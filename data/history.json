@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "monitor_id": "9a4365ef3ec9",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Hanuman Ansh",
+    "targets": [
+      "ALLU Cinemas · Dolby Cinema",
+      "AMB Cinemas · HDR By Barco"
+    ],
+    "at": "2026-09-14T02:55:40.373004+05:30"
+  }
+]
