@@ -1,0 +1,297 @@
+"""The monitoring engine.
+
+One entry point, :func:`run_once`, is everything the GitHub Actions workflow
+does. It is deliberately platform-agnostic: it asks ``platforms.get_provider``
+for a snapshot and reasons entirely in ``monitor.models`` terms, so adding a
+second ticketing site later means adding a provider, not editing this file.
+
+Order of operations, and why:
+
+1. Expire anything past its end time — *before* checking, so an expired
+   monitor never gets one last check it shouldn't have had.
+2. Skip monitors that aren't due yet (the workflow ticks faster than the
+   slowest interval).
+3. Fetch. A failure here becomes an ERROR record, never an availability.
+4. Evaluate each theatre+format target independently.
+5. Detect changes, send mail, and only then mark as notified.
+6. Persist.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+
+from config.timezone import now_ist
+from monitor.changes import Change, apply_outcome, detect_changes, mark_notified
+from monitor.models import (
+    Availability,
+    CheckOutcome,
+    Monitor,
+    Showtime,
+    Snapshot,
+    TargetResult,
+    TheatreTarget,
+)
+from monitor.state import (
+    MonitorState,
+    expire_due_monitors,
+    load_monitors,
+    load_state,
+    record_history,
+    save_state,
+)
+from platforms import get_provider
+from platforms.base import PlatformBlocked, PlatformError
+
+
+@dataclass
+class RunReport:
+    """What one worker tick did — printed to the Actions log and asserted in tests."""
+
+    started_at: datetime
+    checked: list[str] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)
+    expired: list[str] = field(default_factory=list)
+    failed: list[str] = field(default_factory=list)
+    changes: list[Change] = field(default_factory=list)
+    emails_sent: int = 0
+    email_errors: list[str] = field(default_factory=list)
+
+    def summary(self) -> str:
+        return (
+            f"checked={len(self.checked)} skipped={len(self.skipped)} "
+            f"expired={len(self.expired)} failed={len(self.failed)} "
+            f"changes={len(self.changes)} emails={self.emails_sent}"
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Evaluating one target against one snapshot
+# ──────────────────────────────────────────────────────────────────────────
+def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot) -> TargetResult:
+    """Turn a snapshot into a verdict for one theatre+format.
+
+    The ladder of "no" answers matters: not knowing the theatre exists, the
+    theatre existing without this format, the format existing without an open
+    sale, and the sale being sold out are four different situations, and the
+    UI says four different things about them.
+    """
+    shows = [s for s in snapshot.showtimes if _same_venue(s, target)]
+    wanted_dates = set(monitor.date_codes)
+
+    if not shows:
+        known_venue = any(_same_venue_code(v.code, v.name, target) for v in snapshot.venues)
+        return TargetResult(
+            target_key=target.key,
+            venue_name=target.venue_name,
+            fmt=target.fmt,
+            availability=(
+                Availability.THEATRE_NOT_AVAILABLE
+                if not known_venue
+                else Availability.SHOW_NOT_AVAILABLE
+            ),
+            detail=(
+                "This theatre isn't listed for the movie yet."
+                if not known_venue
+                else "Theatre is listed, but no showtimes are published yet."
+            ),
+            booking_url=_booking_url(monitor, snapshot, ""),
+        )
+
+    if wanted_dates:
+        shows = [s for s in shows if s.date_code in wanted_dates]
+        if not shows:
+            return TargetResult(
+                target_key=target.key,
+                venue_name=target.venue_name,
+                fmt=target.fmt,
+                availability=Availability.SHOW_NOT_AVAILABLE,
+                detail="No showtimes on the dates you're watching.",
+                booking_url=_booking_url(monitor, snapshot, sorted(wanted_dates)[0]),
+            )
+
+    matching = [s for s in shows if target.matches_format(s.format_label)]
+    if not matching:
+        return TargetResult(
+            target_key=target.key,
+            venue_name=target.venue_name,
+            fmt=target.fmt,
+            availability=Availability.SHOW_NOT_AVAILABLE,
+            detail=f"Shows are listed, but none in {target.fmt}.",
+            date_code=shows[0].date_code,
+            booking_url=_booking_url(monitor, snapshot, shows[0].date_code),
+        )
+
+    bookable = [s for s in matching if s.availability is Availability.AVAILABLE]
+    if bookable:
+        date_code = _earliest_date(bookable)
+        return TargetResult(
+            target_key=target.key,
+            venue_name=target.venue_name,
+            fmt=target.fmt,
+            availability=Availability.AVAILABLE,
+            showtimes=bookable,
+            date_code=date_code,
+            booking_url=_booking_url(monitor, snapshot, date_code),
+            detail=f"{len(bookable)} showtime(s) bookable.",
+        )
+
+    sold_out = [s for s in matching if s.availability is Availability.SOLD_OUT]
+    date_code = _earliest_date(matching)
+    if sold_out:
+        return TargetResult(
+            target_key=target.key,
+            venue_name=target.venue_name,
+            fmt=target.fmt,
+            availability=Availability.SOLD_OUT,
+            showtimes=sold_out,
+            date_code=date_code,
+            booking_url=_booking_url(monitor, snapshot, date_code),
+            detail="Every seat category is sold out.",
+        )
+
+    return TargetResult(
+        target_key=target.key,
+        venue_name=target.venue_name,
+        fmt=target.fmt,
+        availability=Availability.NOT_BOOKABLE,
+        showtimes=matching,
+        date_code=date_code,
+        booking_url=_booking_url(monitor, snapshot, date_code),
+        detail="Showtimes are listed but booking hasn't opened.",
+    )
+
+
+def _same_venue(show: Showtime, target: TheatreTarget) -> bool:
+    return _same_venue_code(show.venue_code, show.venue_name, target)
+
+
+def _same_venue_code(code: str, name: str, target: TheatreTarget) -> bool:
+    """Match on venue code, falling back to the name.
+
+    Venue codes are stable, but a monitor saved months ago can outlive one, so
+    a name match is kept as a safety net rather than dropping the theatre.
+    """
+    if code and target.venue_code and code == target.venue_code:
+        return True
+    return bool(name) and name.strip().lower() == target.venue_name.strip().lower()
+
+
+def _earliest_date(shows: list[Showtime]) -> str:
+    codes = sorted({s.date_code for s in shows if s.date_code})
+    return codes[0] if codes else ""
+
+
+def _booking_url(monitor: Monitor, snapshot: Snapshot, date_code: str) -> str:
+    try:
+        return get_provider(monitor.movie.platform).booking_url(snapshot.movie, date_code)
+    except PlatformError:
+        return monitor.movie.source_url
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Checking one monitor
+# ──────────────────────────────────────────────────────────────────────────
+def check_monitor(monitor: Monitor, *, at: datetime | None = None) -> CheckOutcome:
+    """Read the platform once and evaluate every target. Never raises."""
+    at = at or now_ist()
+    try:
+        provider = get_provider(monitor.movie.platform)
+        snapshot = provider.fetch(monitor.movie, monitor.date_codes or None)
+    except PlatformBlocked as exc:
+        return CheckOutcome(monitor.id, at, ok=False, error=str(exc))
+    except PlatformError as exc:
+        return CheckOutcome(monitor.id, at, ok=False, error=str(exc))
+    except Exception as exc:  # noqa: BLE001 - a parser bug must not kill the run
+        return CheckOutcome(
+            monitor.id, at, ok=False,
+            error=f"Unexpected failure while reading the listing: {type(exc).__name__}: {exc}",
+        )
+
+    results = [evaluate_target(monitor, t, snapshot) for t in monitor.targets]
+    return CheckOutcome(monitor.id, at, ok=True, results=results)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The worker tick
+# ──────────────────────────────────────────────────────────────────────────
+def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str = "",
+             mirror: bool = False, notifier=None) -> RunReport:
+    """Check every monitor that is due. This is what the workflow calls.
+
+    ``mirror`` is False by default because inside Actions the workflow makes
+    one commit of the whole data directory at the end; mirroring each write
+    through the API as well would race it.
+    """
+    at = at or now_ist()
+    report = RunReport(started_at=at)
+
+    if notifier is None:
+        from notifications.email import send_change_email
+
+        notifier = send_change_email
+
+    monitors, newly_expired = expire_due_monitors(at=at, mirror=mirror)
+    report.expired = [m.id for m in newly_expired]
+
+    state = load_state()
+    dirty = bool(newly_expired)
+
+    for monitor in monitors:
+        if monitor_id and monitor.id != monitor_id:
+            continue
+        if not monitor.is_running(at):
+            report.skipped.append(f"{monitor.id} ({monitor.status.value.lower()})")
+            continue
+
+        ms: MonitorState = state.setdefault(monitor.id, MonitorState())
+        if not force and not ms.is_due(monitor.interval_minutes, at):
+            report.skipped.append(f"{monitor.id} (not due)")
+            continue
+
+        print(f"[checker] {monitor.id} — {monitor.movie.title} ({len(monitor.targets)} target(s))")
+        outcome = check_monitor(monitor, at=at)
+        changes = detect_changes(monitor, outcome, ms)
+        apply_outcome(outcome, ms)
+        dirty = True
+
+        if outcome.ok:
+            report.checked.append(monitor.id)
+            for result in outcome.results:
+                print(f"    {result.venue_name} · {result.fmt} -> {result.availability.value}")
+        else:
+            report.failed.append(monitor.id)
+            print(f"    check failed: {outcome.error}")
+            record_history(
+                monitor, "ERROR",
+                "Couldn't check BookMyShow — connection problem, not a 'no tickets' answer.",
+                mirror=mirror, at=at,
+            )
+
+        for change in changes:
+            report.changes.append(change)
+            try:
+                notifier(monitor, change)
+            except Exception as exc:  # noqa: BLE001 - retried on the next tick
+                report.email_errors.append(f"{monitor.id}: {exc}")
+                print(f"    email failed ({exc}) — will retry next check")
+                continue
+            report.emails_sent += 1
+            mark_notified(change, ms, at)
+            record_history(
+                monitor,
+                change.kind.value,
+                f"{change.venue_name} · {change.fmt} — {change.kind.value.replace('_', ' ').title()}",
+                mirror=mirror, at=at,
+                extra={"booking_url": change.booking_url},
+            )
+
+    if dirty:
+        save_state(state, mirror=mirror)
+
+    print(f"[checker] {report.summary()}")
+    return report
+
+
+__all__ = ["RunReport", "check_monitor", "evaluate_target", "run_once"]

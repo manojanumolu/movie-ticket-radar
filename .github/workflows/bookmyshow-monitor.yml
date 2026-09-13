@@ -1,0 +1,101 @@
+name: BookMyShow monitor
+
+# The schedule ticks every 5 minutes; the worker decides per monitor whether
+# enough time has actually elapsed for its 10/15/30-minute interval. That keeps
+# one workflow serving every interval without rewriting this cron each time the
+# user changes their mind in the UI.
+#
+# GitHub does not run scheduled workflows on time. Delays of several minutes
+# are normal and delays of 15+ minutes happen under load, so the UI shows
+# "next check ~" rather than a countdown that pretends to be exact.
+#
+# Note: GitHub disables scheduled workflows on repos with no activity for 60
+# days. The monitor commits state on every real check, which keeps it alive
+# while anything is being watched.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Check now, ignoring each monitor's interval"
+        type: boolean
+        default: true
+      dry_run:
+        description: "Evaluate but send no email"
+        type: boolean
+        default: false
+      monitor_id:
+        description: "Restrict to a single monitor id (optional)"
+        type: string
+        default: ""
+
+# Runs write data/ and push. Queue them instead of letting two runs race.
+concurrency:
+  group: bookmyshow-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the rebase below needs a merge base
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run monitor
+        id: monitor
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          TZ: Asia/Kolkata
+        run: |
+          python run_monitor.py \
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.force) && '--force' || '' }} \
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }} \
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.monitor_id != '') && format('--monitor {0}', inputs.monitor_id) || '' }}
+
+      - name: Commit state
+        # Runs even if the check step failed, so a freshly observed state is
+        # never lost. Anything that failed to notify stays un-notified in
+        # state.json and the next run retries it.
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "No state changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: monitoring state $(date -u +'%Y-%m-%dT%H:%MZ') [skip ci]"
+          # main may have moved while this run executed (the Streamlit app
+          # saving a monitor, or a manual push). Rebase on top and retry.
+          # -X ours keeps THIS run's observations for data/ files touched on
+          # both sides — the worker owns state.json.
+          for attempt in 1 2 3; do
+            if git pull --rebase -X ours origin "${GITHUB_REF_NAME}" && git push; then
+              echo "State pushed"
+              exit 0
+            fi
+            echo "push attempt $attempt failed, retrying…"
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push state after 3 attempts"
+          exit 1

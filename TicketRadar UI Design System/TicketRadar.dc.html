@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#08080A; color:#F2F2F4; font-family:'Archivo',Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; line-height:1.4; text-wrap:pretty; }
+  a { color:#FF3355; text-decoration:none; }
+  a:hover { color:#FF7288; }
+  @keyframes tr-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.82)} }
+  @keyframes tr-spin { to { transform:rotate(360deg) } }
+  @keyframes tr-sweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
+</style>
+</helmet>
+
+<div style="width:1600px;display:flex;flex-direction:column;gap:56px;padding:48px 48px 96px;box-sizing:border-box;background:radial-gradient(1200px 600px at 60% -10%, rgba(255,51,85,.10), transparent 70%), #08080A;">
+
+  <!-- ============== SCREEN 1 : SETUP DASHBOARD ============== -->
+  <section data-screen-label="01 Setup dashboard" style="display:flex;flex-direction:column;gap:14px;">
+    <div style="display:flex;align-items:baseline;gap:12px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#6E6E7A;">
+      <span style="color:#FF3355;">01</span><span>Setup dashboard — desktop 1440+</span>
+    </div>
+
+    <div style="display:flex;border:1px solid rgba(255,255,255,.09);border-radius:20px;overflow:hidden;background:#0B0B0E;box-shadow:0 40px 120px -40px rgba(0,0,0,.9);">
+
+      <!-- sidebar -->
+      <aside style="width:236px;flex:none;background:linear-gradient(180deg,#0E0E12,#0A0A0D);border-right:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;padding:26px 18px;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;gap:11px;padding:0 6px 4px;">
+          <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,#FF3355,#B3123A);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;box-shadow:0 8px 24px -8px rgba(255,51,85,.8);">R</div>
+          <div>
+            <div style="font-size:17px;font-weight:700;letter-spacing:-.02em;">Ticket<span style="color:#FF3355;">Radar</span></div>
+            <div style="font-size:11px;color:#77777F;margin-top:1px;">Be first in line.</div>
+          </div>
+        </div>
+
+        <nav style="display:flex;flex-direction:column;gap:4px;margin-top:28px;">
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:11px;background:linear-gradient(90deg,rgba(255,51,85,.16),rgba(255,51,85,.02));border:1px solid rgba(255,51,85,.32);font-size:14px;font-weight:600;color:#fff;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#FF3355;box-shadow:0 0 12px #FF3355;"></span>Home
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-radius:11px;font-size:14px;color:#9A9AA4;">
+            <span>My Monitors</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:2px 7px;border-radius:6px;background:rgba(255,51,85,.14);color:#FF6B85;">1</span>
+          </div>
+          <div style="padding:11px 14px;border-radius:11px;font-size:14px;color:#9A9AA4;">History</div>
+          <div style="padding:11px 14px;border-radius:11px;font-size:14px;color:#9A9AA4;">Settings</div>
+        </nav>
+
+        <div style="margin-top:auto;display:flex;flex-direction:column;gap:16px;">
+          <div style="padding:16px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);">
+            <div style="font-size:13px;line-height:1.55;color:#C9C9D2;font-style:italic;">“Good movies find their audience. You just have to be faster.”</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5A5A64;letter-spacing:.08em;">
+            <span>V1.0.0</span><span>HYDERABAD</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- main column -->
+      <main style="flex:1;min-width:0;display:flex;flex-direction:column;">
+
+        <!-- hero -->
+        <div style="position:relative;padding:34px 36px 30px;background:linear-gradient(115deg,#101015 0%,#15070C 55%,#2A0A15 100%);border-bottom:1px solid rgba(255,255,255,.07);overflow:hidden;">
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px);opacity:.5;"></div>
+          <div style="position:relative;display:flex;justify-content:space-between;align-items:flex-start;gap:40px;">
+            <div>
+              <div style="font-size:44px;font-weight:800;letter-spacing:-.035em;line-height:1.02;">Movie Ticket Monitor</div>
+              <div style="font-size:19px;color:#E3E3E8;margin-top:10px;font-weight:500;">Know the moment your tickets go live.</div>
+              <div style="font-size:14px;color:#8E8E98;margin-top:6px;">We watch the booking page for you, so you don’t have to.</div>
+            </div>
+            <div style="flex:none;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:2;letter-spacing:.26em;color:rgba(255,255,255,.4);text-transform:uppercase;">
+              <div>Some stories</div><div>are worth</div><div style="color:#FF3355;">the wait</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:28px 36px 36px;display:flex;flex-direction:column;gap:22px;">
+
+          <!-- platform -->
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#8E8E98;">Platform</div>
+              <div style="height:1px;flex:1;background:rgba(255,255,255,.07);"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr;gap:12px;">
+              <div style="position:relative;padding:18px 20px;border-radius:14px;border:1.5px solid #FF3355;background:linear-gradient(135deg,rgba(255,51,85,.14),rgba(255,51,85,.03));overflow:hidden;">
+                <div style="position:absolute;top:0;left:0;width:60px;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent);animation:tr-sweep 3.4s ease-in-out infinite;"></div>
+                <div style="position:relative;display:flex;justify-content:space-between;align-items:center;">
+                  <div style="font-size:21px;font-weight:700;letter-spacing:-.02em;">Book<span style="color:#FF3355;">My</span>Show</div>
+                  <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(62,213,152,.12);border:1px solid rgba(62,213,152,.3);font-size:11px;font-weight:600;color:#3ED598;">
+                    <span style="width:6px;height:6px;border-radius:50%;background:#3ED598;"></span>Connected
+                  </div>
+                </div>
+                <div style="margin-top:12px;display:flex;align-items:center;gap:7px;font-size:13px;color:#C9C9D2;">
+                  <span style="width:5px;height:5px;border-radius:50%;background:#FF3355;"></span>Hyderabad · 42 theatres tracked
+                </div>
+              </div>
+              <div style="padding:18px 20px;border-radius:14px;border:1px dashed rgba(255,255,255,.10);background:rgba(255,255,255,.015);opacity:.55;">
+                <div style="font-size:17px;font-weight:600;color:#9A9AA4;">District</div>
+                <div style="margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6E6E7A;">Coming soon</div>
+              </div>
+              <div style="padding:18px 20px;border-radius:14px;border:1px dashed rgba(255,255,255,.10);background:rgba(255,255,255,.015);opacity:.55;">
+                <div style="font-size:17px;font-weight:600;color:#9A9AA4;">PVR Cinemas</div>
+                <div style="margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6E6E7A;">Coming soon</div>
+              </div>
+              <div style="padding:18px 20px;border-radius:14px;border:1px dashed rgba(255,255,255,.10);background:rgba(255,255,255,.015);opacity:.55;">
+                <div style="font-size:17px;font-weight:600;color:#9A9AA4;">Cinépolis</div>
+                <div style="margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6E6E7A;">Coming soon</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- step 1 movie -->
+          <div style="padding:22px;border-radius:16px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+            <div style="display:flex;align-items:center;gap:13px;">
+              <div style="width:27px;height:27px;flex:none;border-radius:9px;background:rgba(255,51,85,.14);border:1px solid rgba(255,51,85,.35);color:#FF6B85;font-family:'JetBrains Mono',monospace;font-size:12px;display:flex;align-items:center;justify-content:center;">1</div>
+              <div>
+                <div style="font-size:16px;font-weight:700;">Select movie</div>
+                <div style="font-size:13px;color:#8E8E98;margin-top:2px;">Search the release you want on your radar.</div>
+              </div>
+            </div>
+            <div style="margin-top:16px;display:flex;align-items:center;gap:10px;padding:13px 16px;border-radius:11px;background:#0A0A0D;border:1px solid rgba(255,255,255,.09);">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#6E6E7A;">⌕</span>
+              <span style="font-size:14px;color:#6E6E7A;">Search for a movie…</span>
+            </div>
+            <div style="margin-top:16px;display:grid;grid-template-columns:repeat(6,1fr);gap:12px;">
+              <sc-for list="{{ movies }}" as="m" hint-placeholder-count="6">
+                <div onClick="{{ m.pick }}" style="{{ m.cardStyle }}">
+                  <div style="{{ m.posterStyle }}">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:rgba(255,255,255,.42);text-transform:uppercase;">poster</span>
+                    <sc-if value="{{ m.selected }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:#FF3355;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(255,51,85,.7);">✓</div>
+                    </sc-if>
+                  </div>
+                  <div style="padding:10px 11px 12px;">
+                    <div style="font-size:13px;font-weight:600;line-height:1.3;">{{ m.title }}</div>
+                    <div style="font-size:11px;color:#8E8E98;margin-top:4px;font-family:'JetBrains Mono',monospace;">{{ m.meta }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- steps 2 + 3 -->
+          <div style="display:grid;grid-template-columns:1fr 1.08fr;gap:16px;">
+            <div style="padding:22px;border-radius:16px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
+                <div style="display:flex;align-items:center;gap:13px;">
+                  <div style="width:27px;height:27px;flex:none;border-radius:9px;background:rgba(255,51,85,.14);border:1px solid rgba(255,51,85,.35);color:#FF6B85;font-family:'JetBrains Mono',monospace;font-size:12px;display:flex;align-items:center;justify-content:center;">2</div>
+                  <div>
+                    <div style="font-size:16px;font-weight:700;">Where do you want to watch?</div>
+                    <div style="font-size:13px;color:#8E8E98;margin-top:2px;">One or more theatres in Hyderabad.</div>
+                  </div>
+                </div>
+                <div onClick="{{ toggleAll }}" style="flex:none;font-size:12px;font-weight:600;color:#C9C9D2;padding:6px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);cursor:pointer;">Select all</div>
+              </div>
+              <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
+                <sc-for list="{{ theatres }}" as="t" hint-placeholder-count="5">
+                  <div onClick="{{ t.toggle }}" style="{{ t.rowStyle }}">
+                    <div style="{{ t.boxStyle }}">{{ t.mark }}</div>
+                    <div style="width:38px;height:38px;flex:none;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#9A9AA4;">{{ t.abbr }}</div>
+                    <div style="min-width:0;">
+                      <div style="font-size:14px;font-weight:600;">{{ t.name }}</div>
+                      <div style="font-size:12px;color:#8E8E98;margin-top:2px;">{{ t.area }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="padding:22px;border-radius:16px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+              <div style="display:flex;align-items:center;gap:13px;">
+                <div style="width:27px;height:27px;flex:none;border-radius:9px;background:rgba(255,51,85,.14);border:1px solid rgba(255,51,85,.35);color:#FF6B85;font-family:'JetBrains Mono',monospace;font-size:12px;display:flex;align-items:center;justify-content:center;">3</div>
+                <div>
+                  <div style="font-size:16px;font-weight:700;">Formats, per theatre</div>
+                  <div style="font-size:13px;color:#8E8E98;margin-top:2px;">Only formats that theatre actually runs.</div>
+                </div>
+              </div>
+              <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
+                <sc-for list="{{ formatPanels }}" as="p" hint-placeholder-count="2">
+                  <div style="display:flex;gap:18px;padding:16px;border-radius:13px;background:#0A0A0D;border:1px solid rgba(255,255,255,.07);">
+                    <div style="width:150px;flex:none;">
+                      <div style="font-size:13px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;">{{ p.name }}</div>
+                      <div style="font-size:11.5px;color:#8E8E98;margin-top:3px;">{{ p.area }}</div>
+                      <div style="margin-top:10px;display:inline-block;padding:3px 8px;border-radius:6px;background:rgba(232,178,92,.10);border:1px solid rgba(232,178,92,.26);font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:#E8B25C;">{{ p.badge }}</div>
+                    </div>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+                      <sc-for list="{{ p.opts }}" as="o" hint-placeholder-count="3">
+                        <div onClick="{{ o.pick }}" style="{{ o.rowStyle }}">
+                          <span style="{{ o.dotStyle }}"></span>
+                          <span style="{{ o.labelStyle }}">{{ o.label }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <!-- steps 4 + 5 -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div style="padding:22px;border-radius:16px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+              <div style="display:flex;align-items:center;gap:13px;">
+                <div style="width:27px;height:27px;flex:none;border-radius:9px;background:rgba(255,51,85,.14);border:1px solid rgba(255,51,85,.35);color:#FF6B85;font-family:'JetBrains Mono',monospace;font-size:12px;display:flex;align-items:center;justify-content:center;">4</div>
+                <div>
+                  <div style="font-size:16px;font-weight:700;">How often should I check?</div>
+                  <div style="font-size:13px;color:#8E8E98;margin-top:2px;">Checks run automatically in the background.</div>
+                </div>
+              </div>
+              <div style="margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:9px;">
+                <sc-for list="{{ intervals }}" as="i" hint-placeholder-count="3">
+                  <div onClick="{{ i.pick }}" style="{{ i.style }}">
+                    <div style="font-size:22px;font-weight:700;letter-spacing:-.02em;">{{ i.num }}</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#8E8E98;margin-top:3px;">minutes</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="padding:22px;border-radius:16px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+              <div style="display:flex;align-items:center;gap:13px;">
+                <div style="width:27px;height:27px;flex:none;border-radius:9px;background:rgba(255,51,85,.14);border:1px solid rgba(255,51,85,.35);color:#FF6B85;font-family:'JetBrains Mono',monospace;font-size:12px;display:flex;align-items:center;justify-content:center;">5</div>
+                <div>
+                  <div style="font-size:16px;font-weight:700;">Monitor until</div>
+                  <div style="font-size:13px;color:#8E8E98;margin-top:2px;">The monitor stops itself after this time.</div>
+                </div>
+              </div>
+              <div style="margin-top:16px;display:grid;grid-template-columns:1.5fr 1fr;gap:9px;">
+                <div style="display:flex;align-items:center;gap:10px;padding:14px 15px;border-radius:11px;background:#0A0A0D;border:1px solid rgba(255,255,255,.09);">
+                  <span style="font-size:14px;color:#6E6E7A;">▤</span>
+                  <span style="font-size:14.5px;font-weight:600;white-space:nowrap;">25 September 2026</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:14px 15px;border-radius:11px;background:#0A0A0D;border:1px solid rgba(255,255,255,.09);">
+                  <span style="font-size:14px;color:#6E6E7A;">◷</span>
+                  <span style="font-size:14.5px;font-weight:600;white-space:nowrap;">11:59 PM</span>
+                </div>
+              </div>
+              <div style="margin-top:10px;display:flex;align-items:center;gap:9px;font-size:12.5px;color:#8E8E98;">
+                <span style="width:32px;height:18px;border-radius:999px;background:rgba(255,51,85,.9);position:relative;flex:none;"><span style="position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff;"></span></span>
+                Start checking immediately
+              </div>
+            </div>
+          </div>
+
+          <!-- CTA -->
+          <div style="display:flex;align-items:center;gap:20px;">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:11px;padding:19px;border-radius:14px;background:linear-gradient(135deg,#FF3355,#D4123F);font-size:17px;font-weight:700;letter-spacing:.04em;color:#fff;box-shadow:0 20px 50px -18px rgba(255,51,85,.85);cursor:pointer;" style-hover="filter:brightness(1.08);transform:translateY(-1px);">
+              <span style="font-size:13px;">▶</span>START MONITORING
+            </div>
+            <div style="width:290px;flex:none;font-size:12.5px;line-height:1.5;color:#8E8E98;">
+              <span style="color:#E8B25C;">⚡</span> You’ll get an email the second tickets appear — and the monitor keeps running for the other theatres.
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- right rail -->
+      <aside style="width:344px;flex:none;background:#0A0A0D;border-left:1px solid rgba(255,255,255,.07);padding:24px 22px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:9px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#3ED598;box-shadow:0 0 12px #3ED598;animation:tr-pulse 1.8s ease-in-out infinite;"></span>
+            <span style="font-size:14px;font-weight:700;">Active monitor</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);"></div>
+            <div style="font-size:11.5px;line-height:1.3;color:#9A9AA4;">Hello!<br><span style="color:#F2F2F4;font-weight:600;">Movie Lover</span></div>
+          </div>
+        </div>
+
+        <div style="border-radius:16px;border:1px solid rgba(62,213,152,.22);background:linear-gradient(180deg,rgba(62,213,152,.07),rgba(255,255,255,.015));padding:18px;">
+          <div style="display:flex;gap:14px;">
+            <div style="width:62px;height:88px;flex:none;border-radius:9px;background:repeating-linear-gradient(135deg,#1C1C22 0 6px,#15151A 6px 12px);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.1em;">ART</span>
+            </div>
+            <div style="min-width:0;">
+              <div style="font-size:16px;font-weight:700;line-height:1.25;">Avengers:<br>Endgame Encore</div>
+              <div style="font-size:12px;color:#8E8E98;margin-top:5px;">BookMyShow · Hyderabad</div>
+              <div style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;background:rgba(62,213,152,.12);border:1px solid rgba(62,213,152,.3);font-size:10.5px;font-weight:700;letter-spacing:.1em;color:#3ED598;white-space:nowrap;">MONITORING ACTIVE</div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07);">
+            <div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6E6E7A;">Last checked</div>
+              <div style="font-size:15px;font-weight:600;margin-top:4px;">10:20 PM</div>
+            </div>
+            <div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6E6E7A;">Next check in</div>
+              <div style="font-size:15px;font-weight:600;margin-top:4px;font-family:'JetBrains Mono',monospace;color:#3ED598;">{{ countdown }}</div>
+            </div>
+            <div style="grid-column:span 2;">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6E6E7A;">Monitoring until</div>
+              <div style="font-size:15px;font-weight:600;margin-top:4px;">25 Sep 2026, 11:59 PM</div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:11px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);">
+            <span style="width:15px;height:15px;flex:none;border-radius:50%;border:2px solid rgba(62,213,152,.25);border-top-color:#3ED598;animation:tr-spin 1s linear infinite;"></span>
+            <div>
+              <div style="font-size:13px;font-weight:600;">Checking for tickets…</div>
+              <div style="font-size:11.5px;color:#8E8E98;margin-top:1px;">Not released yet · checked 14 times</div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;display:flex;align-items:center;justify-content:center;gap:9px;padding:14px;border-radius:11px;background:rgba(255,51,85,.12);border:1px solid rgba(255,51,85,.42);font-size:13.5px;font-weight:700;letter-spacing:.06em;color:#FF6B85;cursor:pointer;" style-hover="background:rgba(255,51,85,.2);">
+            <span style="width:9px;height:9px;background:#FF6B85;border-radius:2px;"></span>STOP MONITORING
+          </div>
+        </div>
+
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#6E6E7A;margin-bottom:9px;">Theatres (2)</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-radius:12px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+              <div>
+                <div style="font-size:13.5px;font-weight:600;white-space:nowrap;">Allu Cinemas</div>
+                <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;white-space:nowrap;">Dolby Cinema</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#8E8E98;white-space:nowrap;">
+                <span style="width:12px;height:12px;border-radius:50%;border:2px solid rgba(255,255,255,.14);border-top-color:#8E8E98;animation:tr-spin 1.1s linear infinite;"></span>Watching
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-radius:12px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+              <div>
+                <div style="font-size:13.5px;font-weight:600;white-space:nowrap;">AMB Cinemas</div>
+                <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;white-space:nowrap;">HDR by Barco</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#8E8E98;white-space:nowrap;">
+                <span style="width:12px;height:12px;border-radius:50%;border:2px solid rgba(255,255,255,.14);border-top-color:#8E8E98;animation:tr-spin 1.1s linear infinite;"></span>Watching
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#6E6E7A;">Recent history</div>
+            <div style="font-size:11.5px;color:#FF6B85;white-space:nowrap;">View all →</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;gap:12px;padding:12px;border-radius:12px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+              <div style="width:34px;height:46px;flex:none;border-radius:7px;background:repeating-linear-gradient(135deg,#1C1C22 0 6px,#15151A 6px 12px);"></div>
+              <div style="min-width:0;">
+                <div style="font-size:13px;font-weight:600;">Oppenheimer</div>
+                <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;">AMB Cinemas · IMAX</div>
+                <div style="font-size:11px;color:#3ED598;margin-top:5px;">✓ Tickets found · 12 Jan</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;padding:12px;border-radius:12px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+              <div style="width:34px;height:46px;flex:none;border-radius:7px;background:repeating-linear-gradient(135deg,#1C1C22 0 6px,#15151A 6px 12px);"></div>
+              <div style="min-width:0;">
+                <div style="font-size:13px;font-weight:600;">Dune: Part Two</div>
+                <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;white-space:nowrap;">Allu Cinemas · Dolby Cinema</div>
+                <div style="font-size:11px;color:#9A9AA4;margin-top:5px;">■ Stopped manually · 28 Feb</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;padding:12px;border-radius:12px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+              <div style="width:34px;height:46px;flex:none;border-radius:7px;background:repeating-linear-gradient(135deg,#1C1C22 0 6px,#15151A 6px 12px);"></div>
+              <div style="min-width:0;">
+                <div style="font-size:13px;font-weight:600;">Spider-Man: No Way Home</div>
+                <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;">PVR Inorbit · 2D</div>
+                <div style="font-size:11px;color:#E8B25C;margin-top:5px;">◷ Expired · 15 Dec</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============== SCREEN 2 : TICKETS LIVE ============== -->
+  <section data-screen-label="02 Tickets live" style="display:flex;flex-direction:column;gap:14px;">
+    <div style="display:flex;align-items:baseline;gap:12px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#6E6E7A;">
+      <span style="color:#FF3355;">02</span><span>Ticket release + notification state</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;">
+      <div style="position:relative;overflow:hidden;padding:30px;border-radius:20px;border:1.5px solid rgba(62,213,152,.4);background:radial-gradient(700px 300px at 10% 0%, rgba(62,213,152,.16), transparent 70%), #0C1210;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px;">
+          <div>
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(62,213,152,.16);border:1px solid rgba(62,213,152,.45);font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;color:#3ED598;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#3ED598;animation:tr-pulse 1.4s ease-in-out infinite;"></span>TICKETS ARE LIVE
+            </div>
+            <div style="font-size:38px;font-weight:800;letter-spacing:-.03em;margin-top:16px;">Avengers: Endgame Encore</div>
+            <div style="font-size:15px;color:#B8B8C2;margin-top:8px;">Allu Cinemas · Dolby Cinema · Attapur, Hyderabad</div>
+          </div>
+          <div style="flex:none;text-align:right;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6E6E7A;">Detected at</div>
+            <div style="font-size:20px;font-weight:700;margin-top:4px;">10:23 PM</div>
+            <div style="font-size:12px;color:#3ED598;margin-top:6px;white-space:nowrap;">✓ Email sent</div>
+          </div>
+        </div>
+
+        <div style="margin-top:26px;padding-top:22px;border-top:1px solid rgba(255,255,255,.09);display:flex;gap:36px;align-items:flex-end;">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6E6E7A;">Date</div>
+            <div style="font-size:19px;font-weight:700;margin-top:6px;">25 September 2026</div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6E6E7A;">Showtimes found</div>
+            <div style="display:flex;gap:9px;margin-top:8px;">
+              <span style="padding:9px 15px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);font-size:14px;font-weight:600;white-space:nowrap;">7:30 PM</span>
+              <span style="padding:9px 15px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);font-size:14px;font-weight:600;white-space:nowrap;">9:45 PM</span>
+              <span style="padding:9px 15px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);font-size:14px;font-weight:600;white-space:nowrap;">11:15 PM</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:24px;display:flex;gap:12px;">
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:10px;padding:18px;border-radius:13px;background:linear-gradient(135deg,#3ED598,#1FA875);font-size:16px;font-weight:700;letter-spacing:.04em;color:#04120C;box-shadow:0 20px 50px -20px rgba(62,213,152,.7);cursor:pointer;">BOOK ON BOOKMYSHOW ↗</div>
+          <div style="width:200px;flex:none;display:flex;align-items:center;justify-content:center;padding:18px;border-radius:13px;border:1px solid rgba(255,255,255,.14);font-size:13.5px;font-weight:600;color:#C9C9D2;cursor:pointer;">Keep monitoring</div>
+        </div>
+        <div style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:28px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#6E6E7A;">
+          <span>Found on check #14</span><span>Checked every 10 min</span><span>Monitor still live until 11:59 PM</span>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="padding:18px;border-radius:16px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#6E6E7A;">Per-theatre status</div>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:9px;">
+            <div style="padding:14px;border-radius:12px;background:rgba(62,213,152,.07);border:1px solid rgba(62,213,152,.32);">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-size:14px;font-weight:700;letter-spacing:.01em;white-space:nowrap;">Allu Cinemas</div>
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:#3ED598;">✓ AVAILABLE</div>
+              </div>
+              <div style="font-size:12px;color:#8E8E98;margin-top:4px;">Dolby Cinema · 3 showtimes</div>
+            </div>
+            <div style="padding:14px;border-radius:12px;background:#0A0A0D;border:1px solid rgba(255,255,255,.07);">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-size:14px;font-weight:700;letter-spacing:.01em;white-space:nowrap;">AMB Cinemas</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8E8E98;">
+                  <span style="width:11px;height:11px;border-radius:50%;border:2px solid rgba(255,255,255,.14);border-top-color:#8E8E98;animation:tr-spin 1.1s linear infinite;"></span>Still watching
+                </div>
+              </div>
+              <div style="font-size:12px;color:#8E8E98;margin-top:4px;">HDR by Barco · not released yet</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;font-size:11.5px;color:#8E8E98;line-height:1.5;">One theatre going live doesn’t stop the others. AMB keeps being checked until 11:59 PM.</div>
+        </div>
+
+        <div style="padding:18px;border-radius:16px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#6E6E7A;">Notifications</div>
+          <div style="margin-top:12px;display:flex;gap:11px;padding:13px;border-radius:11px;background:rgba(62,213,152,.07);border:1px solid rgba(62,213,152,.26);">
+            <span style="color:#3ED598;font-size:14px;">✓</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;">Email sent to you@gmail.com</div>
+              <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;white-space:nowrap;">Allu Cinemas · Dolby Cinema · 10:23 PM</div>
+            </div>
+          </div>
+          <div style="margin-top:9px;display:flex;gap:11px;padding:13px;border-radius:11px;background:#0A0A0D;border:1px solid rgba(255,255,255,.07);">
+            <span style="color:#8E8E98;font-size:14px;">◷</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#C9C9D2;">Next alert pending</div>
+              <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;white-space:nowrap;">AMB Cinemas · HDR by Barco</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== SCREEN 3 : OTHER STATES ============== -->
+  <section data-screen-label="03 States" style="display:flex;flex-direction:column;gap:14px;">
+    <div style="display:flex;align-items:baseline;gap:12px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#6E6E7A;">
+      <span style="color:#FF3355;">03</span><span>Stopped · expired · error · empty</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+
+      <div style="padding:26px;border-radius:18px;background:#101014;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;">
+        <div style="width:40px;height:40px;border-radius:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:13px;color:#C9C9D2;">■</div>
+        <div style="font-size:20px;font-weight:700;margin-top:16px;letter-spacing:-.02em;">Monitoring stopped</div>
+        <div style="font-size:13.5px;color:#8E8E98;margin-top:8px;line-height:1.55;">You stopped this alert at 10:41 PM. We are no longer checking BookMyShow.</div>
+        <div style="margin-top:16px;padding:13px;border-radius:11px;background:#0A0A0D;border:1px solid rgba(255,255,255,.07);font-size:12px;color:#9A9AA4;line-height:1.6;">Avengers: Endgame Encore<br>2 theatres · 14 checks run</div>
+        <div style="margin-top:auto;padding-top:18px;">
+          <div style="padding:14px;border-radius:11px;background:linear-gradient(135deg,#FF3355,#D4123F);text-align:center;font-size:13px;font-weight:700;letter-spacing:.05em;color:#fff;cursor:pointer;">START NEW MONITOR</div>
+        </div>
+      </div>
+
+      <div style="padding:26px;border-radius:18px;background:#12100B;border:1px solid rgba(232,178,92,.3);display:flex;flex-direction:column;">
+        <div style="width:40px;height:40px;border-radius:11px;background:rgba(232,178,92,.12);border:1px solid rgba(232,178,92,.35);display:flex;align-items:center;justify-content:center;font-size:15px;color:#E8B25C;">◷</div>
+        <div style="font-size:20px;font-weight:700;margin-top:16px;letter-spacing:-.02em;">Monitoring expired</div>
+        <div style="font-size:13.5px;color:#B5A588;margin-top:8px;line-height:1.55;">This alert stopped on its own at the end time you set. Nothing went wrong.</div>
+        <div style="margin-top:16px;padding:13px;border-radius:11px;background:rgba(232,178,92,.07);border:1px solid rgba(232,178,92,.2);font-size:12px;color:#D8C49E;line-height:1.6;">Ended 25 Sep 2026, 11:59 PM<br>No release detected</div>
+        <div style="margin-top:auto;padding-top:18px;display:flex;flex-direction:column;gap:9px;">
+          <div style="padding:14px;border-radius:11px;background:rgba(232,178,92,.14);border:1px solid rgba(232,178,92,.4);text-align:center;font-size:13px;font-weight:700;letter-spacing:.05em;color:#E8B25C;cursor:pointer;">EXTEND BY 24 HOURS</div>
+          <div style="padding:12px;border-radius:11px;border:1px solid rgba(255,255,255,.12);text-align:center;font-size:12.5px;font-weight:600;color:#C9C9D2;cursor:pointer;">Start new monitor</div>
+        </div>
+      </div>
+
+      <div style="padding:26px;border-radius:18px;background:#130C0E;border:1px solid rgba(255,51,85,.28);display:flex;flex-direction:column;">
+        <div style="width:40px;height:40px;border-radius:11px;background:rgba(255,51,85,.12);border:1px solid rgba(255,51,85,.35);display:flex;align-items:center;justify-content:center;font-size:15px;color:#FF6B85;">!</div>
+        <div style="font-size:20px;font-weight:700;margin-top:16px;letter-spacing:-.02em;">Couldn’t check BookMyShow</div>
+        <div style="font-size:13.5px;color:#C0A3A9;margin-top:8px;line-height:1.55;">This is a connection problem on our side — not a “no tickets” answer.</div>
+        <div style="margin-top:16px;padding:13px;border-radius:11px;background:rgba(255,51,85,.06);border:1px solid rgba(255,51,85,.18);font-size:12px;color:#D9BDC3;line-height:1.7;">Last successful check<br><span style="color:#fff;font-weight:600;font-size:13px;">10:20 PM</span><br>2 failed attempts · retrying at 10:40 PM</div>
+        <div style="margin-top:auto;padding-top:18px;display:flex;flex-direction:column;gap:9px;">
+          <div style="padding:14px;border-radius:11px;background:rgba(255,51,85,.14);border:1px solid rgba(255,51,85,.42);text-align:center;font-size:13px;font-weight:700;letter-spacing:.05em;color:#FF6B85;cursor:pointer;">RETRY NOW</div>
+          <div style="font-size:11.5px;color:#8E8E98;text-align:center;">The monitor keeps running. We retry automatically.</div>
+        </div>
+      </div>
+
+      <div style="padding:26px;border-radius:18px;background:#0A0A0D;border:1px dashed rgba(255,255,255,.14);display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;">
+        <div style="width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:17px;color:#6E6E7A;">◎</div>
+        <div style="font-size:20px;font-weight:700;margin-top:18px;letter-spacing:-.02em;">No active monitors</div>
+        <div style="font-size:13.5px;color:#8E8E98;margin-top:8px;line-height:1.55;max-width:230px;">Set an alert and we’ll watch BookMyShow for you — quietly, in the background.</div>
+        <div style="margin-top:22px;padding:14px 22px;border-radius:11px;background:linear-gradient(135deg,#FF3355,#D4123F);font-size:13px;font-weight:700;letter-spacing:.05em;color:#fff;cursor:pointer;">CREATE NEW ALERT</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== SCREEN 4 : MOBILE ============== -->
+  <section data-screen-label="04 Mobile" style="display:flex;flex-direction:column;gap:14px;">
+    <div style="display:flex;align-items:baseline;gap:12px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#6E6E7A;">
+      <span style="color:#FF3355;">04</span><span>Mobile — single column, one step at a time</span>
+    </div>
+    <div style="display:flex;gap:24px;">
+
+      <div style="width:390px;flex:none;border-radius:26px;border:1px solid rgba(255,255,255,.1);background:#0B0B0E;padding:22px 18px;box-sizing:border-box;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:#6E6E7A;letter-spacing:.1em;"><span>TICKETRADAR</span><span>10:22 PM</span></div>
+        <div style="font-size:27px;font-weight:800;letter-spacing:-.03em;margin-top:16px;line-height:1.1;">Movie Ticket Monitor</div>
+        <div style="font-size:14px;color:#9A9AA4;margin-top:7px;">Know the moment your tickets go live.</div>
+        <div style="margin-top:18px;padding:14px;border-radius:13px;border:1.5px solid #FF3355;background:linear-gradient(135deg,rgba(255,51,85,.14),rgba(255,51,85,.03));">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:16px;font-weight:700;">Book<span style="color:#FF3355;">My</span>Show</div>
+            <div style="font-size:10.5px;color:#3ED598;font-weight:600;">● Connected</div>
+          </div>
+          <div style="font-size:12px;color:#9A9AA4;margin-top:6px;">Hyderabad</div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px;">
+          <div style="flex:1;padding:9px;border-radius:9px;border:1px dashed rgba(255,255,255,.1);text-align:center;font-size:10.5px;color:#6E6E7A;">District · soon</div>
+          <div style="flex:1;padding:9px;border-radius:9px;border:1px dashed rgba(255,255,255,.1);text-align:center;font-size:10.5px;color:#6E6E7A;">PVR · soon</div>
+        </div>
+        <div style="margin-top:20px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;color:#6E6E7A;">STEP 1 OF 5 — MOVIE</div>
+        <div style="margin-top:11px;padding:13px 14px;border-radius:11px;background:#0A0A0D;border:1px solid rgba(255,255,255,.09);font-size:13.5px;color:#6E6E7A;">⌕ Search for a movie…</div>
+        <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div style="border-radius:12px;border:1.5px solid #FF3355;overflow:hidden;background:rgba(255,51,85,.06);">
+            <div style="height:110px;background:repeating-linear-gradient(135deg,#22161A 0 7px,#1A1116 7px 14px);position:relative;">
+              <div style="position:absolute;top:7px;right:7px;width:20px;height:20px;border-radius:50%;background:#FF3355;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;">✓</div>
+            </div>
+            <div style="padding:9px;font-size:12px;font-weight:600;line-height:1.3;">Avengers: Endgame Encore</div>
+          </div>
+          <div style="border-radius:12px;border:1px solid rgba(255,255,255,.08);overflow:hidden;">
+            <div style="height:110px;background:repeating-linear-gradient(135deg,#1C1C22 0 7px,#15151A 7px 14px);"></div>
+            <div style="padding:9px;font-size:12px;font-weight:600;color:#C9C9D2;">Dune: Part Two</div>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding:16px;border-radius:12px;background:linear-gradient(135deg,#FF3355,#D4123F);text-align:center;font-size:14px;font-weight:700;letter-spacing:.04em;">CONTINUE TO THEATRES</div>
+      </div>
+
+      <div style="width:390px;flex:none;border-radius:26px;border:1px solid rgba(255,255,255,.1);background:#0B0B0E;padding:22px 18px;box-sizing:border-box;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;color:#6E6E7A;">STEP 3 OF 5 — FORMAT</div>
+        <div style="font-size:22px;font-weight:700;margin-top:12px;letter-spacing:-.02em;">Pick a format for each theatre</div>
+        <div style="margin-top:16px;padding:15px;border-radius:13px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+          <div style="font-size:13.5px;font-weight:700;letter-spacing:.01em;">Allu Cinemas</div>
+          <div style="font-size:11.5px;color:#8E8E98;margin-top:3px;">Attapur</div>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:7px;">
+            <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:rgba(255,51,85,.1);border:1px solid rgba(255,51,85,.4);font-size:13.5px;font-weight:600;"><span style="width:15px;height:15px;border-radius:50%;border:4px solid #FF3355;background:#0B0B0E;"></span>Dolby Cinema</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.09);font-size:13.5px;color:#C9C9D2;"><span style="width:15px;height:15px;border-radius:50%;border:1.5px solid rgba(255,255,255,.22);"></span>Any format</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:15px;border-radius:13px;background:#101014;border:1px solid rgba(255,255,255,.07);">
+          <div style="font-size:13.5px;font-weight:700;letter-spacing:.01em;">AMB Cinemas</div>
+          <div style="font-size:11.5px;color:#8E8E98;margin-top:3px;">Gachibowli</div>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:7px;">
+            <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:rgba(255,51,85,.1);border:1px solid rgba(255,51,85,.4);font-size:13.5px;font-weight:600;"><span style="width:15px;height:15px;border-radius:50%;border:4px solid #FF3355;background:#0B0B0E;"></span>HDR by Barco</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.09);font-size:13.5px;color:#C9C9D2;"><span style="width:15px;height:15px;border-radius:50%;border:1.5px solid rgba(255,255,255,.22);"></span>Any format</div>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding:16px;border-radius:12px;background:linear-gradient(135deg,#FF3355,#D4123F);text-align:center;font-size:14px;font-weight:700;letter-spacing:.04em;">CONTINUE</div>
+      </div>
+
+      <div style="width:390px;flex:none;border-radius:26px;border:1px solid rgba(62,213,152,.32);background:radial-gradient(400px 200px at 50% 0%, rgba(62,213,152,.16), transparent 70%), #0B0E0D;padding:22px 18px;box-sizing:border-box;">
+        <div style="display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;background:rgba(62,213,152,.16);border:1px solid rgba(62,213,152,.45);font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;color:#3ED598;white-space:nowrap;"><span style="width:6px;height:6px;border-radius:50%;background:#3ED598;animation:tr-pulse 1.4s ease-in-out infinite;"></span>TICKETS ARE LIVE</div>
+        <div style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin-top:14px;line-height:1.12;">Avengers: Endgame Encore</div>
+        <div style="font-size:13.5px;color:#B8B8C2;margin-top:8px;">Allu Cinemas · Dolby Cinema<br>25 September 2026</div>
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+          <span style="padding:10px 14px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);font-size:13.5px;font-weight:600;white-space:nowrap;">7:30 PM</span>
+          <span style="padding:10px 14px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);font-size:13.5px;font-weight:600;white-space:nowrap;">9:45 PM</span>
+          <span style="padding:10px 14px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);font-size:13.5px;font-weight:600;white-space:nowrap;">11:15 PM</span>
+        </div>
+        <div style="margin-top:18px;padding:13px;border-radius:11px;background:rgba(62,213,152,.08);border:1px solid rgba(62,213,152,.26);font-size:12.5px;color:#A8D8C4;">✓ Email sent · detected 10:23 PM</div>
+        <div style="margin-top:16px;padding:17px;border-radius:12px;background:linear-gradient(135deg,#3ED598,#1FA875);text-align:center;font-size:15px;font-weight:700;letter-spacing:.04em;color:#04120C;">BOOK ON BOOKMYSHOW ↗</div>
+        <div style="margin-top:10px;padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,.14);text-align:center;font-size:13px;font-weight:600;color:#C9C9D2;">Keep monitoring AMB Cinemas</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:1120}}">
+class Component extends DCLogic {
+  state = {
+    movie: 0,
+    theatres: [0, 1],
+    formats: { 0: 'Dolby Cinema', 1: 'HDR by Barco' },
+    interval: 10,
+    secs: 462
+  };
+
+  componentDidMount() {
+    this.t = setInterval(() => this.setState(s => ({ secs: s.secs > 0 ? s.secs - 1 : this.state.interval * 60 })), 1000);
+  }
+  componentWillUnmount() { clearInterval(this.t); }
+
+  data = {
+    movies: [
+      { title: 'Avengers: Endgame Encore', meta: 'English · Re-release' },
+      { title: 'Interstellar', meta: 'English · IMAX' },
+      { title: 'Dune: Part Two', meta: 'English' },
+      { title: 'Oppenheimer', meta: 'English' },
+      { title: 'Kalki 2898 AD', meta: 'Telugu' },
+      { title: 'Deadpool & Wolverine', meta: 'English' }
+    ],
+    theatres: [
+      { name: 'Allu Cinemas', area: 'Attapur, Hyderabad', abbr: 'ALU', badge: 'Premium', formats: ['Any format', 'Dolby Cinema', '2D', 'IMAX'] },
+      { name: 'AMB Cinemas', area: 'Gachibowli, Hyderabad', abbr: 'AMB', badge: 'HDR', formats: ['Any format', 'HDR by Barco', '4DX', '2D'] },
+      { name: 'PVR Inorbit', area: 'Madhapur, Hyderabad', abbr: 'PVR', badge: 'IMAX', formats: ['Any format', 'IMAX', '2D'] },
+      { name: 'Asian CineSquare', area: 'Uppal, Hyderabad', abbr: 'ACS', badge: '4K', formats: ['Any format', 'Dolby Atmos', '2D'] },
+      { name: 'Miraj Cinemas', area: 'KPHB, Hyderabad', abbr: 'MRJ', badge: '2D', formats: ['Any format', '2D'] }
+    ]
+  };
+
+  renderVals() {
+    const s = this.state;
+    const mm = String(Math.floor(s.secs / 60)).padStart(2, '0');
+    const ss = String(s.secs % 60).padStart(2, '0');
+
+    const movies = this.data.movies.map((m, i) => {
+      const sel = s.movie === i;
+      return {
+        title: m.title, meta: m.meta, selected: sel,
+        pick: () => this.setState({ movie: i }),
+        cardStyle: 'cursor:pointer;border-radius:13px;overflow:hidden;background:' + (sel ? 'rgba(255,51,85,.07)' : '#0A0A0D') +
+          ';border:' + (sel ? '1.5px solid #FF3355' : '1px solid rgba(255,255,255,.08)') +
+          ';box-shadow:' + (sel ? '0 14px 40px -18px rgba(255,51,85,.8)' : 'none') + ';transition:border-color .15s;',
+        posterStyle: 'position:relative;height:168px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:9px;background:repeating-linear-gradient(135deg,' +
+          (sel ? '#26161B 0 7px,#1C1015 7px 14px' : '#1C1C22 0 7px,#15151A 7px 14px') + ');'
+      };
+    });
+
+    const theatres = this.data.theatres.map((t, i) => {
+      const sel = s.theatres.indexOf(i) >= 0;
+      return {
+        name: t.name, area: t.area, abbr: t.abbr, mark: sel ? '✓' : '',
+        toggle: () => this.setState(st => ({ theatres: st.theatres.indexOf(i) >= 0 ? st.theatres.filter(x => x !== i) : st.theatres.concat([i]) })),
+        rowStyle: 'display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:12px;cursor:pointer;background:' +
+          (sel ? 'rgba(255,51,85,.07)' : '#0A0A0D') + ';border:' + (sel ? '1px solid rgba(255,51,85,.45)' : '1px solid rgba(255,255,255,.07)') + ';',
+        boxStyle: 'width:20px;height:20px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;background:' +
+          (sel ? '#FF3355' : 'transparent') + ';border:' + (sel ? '1px solid #FF3355' : '1.5px solid rgba(255,255,255,.2)') + ';'
+      };
+    });
+
+    const formatPanels = s.theatres.slice().sort((a, b) => a - b).map(i => {
+      const t = this.data.theatres[i];
+      return {
+        name: t.name, area: t.area, badge: t.badge,
+        opts: t.formats.map(f => {
+          const sel = (s.formats[i] || 'Any format') === f;
+          return {
+            label: f,
+            pick: () => this.setState(st => ({ formats: Object.assign({}, st.formats, { [i]: f }) })),
+            rowStyle: 'display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;cursor:pointer;background:' +
+              (sel ? 'rgba(255,51,85,.1)' : 'transparent') + ';border:1px solid ' + (sel ? 'rgba(255,51,85,.42)' : 'rgba(255,255,255,.07)') + ';',
+            dotStyle: 'width:14px;height:14px;flex:none;border-radius:50%;background:#0A0A0D;border:' +
+              (sel ? '4px solid #FF3355' : '1.5px solid rgba(255,255,255,.22)') + ';',
+            labelStyle: 'font-size:13px;font-weight:' + (sel ? '600' : '500') + ';color:' + (sel ? '#F2F2F4' : '#B0B0BA') + ';'
+          };
+        })
+      };
+    });
+
+    const intervals = [10, 15, 30].map(n => {
+      const sel = s.interval === n;
+      return {
+        num: n, pick: () => this.setState({ interval: n, secs: n * 60 }),
+        style: 'text-align:center;padding:15px 8px;border-radius:12px;cursor:pointer;background:' +
+          (sel ? 'rgba(255,51,85,.1)' : '#0A0A0D') + ';border:' + (sel ? '1.5px solid #FF3355' : '1px solid rgba(255,255,255,.08)') + ';'
+      };
+    });
+
+    return {
+      movies, theatres, formatPanels, intervals,
+      countdown: mm + ':' + ss,
+      toggleAll: () => this.setState(st => ({ theatres: st.theatres.length === this.data.theatres.length ? [] : this.data.theatres.map((x, i) => i) }))
+    };
+  }
+}
+</script>
+</body>
+</html>
