@@ -29,3 +29,6 @@ jobs:
       - name: Dump payload shapes
         if: ${{ !cancelled() }}
         run: python tools/bms_shape.py --city "${{ inputs.city }}"
+      - name: Dump venue shapes
+        if: ${{ !cancelled() }}
+        run: python tools/bms_shape2.py --city "${{ inputs.city }}"
