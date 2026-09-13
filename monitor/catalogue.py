@@ -1,34 +1,67 @@
-"""The movie catalogue — resolved movies, their theatres and their formats.
+"""The movie catalogue — what's showing in a city, and where.
 
 Why this exists
 ---------------
-Theatres and formats are *discovered*, never hard-coded: the list of formats
-Allu Cinemas offers is whatever that movie is actually screening there. But
-discovery needs a live call to the platform, and the two places this app runs
-are exactly the two places that call is least reliable — Streamlit Cloud and a
-home connection both get bot-checked by BookMyShow's WAF often enough to
-matter.
+The user picks a city and then a movie. Neither of those questions can be
+answered without reading BookMyShow, and BookMyShow is exactly the thing that
+is unreliable from a browser-facing host: its bot check refuses some networks
+outright (Streamlit Cloud's among them, most likely).
 
-So resolution is cached into ``data/catalogue.json``. The UI reads the cache
-instantly and offers a refresh; if refreshing from the browser is blocked, the
-same resolution can be run from GitHub Actions (``resolve-movie.yml``), whose
-runners are not blocked, and the result lands back in the repo.
+So retrieval is separated from presentation. A scheduled GitHub Action syncs
+the city's catalogue into ``data/catalogue.json`` and commits it; the UI reads
+that file and is therefore instant and always available, even when the app
+itself could never have reached BookMyShow. The UI may also refresh live when
+its own network happens to work — but it never *depends* on that.
 
-The cache only ever holds data a provider genuinely returned. Nothing here
-invents a movie, a theatre or a format.
+Nothing here invents data. A movie, theatre or format is in the catalogue only
+because a provider returned it, and a failed sync leaves the previous
+catalogue untouched rather than replacing it with an empty one.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
+from datetime import datetime
+from enum import Enum
+from typing import Any, Callable
 
 from config.store import load_catalogue, save_catalogue
-from config.timezone import now_ist, to_iso
+from config.timezone import now_ist, parse_iso, to_iso
 from monitor.models import MovieRef, Snapshot, Venue, dedupe
 from platforms import get_provider
+from platforms.base import PlatformBlocked, PlatformError
+
+#: How many movies a single sync will resolve theatre/format detail for.
+#: Each one is its own request, so this is the difference between a polite
+#: two-minute job and hammering BookMyShow a hundred times in a row.
+DETAIL_LIMIT = 60
+
+#: Politeness gap between per-movie detail requests, in seconds.
+DETAIL_DELAY = 1.2
 
 
+class SyncStatus(str, Enum):
+    """Why the catalogue looks the way it does.
+
+    The UI must be able to tell "this city genuinely has nothing listed" from
+    "we could not ask" — showing an empty movie grid for a Cloudflare block is
+    exactly the class of lie this whole application is built to avoid.
+    """
+
+    OK = "OK"                # synced, movies found
+    EMPTY = "EMPTY"          # synced, the city really has nothing listed
+    BLOCKED = "BLOCKED"      # bot check / WAF refused us
+    ERROR = "ERROR"          # network or parse failure
+    NEVER = "NEVER"          # no sync has ever run
+
+    @property
+    def is_failure(self) -> bool:
+        return self in (SyncStatus.BLOCKED, SyncStatus.ERROR)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Entry shape
+# ──────────────────────────────────────────────────────────────────────────
 def entry_from_snapshot(snapshot: Snapshot) -> dict[str, Any]:
     return {
         "movie": asdict(snapshot.movie),
@@ -40,6 +73,18 @@ def entry_from_snapshot(snapshot: Snapshot) -> dict[str, Any]:
         "closed_dates": list(snapshot.closed_dates),
         "showtime_count": len(snapshot.showtimes),
         "resolved_at": to_iso(snapshot.fetched_at or now_ist()),
+    }
+
+
+def entry_from_movie(movie: MovieRef) -> dict[str, Any]:
+    """A catalogue row for a movie we know exists but haven't detailed yet."""
+    return {
+        "movie": asdict(movie),
+        "venues": [],
+        "bookable_dates": [],
+        "closed_dates": [],
+        "showtime_count": 0,
+        "resolved_at": None,
     }
 
 
@@ -62,41 +107,101 @@ def venues_from_entry(entry: dict[str, Any]) -> list[Venue]:
     ]
 
 
-def list_entries() -> list[dict[str, Any]]:
-    entries = load_catalogue().get("movies", [])
-    return [e for e in entries if isinstance(e, dict) and e.get("movie")]
+def is_detailed(entry: dict[str, Any]) -> bool:
+    """Has this movie's theatre/format detail been read yet?"""
+    return entry.get("resolved_at") is not None
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Reading
+# ──────────────────────────────────────────────────────────────────────────
+def list_entries(region_slug: str = "") -> list[dict[str, Any]]:
+    entries = [
+        e for e in load_catalogue().get("movies", [])
+        if isinstance(e, dict) and e.get("movie")
+    ]
+    if region_slug:
+        entries = [e for e in entries if movie_from_entry(e).region_slug == region_slug]
+    return entries
 
 
 def find_entry(movie_id: str) -> dict[str, Any] | None:
-    for entry in list_entries():
-        if movie_from_entry(entry).id == movie_id:
-            return entry
-    return None
+    return next((e for e in list_entries() if movie_from_entry(e).id == movie_id), None)
 
 
-def search_entries(query: str) -> list[dict[str, Any]]:
+def search_entries(query: str, region_slug: str = "") -> list[dict[str, Any]]:
+    entries = list_entries(region_slug)
     q = (query or "").strip().lower()
     if not q:
-        return list_entries()
+        return entries
     out = []
-    for entry in list_entries():
+    for entry in entries:
         movie = movie_from_entry(entry)
-        haystack = f"{movie.title} {movie.language} {movie.event_code}".lower()
-        if q in haystack:
+        if q in f"{movie.title} {movie.language} {movie.event_code}".lower():
             out.append(entry)
     return out
 
 
+def sync_state(region_slug: str = "") -> dict[str, Any]:
+    """The last sync's outcome, for the UI to render honestly."""
+    catalogue = load_catalogue()
+    states = catalogue.get("sync", {})
+    raw = states.get(region_slug) if region_slug else None
+    if not isinstance(raw, dict):
+        raw = {}
+    try:
+        status = SyncStatus(raw.get("status", "NEVER"))
+    except ValueError:
+        status = SyncStatus.NEVER
+    return {
+        "status": status,
+        "message": raw.get("message", ""),
+        "at": parse_iso(raw.get("at")),
+        "movie_count": int(raw.get("movie_count", 0) or 0),
+        "strategy": raw.get("strategy", ""),
+    }
+
+
+def _record_sync(region_slug: str, status: SyncStatus, message: str = "",
+                 movie_count: int = 0, *, mirror: bool) -> None:
+    catalogue = load_catalogue()
+    catalogue.setdefault("sync", {})[region_slug] = {
+        "status": status.value,
+        "message": message,
+        "at": to_iso(now_ist()),
+        "movie_count": movie_count,
+    }
+    catalogue["updated_at"] = to_iso(now_ist())
+    save_catalogue(catalogue, mirror=mirror)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Writing
+# ──────────────────────────────────────────────────────────────────────────
+def _upsert(entries: list[dict[str, Any]], *, region_slug: str, mirror: bool) -> None:
+    """Replace this region's rows, leaving other regions alone."""
+    catalogue = load_catalogue()
+    keep = [
+        e for e in catalogue.get("movies", [])
+        if isinstance(e, dict) and e.get("movie")
+        and movie_from_entry(e).region_slug != region_slug
+    ]
+    catalogue["movies"] = entries + keep
+    catalogue["updated_at"] = to_iso(now_ist())
+    save_catalogue(catalogue, mirror=mirror)
+
+
 def store_snapshot(snapshot: Snapshot, *, mirror: bool = True) -> dict[str, Any]:
-    """Upsert a resolved movie, newest first."""
+    """Upsert one fully-resolved movie."""
     entry = entry_from_snapshot(snapshot)
     catalogue = load_catalogue()
     movies = [
         e for e in catalogue.get("movies", [])
-        if isinstance(e, dict) and movie_from_entry(e).id != snapshot.movie.id
+        if isinstance(e, dict) and e.get("movie")
+        and movie_from_entry(e).id != snapshot.movie.id
     ]
     movies.insert(0, entry)
-    catalogue["movies"] = movies[:40]
+    catalogue["movies"] = movies
     catalogue["updated_at"] = to_iso(now_ist())
     save_catalogue(catalogue, mirror=mirror)
     return entry
@@ -106,23 +211,124 @@ def remove_entry(movie_id: str, *, mirror: bool = True) -> None:
     catalogue = load_catalogue()
     catalogue["movies"] = [
         e for e in catalogue.get("movies", [])
-        if isinstance(e, dict) and movie_from_entry(e).id != movie_id
+        if isinstance(e, dict) and e.get("movie") and movie_from_entry(e).id != movie_id
     ]
     catalogue["updated_at"] = to_iso(now_ist())
     save_catalogue(catalogue, mirror=mirror)
 
 
-def resolve_url(url: str, platform: str = "bookmyshow", *, mirror: bool = True) -> dict[str, Any]:
-    """Read a listing URL live and cache it.
+# ──────────────────────────────────────────────────────────────────────────
+# Syncing a city
+# ──────────────────────────────────────────────────────────────────────────
+def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool = False,
+                detail_limit: int = DETAIL_LIMIT, detail: bool = True,
+                on_progress: Callable[[str], None] | None = None) -> dict[str, Any]:
+    """Read a city's listing and cache it. Never raises.
 
-    Raises ``PlatformError`` on failure — the caller decides how to say
-    "we couldn't look", and nothing is written to the cache on a failure.
+    Returns a summary dict. On failure the previous catalogue is left exactly
+    as it was — a bot check must not be allowed to look like "the city has no
+    movies today", because tomorrow the UI would show an empty grid and the
+    user would believe it.
+    """
+    say = on_progress or (lambda msg: print(f"[catalogue] {msg}"))
+    provider = get_provider(platform)
+
+    try:
+        movies = provider.list_movies(region_slug)
+    except PlatformBlocked as exc:
+        say(f"blocked: {exc}")
+        _record_sync(region_slug, SyncStatus.BLOCKED, str(exc), mirror=mirror)
+        return {"ok": False, "status": SyncStatus.BLOCKED, "message": str(exc), "movies": 0}
+    except PlatformError as exc:
+        say(f"failed: {exc}")
+        _record_sync(region_slug, SyncStatus.ERROR, str(exc), mirror=mirror)
+        return {"ok": False, "status": SyncStatus.ERROR, "message": str(exc), "movies": 0}
+
+    if not movies:
+        say("the city listing came back empty")
+        _record_sync(region_slug, SyncStatus.EMPTY, "No movies listed.", mirror=mirror)
+        return {"ok": True, "status": SyncStatus.EMPTY, "message": "No movies listed.", "movies": 0}
+
+    say(f"{len(movies)} movie(s) listed in {region_slug}")
+
+    # Keep whatever detail we already have; only re-read what we must.
+    existing = {movie_from_entry(e).id: e for e in list_entries(region_slug)}
+    entries: list[dict[str, Any]] = []
+    for movie in movies:
+        prior = existing.get(movie.id)
+        if prior and is_detailed(prior):
+            # Carry the resolved detail forward, but take the fresher title.
+            prior = dict(prior)
+            stored = movie_from_entry(prior)
+            prior["movie"] = asdict(
+                MovieRef(
+                    **{
+                        **asdict(stored),
+                        "title": movie.title or stored.title,
+                        "poster_url": movie.poster_url or stored.poster_url,
+                        "language": movie.language or stored.language,
+                    }
+                )
+            )
+            entries.append(prior)
+        else:
+            entries.append(entry_from_movie(movie))
+
+    _upsert(entries, region_slug=region_slug, mirror=mirror)
+
+    detailed = failed = 0
+    if detail:
+        pending = [e for e in entries if not is_detailed(e)][:detail_limit]
+        say(f"resolving theatres/formats for {len(pending)} movie(s)")
+        for index, entry in enumerate(pending):
+            movie = movie_from_entry(entry)
+            if index:
+                provider_sleep(provider, DETAIL_DELAY)
+            try:
+                snapshot = provider.fetch(movie)
+            except PlatformError as exc:
+                failed += 1
+                say(f"  {movie.title or movie.event_code}: {exc}")
+                continue
+            except Exception as exc:  # noqa: BLE001 - one bad movie must not end the sync
+                failed += 1
+                say(f"  {movie.title or movie.event_code}: unexpected {type(exc).__name__}")
+                continue
+            store_snapshot(snapshot, mirror=False)
+            detailed += 1
+            say(
+                f"  {snapshot.movie.title}: {len(snapshot.venues)} theatre(s), "
+                f"{len(snapshot.showtimes)} showtime(s)"
+            )
+
+    _record_sync(region_slug, SyncStatus.OK, "", movie_count=len(entries), mirror=mirror)
+    return {
+        "ok": True,
+        "status": SyncStatus.OK,
+        "movies": len(entries),
+        "detailed": detailed,
+        "failed": failed,
+    }
+
+
+def provider_sleep(provider, seconds: float) -> None:
+    """Sleep using the provider's own sleeper, so tests stay instant."""
+    getattr(provider, "_sleep", lambda _s: None)(seconds)
+
+
+def resolve_url(url: str, platform: str = "bookmyshow", *, mirror: bool = True) -> dict[str, Any]:
+    """Resolve one listing URL into the catalogue.
+
+    Admin/debug path only — reachable from ``resolve_movie.py``, never from
+    the UI. The user-facing flow is location -> catalogue -> movie and must
+    never ask anyone for a BookMyShow URL.
     """
     snapshot = get_provider(platform).resolve(url)
     return store_snapshot(snapshot, mirror=mirror)
 
 
 def refresh_entry(movie_id: str, *, mirror: bool = True) -> dict[str, Any]:
+    """Re-read one movie's theatres and formats."""
     entry = find_entry(movie_id)
     if entry is None:
         raise KeyError(f"{movie_id} is not in the catalogue.")
@@ -131,9 +337,33 @@ def refresh_entry(movie_id: str, *, mirror: bool = True) -> dict[str, Any]:
     return store_snapshot(snapshot, mirror=mirror)
 
 
+def ensure_detail(movie_id: str, *, mirror: bool = True) -> tuple[dict[str, Any] | None, str]:
+    """Make sure a movie has theatre/format detail, reading it live if not.
+
+    Returns ``(entry, problem)``. ``problem`` is empty on success; when it is
+    set the caller shows it verbatim rather than an empty theatre list.
+    """
+    entry = find_entry(movie_id)
+    if entry is None:
+        return None, "That movie is no longer in the catalogue."
+    if is_detailed(entry):
+        return entry, ""
+    try:
+        return refresh_entry(movie_id, mirror=mirror), ""
+    except PlatformBlocked as exc:
+        return entry, str(exc)
+    except (PlatformError, KeyError) as exc:
+        return entry, str(exc)
+
+
 __all__ = [
+    "DETAIL_LIMIT",
+    "SyncStatus",
+    "ensure_detail",
+    "entry_from_movie",
     "entry_from_snapshot",
     "find_entry",
+    "is_detailed",
     "list_entries",
     "movie_from_entry",
     "refresh_entry",
@@ -141,5 +371,7 @@ __all__ = [
     "resolve_url",
     "search_entries",
     "store_snapshot",
+    "sync_region",
+    "sync_state",
     "venues_from_entry",
 ]

@@ -1,0 +1,91 @@
+name: Catalogue sync
+
+# Keeps data/catalogue.json — the city's movie list, the theatres each movie
+# plays at, and the formats each theatre runs — current.
+#
+# This is the backend half of the location-first flow. The Streamlit app never
+# calls BookMyShow to build its movie grid; it reads what this job committed.
+# That is deliberate: BookMyShow's bot check refuses some hosts outright, and
+# an Actions runner is far more likely to get through than a Streamlit Cloud
+# container. The user picks a city and sees movies either way.
+
+on:
+  schedule:
+    # Four times a day. Listings change on release days, not by the minute.
+    - cron: "0 1,7,13,19 * * *"
+  workflow_dispatch:
+    inputs:
+      city:
+        description: "City slug (blank = every enabled city)"
+        type: string
+        default: ""
+      probe:
+        description: "Report what each listing strategy does, and change nothing"
+        type: boolean
+        default: false
+      no_detail:
+        description: "Only list movies; skip per-movie theatre/format reads"
+        type: boolean
+        default: false
+
+concurrency:
+  group: catalogue-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Probe listing strategies
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.probe }}
+        env:
+          TZ: Asia/Kolkata
+        run: python sync_catalogue.py --probe --city "${{ inputs.city || 'hyderabad' }}"
+
+      - name: Sync catalogue
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.probe) }}
+        env:
+          TZ: Asia/Kolkata
+        run: |
+          python sync_catalogue.py \
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.city != '') && format('--city {0}', inputs.city) || '' }} \
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.no_detail) && '--no-detail' || '' }}
+
+      - name: Commit catalogue
+        # Probe runs change nothing, so this is a no-op for them.
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/catalogue.json
+          if git diff --cached --quiet; then
+            echo "Catalogue unchanged"
+            exit 0
+          fi
+          git commit -m "chore: sync movie catalogue [skip ci]"
+          for attempt in 1 2 3; do
+            if git pull --rebase -X ours origin "${GITHUB_REF_NAME}" && git push; then
+              echo "Catalogue pushed"
+              exit 0
+            fi
+            echo "push attempt $attempt failed, retrying…"
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push the catalogue after 3 attempts"
+          exit 1

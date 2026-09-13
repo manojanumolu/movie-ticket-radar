@@ -27,6 +27,7 @@ means "we don't know" — the monitoring engine treats those very differently.
 
 from __future__ import annotations
 
+import json
 import random
 import re
 import time
@@ -80,10 +81,15 @@ DATE_STYLE = {
 
 EVENT_CODE_RE = re.compile(r"^ET\d{6,}$", re.IGNORECASE)
 DATE_CODE_RE = re.compile(r"^\d{8}$")
+ANY_EVENT_CODE_RE = re.compile(r"ET\d{6,}")
 
 TIMEOUT = 20
 MAX_ATTEMPTS = 3
 BACKOFF_BASE = 2.0
+
+#: Where the browse page for a city lives. Used both as a Referer for the
+#: listing endpoints and as the HTML fallback strategy's target.
+BROWSE_PATH = "/explore/movies-{slug}"
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -150,6 +156,76 @@ def _dicts(value: Any) -> Iterable[dict[str, Any]]:
                 yield item
 
 
+def _walk_dicts(node: Any, depth: int = 0):
+    """Yield every dict inside an arbitrarily nested payload."""
+    if depth > 12:
+        return
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _walk_dicts(value, depth + 1)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _walk_dicts(item, depth + 1)
+
+
+def _event_code_in(node: dict[str, Any]) -> str:
+    """The ET code carried by a node, if it has one on a plausible key."""
+    for key, value in node.items():
+        if not isinstance(value, str):
+            continue
+        candidate = value.strip().upper()
+        if EVENT_CODE_RE.match(candidate) and (
+            "code" in key.lower() or "id" in key.lower() or key.lower().startswith("event")
+        ):
+            return candidate
+    return ""
+
+
+def _first_text(node: dict[str, Any], keys: tuple[str, ...]) -> str:
+    for key in keys:
+        value = node.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, list):
+            parts = [v.strip() for v in value if isinstance(v, str) and v.strip()]
+            if parts:
+                return ", ".join(dict.fromkeys(parts))
+    return ""
+
+
+def _first_url(node: dict[str, Any], keys: tuple[str, ...]) -> str:
+    value = _first_text(node, keys)
+    if value.startswith("//"):
+        return f"https:{value}"
+    return value if value.startswith("http") else ""
+
+
+#: Script blocks that carry a page's server-rendered data.
+_EMBEDDED_JSON_RE = re.compile(
+    r"<script[^>]*(?:id=[\"'](?:__NEXT_DATA__|__NUXT_DATA__)[\"']|"
+    r"type=[\"']application/json[\"'])[^>]*>(.*?)</script>",
+    re.DOTALL | re.IGNORECASE,
+)
+_ASSIGNED_JSON_RE = re.compile(
+    r"(?:window\.__INITIAL_STATE__|window\.__PRELOADED_STATE__|window\.__DATA__)\s*=\s*(\{.*?\})\s*;?\s*</script>",
+    re.DOTALL,
+)
+
+
+def _embedded_json(html: str):
+    """Yield each parseable JSON blob embedded in a page."""
+    for pattern in (_EMBEDDED_JSON_RE, _ASSIGNED_JSON_RE):
+        for match in pattern.finditer(html or ""):
+            blob = match.group(1).strip()
+            if not blob.startswith(("{", "[")):
+                continue
+            try:
+                yield json.loads(blob)
+            except ValueError:
+                continue
+
+
 def clean_format(raw: str) -> str:
     """'2D DOLBY CINEMA' -> 'Dolby Cinema 2D' is overkill; we just tidy case.
 
@@ -200,6 +276,41 @@ class BookMyShowProvider:
             "x-location-selection": "manual",
             "x-lsid": "",
         }
+
+    def _browse_headers(self, region: tuple[str, str, str, str, str], *,
+                        accept: str = "application/json, text/plain, */*") -> dict[str, str]:
+        """Headers for city-wide browsing, where there is no event yet."""
+        region_code, region_slug, lat, lon, geohash = region
+        return {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+            ),
+            "Accept": accept,
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": f"{SITE}{BROWSE_PATH.format(slug=region_slug)}",
+            "sec-ch-ua": '"Chromium";v="140", "Not:A-Brand";v="99"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "x-app-code": "WEB",
+            "x-region-code": region_code,
+            "x-region-slug": region_slug,
+            "x-geohash": geohash,
+            "x-latitude": lat,
+            "x-longitude": lon,
+            "x-location-selection": "manual",
+            # The legacy endpoints key the city off this cookie rather than a header.
+            "Cookie": f"Rgn=Code%3D{region_code}; bmsId=; _region_slug={region_slug}",
+        }
+
+    def _raw_get(self, url: str, headers: dict[str, str], params: dict[str, str] | None = None):
+        """A single unretried request. Returns the response or raises.
+
+        Used by the catalogue strategies, which each get one shot: when one
+        approach is refused we want to fall through to the next rather than
+        spend three retries proving the same block.
+        """
+        return self._session.get(url, headers=headers, params=params or {}, timeout=TIMEOUT)
 
     def _get(self, event_code: str, date_code: str, region: tuple[str, str, str, str, str]) -> dict[str, Any]:
         """One API read, with bounded retries.
@@ -262,6 +373,220 @@ class BookMyShowProvider:
                 self._sleep(BACKOFF_BASE ** attempt + random.uniform(0, 0.75))
 
         raise PlatformError(f"Could not reach BookMyShow after {MAX_ATTEMPTS} attempts — {last_error}.")
+
+    # ── City catalogue ───────────────────────────────────────────────────
+    #
+    # BookMyShow has no public "what's showing in this city" API. Several
+    # internal ones are known to exist, they are not documented, and which of
+    # them answers depends on the caller's network and the day. Rather than
+    # betting the feature on one guess, we try a chain of approaches and use
+    # the first that returns real data; `probe_listing` reports what every
+    # single one did, which is how the working strategy was established from
+    # a CI runner (see README §Catalogue).
+    #
+    # The chain deliberately ends with an HTML strategy: parsing the page a
+    # browser loads is the slowest and ugliest option, but it is the one that
+    # cannot be turned off without also breaking the website.
+
+    def listing_strategies(self):
+        """(name, callable) pairs, cheapest and most structured first."""
+        return [
+            ("explore-api", self._listing_explore_api),
+            ("quickbook", self._listing_quickbook),
+            ("browse-html", self._listing_browse_html),
+        ]
+
+    def list_movies(self, region_slug: str = DEFAULT_CITY) -> list[MovieRef]:
+        """Every movie currently listed in a city.
+
+        Raises :class:`PlatformError` when no strategy could get an answer —
+        which is emphatically different from returning ``[]``, meaning
+        "we looked and the city has nothing listed".
+        """
+        region = region_for(region_slug)
+        failures: list[str] = []
+
+        for name, strategy in self.listing_strategies():
+            try:
+                movies = strategy(region)
+            except PlatformError as exc:
+                failures.append(f"{name}: {exc}")
+                continue
+            except Exception as exc:  # noqa: BLE001 - one bad parser must not end the chain
+                failures.append(f"{name}: unexpected {type(exc).__name__}: {exc}")
+                continue
+            if movies:
+                print(f"[bookmyshow] catalogue via '{name}': {len(movies)} movie(s)")
+                return movies
+            failures.append(f"{name}: returned nothing")
+
+        blocked = any("refused" in f or "403" in f for f in failures)
+        message = "Could not read the BookMyShow city listing — " + "; ".join(failures)
+        raise (PlatformBlocked if blocked else PlatformError)(message)
+
+    def probe_listing(self, region_slug: str = DEFAULT_CITY) -> list[dict[str, Any]]:
+        """Run every strategy and report what each did. Diagnostics only."""
+        region = region_for(region_slug)
+        report = []
+        for name, strategy in self.listing_strategies():
+            entry: dict[str, Any] = {"strategy": name}
+            try:
+                movies = strategy(region)
+            except Exception as exc:  # noqa: BLE001 - reporting, not flow control
+                entry.update(ok=False, error=f"{type(exc).__name__}: {exc}")
+            else:
+                entry.update(
+                    ok=bool(movies),
+                    count=len(movies),
+                    sample=[f"{m.title} [{m.event_code}]" for m in movies[:5]],
+                )
+            report.append(entry)
+        return report
+
+    def _check_listing_response(self, resp, name: str) -> None:
+        if resp.status_code == 200:
+            return
+        if resp.status_code in (401, 403):
+            raise PlatformBlocked(f"refused (HTTP {resp.status_code})")
+        raise PlatformError(f"HTTP {resp.status_code}")
+
+    def _listing_explore_api(self, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
+        """The JSON the browse page's own client calls."""
+        region_code, region_slug, *_ = region
+        url = f"{SITE}/api/explore/v1/discover/movies-{region_slug}"
+        try:
+            resp = self._raw_get(url, self._browse_headers(region), {"regionCode": region_code})
+        except requests.RequestException as exc:
+            raise PlatformError(f"{type(exc).__name__}") from None
+        self._check_listing_response(resp, "explore-api")
+        try:
+            payload = resp.json()
+        except ValueError:
+            raise PlatformError("not JSON") from None
+        return self._movies_from_json(payload, region)
+
+    def _listing_quickbook(self, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
+        """The legacy mobile endpoint. Keys the city off the Rgn cookie."""
+        region_code, region_slug, *_ = region
+        headers = self._browse_headers(region)
+        headers["Cookie"] = f"Rgn=Code%3D{region_code}%7Ctext%3D{region_slug}"
+        try:
+            resp = self._raw_get(
+                f"{SITE}/serv/getData",
+                headers,
+                {"cmd": "QUICKBOOK", "type": "MT", "f": "json"},
+            )
+        except requests.RequestException as exc:
+            raise PlatformError(f"{type(exc).__name__}") from None
+        self._check_listing_response(resp, "quickbook")
+        try:
+            payload = resp.json()
+        except ValueError:
+            raise PlatformError("not JSON") from None
+        return self._movies_from_json(payload, region)
+
+    def _listing_browse_html(self, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
+        """Parse the browse page itself.
+
+        BookMyShow renders the city's movie list server-side and ships the
+        data as JSON inside the document. We look for that payload first and
+        only fall back to scraping links, because the embedded JSON carries
+        titles and languages while the links carry only codes.
+        """
+        _, region_slug, *_ = region
+        url = f"{SITE}{BROWSE_PATH.format(slug=region_slug)}"
+        headers = self._browse_headers(
+            region, accept="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        )
+        try:
+            resp = self._raw_get(url, headers)
+        except requests.RequestException as exc:
+            raise PlatformError(f"{type(exc).__name__}") from None
+        self._check_listing_response(resp, "browse-html")
+
+        html = resp.text or ""
+        for payload in _embedded_json(html):
+            movies = self._movies_from_json(payload, region)
+            if movies:
+                return movies
+        return self._movies_from_links(html, region)
+
+    # ── Turning whatever came back into MovieRefs ────────────────────────
+    def _movies_from_json(self, payload: Any, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
+        """Walk an arbitrary payload for objects that look like a movie.
+
+        These endpoints nest their results differently and rename their
+        wrappers between releases, so instead of hard-coding a path we walk
+        the tree for any dict carrying an event code plus a title. That
+        survives re-nesting, which a fixed path does not.
+        """
+        found: dict[str, MovieRef] = {}
+        for node in _walk_dicts(payload):
+            code = _event_code_in(node)
+            if not code or code in found:
+                continue
+            title = _first_text(node, ("EventTitle", "eventTitle", "title", "name",
+                                       "EventName", "eventName", "movieName"))
+            if not title:
+                continue
+            found[code] = MovieRef(
+                platform=self.slug,
+                event_code=code,
+                title=title,
+                region_code=region[0],
+                region_slug=region[1],
+                city=region[1].replace("-", " ").title(),
+                language=_first_text(node, ("EventLanguage", "eventLanguage", "language",
+                                            "languages", "movieLanguage")),
+                poster_url=_first_url(node, ("EventImageURL", "eventImageUrl", "imageUrl",
+                                             "posterUrl", "image", "portraitImageUrl")),
+                source_url=self._listing_url(region[1], code),
+            )
+        return list(found.values())
+
+    def _movies_from_links(self, html: str, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
+        """Last resort: event codes scraped out of the markup.
+
+        Titles recovered this way are approximate — they come from the URL
+        slug — so this strategy is only reached when nothing structured was
+        available, and the sync step overwrites these titles with the real
+        ones as soon as each movie's own listing is read.
+        """
+        out: dict[str, MovieRef] = {}
+        pattern = re.compile(
+            r'href="[^"]*?/movies/(?P<slug>[a-z0-9-]+)/(?P<title>[a-z0-9-]+)/(?P<code>ET\d{6,})',
+            re.IGNORECASE,
+        )
+        for match in pattern.finditer(html):
+            code = match.group("code").upper()
+            if code in out:
+                continue
+            out[code] = MovieRef(
+                platform=self.slug,
+                event_code=code,
+                title=match.group("title").replace("-", " ").title(),
+                region_code=region[0],
+                region_slug=region[1],
+                city=region[1].replace("-", " ").title(),
+                source_url=self._listing_url(region[1], code),
+            )
+        if out:
+            return list(out.values())
+
+        # Even the links changed shape: fall back to bare codes with no title,
+        # which the sync step will fill in. Better than claiming the city is empty.
+        return [
+            MovieRef(
+                platform=self.slug, event_code=code, title="",
+                region_code=region[0], region_slug=region[1],
+                city=region[1].replace("-", " ").title(),
+                source_url=self._listing_url(region[1], code),
+            )
+            for code in dict.fromkeys(ANY_EVENT_CODE_RE.findall(html))
+        ]
+
+    def _listing_url(self, region_slug: str, event_code: str) -> str:
+        return f"{SITE}/movies/{region_slug}/buytickets/{event_code}"
 
     # ── Public API ───────────────────────────────────────────────────────
     def resolve(self, url: str) -> Snapshot:
