@@ -37,6 +37,7 @@ from urllib.parse import urlparse
 import requests
 
 from config.timezone import now_ist
+from platforms.http import REQUEST_ERRORS, build_session, transport_name
 from monitor.models import (
     Availability,
     MovieRef,
@@ -226,6 +227,18 @@ def _embedded_json(html: str):
                 continue
 
 
+#: BookMyShow serves posters from its own image CDN, keyed by the
+#: ``EventImageCode`` the listing hands us. The transform segment (``tr:``)
+#: is ImageKit's, which is what BookMyShow's own pages use.
+POSTER_CDN = "https://assets-in.bmscdn.com/discovery-catalog/events/tr:w-400,h-600,bg-CCCCCC/{code}.jpg"
+
+
+def poster_url(image_code: str) -> str:
+    """A poster URL for a real image code, or '' — never a placeholder."""
+    code = (image_code or "").strip()
+    return POSTER_CDN.format(code=code) if code else ""
+
+
 def clean_format(raw: str) -> str:
     """'2D DOLBY CINEMA' -> 'Dolby Cinema 2D' is overkill; we just tidy case.
 
@@ -248,9 +261,15 @@ class BookMyShowProvider:
     slug = "bookmyshow"
     name = "BookMyShow"
 
-    def __init__(self, session: requests.Session | None = None, sleeper=time.sleep) -> None:
-        self._session = session or requests.Session()
+    def __init__(self, session=None, sleeper=time.sleep) -> None:
+        # Default to the TLS-impersonating client; BookMyShow refuses plain
+        # `requests` outright (platforms/http.py documents the evidence).
+        self._session = session if session is not None else build_session(sleeper)
         self._sleep = sleeper
+
+    @property
+    def transport(self) -> str:
+        return transport_name(self._session)
 
     # ── HTTP ─────────────────────────────────────────────────────────────
     def _headers(self, region_code: str, region_slug: str, lat: str, lon: str, geohash: str,
@@ -338,7 +357,7 @@ class BookMyShowProvider:
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
                 resp = self._session.get(API_URL, headers=headers, params=params, timeout=TIMEOUT)
-            except requests.RequestException as exc:
+            except REQUEST_ERRORS as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
             else:
                 if resp.status_code == 200:
@@ -389,11 +408,20 @@ class BookMyShowProvider:
     # cannot be turned off without also breaking the website.
 
     def listing_strategies(self):
-        """(name, callable) pairs, cheapest and most structured first."""
+        """(name, callable) pairs, best-evidenced first.
+
+        QUICKBOOK leads because it is the one that actually answered from a
+        runner, and it answers with the richest data: 39 movie groups for
+        Hyderabad, each with per-language child events, dimensions, censor
+        rating, release date and a poster image code.
+        """
         return [
-            ("explore-api", self._listing_explore_api),
             ("quickbook", self._listing_quickbook),
             ("browse-html", self._listing_browse_html),
+            # explore-api answered HTTP 500 on every runner attempt, so it is
+            # last: kept because it costs nothing to try when the other two
+            # have already failed, not because it has ever worked.
+            ("explore-api", self._listing_explore_api),
         ]
 
     def list_movies(self, region_slug: str = DEFAULT_CITY) -> list[MovieRef]:
@@ -456,7 +484,7 @@ class BookMyShowProvider:
         url = f"{SITE}/api/explore/v1/discover/movies-{region_slug}"
         try:
             resp = self._raw_get(url, self._browse_headers(region), {"regionCode": region_code})
-        except requests.RequestException as exc:
+        except REQUEST_ERRORS as exc:
             raise PlatformError(f"{type(exc).__name__}") from None
         self._check_listing_response(resp, "explore-api")
         try:
@@ -466,24 +494,87 @@ class BookMyShowProvider:
         return self._movies_from_json(payload, region)
 
     def _listing_quickbook(self, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
-        """The legacy mobile endpoint. Keys the city off the Rgn cookie."""
+        """The endpoint the city page's quick-book rail uses.
+
+        Confirmed shape (see ``tools/bms_shape.py`` output)::
+
+            moviesData.BookMyShow.arrEvents[]      one entry per movie *group*
+              EventTitle      "Mandaadi"
+              EventCode       "ET00442702"          group-level code
+              ChildEvents[]                          one per language/format
+                EventCode     "ET00514261"           the bookable code
+                EventName     "Mandaadi (Telugu)"
+                EventLanguage "Telugu"
+                EventDimension "2D"
+                EventImageCode "mandaadi-et00514261-…"
+
+        The child events are what you can actually book, so each becomes its
+        own selectable movie — that is how "Kantara (Telugu)" and
+        "Kantara (Hindi)" end up as separate, separately-watchable rows.
+        """
         region_code, region_slug, *_ = region
         headers = self._browse_headers(region)
-        headers["Cookie"] = f"Rgn=Code%3D{region_code}%7Ctext%3D{region_slug}"
+        headers["Cookie"] = f"Rgn=Code%3D{region_code}"
         try:
             resp = self._raw_get(
                 f"{SITE}/serv/getData",
                 headers,
                 {"cmd": "QUICKBOOK", "type": "MT", "f": "json"},
             )
-        except requests.RequestException as exc:
+        except REQUEST_ERRORS as exc:
             raise PlatformError(f"{type(exc).__name__}") from None
         self._check_listing_response(resp, "quickbook")
         try:
             payload = resp.json()
         except ValueError:
             raise PlatformError("not JSON") from None
-        return self._movies_from_json(payload, region)
+
+        movies = self._movies_from_quickbook(payload, region)
+        # If the wrapper ever moves, fall back to the generic tree walk
+        # rather than reporting the city as empty.
+        return movies or self._movies_from_json(payload, region)
+
+    def _movies_from_quickbook(self, payload: Any,
+                               region: tuple[str, str, str, str, str]) -> list[MovieRef]:
+        groups = payload
+        for key in ("moviesData", "BookMyShow", "arrEvents"):
+            groups = groups.get(key) if isinstance(groups, dict) else None
+            if groups is None:
+                return []
+        if not isinstance(groups, list):
+            return []
+
+        out: dict[str, MovieRef] = {}
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            group_title = _text(group.get("EventTitle"))
+            children = [c for c in _dicts(group.get("ChildEvents"))]
+
+            # A group with no children is still bookable at the group code.
+            for child in children or [group]:
+                code = _text(child.get("EventCode")).upper()
+                if not EVENT_CODE_RE.match(code) or code in out:
+                    continue
+                language = _text(child.get("EventLanguage"))
+                dimension = _text(child.get("EventDimension"))
+                title = _text(child.get("EventName")) or group_title
+                if not title:
+                    continue
+                out[code] = MovieRef(
+                    platform=self.slug,
+                    event_code=code,
+                    title=title,
+                    region_code=region[0],
+                    region_slug=region[1],
+                    city=region[1].replace("-", " ").title(),
+                    language=" · ".join(x for x in (language, dimension) if x),
+                    poster_url=poster_url(_text(child.get("EventImageCode"))),
+                    source_url=self._listing_url(
+                        region[1], code, _text(child.get("EventURL")) or _text(group.get("EventURLTitle"))
+                    ),
+                )
+        return list(out.values())
 
     def _listing_browse_html(self, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
         """Parse the browse page itself.
@@ -500,7 +591,7 @@ class BookMyShowProvider:
         )
         try:
             resp = self._raw_get(url, headers)
-        except requests.RequestException as exc:
+        except REQUEST_ERRORS as exc:
             raise PlatformError(f"{type(exc).__name__}") from None
         self._check_listing_response(resp, "browse-html")
 
@@ -585,7 +676,14 @@ class BookMyShowProvider:
             for code in dict.fromkeys(ANY_EVENT_CODE_RE.findall(html))
         ]
 
-    def _listing_url(self, region_slug: str, event_code: str) -> str:
+    def _listing_url(self, region_slug: str, event_code: str, title_slug: str = "") -> str:
+        """The page a human would book on.
+
+        BookMyShow accepts the form without a title slug, so the slug is
+        included only when the listing gave us one — never guessed.
+        """
+        if title_slug:
+            return f"{SITE}/movies/{region_slug}/{title_slug}/buytickets/{event_code}"
         return f"{SITE}/movies/{region_slug}/buytickets/{event_code}"
 
     # ── Public API ───────────────────────────────────────────────────────

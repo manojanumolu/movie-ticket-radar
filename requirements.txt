@@ -1,4 +1,7 @@
 streamlit>=1.40
 requests>=2.31
+# BookMyShow's bot check refuses urllib3's TLS fingerprint outright; curl_cffi
+# replays a real browser's handshake. See platforms/http.py for the evidence.
+curl_cffi>=0.7
 PyGithub>=2.3
 tzdata>=2024.1
