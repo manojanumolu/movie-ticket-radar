@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from monitor.models import MovieRef, Snapshot
+from monitor.models import MovieRef, Snapshot  # noqa: F401 - used in the Protocol
 
 
 class PlatformError(Exception):
@@ -43,8 +43,17 @@ class Provider(Protocol):
     slug: str
     name: str
 
+    def list_movies(self, region_slug: str) -> list[MovieRef]:
+        """Every movie currently listed in a city.
+
+        An empty list means the city genuinely has nothing on. Not being able
+        to ask must raise :class:`PlatformError` instead — the difference is
+        what stops the UI showing an empty grid for a bot check.
+        """
+        ...
+
     def resolve(self, url: str) -> Snapshot:
-        """Turn a user-supplied listing URL into a full snapshot."""
+        """Turn a listing URL into a full snapshot. Admin path, not user-facing."""
         ...
 
     def fetch(self, movie: MovieRef, date_codes: list[str] | None = None) -> Snapshot:
