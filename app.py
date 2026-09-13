@@ -242,8 +242,10 @@ def page_home(monitors, states, history, settings) -> None:
         drain_flash()
 
         C.rule("Platform")
-        C.platform_selector(PLATFORMS, "bookmyshow",
-                            len(catalogue.list_entries()), "BookMyShow")
+        city = get_location(st.session_state.get("location") or "hyderabad")
+        entries = catalogue.list_entries(city.slug)
+        theatres = len({v.code for e in entries for v in catalogue.venues_from_entry(e)})
+        C.platform_selector(PLATFORMS, "bookmyshow", theatres, city.name)
         st.write("")
 
         # A live target is the loudest thing on screen when it happens.
