@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Second-pass shape dump: venue cards, showtimes, and poster URLs."""
-import argparse, json, sys
+import argparse, json, pathlib, sys
 SITE = "https://in.bookmyshow.com"
 
 def main(argv=None):
     ap = argparse.ArgumentParser(); ap.add_argument("--city", default="hyderabad")
     a = ap.parse_args(argv); code, lat, lon = "HYD", "17.385", "78.487"
-    from curl_cffi import requests as creq
-    s = creq.Session(impersonate="safari")
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+    from platforms.http import ImpersonatingSession
+    s = ImpersonatingSession()   # rotates profiles on a refusal
 
     qb = s.get(f"{SITE}/serv/getData", params={"cmd":"QUICKBOOK","type":"MT","f":"json"},
                headers={"Cookie": f"Rgn=Code%3D{code}"}, timeout=30).json()
