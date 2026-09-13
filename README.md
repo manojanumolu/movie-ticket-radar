@@ -13,16 +13,25 @@ the alternative is refreshing a booking page all evening.
 
 ## What it does
 
-1. You paste a BookMyShow **Book tickets** link.
-2. It reads the listing and discovers the theatres and the formats each one is
-   actually screening.
-3. You pick one or more theatres, a format per theatre, a check interval
-   (10 / 15 / 30 min) and an end time.
-4. A scheduled GitHub Action checks BookMyShow in the background.
-5. When a theatre you're watching goes from *not bookable* (or *sold out*) to
-   *available*, you get one email with the showtimes and a booking link.
-6. The monitor stops itself at the end time you set. You can also stop it
+    1 Location  →  2 Movie  →  3 Theatres  →  4 Formats  →  5 Monitoring  →  START
+
+1. Pick your city. (Hyderabad today; the rest are wired up but off.)
+2. Pick from the movies **actually showing there** — real titles, real posters,
+   pulled from BookMyShow by a background job.
+3. Pick one or more theatres that are screening it.
+4. Pick formats **per theatre** — only the ones that theatre actually runs.
+   AMB's HDR by Barco and Allu's Dolby Cinema are separate choices, and each
+   theatre × format is watched independently.
+5. Choose a check interval (10 / 15 / 30 min) and an end time.
+6. A scheduled GitHub Action checks BookMyShow in the background. When a target
+   goes from *not bookable* (or *sold out*) to *available*, you get one email
+   with the showtimes and a booking link.
+7. The monitor stops itself at the end time you set. You can also stop it
    manually, and either way the *persisted* state changes — not just the view.
+
+**You never paste a URL.** No BookMyShow link, no `ET…` code, nothing about how
+the data got there. That is a hard rule, enforced by a test that fails if the
+string `bookmyshow.com` appears anywhere in the user-facing flow.
 
 ### What it deliberately does not do
 
@@ -33,7 +42,9 @@ the alternative is refreshing a booking page all evening.
   time, and the last real observation is left untouched.
 - It does not stop watching your other theatres when one goes live.
 - It does not invent booking URLs, movie titles, theatres or formats. Every
-  one of those is read from the listing, or absent.
+  one of those is read from BookMyShow, or absent.
+- It does not show an empty movie grid when the problem was a bot check. Loaded,
+  genuinely-empty, refused, broken and never-synced are five different messages.
 
 ---
 
@@ -43,37 +54,75 @@ the alternative is refreshing a booking page all evening.
 |---|---|
 | Platforms | **BookMyShow only.** District / PVR / Cinépolis are shown as *Coming soon* and are not implemented. |
 | City | Hyderabad (other Indian cities are wired up in `platforms/bookmyshow.py` but untested). |
-| BookMyShow API | An **undocumented internal endpoint**. It can change shape or start refusing us with no notice. Every parse step is defensive and every failure is surfaced as an error, never as an availability. |
-| Bot checks | BookMyShow sits behind Cloudflare and **403s some networks** — this was reproduced from the development machine with both `requests` and `curl`. GitHub Actions runners generally get through; Streamlit Cloud may not. See [Troubleshooting](#troubleshooting). |
+| BookMyShow API | **Undocumented internal endpoints.** They can change shape or start refusing us with no notice. Every parse step is defensive and every failure is surfaced as an error, never as an availability. |
+| Bot checks | BookMyShow is behind Cloudflare, which fingerprints the **TLS handshake**. Plain `requests` is refused every single time, from every host tested. See [The bot check](#the-bot-check) — the single most important thing to understand about this project. |
 | Scheduling | GitHub Actions cron is **best-effort**. Runs are commonly a few minutes late and can be much later under load. The UI shows a configured interval and an expected next check, and never pretends a check happened that didn't. |
 | Email | Gmail SMTP with an app password. One recipient. |
 
-The live BookMyShow integration has **not** been verified end-to-end against
-the real site from the development machine, because that machine is
-Cloudflare-blocked. The parsing is built to the structure the endpoint is
-known to return and is covered by tests against a recorded-shape fixture. The
-first real proof will be a `Resolve movie` workflow run — see
-[First run](#first-run).
+**Verified against the live site.** The catalogue sync has run on a GitHub
+runner and pulled the real Hyderabad listing — 59 bookable events across 39
+films, with real posters and real per-screen formats. Every parser in
+`platforms/bookmyshow.py` was written against payloads captured from that run,
+not against guesses. Two guesses that *were* made got caught by doing this: the
+poster CDN path 404'd, and venue cards turned out to carry no area field at all.
+
+---
+
+## The bot check
+
+BookMyShow sits behind Cloudflare bot management. What it refuses is not the
+URL or the headers — it is the **TLS fingerprint of the HTTP client**.
+Measured from GitHub Actions runners:
+
+| Client | Result |
+|---|---|
+| `requests`, any headers, any URL | 403, every time |
+| `requests` + homepage warm-up for cookies | 403 |
+| `curl_cffi`, `impersonate="chrome"` | 403 on one run, **200** on the next |
+| `curl_cffi`, `impersonate="safari"` | **200** on one run, 403 on the next |
+
+Two conclusions, and they shape the whole design:
+
+1. **Plain `requests` never works.** No amount of header tuning changes it.
+   This is why the original paste-a-URL flow was unreliable — the URL was
+   never the problem, the client was.
+2. **A single browser profile is not enough.** The block is probabilistic, not
+   a permanent verdict on a fingerprint. So `platforms/http.py` rotates: on a
+   refusal it discards the session, picks the next profile, and retries.
+
+`curl_cffi` is therefore a real dependency, not a nicety. It is also optional
+at import time — without it the app still runs, and refusals surface as the
+honest `BLOCKED` state rather than an `ImportError` at startup.
+
+Reproduce any of this with the **BookMyShow diagnose** workflow, which prints
+the table above for the current runner and changes nothing.
 
 ---
 
 ## How it works
 
 ```
-  Streamlit UI                    data/ (the database)              GitHub Actions
-  ────────────                    ────────────────────              ──────────────
-  pick movie ─────► resolve ────► catalogue.json  ◄──── resolve-movie.yml
-  pick theatres                                            (workflow_dispatch)
-  pick formats
-  pick interval ──► save ───────► monitors.json  ─────►  bookmyshow-monitor.yml
-  pick end time                                           (every 5 min)
-                                                                │
-  show status  ◄──────────────── state.json  ◄────────────── check, compare,
-                                                            notify, commit
-                                                                │
-                                                                ▼
-                                                        Gmail SMTP ──► your inbox
+  Streamlit UI                  data/ (the database)          GitHub Actions
+  ------------                  --------------------          --------------
+  1 pick city  -----reads------> catalogue.json  <---writes--  catalogue-sync.yml
+  2 pick movie                    movies, theatres,             (4x/day + manual)
+  3 pick theatres                 formats per theatre
+  4 pick formats
+  5 interval+end ---writes-----> monitors.json   ----reads--->  bookmyshow-monitor.yml
+                                                                (every 5 min)
+                                                                     |
+  active monitoring <--reads---- state.json      <---writes---  check, compare,
+                                                                notify, commit
+                                                                     |
+                                                                     v
+                                                            Gmail SMTP --> inbox
 ```
+
+The UI **never calls BookMyShow to build its movie grid.** It reads what the
+sync job committed. That is the whole point: a Streamlit Cloud container is
+exactly the kind of host the bot check refuses, and the user should not have to
+care. The app stays instant and always available, and the one place that has to
+fight Cloudflare is a background job that can retry on a schedule.
 
 The repository **is** the database. `data/*.json` is the single source of
 truth; the worker commits what it observed back to the repo, and the UI
@@ -88,31 +137,38 @@ Two files, two owners, so they never race:
 ### Layout
 
 ```
-app.py                      Streamlit entrypoint
-run_monitor.py              worker CLI — what the schedule runs
-resolve_movie.py            resolve a listing into the catalogue
+app.py                      Streamlit entrypoint (page + rail)
+run_monitor.py              worker CLI — what the ticket schedule runs
+sync_catalogue.py           catalogue CLI — what the catalogue schedule runs
+resolve_movie.py            admin-only: resolve one listing URL. Not user-facing.
 
 platforms/
   base.py                   Provider protocol + PlatformError / PlatformBlocked
+  http.py                   the TLS-impersonating client, and why it exists
   bookmyshow.py             the only implemented provider
 monitor/
   models.py                 normalised domain types (no platform knowledge)
+  catalogue.py              city listing cache + sync, with SyncStatus
   state.py                  persistence + monitor lifecycle
   changes.py                when something is actually worth an email
   checker.py                the engine
-  catalogue.py              resolved movies / theatres / formats cache
 notifications/
   email.py                  Gmail SMTP + the alert template
 config/
+  locations.py              supported cities
   store.py                  atomic JSON IO + GitHub mirroring
   timezone.py               everything is IST
 ui/
   theme.py                  the design system, as CSS
+  flow.py                   the five-step wizard
   components.py             status cards
-tests/                      93 tests, no network, no SMTP
+tools/
+  bms_diagnose.py           reachability diagnostics (run it on a runner)
+tests/                      122 tests, no network, no SMTP
 .github/workflows/
-  bookmyshow-monitor.yml    the schedule
-  resolve-movie.yml         resolve/refresh a listing from a runner
+  bookmyshow-monitor.yml    ticket checks, every 5 min
+  catalogue-sync.yml        city catalogue, 4x/day + manual
+  bms-diagnose.yml          diagnostics, manual, changes nothing
 ```
 
 ### Availability states
