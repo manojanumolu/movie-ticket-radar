@@ -192,15 +192,40 @@ def _upsert(entries: list[dict[str, Any]], *, region_slug: str, mirror: bool) ->
 
 
 def store_snapshot(snapshot: Snapshot, *, mirror: bool = True) -> dict[str, Any]:
-    """Upsert one fully-resolved movie."""
+    """Upsert one fully-resolved movie, keeping what the city listing knew.
+
+    The two sources describe the same film but not equally well. The city
+    listing carries the poster, the language and the marketing title; the
+    showtimes response carries the theatres and formats. Letting the second
+    overwrite the first wholesale would blank every poster in the grid the
+    moment detail was resolved — so listing-only fields are merged forward
+    rather than replaced.
+    """
     entry = entry_from_snapshot(snapshot)
     catalogue = load_catalogue()
-    movies = [
-        e for e in catalogue.get("movies", [])
-        if isinstance(e, dict) and e.get("movie")
-        and movie_from_entry(e).id != snapshot.movie.id
-    ]
-    movies.insert(0, entry)
+
+    movies = [e for e in catalogue.get("movies", []) if isinstance(e, dict) and e.get("movie")]
+    position = next(
+        (i for i, e in enumerate(movies) if movie_from_entry(e).id == snapshot.movie.id),
+        None,
+    )
+    previous = movies[position] if position is not None else None
+    if previous is not None:
+        known = movie_from_entry(previous)
+        merged = dict(entry["movie"])
+        for field in ("title", "poster_url", "language", "source_url"):
+            # The listing wins: it is what the user saw and clicked. Resolving
+            # detail adds theatres and formats — it must never rename a movie
+            # out from under the person who picked it.
+            merged[field] = getattr(known, field) or merged.get(field, "")
+        entry["movie"] = merged
+
+    if position is None:
+        movies.insert(0, entry)
+    else:
+        # Replace in place. Resolving detail must not reshuffle the grid —
+        # the order is BookMyShow's own, and the user's eye is already on it.
+        movies[position] = entry
     catalogue["movies"] = movies
     catalogue["updated_at"] = to_iso(now_ist())
     save_catalogue(catalogue, mirror=mirror)

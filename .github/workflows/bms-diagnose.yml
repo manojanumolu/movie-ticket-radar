@@ -26,9 +26,3 @@ jobs:
           python-version: "3.12"
       - run: pip install requests "curl_cffi>=0.7"
       - run: python tools/bms_diagnose.py --city "${{ inputs.city }}"
-      - name: Dump payload shapes
-        if: ${{ !cancelled() }}
-        run: python tools/bms_shape.py --city "${{ inputs.city }}"
-      - name: Dump venue shapes
-        if: ${{ !cancelled() }}
-        run: python tools/bms_shape2.py --city "${{ inputs.city }}"
