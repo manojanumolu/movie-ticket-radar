@@ -54,6 +54,122 @@ def e(value: object) -> str:
 # ──────────────────────────────────────────────────────────────────────────
 # Chrome
 # ──────────────────────────────────────────────────────────────────────────
+def step_strip(steps: list[str], current: int, furthest: int) -> None:
+    """The 1–5 progress rail.
+
+    ``current`` is where the user is; ``furthest`` is how far they have got,
+    so a completed step reads as done even while they are back editing an
+    earlier one.
+    """
+    cells = []
+    for index, label in enumerate(steps, start=1):
+        if index == current:
+            state = "now"
+        elif index <= furthest:
+            state = "done"
+        else:
+            state = "todo"
+        mark = "✓" if state == "done" else str(index)
+        cells.append(
+            f'<div class="tr-step-pip {state}">'
+            f'<span class="n">{mark}</span><span class="l">{e(label)}</span></div>'
+        )
+    html(f'<div class="tr-steps">{"".join(cells)}</div>')
+
+
+def summary_row(number: int, label: str, value: str) -> None:
+    """A collapsed, already-answered step."""
+    html(
+        f"""<div class="tr-summary">
+          <div class="n">✓</div>
+          <div class="b"><div class="k">{number}. {e(label)}</div>
+          <div class="v">{e(value)}</div></div>
+        </div>"""
+    )
+
+
+def locked_step(number: int, title: str, reason: str) -> None:
+    html(
+        f"""<div class="tr-locked">
+          <div class="tr-step-head">
+            <div class="tr-step-num muted">{number}</div>
+            <div><div class="tr-step-title">{e(title)}</div>
+            <div class="tr-step-help">{e(reason)}</div></div>
+          </div>
+        </div>"""
+    )
+
+
+def location_tile(name: str, sub: str, selected: bool, enabled: bool = True) -> None:
+    if not enabled:
+        html(
+            f'<div class="tr-loc disabled"><div class="n">{e(name)}</div>'
+            f'<div class="s">Coming soon</div></div>'
+        )
+        return
+    check = '<div class="check">✓</div>' if selected else ""
+    html(
+        f'<div class="tr-loc{" selected" if selected else ""}">{check}'
+        f'<div class="pin">◉</div><div class="n">{e(name)}</div>'
+        f'<div class="s">{e(sub)}</div></div>'
+    )
+
+
+def theatre_tile(name: str, area: str, formats: list[str], selected: bool) -> None:
+    chips = "".join(f'<span class="f">{e(f)}</span>' for f in formats[:4])
+    if len(formats) > 4:
+        chips += f'<span class="f more">+{len(formats) - 4}</span>'
+    if not formats:
+        chips = '<span class="f muted">formats not published yet</span>'
+    check = '<div class="check">✓</div>' if selected else ""
+    html(
+        f"""<div class="tr-theatre{' selected' if selected else ''}">{check}
+          <div class="hd"><div class="ab">{e(_abbr(name))}</div>
+            <div><div class="n">{e(name)}</div><div class="a">{e(area or 'Hyderabad')}</div></div>
+          </div>
+          <div class="fl">{chips}</div>
+        </div>"""
+    )
+
+
+def _abbr(name: str) -> str:
+    words = [w for w in name.replace("-", " ").split() if w]
+    if not words:
+        return "???"
+    if len(words) == 1:
+        return words[0][:3].upper()
+    return "".join(w[0] for w in words[:3]).upper()
+
+
+def catalogue_banner(status, message: str, when: str, count: int) -> None:
+    """Say exactly why the movie grid looks the way it does.
+
+    An empty grid and a refused request are different facts, and the user is
+    told which one they are looking at — never "no movies" for a block.
+    """
+    kinds = {
+        "OK": ("ok", "✓", "Catalogue loaded",
+               f"{count} movie(s) from BookMyShow · updated {when}"),
+        "EMPTY": ("warn", "◎", "No movies listed right now",
+                  f"BookMyShow answered, and had nothing on for this city · checked {when}"),
+        "BLOCKED": ("bad", "!", "Couldn't reach BookMyShow",
+                    "BookMyShow's bot check refused the request — this is not "
+                    "a 'no movies' answer."),
+        "ERROR": ("bad", "!", "Couldn't load the catalogue",
+                  "A network or parsing problem, not a 'no movies' answer."),
+        "NEVER": ("", "◷", "Catalogue not built yet",
+                  "The background sync hasn't run for this city yet."),
+    }
+    cls, glyph, title, default_sub = kinds.get(str(status), kinds["NEVER"])
+    sub = message if (message and str(status) in ("BLOCKED", "ERROR")) else default_sub
+    html(
+        f"""<div class="tr-banner {cls}">
+          <div class="g">{e(glyph)}</div>
+          <div><div class="t">{e(title)}</div><div class="s">{e(sub)}</div></div>
+        </div>"""
+    )
+
+
 def hero(title: str, lede: str, sub: str) -> None:
     html(
         f"""<div class="tr-hero"><div class="tr-hero-inner">
