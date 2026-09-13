@@ -31,6 +31,7 @@ import json
 import random
 import re
 import time
+from dataclasses import dataclass
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
@@ -157,6 +158,15 @@ def _dicts(value: Any) -> Iterable[dict[str, Any]]:
                 yield item
 
 
+def _dig(node: Any, *keys: str) -> Any:
+    """Follow a key path, returning None the moment it doesn't exist."""
+    for key in keys:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+    return node
+
+
 def _walk_dicts(node: Any, depth: int = 0):
     """Yield every dict inside an arbitrarily nested payload."""
     if depth > 12:
@@ -237,6 +247,55 @@ def poster_url(image_code: str) -> str:
     """A poster URL for a real image code, or '' — never a placeholder."""
     code = (image_code or "").strip()
     return POSTER_CDN.format(code=code) if code else ""
+
+
+#: Dimensions that are just "the normal screening". Anything else is a
+#: premium-format variant of the same film in the same language.
+BASE_DIMENSIONS = {"2D", ""}
+
+
+def _primary_children(children: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """One bookable event per language, collapsing premium-format variants.
+
+    BookMyShow lists a film once per language *and* once per premium format:
+    Mandaadi alone appears as Telugu 2D, Telugu EPIQ, Telugu DOLBY CINEMA 2D,
+    Telugu HDR By Barco, Tamil 2D and Tamil HDR By Barco. Showing all six in a
+    movie picker is noise — the user wants "Mandaadi, Telugu", and then to
+    pick the format per theatre in step 4.
+
+    Collapsing is safe because the showtimes endpoint for the base event
+    returns every screen at every venue with its real format in ``screenAttr``
+    — verified live: the Telugu 2D event returns AMB Cinemas' "BARCO FLAGSHIP
+    LASER DOLBY ATMOS" screen. So the base event sees the premium shows too,
+    and nothing is lost by not listing them separately.
+    """
+    by_language: dict[str, dict[str, Any]] = {}
+    for child in children:
+        language = _text(child.get("EventLanguage"))
+        dimension = _text(child.get("EventDimension")).upper()
+        current = by_language.get(language)
+        if current is None:
+            by_language[language] = child
+            continue
+        # Prefer the plain screening as the canonical event for a language.
+        current_dim = _text(current.get("EventDimension")).upper()
+        if dimension in BASE_DIMENSIONS and current_dim not in BASE_DIMENSIONS:
+            by_language[language] = child
+    return by_language
+
+
+@dataclass(frozen=True)
+class ListingResult:
+    """What one listing strategy came back with.
+
+    ``authoritative`` says whether an empty ``movies`` list can be trusted to
+    mean "this city has nothing on". A structured endpoint whose wrapper we
+    found and parsed can vouch for that; an HTML scrape that simply matched
+    nothing cannot, and must let the next strategy try.
+    """
+
+    movies: list[MovieRef]
+    authoritative: bool = False
 
 
 def split_venue_name(full_name: str) -> tuple[str, str]:
@@ -425,7 +484,7 @@ class BookMyShowProvider:
     # cannot be turned off without also breaking the website.
 
     def listing_strategies(self):
-        """(name, callable) pairs, best-evidenced first.
+        """(name, callable) pairs returning ListingResult, best-evidenced first.
 
         QUICKBOOK leads because it is the one that actually answered from a
         runner, and it answers with the richest data: 39 movie groups for
@@ -453,16 +512,21 @@ class BookMyShowProvider:
 
         for name, strategy in self.listing_strategies():
             try:
-                movies = strategy(region)
+                result = strategy(region)
             except PlatformError as exc:
                 failures.append(f"{name}: {exc}")
                 continue
             except Exception as exc:  # noqa: BLE001 - one bad parser must not end the chain
                 failures.append(f"{name}: unexpected {type(exc).__name__}: {exc}")
                 continue
-            if movies:
-                print(f"[bookmyshow] catalogue via '{name}': {len(movies)} movie(s)")
-                return movies
+
+            # An empty list from a strategy that genuinely parsed the listing
+            # is an *answer*: this city has nothing on. Only fall through when
+            # the strategy couldn't vouch for its own emptiness, or the city
+            # would look unreachable every time it was simply quiet.
+            if result.movies or result.authoritative:
+                print(f"[bookmyshow] catalogue via '{name}': {len(result.movies)} movie(s)")
+                return result.movies
             failures.append(f"{name}: returned nothing")
 
         blocked = any("refused" in f or "403" in f for f in failures)
@@ -476,14 +540,15 @@ class BookMyShowProvider:
         for name, strategy in self.listing_strategies():
             entry: dict[str, Any] = {"strategy": name}
             try:
-                movies = strategy(region)
+                result = strategy(region)
             except Exception as exc:  # noqa: BLE001 - reporting, not flow control
                 entry.update(ok=False, error=f"{type(exc).__name__}: {exc}")
             else:
                 entry.update(
-                    ok=bool(movies),
-                    count=len(movies),
-                    sample=[f"{m.title} [{m.event_code}]" for m in movies[:5]],
+                    ok=bool(result.movies) or result.authoritative,
+                    count=len(result.movies),
+                    authoritative=result.authoritative,
+                    sample=[f"{m.title} [{m.event_code}]" for m in result.movies[:5]],
                 )
             report.append(entry)
         return report
@@ -495,7 +560,7 @@ class BookMyShowProvider:
             raise PlatformBlocked(f"refused (HTTP {resp.status_code})")
         raise PlatformError(f"HTTP {resp.status_code}")
 
-    def _listing_explore_api(self, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
+    def _listing_explore_api(self, region: tuple[str, str, str, str, str]) -> ListingResult:
         """The JSON the browse page's own client calls."""
         region_code, region_slug, *_ = region
         url = f"{SITE}/api/explore/v1/discover/movies-{region_slug}"
@@ -508,9 +573,9 @@ class BookMyShowProvider:
             payload = resp.json()
         except ValueError:
             raise PlatformError("not JSON") from None
-        return self._movies_from_json(payload, region)
+        return ListingResult(self._movies_from_json(payload, region))
 
-    def _listing_quickbook(self, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
+    def _listing_quickbook(self, region: tuple[str, str, str, str, str]) -> ListingResult:
         """The endpoint the city page's quick-book rail uses.
 
         Confirmed shape (see ``tools/bms_shape.py`` output)::
@@ -546,10 +611,13 @@ class BookMyShowProvider:
         except ValueError:
             raise PlatformError("not JSON") from None
 
-        movies = self._movies_from_quickbook(payload, region)
-        # If the wrapper ever moves, fall back to the generic tree walk
-        # rather than reporting the city as empty.
-        return movies or self._movies_from_json(payload, region)
+        events = _dig(payload, "moviesData", "BookMyShow", "arrEvents")
+        if isinstance(events, list):
+            # We found the wrapper, so we can vouch for an empty result.
+            return ListingResult(self._movies_from_quickbook(payload, region), authoritative=True)
+        # The wrapper moved: fall back to a generic tree walk and let a later
+        # strategy speak if this finds nothing.
+        return ListingResult(self._movies_from_json(payload, region))
 
     def _movies_from_quickbook(self, payload: Any,
                                region: tuple[str, str, str, str, str]) -> list[MovieRef]:
@@ -566,16 +634,13 @@ class BookMyShowProvider:
             if not isinstance(group, dict):
                 continue
             group_title = _text(group.get("EventTitle"))
-            children = [c for c in _dicts(group.get("ChildEvents"))]
+            children = [c for c in _dicts(group.get("ChildEvents"))] or [group]
 
-            # A group with no children is still bookable at the group code.
-            for child in children or [group]:
+            for language, child in _primary_children(children).items():
                 code = _text(child.get("EventCode")).upper()
                 if not EVENT_CODE_RE.match(code) or code in out:
                     continue
-                language = _text(child.get("EventLanguage"))
-                dimension = _text(child.get("EventDimension"))
-                title = _text(child.get("EventName")) or group_title
+                title = group_title or _text(child.get("EventName"))
                 if not title:
                     continue
                 out[code] = MovieRef(
@@ -585,15 +650,16 @@ class BookMyShowProvider:
                     region_code=region[0],
                     region_slug=region[1],
                     city=region[1].replace("-", " ").title(),
-                    language=" · ".join(x for x in (language, dimension) if x),
+                    language=language,
                     poster_url=poster_url(_text(child.get("EventImageCode"))),
                     source_url=self._listing_url(
-                        region[1], code, _text(child.get("EventURL")) or _text(group.get("EventURLTitle"))
+                        region[1], code,
+                        _text(child.get("EventURL")) or _text(group.get("EventURLTitle")),
                     ),
                 )
         return list(out.values())
 
-    def _listing_browse_html(self, region: tuple[str, str, str, str, str]) -> list[MovieRef]:
+    def _listing_browse_html(self, region: tuple[str, str, str, str, str]) -> ListingResult:
         """Parse the browse page itself.
 
         BookMyShow renders the city's movie list server-side and ships the
@@ -616,8 +682,10 @@ class BookMyShowProvider:
         for payload in _embedded_json(html):
             movies = self._movies_from_json(payload, region)
             if movies:
-                return movies
-        return self._movies_from_links(html, region)
+                return ListingResult(movies)
+        # Never authoritative: matching nothing in a page is as likely to mean
+        # "the markup changed" as "the city is empty".
+        return ListingResult(self._movies_from_links(html, region))
 
     # ── Turning whatever came back into MovieRefs ────────────────────────
     def _movies_from_json(self, payload: Any, region: tuple[str, str, str, str, str]) -> list[MovieRef]:

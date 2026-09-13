@@ -275,3 +275,60 @@ def later(at):
         return at + timedelta(minutes=minutes)
 
     return step
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# QUICKBOOK city listing — mirrors the live shape captured by
+# tools/bms_shape.py: moviesData.BookMyShow.arrEvents[], each a movie *group*
+# whose ChildEvents are the per-language / per-premium-format bookable events.
+# ──────────────────────────────────────────────────────────────────────────
+def build_quickbook(groups: list[dict]) -> dict:
+    """`groups` = [{title, url, children: [{code, language, dimension, image}]}]"""
+    events = []
+    for g in groups:
+        children = [
+            {
+                "EventCode": c["code"],
+                "EventImageCode": c.get("image", f"{g['url']}-{c['code'].lower()}-1789"),
+                "EventType": "MT",
+                "EventLanguage": c.get("language", "Telugu"),
+                "EventStatus": "NS",
+                "EventName": c.get("name", g["title"]),
+                "EventDimension": c.get("dimension", "2D"),
+                "EventURL": c.get("url", g["url"]),
+                "EventDate": "2026-09-10",
+            }
+            for c in g["children"]
+        ]
+        events.append({
+            "EventGroup": g.get("group", "EG00000001"),
+            "EventTitle": g["title"],
+            "EventCode": g["children"][0]["code"],
+            "EventURLTitle": g["url"],
+            "ChildEvents": children,
+        })
+    return {
+        "moviesData": {"BookMyShow": {"arrLanguages": [], "arrEvents": events}},
+        "preferredLanguages": None,
+        "cinemas": {"BookMyShow": {"aiVN": {"venues": [], "error": None}}},
+    }
+
+
+#: A film listed in two languages with premium-format variants in each — the
+#: exact shape that made a naive parser emit six rows for one movie.
+QUICKBOOK_HYD = build_quickbook([
+    {
+        "title": "Mandaadi", "url": "mandaadi", "children": [
+            {"code": "ET00514261", "language": "Telugu", "dimension": "2D"},
+            {"code": "ET00516384", "language": "Telugu", "dimension": "EPIQ"},
+            {"code": "ET00516197", "language": "Telugu", "dimension": "DOLBY CINEMA 2D"},
+            {"code": "ET00442702", "language": "Tamil", "dimension": "2D"},
+            {"code": "ET00516312", "language": "Tamil", "dimension": "HDR By Barco"},
+        ],
+    },
+    {
+        "title": "Hanuman Ansh", "url": "hanuman-ansh", "children": [
+            {"code": "ET00507738", "language": "Hindi", "dimension": "2D"},
+        ],
+    },
+])

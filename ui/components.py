@@ -152,20 +152,23 @@ def catalogue_banner(status, message: str, when: str, count: int) -> None:
                f"{count} movie(s) from BookMyShow · updated {when}"),
         "EMPTY": ("warn", "◎", "No movies listed right now",
                   f"BookMyShow answered, and had nothing on for this city · checked {when}"),
-        "BLOCKED": ("bad", "!", "Couldn't reach BookMyShow",
-                    "BookMyShow's bot check refused the request — this is not "
-                    "a 'no movies' answer."),
+        "BLOCKED": ("bad", "!", "Couldn&rsquo;t reach BookMyShow",
+                    "BookMyShow&rsquo;s bot check refused the request &mdash; this is "
+                    "<strong>not</strong> a &ldquo;no movies&rdquo; answer."),
         "ERROR": ("bad", "!", "Couldn't load the catalogue",
                   "A network or parsing problem, not a 'no movies' answer."),
         "NEVER": ("", "◷", "Catalogue not built yet",
                   "The background sync hasn't run for this city yet."),
     }
     cls, glyph, title, default_sub = kinds.get(str(status), kinds["NEVER"])
-    sub = message if (message and str(status) in ("BLOCKED", "ERROR")) else default_sub
+    # `title` and `default_sub` are our own copy and are written as HTML;
+    # `message` comes from an exception, so only that gets escaped.
+    sub = f"{default_sub} {e(message)}" if (message and str(status) in ("BLOCKED", "ERROR")) \
+        else default_sub
     html(
         f"""<div class="tr-banner {cls}">
-          <div class="g">{e(glyph)}</div>
-          <div><div class="t">{e(title)}</div><div class="s">{e(sub)}</div></div>
+          <div class="g">{glyph}</div>
+          <div><div class="t">{title}</div><div class="s">{sub}</div></div>
         </div>"""
     )
 
