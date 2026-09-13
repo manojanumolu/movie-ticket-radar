@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "monitor_id": "6e009028ca68",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Mandaadi",
+    "targets": [
+      "AMB Cinemas · Barco Flagship Laser Dolby Atmos",
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-14T02:30:55.360041+05:30"
+  }
+]

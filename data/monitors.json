@@ -1,1 +1,39 @@
-[]
+[
+  {
+    "id": "6e009028ca68",
+    "movie": {
+      "platform": "bookmyshow",
+      "event_code": "ET00514261",
+      "title": "Mandaadi",
+      "region_code": "HYD",
+      "region_slug": "hyderabad",
+      "city": "Hyderabad",
+      "language": "Telugu",
+      "poster_url": "https://in.bmscdn.com/events/moviecard/mandaadi-et00514261-1789145096.jpg",
+      "source_url": "https://in.bookmyshow.com/movies/hyderabad/mandaadi-telugu/buytickets/ET00514261"
+    },
+    "targets": [
+      {
+        "venue_code": "AMBH",
+        "venue_name": "AMB Cinemas",
+        "area": "Gachibowli",
+        "fmt": "Barco Flagship Laser Dolby Atmos"
+      },
+      {
+        "venue_code": "ALUC",
+        "venue_name": "ALLU Cinemas",
+        "area": "Kokapet",
+        "fmt": "Barco Laser 4K Atmos"
+      }
+    ],
+    "interval_minutes": 10,
+    "monitor_until": "2026-09-15T23:59:00+05:30",
+    "start_immediately": true,
+    "notify_email": "demo@example.com",
+    "date_codes": [],
+    "status": "ACTIVE",
+    "created_at": "2026-09-14T02:30:55.357081+05:30",
+    "stopped_at": null,
+    "stopped_reason": ""
+  }
+]

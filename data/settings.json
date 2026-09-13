@@ -1,4 +1,4 @@
 {
-  "notify_email": "",
+  "notify_email": "demo@example.com",
   "default_interval": 10
 }
