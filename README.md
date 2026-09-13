@@ -267,31 +267,42 @@ starts cleanly on a fresh container.
 
 ## First run
 
-1. Open the app → **Settings** → set your notification email → **Save**.
-2. **Home** → *Add a movie from BookMyShow* → paste a **Book tickets** URL
-   (the one containing an `ET…` code) → **Resolve movie**.
-   - If that fails with a bot check, press **Resolve on GitHub** instead. It
-     dispatches `resolve-movie.yml`; the runner writes the catalogue back to
-     the repo and the movie appears after you reload.
-3. Pick the movie, tick the theatres, choose a format for each, pick an
-   interval and an end time → **START MONITORING**.
-4. Optional: **Settings → Run a check now** to force the worker immediately
-   rather than waiting for the schedule.
+The catalogue ships populated, so there is nothing to set up before you can
+browse:
 
-Verify the plumbing before you rely on it: run `resolve-movie.yml` once from
-the Actions tab and confirm it lists real theatres and formats. If it does,
-the monitor will work.
+1. Open the app. **Hyderabad** → the real movie grid appears immediately.
+2. Pick a movie → tick theatres → tick formats per theatre → set interval and
+   end time → **START MONITORING**.
+3. **Settings** → set your notification email (the monitoring step pre-fills
+   from it) and press **Send test email** once to confirm delivery.
+
+Optional, any time:
+
+- **Settings → Refresh catalogue now** — pulls the current listing. It also
+  runs on a schedule four times a day.
+- **Settings → Run a ticket check now** — forces the worker instead of waiting
+  for the next scheduled run.
 
 ---
 
-## Running the worker yourself
+## Running the jobs yourself
 
 ```bash
 python run_monitor.py                # check everything that is due
 python run_monitor.py --force        # ignore the interval
 python run_monitor.py --dry-run      # evaluate, report, send nothing
 python run_monitor.py --monitor <id> # one monitor only
+
+python sync_catalogue.py             # sync every enabled city
+python sync_catalogue.py --city hyderabad
+python sync_catalogue.py --no-detail # movie list only, skip theatre reads
+python sync_catalogue.py --probe     # report what each listing strategy does
+
+python tools/bms_diagnose.py         # which clients/endpoints answer from here
 ```
+
+Locally these will probably be refused — see [The bot check](#the-bot-check).
+That is expected, and it is why they are scheduled on Actions.
 
 The worker exits `0` whenever the *run* completed, even if a check failed —
 BookMyShow being briefly unreachable is expected, and a red X every time it
@@ -304,16 +315,21 @@ itself broke.
 python -m pytest
 ```
 
-93 tests, no network and no SMTP — a fixture fails the run if anything tries
+122 tests, no network and no SMTP — a fixture fails the run if anything tries
 to open a real SMTP connection. BookMyShow is replaced by a fake session
-replaying a payload with the real response's widget structure, so the suite is
-deterministic and doesn't poke a third party on every commit.
+replaying payloads **rebuilt from responses captured on a live runner**, so the
+suite is deterministic without being fictional.
 
-Covered: URL parsing, availability mapping, every failure mode (403 / 429 /
-5xx / timeout / malformed JSON / restructured payload), per-theatre format
-matching, the full duplicate-suppression matrix, failed-email retry, expiry,
-manual stop, the Streamlit UI driven end-to-end through `AppTest`, and a check
-that the worker still imports and runs with Streamlit blocked.
+Covered: the city listing and its strategy chain, availability mapping, every
+failure mode (403 / 429 / 5xx / timeout / malformed JSON / restructured
+payload), the five catalogue sync states, per-theatre format isolation, the
+full duplicate-suppression matrix, failed-email retry, expiry, manual stop, the
+whole five-step wizard driven through `AppTest`, and a check that the worker
+still imports and runs with Streamlit blocked entirely.
+
+Two of these tests exist because they caught real bugs during this work: one
+where resolving theatre detail blanked every poster in the grid, and one where
+a genuinely empty city was reported as a connection error.
 
 ---
 

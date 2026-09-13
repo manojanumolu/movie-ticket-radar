@@ -122,7 +122,7 @@ def step_movie() -> bool:
     state = catalogue.sync_state(location.slug)
     entries = catalogue.list_entries(location.slug)
     C.catalogue_banner(state["status"].value, state["message"],
-                       _ago(state["at"]), len(entries))
+                       ago(state["at"]), len(entries))
     st.write("")
 
     if not entries:
@@ -193,7 +193,7 @@ def step_theatres() -> list[Venue]:
         else:
             C.catalogue_banner(
                 "EMPTY", "",
-                _ago(catalogue.sync_state(movie.region_slug)["at"]), 0,
+                ago(catalogue.sync_state(movie.region_slug)["at"]), 0,
             )
             st.caption(
                 f"BookMyShow lists **{movie.title}** but hasn't published any theatres for "
@@ -359,7 +359,7 @@ def summary(step: int) -> None:
         C.summary_row(4, "Formats", " · ".join(parts))
 
 
-def _ago(when) -> str:
+def ago(when) -> str:
     if when is None:
         return "never"
     delta = (now_ist() - when).total_seconds()
@@ -375,6 +375,7 @@ def _ago(when) -> str:
 __all__ = [
     "INTERVALS",
     "STEPS",
+    "ago",
     "boot",
     "goto",
     "reset_from",
