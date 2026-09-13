@@ -1,6 +1,30 @@
 [
   {
     "monitor_id": "6e009028ca68",
+    "kind": "TICKETS_LIVE",
+    "message": "ALLU Cinemas · Barco Laser 4K Atmos — Tickets Live",
+    "movie": "Mandaadi",
+    "targets": [
+      "AMB Cinemas · Barco Flagship Laser Dolby Atmos",
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-14T02:31:49.004397+05:30",
+    "booking_url": "https://in.bookmyshow.com/movies/hyderabad/mandaadi-telugu/buytickets/ET00514261/20260914"
+  },
+  {
+    "monitor_id": "6e009028ca68",
+    "kind": "TICKETS_LIVE",
+    "message": "AMB Cinemas · Barco Flagship Laser Dolby Atmos — Tickets Live",
+    "movie": "Mandaadi",
+    "targets": [
+      "AMB Cinemas · Barco Flagship Laser Dolby Atmos",
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-14T02:31:49.004397+05:30",
+    "booking_url": "https://in.bookmyshow.com/movies/hyderabad/mandaadi-telugu/buytickets/ET00514261/20260914"
+  },
+  {
+    "monitor_id": "6e009028ca68",
     "kind": "CREATED",
     "message": "Monitor created.",
     "movie": "Mandaadi",
