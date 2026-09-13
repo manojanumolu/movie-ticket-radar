@@ -85,14 +85,19 @@ def build_payload(shows: list[dict], *, title: str = "Avengers: Endgame Encore",
     """
     venues: dict[str, dict] = {}
     for s in shows:
+        # Live payloads put the locality in the venue name and carry no
+        # separate area field — see tools/bms_shape2.py output.
+        display_name = s["venue_name"]
+        if s.get("area"):
+            display_name = f'{s["venue_name"]}: {s["area"]}'
         card = venues.setdefault(
             s["venue_code"],
             {
                 "type": "venue-card",
                 "additionalData": {
                     "venueCode": s["venue_code"],
-                    "venueName": s["venue_name"],
-                    "venueSubRegion": s.get("area", ""),
+                    "venueName": display_name,
+                    "isFnBAvailable": True,
                 },
                 "showtimes": [],
             },
@@ -106,10 +111,14 @@ def build_payload(shows: list[dict], *, title: str = "Avengers: Endgame Encore",
             {
                 "title": s["time"],
                 "screenAttr": s.get("fmt", ""),
+                "styleId": "green-pill-with-border",
                 "additionalData": {
                     "sessionId": s.get("session_id", f"S{s['venue_code']}{s['time_code']}"),
+                    "availStatus": s.get("status") or "",
                     "showDateCode": s.get("date", "20260925"),
+                    "showDateTime": f"{s.get('date', '20260925')}{s['time_code']}",
                     "showTimeCode": s["time_code"],
+                    "showTime": s["time"],
                     "categories": categories,
                 },
             }
@@ -141,8 +150,14 @@ def build_payload(shows: list[dict], *, title: str = "Avengers: Endgame Encore",
                     ]
                 }
             },
+            "header": {"title": {"styleId": "header-title-v2", "text": title}},
+            "additionalData": {"eventCode": "ET00478890", "dateCode": bookable_dates[0]
+                               if bookable_dates else ""},
             "showtimeWidgets": [
-                {"type": "groupList", "data": [{"type": "venueGroup", "data": list(venues.values())}]}
+                # Live responses lead with an ad slot; the parser must skip it.
+                {"type": "adtech", "data": [{"id": "AD_MOVIE_SHOWTIMES_CARD"}]},
+                {"type": "groupList", "data": [{"type": "venueGroup", "data": list(venues.values())}]},
+                {"type": "info", "data": []},
             ],
         }
     }

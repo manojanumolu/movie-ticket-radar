@@ -227,16 +227,33 @@ def _embedded_json(html: str):
                 continue
 
 
-#: BookMyShow serves posters from its own image CDN, keyed by the
-#: ``EventImageCode`` the listing hands us. The transform segment (``tr:``)
-#: is ImageKit's, which is what BookMyShow's own pages use.
-POSTER_CDN = "https://assets-in.bmscdn.com/discovery-catalog/events/tr:w-400,h-600,bg-CCCCCC/{code}.jpg"
+#: BookMyShow serves posters keyed by the ``EventImageCode`` the listing
+#: hands us. Verified against the live CDN from a runner: the
+#: discovery-catalog path 404s, this one returns the image.
+POSTER_CDN = "https://in.bmscdn.com/events/moviecard/{code}.jpg"
 
 
 def poster_url(image_code: str) -> str:
     """A poster URL for a real image code, or '' — never a placeholder."""
     code = (image_code or "").strip()
     return POSTER_CDN.format(code=code) if code else ""
+
+
+def split_venue_name(full_name: str) -> tuple[str, str]:
+    """'AMB Cinemas: Gachibowli' -> ('AMB Cinemas', 'Gachibowli').
+
+    BookMyShow encodes the locality in the venue name rather than a separate
+    field, so the split is how the UI gets a clean title and an area line.
+    Names without the separator are returned unchanged with no area, rather
+    than having one guessed for them.
+    """
+    name = (full_name or "").strip()
+    if ":" in name:
+        head, _, tail = name.partition(":")
+        head, tail = head.strip(), tail.strip()
+        if head and tail:
+            return head, tail
+    return name, ""
 
 
 def clean_format(raw: str) -> str:
@@ -807,6 +824,20 @@ class BookMyShowProvider:
                         elif not title and "•" not in text:
                             title = text
 
+        header = data.get("header")
+        if not title and isinstance(header, dict):
+            header_title = header.get("title")
+            if isinstance(header_title, dict):
+                title = _text(header_title.get("text"))
+
+        meta = payload.get("metadata")
+        analytics = meta.get("analytics") if isinstance(meta, dict) else None
+        if isinstance(analytics, dict):
+            title = title or _text(analytics.get("title"))
+            language = language or " · ".join(
+                x for x in (_text(analytics.get("language")), _text(analytics.get("format"))) if x
+            )
+
         for key in ("eventTitle", "title", "movieName", "name"):
             if not title:
                 title = _text(data.get(key))
@@ -863,14 +894,16 @@ class BookMyShowProvider:
                     if not code and not name:
                         continue
                     code = code or name
+                    # Live payloads carry no area field; the locality is the
+                    # tail of the venue name ("AMB Cinemas: Gachibowli").
+                    short_name, area = split_venue_name(name or code)
                     area = (
                         _text(addl.get("venueSubRegion"))
                         or _text(addl.get("subRegionName"))
-                        or _text(addl.get("venueAddress"))
-                        or _text(card.get("subtitle"))
+                        or area
                     )
-                    venues.setdefault(code, Venue(code=code, name=name or code, area=area))
-                    showtimes.extend(self._parse_showtimes(card, code, name or code, movie))
+                    venues.setdefault(code, Venue(code=code, name=short_name, area=area))
+                    showtimes.extend(self._parse_showtimes(card, code, short_name, movie))
 
         return list(venues.values()), showtimes
 
@@ -915,7 +948,9 @@ class BookMyShowProvider:
         """
         categories = list(_dicts(show_data.get("categories")))
         if not categories:
-            return Availability.NOT_BOOKABLE
+            # Some payloads report only the showtime-level status.
+            overall = AVAIL_STATUS.get(str(show_data.get("availStatus", "")).strip())
+            return overall or Availability.NOT_BOOKABLE
 
         states = [AVAIL_STATUS.get(str(c.get("availStatus", "")).strip()) for c in categories]
         known = [s for s in states if s is not None]
