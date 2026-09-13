@@ -1,4 +1,1075 @@
 {
-  "movies": [],
-  "updated_at": null
+  "movies": [
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00514261",
+        "title": "Mandaadi (Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mandaadi-et00514261-1789145096.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mandaadi-telugu/buytickets/ET00514261"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516384",
+        "title": "Mandaadi (EPIQ)(Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · EPIQ",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mandaadi-et00516384-1789145155.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mandaadi-epiqtelugu/buytickets/ET00516384"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516197",
+        "title": "Mandaadi (DOLBY CINEMA 2D)(Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · DOLBY CINEMA 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mandaadi-et00516197-1789145140.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mandaadi-dolby-cinema-2dtelugu/buytickets/ET00516197"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00442702",
+        "title": "Mandaadi",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Tamil · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mandaadi-et00442702-1789145092.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mandaadi/buytickets/ET00442702"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516311",
+        "title": "Mandaadi (HDR By Barco)(Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · HDR By Barco",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mandaadi-et00516311-1789145144.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mandaadi-hdr-by-barcotelugu/buytickets/ET00516311"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516312",
+        "title": "Mandaadi (HDR By Barco)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Tamil · HDR By Barco",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mandaadi-et00516312-1789145150.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mandaadi-hdr-by-barco/buytickets/ET00516312"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00487933",
+        "title": "Irumudi",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/irumudi-et00487933-1787303118.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00515338",
+        "title": "Epic",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/epic-2026-et00515338-1788358210.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/epic/buytickets/ET00515338"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00507738",
+        "title": "Hanuman Ansh",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00434922",
+        "title": "Mahendragiri Varahi",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mahendragiri-varahi-et00434922-1789031527.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mahendragiri-varahi/buytickets/ET00434922"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00440191",
+        "title": "Sardar 2 (Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/sardar-2-et00440191-1743503145.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/sardar-2-telugu/buytickets/ET00440191"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00440190",
+        "title": "Sardar 2",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Tamil · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/sardar-2-et00440190-1743503139.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/sardar-2/buytickets/ET00440190"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00417686",
+        "title": "Mirzapur: The Movie",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mirzapur-the-movie-et00417686-1787817242.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mirzapur-the-movie/buytickets/ET00417686"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00510304",
+        "title": "Mirzapur: The Movie (Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mirzapur-the-movie-et00510304-1787817287.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mirzapur-the-movie-telugu/buytickets/ET00510304"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00515244",
+        "title": "Bethlehem Kudumba Unit (Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/bethlehem-kudumba-unit-et00515244-1788413792.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/bethlehem-kudumba-unit-telugu/buytickets/ET00515244"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00502829",
+        "title": "Bethlehem Kudumba Unit",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Malayalam · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/bethlehem-kudumba-unit-et00502829-1788413826.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/bethlehem-kudumba-unit/buytickets/ET00502829"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00512696",
+        "title": "Pradhama Drishtiya Kuttakkar",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Malayalam · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/pradhama-drishtiya-kuttakkar-et00512696-1786946890.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/pradhama-drishtiya-kuttakkar/buytickets/ET00512696"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00514473",
+        "title": "Romanchakam",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/romanchakam-et00514473-1787895800.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/romanchakam/buytickets/ET00514473"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00514163",
+        "title": "Avengers Endgame: Encore",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00514163-1787720198.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/buytickets/ET00514163"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516224",
+        "title": "Avengers Endgame: Encore (MS - Infinity Vision)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · MS - Infinity Vision",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00516224-1788852759.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore-ms-infinity-vision/buytickets/ET00516224"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516728",
+        "title": "Avengers Endgame: Encore (MS-Infinity Vsn 3D)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · MS-Infinity Vsn 3d",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00516728-1789059722.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore-ms-infinity-vsn-3d/buytickets/ET00516728"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516729",
+        "title": "Avengers Endgame: Encore (4DX 3D)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 4DX 3D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00516729-1789060264.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore-4dx-3d/buytickets/ET00516729"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516731",
+        "title": "Avengers Endgame: Encore (3D)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 3D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00516731-1789061074.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore-3d/buytickets/ET00516731"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00514535",
+        "title": "Avengers Endgame: Encore (Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00514535-1787913136.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore-telugu/buytickets/ET00514535"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00506432",
+        "title": "Haiwaan",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/haiwaan-et00506432-1788412070.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/haiwaan/buytickets/ET00506432"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00517121",
+        "title": "Resident Evil (DOLBY CINEMA 2D)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · DOLBY CINEMA 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/resident-evil-et00517121-1789289627.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/resident-evil-dolby-cinema-2d/buytickets/ET00517121"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00498183",
+        "title": "Resident Evil",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/resident-evil-et00498183-1788341144.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/resident-evil/buytickets/ET00498183"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00517176",
+        "title": "Resident Evil (EPIQ)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · EPIQ",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/resident-evil-et00517176-1789304491.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/resident-evil-epiq/buytickets/ET00517176"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00512020",
+        "title": "Maremma",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/maremma-et00512020-1786515303.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/maremma/buytickets/ET00512020"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00514054",
+        "title": "Sahaa - Life of Sanju",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/sahaa--life-of-sanju-et00514054-1787648870.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/sahaa-life-of-sanju/buytickets/ET00514054"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00439318",
+        "title": "Awarapan 2",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/awarapan-2-et00439318-1787939665.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/awarapan-2/buytickets/ET00439318"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00510230",
+        "title": "Vishwanath and Sons (Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/vishwanath-and-sons-et00510230-1785583362.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/vishwanath-and-sons-telugu/buytickets/ET00510230"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00005851",
+        "title": "Mirapakaya",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/mirapakaya-et00005851-1676872148.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/mirapakaya/buytickets/ET00005851"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00511702",
+        "title": "I'm Game (Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/i-m-game-et00511702-1788157475.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/im-game-telugu/buytickets/ET00511702"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00473215",
+        "title": "I'm Game",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Malayalam · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/i-m-game-et00473215-1789113875.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/im-game/buytickets/ET00473215"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00506419",
+        "title": "Fall 2: Deadpoint",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/fall-2-deadpoint-et00506419-1786430252.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/fall-2-deadpoint/buytickets/ET00506419"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516399",
+        "title": "Fall 2: Deadpoint (4DX)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 4DX",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/fall-2-deadpoint-et00516399-1788936214.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/fall-2-deadpoint-4dx/buytickets/ET00516399"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00508816",
+        "title": "Happy Journey",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/happy-journey-et00508816-1786337071.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/happy-journey/buytickets/ET00508816"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00447840",
+        "title": "Spider-Man: Brand New Day",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/spider-man-brand-new-day-et00447840-1789113972.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/spider-man-brand-new-day/buytickets/ET00447840"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00502600",
+        "title": "Spider-Man: Brand New Day (3D)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 3D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/spider-man-brand-new-day-et00502600-1781678765.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/spider-man-brand-new-day-3d/buytickets/ET00502600"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00502630",
+        "title": "Spider-Man: Brand New Day (4DX 3D)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 4DX 3D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/spider-man-brand-new-day-et00502630-1781678897.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/spider-man-brand-new-day-4dx-3d/buytickets/ET00502630"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00495643",
+        "title": "Jadi: The Untold Side of If",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Odia · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/jadi-the-untold-side-of-if-et00495643-1776326077.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/jadi-the-untold-side-of-if/buytickets/ET00495643"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00509671",
+        "title": "Ramba Oorvasi Menaka",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/ramba-oorvasi-menaka-et00509671-1788431498.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/ramba-oorvasi-menaka/buytickets/ET00509671"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00516253",
+        "title": "Aasha",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Malayalam · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/aasha-et00516253-1788955282.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/aasha/buytickets/ET00516253"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00480372",
+        "title": "The Sheep Detectives",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/the-sheep-detectives-et00480372-1774877820.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/the-sheep-detectives/buytickets/ET00480372"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00511400",
+        "title": "The Magic Faraway Tree",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/the-magic-faraway-tree-et00511400-1786602571.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/the-magic-faraway-tree/buytickets/ET00511400"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00502386",
+        "title": "PAW Patrol: The Dino Movie",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/paw-patrol-the-dino-movie-et00502386-1789113929.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/paw-patrol-the-dino-movie/buytickets/ET00502386"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00515521",
+        "title": "Last Man in Tower",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/last-man-in-tower-et00515521-1788939037.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/last-man-in-tower/buytickets/ET00515521"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00452034",
+        "title": "The Odyssey",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/the-odyssey-et00452034-1778421685.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/the-odyssey/buytickets/ET00452034"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00505322",
+        "title": "The Odyssey (4DX)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 4DX",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/the-odyssey-et00505322-1782748439.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/the-odyssey-4dx/buytickets/ET00505322"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00436673",
+        "title": "Demon Slayer: Kimetsu no Yaiba Infinity Castle",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Japanese · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/demon-slayer--kimetsu-no-yaiba--the-movie-infinity-castle-et00436673-1752221214.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/demon-slayer-kimetsu-no-yaiba-infinity-castle/buytickets/ET00436673"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00505185",
+        "title": "Minions & Monsters (3D)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 3D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/minions-and-monsters-et00505185-1782715569.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/minions-monsters-3d/buytickets/ET00505185"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00505232",
+        "title": "Jayanti 2",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Marathi · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/jayanti-2-et00505232-1785932073.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/jayanti-2/buytickets/ET00505232"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00511827",
+        "title": "Modha Rathri",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Tamil · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/modha-rathri-et00511827-1786426464.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/modha-rathri/buytickets/ET00511827"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00509404",
+        "title": "Dahaan: The Evil Within",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Odia · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/dahaan-the-evil-within-et00509404-1789129258.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/dahaan-the-evil-within/buytickets/ET00509404"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00511201",
+        "title": "Insidious: Out of The Further (4DX)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English · 4DX",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/insidious-out-of-the-further-et00511201-1786015631.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/insidious-out-of-the-further-4dx/buytickets/ET00511201"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00514380",
+        "title": "Dharmasthala Niyojakavargam",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/dharmasthala-niyojakavargam-et00514380-1787833627.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/dharmasthala-niyojakavargam/buytickets/ET00514380"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00466071",
+        "title": "Upendra (Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/upendra-et00466071-1759921870.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/upendra-telugu/buytickets/ET00466071"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00464932",
+        "title": "Secret Soldier",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu · 2D",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/secret-soldier-et00464932-1785742214.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/secret-soldier/buytickets/ET00464932"
+      },
+      "venues": [],
+      "bookable_dates": [],
+      "closed_dates": [],
+      "showtime_count": 0,
+      "resolved_at": null
+    }
+  ],
+  "updated_at": "2026-09-14T02:14:50.079232+05:30",
+  "sync": {
+    "hyderabad": {
+      "status": "OK",
+      "message": "",
+      "at": "2026-09-14T02:14:50.079221+05:30",
+      "movie_count": 59
+    }
+  }
 }
