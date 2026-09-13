@@ -414,7 +414,7 @@ def page_settings(settings) -> None:
         slug = st.session_state.get("location") or "hyderabad"
         state = catalogue.sync_state(slug)
         C.catalogue_banner(state["status"].value, state["message"],
-                           flow._ago(state["at"]), len(catalogue.list_entries(slug)))
+                           flow.ago(state["at"]), len(catalogue.list_entries(slug)))
         st.caption(
             "The movie list, the theatres each movie plays at and the formats they run "
             "are synced by a scheduled background job and stored in the repository. "
