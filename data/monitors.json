@@ -31,9 +31,9 @@
     "start_immediately": true,
     "notify_email": "manoj.anumolu01@gmail.com",
     "date_codes": [],
-    "status": "ACTIVE",
+    "status": "STOPPED",
     "created_at": "2026-09-14T02:55:38.582856+05:30",
-    "stopped_at": null,
-    "stopped_reason": ""
+    "stopped_at": "2026-09-14T04:00:44.935526+05:30",
+    "stopped_reason": "Stopped manually."
   }
 ]
