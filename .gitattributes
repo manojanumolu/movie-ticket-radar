@@ -1,0 +1,4 @@
+# Keep LF in the repository. The Actions runner executes the shell blocks in
+# .github/workflows on Linux, where CRLF would break them.
+* text=auto eol=lf
+*.png binary

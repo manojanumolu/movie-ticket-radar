@@ -1,0 +1,187 @@
+"""Provider tests — parsing, and above all, failing honestly."""
+
+from __future__ import annotations
+
+import pytest
+import requests
+
+from monitor.models import Availability
+from platforms.base import PlatformBlocked, PlatformError
+from platforms.bookmyshow import clean_format, parse_listing_url, region_for
+from tests.conftest import ALLU_LIVE, NOT_ON_SALE, FakeResponse, build_payload
+
+
+# ── URL parsing ──────────────────────────────────────────────────────────
+@pytest.mark.parametrize(
+    "url,event,region",
+    [
+        ("https://in.bookmyshow.com/movies/hyderabad/x/buytickets/ET00478890", "ET00478890", "hyderabad"),
+        ("https://in.bookmyshow.com/movies/hyderabad/buytickets/ET00478890/20260925", "ET00478890", "hyderabad"),
+        ("https://in.bookmyshow.com/movies/chennai/y/buytickets/ET00111111", "ET00111111", "chennai"),
+        ("ET00478890", "ET00478890", "hyderabad"),
+    ],
+)
+def test_parse_listing_url(url, event, region):
+    parsed = parse_listing_url(url)
+    assert parsed["event_code"] == event
+    assert parsed["region_slug"] == region
+
+
+def test_parse_listing_url_keeps_the_date():
+    assert parse_listing_url(
+        "https://in.bookmyshow.com/movies/hyderabad/buytickets/ET00478890/20260925"
+    )["date_code"] == "20260925"
+
+
+@pytest.mark.parametrize("bad", ["", "https://example.com/movies/hyderabad",
+                                 "https://in.bookmyshow.com/movies/hyderabad/no-code"])
+def test_parse_listing_url_rejects_junk(bad):
+    with pytest.raises(PlatformError):
+        parse_listing_url(bad)
+
+
+def test_unknown_city_falls_back_to_hyderabad():
+    assert region_for("atlantis")[0] == "HYD"
+    assert region_for("hyderabad")[0] == "HYD"
+
+
+def test_clean_format_keeps_acronyms():
+    assert clean_format("DOLBY CINEMA") == "Dolby Cinema"
+    assert clean_format("imax 2d") == "IMAX 2D"
+    assert clean_format("") == ""
+
+
+# ── Parsing a real-shaped payload ────────────────────────────────────────
+def test_resolve_extracts_movie_venues_and_formats(provider_factory, listing_url):
+    provider = provider_factory([build_payload(ALLU_LIVE)])
+    snap = provider.resolve(listing_url)
+
+    assert snap.movie.title == "Avengers: Endgame Encore"
+    assert snap.movie.event_code == "ET00478890"
+    assert snap.movie.region_code == "HYD"
+
+    names = sorted(v.name for v in snap.venues)
+    assert names == ["AMB Cinemas", "Allu Cinemas"]
+
+    allu = next(v for v in snap.venues if v.code == "ALLU")
+    assert allu.area == "Attapur, Hyderabad"
+    # Formats are discovered from the shows, not hard-coded anywhere.
+    assert allu.formats == ("Dolby Cinema",)
+
+    assert snap.bookable_dates == ["20260925"]
+    assert snap.closed_dates == ["20260926"]
+
+
+def test_availability_mapping(provider_factory, listing_url):
+    provider = provider_factory([build_payload(ALLU_LIVE)])
+    snap = provider.resolve(listing_url)
+    by_venue = {s.venue_code: s.availability for s in snap.showtimes}
+    assert by_venue["ALLU"] is Availability.AVAILABLE
+    # No seat categories at all is "not on sale yet", not "sold out".
+    assert by_venue["AMB"] is Availability.NOT_BOOKABLE
+
+
+def test_filling_fast_counts_as_available(provider_factory, listing_url):
+    shows = [{**NOT_ON_SALE[0], "status": "2"}]
+    provider = provider_factory([build_payload(shows)])
+    snap = provider.resolve(listing_url)
+    assert snap.showtimes[0].availability is Availability.AVAILABLE
+
+
+def test_sold_out_when_every_category_is_full(provider_factory, listing_url):
+    shows = [{**NOT_ON_SALE[0], "status": "0"}]
+    provider = provider_factory([build_payload(shows)])
+    assert provider.resolve(listing_url).showtimes[0].availability is Availability.SOLD_OUT
+
+
+def test_region_headers_are_sent(provider_factory, listing_url):
+    provider = provider_factory([build_payload(ALLU_LIVE)])
+    provider.resolve(listing_url)
+    headers = provider.session.calls[0]["headers"]
+    assert headers["x-region-code"] == "HYD"
+    assert headers["x-region-slug"] == "hyderabad"
+    assert provider.session.calls[0]["params"]["eventCode"] == "ET00478890"
+
+
+# ── Failure handling: the part that must never lie ───────────────────────
+def test_cloudflare_403_raises_blocked_not_empty(provider_factory, listing_url):
+    provider = provider_factory([FakeResponse(403, text="<html>Attention Required! | Cloudflare</html>")])
+    with pytest.raises(PlatformBlocked):
+        provider.resolve(listing_url)
+    # And it does not retry a bot check.
+    assert len(provider.session.calls) == 1
+
+
+def test_timeouts_retry_then_give_up(provider_factory, listing_url):
+    provider = provider_factory([requests.Timeout("slow"), requests.Timeout("slow"),
+                                 requests.Timeout("slow")])
+    with pytest.raises(PlatformError) as exc:
+        provider.resolve(listing_url)
+    assert len(provider.session.calls) == 3
+    assert "Timeout" in str(exc.value)
+
+
+def test_transient_500_recovers(provider_factory, listing_url):
+    provider = provider_factory([FakeResponse(500), build_payload(ALLU_LIVE)])
+    snap = provider.resolve(listing_url)
+    assert len(snap.showtimes) == 2
+    assert len(provider.session.calls) == 2
+
+
+def test_rate_limit_is_retried(provider_factory, listing_url):
+    provider = provider_factory([FakeResponse(429), build_payload(ALLU_LIVE)])
+    assert provider.resolve(listing_url).showtimes
+
+
+def test_malformed_json_raises(provider_factory, listing_url):
+    provider = provider_factory([FakeResponse(200, payload=None, text="<html>oops</html>")])
+    with pytest.raises(PlatformError):
+        provider.resolve(listing_url)
+
+
+def test_unexpected_shape_yields_no_shows_not_a_crash(provider_factory, listing_url):
+    """A restructured payload must degrade to 'nothing listed', not explode."""
+    provider = provider_factory([{"data": {"showtimeWidgets": "not-a-list"}}])
+    snap = provider.resolve(listing_url)
+    assert snap.showtimes == []
+    assert snap.venues == []
+    # Title is unknown, so it falls back to the event code — never invented.
+    assert snap.movie.title == "ET00478890"
+
+
+def test_404_is_an_error_not_a_no(provider_factory, listing_url):
+    provider = provider_factory([FakeResponse(404)])
+    with pytest.raises(PlatformError) as exc:
+        provider.resolve(listing_url)
+    assert "404" in str(exc.value)
+
+
+# ── Booking URLs are derived, never invented ─────────────────────────────
+def test_booking_url_appends_the_date(provider_factory, listing_url):
+    provider = provider_factory([build_payload(ALLU_LIVE)])
+    movie = provider.resolve(listing_url).movie
+    assert provider.booking_url(movie, "20260925") == f"{listing_url}/20260925"
+    assert provider.booking_url(movie) == listing_url
+
+
+def test_booking_url_does_not_double_up_dates(provider_factory):
+    from monitor.models import MovieRef
+
+    provider = provider_factory([])
+    movie = MovieRef(
+        platform="bookmyshow", event_code="ET1", title="t", region_code="HYD",
+        region_slug="hyderabad",
+        source_url="https://in.bookmyshow.com/movies/hyderabad/buytickets/ET1/20260101",
+    )
+    assert provider.booking_url(movie, "20260925").endswith("/ET1/20260925")
+
+
+def test_booking_url_without_a_source_is_still_a_real_bms_path(provider_factory):
+    from monitor.models import MovieRef
+
+    provider = provider_factory([])
+    movie = MovieRef(platform="bookmyshow", event_code="ET9", title="t",
+                     region_code="HYD", region_slug="hyderabad")
+    assert provider.booking_url(movie) == (
+        "https://in.bookmyshow.com/movies/hyderabad/buytickets/ET9"
+    )

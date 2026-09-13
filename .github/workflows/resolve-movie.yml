@@ -1,0 +1,78 @@
+name: Resolve movie
+
+# Reads a BookMyShow listing and writes the movie, its theatres and the
+# formats they're actually running into data/catalogue.json.
+#
+# Use it when BookMyShow's bot check blocks your browser's host (Streamlit
+# Cloud IPs and some home connections get a Cloudflare 403). An Actions runner
+# usually gets through, so this is the fallback path the app offers.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "BookMyShow 'Book tickets' URL (or just the ET… code)"
+        type: string
+        required: false
+        default: ""
+      refresh_all:
+        description: "Re-read every movie already in the catalogue"
+        type: boolean
+        default: false
+
+concurrency:
+  group: resolve-movie
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Resolve
+        env:
+          TZ: Asia/Kolkata
+        run: |
+          if [ "${{ inputs.refresh_all }}" = "true" ]; then
+            python resolve_movie.py --refresh-all
+          elif [ -n "${{ inputs.url }}" ]; then
+            python resolve_movie.py "${{ inputs.url }}"
+          else
+            echo "::error::give a url, or tick refresh_all"
+            exit 1
+          fi
+
+      - name: Commit catalogue
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/catalogue.json
+          if git diff --cached --quiet; then
+            echo "Catalogue unchanged"
+            exit 0
+          fi
+          git commit -m "chore: update movie catalogue [skip ci]"
+          for attempt in 1 2 3; do
+            if git pull --rebase -X ours origin "${GITHUB_REF_NAME}" && git push; then
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push catalogue"
+          exit 1
