@@ -7,4 +7,4 @@ PyGithub>=2.3
 tzdata>=2024.1
 # Streamlit's module reloader needs a real file watcher; without it a deploy
 # that changes ui/*.py keeps serving the old modules until a manual reboot.
-watchdog>=4.0
+watchdog>=6.0
