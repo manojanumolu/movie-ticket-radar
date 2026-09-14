@@ -1,5 +1,17 @@
 [
   {
+    "monitor_id": "0368d3117bd3",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Hanuman Ansh",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+    "targets": [
+      "ALLU Cinemas · Dolby Cinema",
+      "AMB Cinemas · HDR By Barco"
+    ],
+    "at": "2026-09-14T18:54:16.095783+05:30"
+  },
+  {
     "monitor_id": "8a6a36e44881",
     "kind": "EXPIRED",
     "message": "Monitoring expired — reached the end time you set.",
