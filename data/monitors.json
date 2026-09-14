@@ -1,41 +1,5 @@
 [
   {
-    "id": "eca65ebc2ce5",
-    "movie": {
-      "platform": "bookmyshow",
-      "event_code": "ET00515338",
-      "title": "Epic",
-      "region_code": "HYD",
-      "region_slug": "hyderabad",
-      "city": "Hyderabad",
-      "language": "Telugu",
-      "poster_url": "https://in.bmscdn.com/events/moviecard/epic-2026-et00515338-1788358210.jpg",
-      "source_url": "https://in.bookmyshow.com/movies/hyderabad/epic/buytickets/ET00515338",
-      "variants": []
-    },
-    "targets": [
-      {
-        "venue_code": "PIIC",
-        "venue_name": "PVR Superplex Inorbit",
-        "area": "LUXE, PXL, 4DX: Cyberabad",
-        "fmt": "Pxl"
-      }
-    ],
-    "interval_minutes": 10,
-    "monitor_until": "2026-09-16T23:59:00+05:30",
-    "start_immediately": true,
-    "notify_email": "manoj.anumolu01@gmail.com",
-    "date_codes": [
-      "20260916"
-    ],
-    "status": "STOPPED",
-    "created_at": "2026-09-15T01:46:02.543513+05:30",
-    "stopped_at": "2026-09-15T01:51:30.364766+05:30",
-    "stopped_reason": "Stopped manually.",
-    "first_check_requested_at": "2026-09-15T01:46:02.543517+05:30",
-    "problem": null
-  },
-  {
     "id": "029be19254bf",
     "movie": {
       "platform": "bookmyshow",
