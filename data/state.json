@@ -109,5 +109,51 @@
         "new_showtime_notice_at": null
       }
     }
+  },
+  "f822346fc37d": {
+    "last_check_at": "2026-09-14T20:22:37.386238+05:30",
+    "last_success_at": "2026-09-14T20:22:37.386238+05:30",
+    "check_count": 1,
+    "success_count": 1,
+    "consecutive_errors": 0,
+    "last_error": "",
+    "last_error_kind": "",
+    "last_email_error": "",
+    "targets": {
+      "AMBH::Vip Screen": {
+        "availability": "AVAILABLE",
+        "since": "2026-09-14T20:22:37.386238+05:30",
+        "showtime_keys": [
+          "AMBH|20260915|118480",
+          "AMBH|20260915|118481"
+        ],
+        "time_labels": [
+          "10:05 AM",
+          "10:55 PM"
+        ],
+        "time_links": [
+          [
+            "10:05 AM",
+            "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933/20260915"
+          ],
+          [
+            "10:55 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933/20260915"
+          ]
+        ],
+        "date_code": "20260915",
+        "date_codes": [
+          "20260915"
+        ],
+        "booking_url": "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933/20260915",
+        "notified_availability": "AVAILABLE",
+        "notified_at": "2026-09-14T20:22:37.386238+05:30",
+        "notified_showtime_keys": [
+          "AMBH|20260915|118480",
+          "AMBH|20260915|118481"
+        ],
+        "new_showtime_notice_at": null
+      }
+    }
   }
 }
