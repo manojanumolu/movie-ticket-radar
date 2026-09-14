@@ -229,3 +229,35 @@ def test_target_result_time_links_follow_showtime_order(provider_factory, listin
     assert result.time_labels == ["07:30 PM", "09:45 PM"]
     assert result.time_links == [["07:30 PM", f"{listing_url}/20260925"],
                                  ["09:45 PM", f"{listing_url}/20260925"]]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The alert links to the theatre's own booking page (verified shape)
+# ──────────────────────────────────────────────────────────────────────────
+def test_venue_booking_url_is_the_theatre_page_for_that_date(provider_factory, listing_url):
+    provider = provider_factory([build_payload(ALLU_LIVE)])
+    movie = provider.resolve(listing_url).movie
+    assert provider.venue_booking_url(movie, "AMBH", "20260925") == (
+        "https://in.bookmyshow.com/buytickets/avengers-endgame-hyderabad/cinema-hyde-AMBH-MT/20260925")
+    assert provider.venue_booking_url(movie, "ambh") == (
+        "https://in.bookmyshow.com/buytickets/avengers-endgame-hyderabad/cinema-hyde-AMBH-MT")
+    # No venue, or no slug to build from: the movie page, never a guess.
+    assert provider.venue_booking_url(movie, "", "20260925") == f"{listing_url}/20260925"
+    from dataclasses import replace
+    bare = replace(movie, source_url="")
+    assert provider.venue_booking_url(bare, "AMBH", "20260925").endswith("/buytickets/ET00478890/20260925")
+
+
+def test_a_live_result_links_to_the_theatre_not_the_movie(provider_factory, listing_url, make_monitor):
+    from monitor.checker import evaluate_target
+    from notifications.email import is_configured  # noqa: F401 - keeps the import path honest
+
+    monitor = make_monitor()
+    snap = provider_factory([build_payload(ALLU_LIVE)]).resolve(listing_url)
+    result = evaluate_target(monitor, monitor.targets[0], snap)
+    assert result.availability is Availability.AVAILABLE
+    assert result.booking_url == (
+        "https://in.bookmyshow.com/buytickets/avengers-endgame-hyderabad/cinema-hyde-ALLU-MT/20260925")
+    # A theatre still waiting for release links to its page too, undated.
+    waiting = evaluate_target(monitor, monitor.targets[0].__class__("GHOST", "Ghost", "", "Any format"), snap)
+    assert waiting.booking_url.endswith("/cinema-hyde-GHOST-MT")

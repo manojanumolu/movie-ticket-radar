@@ -227,7 +227,7 @@ def step_movie() -> bool:
     C.html('<div class="tr-field-label">Search movies</div>')
     choice = st.selectbox(
         "Search movies", [m.label for m in catalogue.movies], index=None, key="movie_query",
-        placeholder="Type a movie name — e.g. ave, mand, hanu…", label_visibility="collapsed",
+        placeholder=f"Search movies playing in {location.name}…", label_visibility="collapsed",
         accept_new_options=True, filter_mode="contains",
     )
     chosen_id = cv.movie_for_label(choice or "", location.slug)
@@ -267,14 +267,24 @@ def step_movie() -> bool:
 # ──────────────────────────────────────────────────────────────────────────
 # 3 · Theatres
 # ──────────────────────────────────────────────────────────────────────────
-def _toggle_theatre(code: str, venues: list[Venue]) -> None:
-    chosen = set(st.session_state.get("theatres", []))
+def _toggle_theatre(code: str, listed: list[Venue]) -> None:
+    """Select or deselect one theatre.
+
+    The chosen list keeps the movie's listed theatres first, in listing
+    order, then any theatre being watched for release (one the catalogue
+    knows from other films but that hasn't listed this movie yet), in the
+    order they were picked.
+    """
+    chosen = list(st.session_state.get("theatres", []))
     if code in chosen:
-        chosen.discard(code)
+        chosen.remove(code)
         st.session_state["formats"].pop(code, None)
     else:
-        chosen.add(code)
-    st.session_state["theatres"] = [v.code for v in venues if v.code in chosen]
+        chosen.append(code)
+    listed_codes = [v.code for v in listed]
+    st.session_state["theatres"] = (
+        [c for c in listed_codes if c in chosen] + [c for c in chosen if c not in listed_codes]
+    )
     st.rerun()
 
 
@@ -285,17 +295,19 @@ def step_theatres() -> list[Venue]:
         st.caption("Pick a movie first.")
         return []
 
-    head, action = st.columns([3.2, 1])
+    head, action = st.columns([3.2, 1], vertical_alignment="center")
     with head:
         C.step_header(3, "Where do you want to watch?",
-                      f"One or more theatres showing {movie.title} in {movie.city}.")
+                      f"Theatres showing {movie.title} in {movie.city} — or ones you want watched "
+                      "until they release it.")
     with action:
         select_all = st.button("Select all", key="select_all", use_container_width=True)
 
     # Every theatre the catalogue holds for *this* movie — the whole film,
     # every format, nothing added and nothing left out.
     venues = cv.venues(movie.id, slug)
-    if not venues:
+    directory = cv.view(slug).directory
+    if not venues and not directory:
         problem = st.session_state.get("detail_problem", "")
         if problem:
             C.catalogue_banner("BLOCKED", problem, "", 0)
@@ -308,43 +320,55 @@ def step_theatres() -> list[Venue]:
             )
         return []
 
-    chosen = set(st.session_state.get("theatres", []))
+    chosen = list(st.session_state.get("theatres", []))
     if select_all:
-        chosen = set(v.code for v in venues) if chosen != set(v.code for v in venues) else set()
-        st.session_state["theatres"] = [v.code for v in venues if v.code in chosen]
+        every = [v.code for v in venues]
+        st.session_state["theatres"] = [] if set(every) <= set(chosen) and every else every
         st.rerun()
 
-    # ── search: client-side, over this movie's theatres only ─────────────
-    by_code = {v.code: v for v in venues}
+    # ── search: client-side, over every theatre the city catalogue knows ──
+    # A theatre not yet listed for this movie is offered as "coming soon":
+    # picking it watches it until BookMyShow releases tickets there.
+    listed_codes = {v.code for v in venues}
+    by_code = {**directory, **{v.code: v for v in venues}}
+    search_codes = [v.code for v in venues] + sorted(
+        (c for c in directory if c not in listed_codes), key=lambda c: directory[c].name.lower())
     nonce = st.session_state.get("theatre_nonce", 0)
     C.html('<div class="tr-field-label">Search theatres</div>')
     picked_code = st.selectbox(
-        "Search theatres", [v.code for v in venues], index=None,
-        format_func=lambda c: f"{by_code[c].name} · {by_code[c].area or movie.city}",
-        key=f"theatre_query_{nonce}", placeholder="Type a theatre name — e.g. am, allu, pvr…",
+        "Search theatres", search_codes, index=None,
+        format_func=lambda c: (f"{by_code[c].name} · {by_code[c].area or movie.city}"
+                               + ("" if c in listed_codes else " · coming soon")),
+        key=f"theatre_query_{nonce}", placeholder=f"Search theatres in {movie.city}…",
         label_visibility="collapsed", filter_mode="contains",
     )
     if picked_code:
         st.session_state["theatre_nonce"] = nonce + 1    # clears the box on the rerun
         _toggle_theatre(picked_code, venues)
 
-    # ── featured quick-picks: a shortcut into the same list ──────────────
-    shelf = cv.featured(venues)
+    # ── featured quick-picks: released, coming soon, or unknown ──────────
+    shelf = cv.featured(venues, directory)
     C.rule("Featured theatres")
     columns = st.columns(3, gap="small")
-    for index, (feat, venue) in enumerate(shelf):
+    for index, match in enumerate(shelf):
         with columns[index % 3]:
-            if venue is None:
-                C.featured_tile(feat.name, feat.area, None, False)
+            if match.venue is None:
+                C.featured_tile(match.pick.name, match.pick.area, None, False, released=False)
                 continue
-            is_sel = venue.code in chosen
-            if pick(f"feat_{venue.code}", "Selected ✓" if is_sel else f"Select {venue.name}",
-                    lambda v=venue, f=feat, is_sel=is_sel: C.featured_tile(f.name, f.area, v, is_sel)):
-                _toggle_theatre(venue.code, venues)
+            is_sel = match.venue.code in chosen
+            label = "Selected ✓" if is_sel else (
+                f"Select {match.venue.name}" if match.released else f"Watch {match.venue.name} for release")
+            if pick(f"feat_{match.venue.code}", label,
+                    lambda m=match, is_sel=is_sel: C.featured_tile(
+                        m.pick.name, m.pick.area, m.venue, is_sel, released=m.released)):
+                _toggle_theatre(match.venue.code, venues)
 
     # ── the full list ────────────────────────────────────────────────────
-    featured_codes = {venue.code for _, venue in shelf if venue is not None}
+    featured_codes = {m.venue.code for m in shelf if m.venue is not None}
     C.rule(f"All theatres · {len(venues)}")
+    if not venues:
+        st.caption(f"No theatre has listed **{movie.title}** yet — pick the ones you want "
+                   "watched, above, and we'll tell you the moment tickets open.")
     columns = st.columns(2, gap="small")
     for index, venue in enumerate(venues):
         with columns[index % 2]:
@@ -356,7 +380,19 @@ def step_theatres() -> list[Venue]:
                         featured=v.code in featured_codes)):
                 _toggle_theatre(venue.code, venues)
 
-    picked = [v for v in venues if v.code in chosen]
+    # ── theatres being watched for release (chosen, not listed yet) ──────
+    watching = [by_code[c] for c in chosen if c not in listed_codes and c in by_code]
+    if watching:
+        C.rule(f"Watching for release · {len(watching)}")
+        columns = st.columns(2, gap="small")
+        for index, venue in enumerate(watching):
+            with columns[index % 2]:
+                if pick(f"th_{venue.code}", "Selected ✓",
+                        lambda v=venue: C.theatre_row(v.name, v.area, list(v.formats), True, v.abbr,
+                                                      featured=v.code in featured_codes, coming=True)):
+                    _toggle_theatre(venue.code, venues)
+
+    picked = cv.selected_venues(movie.id, slug, chosen)
     if picked:
         st.caption(f"{len(picked)} theatre(s) selected: " + ", ".join(v.name for v in picked))
         if st.button("Continue to formats  →", type="primary", use_container_width=True,
@@ -370,8 +406,14 @@ def step_theatres() -> list[Venue]:
 # ──────────────────────────────────────────────────────────────────────────
 # 4 · Formats
 # ──────────────────────────────────────────────────────────────────────────
-def step_formats(venues: list[Venue]) -> dict[str, list[str]]:
-    C.step_header(4, "Formats, per theatre", "Only formats that theatre actually runs.")
+def step_formats(venues: list[Venue], coming: set[str] | None = None) -> dict[str, list[str]]:
+    """``coming`` names the theatres being watched for release: their format
+    options are the ones the theatre is known to run (from other films), not
+    ones it has listed for this movie — because it hasn't listed it yet."""
+    coming = coming or set()
+    C.step_header(4, "Formats, per theatre",
+                  "Only formats that theatre actually runs. For a theatre that hasn't released "
+                  "this movie yet, the formats it is known to run.")
 
     if not venues:
         st.caption("Pick a theatre first.")
@@ -383,7 +425,8 @@ def step_formats(venues: list[Venue]) -> dict[str, list[str]]:
         with st.container(key=f"trpanel_{venue.code}"):
             left, right = st.columns([1, 1.6], gap="medium")
             with left:
-                C.format_panel_head(venue.name, venue.area, options[0] if options else "")
+                C.format_panel_head(venue.name, venue.area, options[0] if options else "",
+                                    coming=venue.code in coming)
             with right:
                 if not options:
                     st.caption("No format published for this theatre yet — watching every show.")
@@ -514,12 +557,11 @@ def summary(step: int) -> None:
     movie = cv.movie(st.session_state.get("movie_id", ""), slug) if step > 2 else None
     if movie is not None:
         items.append((2, "Movie", f"{movie.title}{f' · {movie.language}' if movie.language else ''}"))
-    if step > 3 and st.session_state.get("theatres"):
-        names = {v.code: v.name for v in cv.venues(st.session_state.get("movie_id", ""), slug)}
-        picked = [names.get(c, c) for c in st.session_state["theatres"]]
-        items.append((3, "Theatres", ", ".join(picked)))
+    codes = list(st.session_state.get("theatres", []))
+    names = {v.code: v.name for v in cv.selected_venues(st.session_state.get("movie_id", ""), slug, codes)}
+    if step > 3 and codes:
+        items.append((3, "Theatres", ", ".join(names.get(c, c) for c in codes)))
     if step > 4 and st.session_state.get("formats"):
-        names = {v.code: v.name for v in cv.venues(st.session_state.get("movie_id", ""), slug)}
         parts = [
             f"{names.get(code, code)} → {', '.join(fmts)}"
             for code, fmts in st.session_state["formats"].items()

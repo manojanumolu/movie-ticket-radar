@@ -13,7 +13,7 @@ import pytest
 
 from config.timezone import now_ist
 from monitor import catalogue
-from monitor.models import ANY_FORMAT, Availability, MonitorStatus
+from monitor.models import ANY_FORMAT, Availability, MonitorStatus, TheatreTarget
 from monitor.state import MonitorState, get_monitor, load_monitors, save_state, upsert_monitor
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
@@ -511,13 +511,15 @@ def test_theatre_search_toggles_a_theatre(seeded):
     assert "1 theatre(s) selected: AMB Cinemas" in text(app)
 
 
-def test_featured_picks_only_offer_theatres_showing_this_movie(seeded):
+def test_featured_picks_only_offer_theatres_the_catalogue_knows(seeded):
     app = run(step=3, location="hyderabad", movie_id=seeded)
     body = text(app)
-    # Allu and AMB screen it — quick-pickable. The other four are named but
-    # say plainly that they are not screening it, and have no button.
+    # Allu and AMB screen it — quick-pickable, "Now listed". The other four
+    # have never appeared in this catalogue, so there is no venue code to
+    # watch: they are named, say so, and have no button.
     assert {b.key for b in app.button if b.key.startswith("feat_")} == {"feat_ALLU", "feat_AMB"}
-    assert body.count("Not screening this movie") == 4
+    assert body.count("Now listed") == 2
+    assert body.count("Not in catalogue") == 4
     assert "Prasads Multiplex" in body and "PVR Lakeshore Mall" in body
     app.button(key="feat_ALLU").click().run()
     assert app.session_state["theatres"] == ["ALLU"]
@@ -591,3 +593,138 @@ def test_no_card_renders_its_own_tags_as_text(make_monitor, at, page):
         lines = value.split("\n")
         assert "" not in lines[1:-1], f"blank line inside an HTML block on {page}: {value[:120]!r}"
         assert not any(line.startswith("    ") for line in lines), f"indented line on {page}: {value[:120]!r}"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Release watch: a theatre that hasn't listed the film yet can be monitored
+# ──────────────────────────────────────────────────────────────────────────
+PRASADS_LIVE = [
+    {"venue_code": "PRHN", "venue_name": "Prasads Multiplex", "area": "Hyderabad",
+     "time": "07:00 PM", "time_code": "1900", "fmt": "PCX SCREEN", "status": "3"},
+]
+
+
+@pytest.fixture
+def release_watch(provider_factory, monkeypatch):
+    """Mandaadi plays at Allu/AMB; Prasads (PCX) is only known from Hanuman
+    Ansh. So for Mandaadi, Prasads is a *coming soon* theatre."""
+    from tests.conftest import ALLU_LIVE, QUICKBOOK_HYD, build_payload
+
+    responses = ([QUICKBOOK_HYD]
+                 + [build_payload(ALLU_LIVE)] * 5       # Mandaadi Telugu (3 events) + Tamil (2)
+                 + [build_payload(PRASADS_LIVE)])       # Hanuman Ansh
+    provider = provider_factory(responses)
+    monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
+    catalogue.sync_region("hyderabad", mirror=False, detail=True)
+    entry = next(e for e in catalogue.list_entries("hyderabad")
+                 if catalogue.movie_from_entry(e).title == "Mandaadi")
+    return catalogue.movie_from_entry(entry).id
+
+
+def test_a_theatre_known_from_other_films_is_offered_as_coming_soon(release_watch):
+    app = run(step=3, location="hyderabad", movie_id=release_watch)
+    body = text(app)
+    assert "feat_PRHN" in {b.key for b in app.button}
+    assert "Coming soon" in body and "Expected: Pcx Screen" in body
+    assert "watch this theatre until BookMyShow releases tickets" in body
+    # The listed set is untouched — Prasads is not pretended into it.
+    assert "All theatres · 2" in body
+    assert {b.key for b in app.button if b.key.startswith("th_")} == {"th_ALLU", "th_AMB"}
+
+    app.button(key="feat_PRHN").click().run()
+    assert not app.exception
+    assert app.session_state["theatres"] == ["PRHN"]
+    body = text(app)
+    assert "Watching for release · 1" in body
+    assert "1 theatre(s) selected: Prasads Multiplex" in body
+
+
+def test_theatre_search_offers_the_whole_city_with_coming_soon_marked(release_watch):
+    app = run(step=3, location="hyderabad", movie_id=release_watch)
+    box = next(s for s in app.selectbox if s.key.startswith("theatre_query_"))
+    assert box.options == ["Allu Cinemas · Attapur, Hyderabad", "AMB Cinemas · Gachibowli, Hyderabad",
+                           "Prasads Multiplex · Hyderabad · coming soon"]
+    assert "example" not in (box.placeholder or "").lower() and "e.g." not in (box.placeholder or "")
+    box.select("Prasads Multiplex · Hyderabad · coming soon").run()
+    assert app.session_state["theatres"] == ["PRHN"]
+
+
+def test_formats_for_a_coming_soon_theatre_are_the_ones_it_is_known_to_run(release_watch):
+    app = run(step=4, location="hyderabad", movie_id=release_watch, theatres=["ALLU", "PRHN"])
+    assert not app.exception
+    keys = {c.key for c in app.checkbox}
+    assert "fmt_PRHN_Pcx Screen" in keys and "fmt_PRHN_any" in keys
+    assert "fmt_ALLU_Dolby Cinema" in keys
+    body = text(app)
+    assert "Not listed for this movie yet" in body
+
+
+def test_release_watch_monitor_is_saved_and_fires_when_the_theatre_appears(
+        release_watch, provider_factory, monkeypatch):
+    """The brief's scenario: pick a theatre with no listing, start, stay
+    ACTIVE while it reads 'waiting for release', then the moment the theatre
+    appears with the format — AVAILABLE, and an email."""
+    from monitor import checker
+    from monitor.changes import ChangeKind, apply_outcome, detect_changes
+    from tests.conftest import ALLU_LIVE, build_payload
+
+    at = now_ist()
+    app = run(step=5, location="hyderabad", movie_id=release_watch,
+              theatres=["PRHN"], formats={"PRHN": ["Pcx Screen"]})
+    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.button(key="start").click().run()
+    assert not app.exception, [str(e) for e in app.exception]
+    monitor = load_monitors()[0]
+    assert monitor.status is MonitorStatus.ACTIVE
+    assert [t.key for t in monitor.targets] == ["PRHN::Pcx Screen"]
+    assert monitor.target("PRHN::Pcx Screen").venue_name == "Prasads Multiplex"
+
+    # Check 1: Mandaadi still lists only Allu/AMB — the theatre is not there.
+    provider = provider_factory([build_payload(ALLU_LIVE)] * 3)
+    monkeypatch.setattr(checker, "get_provider", lambda slug: provider)
+    outcome = checker.check_monitor(monitor, at=at)
+    assert outcome.ok
+    assert outcome.results[0].availability is Availability.THEATRE_NOT_AVAILABLE
+    state = MonitorState()
+    assert detect_changes(monitor, outcome, state) == []               # nothing to email yet
+    state = apply_outcome(outcome, state)
+    save_state({monitor.id: state}, mirror=False)
+    assert monitor.is_running(at)
+    body = text(run("My Monitors"))
+    assert "waiting for this theatre to release" in body
+
+    # Check 2: Prasads lists it, PCX, bookable — the release we were waiting for.
+    provider = provider_factory([build_payload(ALLU_LIVE + PRASADS_LIVE)] * 3)
+    monkeypatch.setattr(checker, "get_provider", lambda slug: provider)
+    outcome = checker.check_monitor(monitor, at=at + timedelta(minutes=10))
+    result = outcome.results[0]
+    assert result.availability is Availability.AVAILABLE
+    assert result.time_labels == ["07:00 PM"]
+    changes = detect_changes(monitor, outcome, state)
+    assert [c.kind for c in changes] == [ChangeKind.TICKETS_LIVE]
+    assert changes[0].venue_name == "Prasads Multiplex" and changes[0].fmt == "Pcx Screen"
+
+
+def test_check_picks_up_sibling_events_the_catalogue_learned_later(make_monitor, provider_factory,
+                                                                   monkeypatch, at):
+    """A monitor saved before BookMyShow added a 'Dolby Cinema 2D' event still
+    sees the theatre when the catalogue sync has recorded that sibling."""
+    from dataclasses import replace
+
+    from monitor import checker
+    from tests.conftest import ALLU_LIVE, build_payload
+
+    monitor = make_monitor(targets=[TheatreTarget("PRHN", "Prasads Multiplex", "Hyderabad", "Pcx Screen")])
+    assert monitor.movie.variants == ()
+    # The catalogue now knows a sibling event for this movie.
+    catalogue.store_snapshot(
+        provider_factory([build_payload(ALLU_LIVE)] * 2).fetch(
+            replace(monitor.movie, variants=(("ET00516197", "Dolby Cinema 2D"),))),
+        mirror=False)
+    assert checker.with_current_variants(monitor.movie).variant_codes == ("ET00516197",)
+
+    provider = provider_factory([build_payload(ALLU_LIVE), build_payload(PRASADS_LIVE)])
+    monkeypatch.setattr(checker, "get_provider", lambda slug: provider)
+    outcome = checker.check_monitor(monitor, at=at)
+    assert [c["params"]["eventCode"] for c in provider.session.calls] == ["ET00478890", "ET00516197"]
+    assert outcome.results[0].availability is Availability.AVAILABLE

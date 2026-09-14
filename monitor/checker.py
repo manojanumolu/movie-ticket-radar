@@ -28,6 +28,7 @@ from monitor.models import (
     Availability,
     CheckOutcome,
     Monitor,
+    MovieRef,
     Showtime,
     Snapshot,
     TargetResult,
@@ -96,7 +97,7 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
                 if not known_venue
                 else "Theatre is listed, but no showtimes are published yet."
             ),
-            booking_url=_booking_url(monitor, snapshot, ""),
+            booking_url=_booking_url(monitor, snapshot, "", target),
         )
 
     if wanted_dates:
@@ -112,7 +113,7 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
                 fmt=target.fmt,
                 availability=Availability.SHOW_NOT_AVAILABLE,
                 detail=f"No showtimes on the dates you're watching ({', '.join(sorted(wanted_dates))}).",
-                booking_url=_booking_url(monitor, snapshot, sorted(wanted_dates)[0]),
+                booking_url=_booking_url(monitor, snapshot, sorted(wanted_dates)[0], target),
             )
 
     matching = [s for s in shows if target.matches_format(s.format_label)]
@@ -127,7 +128,7 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
             availability=Availability.SHOW_NOT_AVAILABLE,
             detail=f"Shows are listed, but none in {target.fmt} (listed: {', '.join(seen)}).",
             date_code=shows[0].date_code,
-            booking_url=_booking_url(monitor, snapshot, shows[0].date_code),
+            booking_url=_booking_url(monitor, snapshot, shows[0].date_code, target),
         )
 
     bookable = [s for s in matching if s.availability is Availability.AVAILABLE]
@@ -140,7 +141,7 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
             availability=Availability.AVAILABLE,
             showtimes=bookable,
             date_code=date_code,
-            booking_url=_booking_url(monitor, snapshot, date_code),
+            booking_url=_booking_url(monitor, snapshot, date_code, target),
             detail=f"{len(bookable)} showtime(s) bookable.",
         )
 
@@ -154,7 +155,7 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
             availability=Availability.SOLD_OUT,
             showtimes=sold_out,
             date_code=date_code,
-            booking_url=_booking_url(monitor, snapshot, date_code),
+            booking_url=_booking_url(monitor, snapshot, date_code, target),
             detail="Every seat category is sold out.",
         )
 
@@ -165,9 +166,24 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
         availability=Availability.NOT_BOOKABLE,
         showtimes=matching,
         date_code=date_code,
-        booking_url=_booking_url(monitor, snapshot, date_code),
+        booking_url=_booking_url(monitor, snapshot, date_code, target),
         detail="Showtimes are listed but booking hasn't opened.",
     )
+
+
+def with_current_variants(movie: MovieRef) -> MovieRef:
+    """The movie with its sibling events as the catalogue knows them today,
+    unioned with the ones saved on the monitor. Never removes a sibling."""
+    from dataclasses import replace
+
+    from monitor import catalogue
+
+    entry = catalogue.find_entry(movie.id)
+    if not entry:
+        return movie
+    current = catalogue.movie_from_entry(entry).variants
+    merged = tuple(dict.fromkeys((*movie.variants, *current)))
+    return movie if merged == movie.variants else replace(movie, variants=merged)
 
 
 def _same_venue(show: Showtime, target: TheatreTarget) -> bool:
@@ -190,11 +206,18 @@ def _earliest_date(shows: list[Showtime]) -> str:
     return codes[0] if codes else ""
 
 
-def _booking_url(monitor: Monitor, snapshot: Snapshot, date_code: str) -> str:
+def _booking_url(monitor: Monitor, snapshot: Snapshot, date_code: str,
+                 target: TheatreTarget | None = None) -> str:
+    """The link an alert carries: the *theatre's* booking page when the
+    provider has one for this venue, else the movie's date page."""
     try:
-        return get_provider(monitor.movie.platform).booking_url(snapshot.movie, date_code)
+        provider = get_provider(monitor.movie.platform)
     except PlatformError:
         return monitor.movie.source_url
+    venue_page = getattr(provider, "venue_booking_url", None)
+    if target is not None and target.venue_code and venue_page is not None:
+        return venue_page(snapshot.movie, target.venue_code, date_code)
+    return provider.booking_url(snapshot.movie, date_code)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -205,7 +228,12 @@ def check_monitor(monitor: Monitor, *, at: datetime | None = None) -> CheckOutco
     at = at or now_ist()
     try:
         provider = get_provider(monitor.movie.platform)
-        snapshot = provider.fetch(monitor.movie, monitor.date_codes or None)
+        # A theatre often releases a film under a *new* premium-format event
+        # (a "Dolby Cinema 2D" sibling that did not exist when the monitor
+        # was saved). The catalogue sync learns of such siblings; take them
+        # from there so the sweep is the whole film as of now, not as of the
+        # day the monitor was created.
+        snapshot = provider.fetch(with_current_variants(monitor.movie), monitor.date_codes or None)
     except PlatformBlocked as exc:
         return CheckOutcome(monitor.id, at, ok=False, error=str(exc), blocked=True)
     except PlatformError as exc:

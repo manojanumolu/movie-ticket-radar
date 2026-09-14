@@ -63,6 +63,11 @@ class CatalogueView:
     theatre_count: int
     sync: dict[str, Any]
     labels: dict[str, str] = field(default_factory=dict)   # search label -> movie id
+    #: Every theatre the catalogue has seen in this city, by BookMyShow venue
+    #: code, with every format ever seen there. This is what lets a theatre be
+    #: watched *before* it lists a film: the code the worker will match on,
+    #: and the formats it is known to run, both come from real listings.
+    directory: dict[str, Venue] = field(default_factory=dict)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -97,10 +102,21 @@ def _build(signature: tuple[str, str], slug: str) -> CatalogueView:
         )
         movies.append(card)
         labels.setdefault(card.label, card.id)
-    theatre_count = len({v.code for venues in venues_by_id.values() for v in venues})
+    directory: dict[str, Venue] = {}
+    for venues in venues_by_id.values():
+        for v in venues:
+            known = directory.get(v.code)
+            if known is None:
+                directory[v.code] = v
+            else:
+                directory[v.code] = Venue(
+                    code=v.code, name=known.name or v.name, area=known.area or v.area,
+                    formats=tuple(dict.fromkeys((*known.formats, *v.formats))),
+                )
     return CatalogueView(
         slug=slug, entries=entries, movies=movies, by_id=by_id, venues_by_id=venues_by_id,
-        theatre_count=theatre_count, sync=catalogue.sync_state(slug), labels=labels,
+        theatre_count=len(directory), sync=catalogue.sync_state(slug), labels=labels,
+        directory=directory,
     )
 
 
@@ -134,6 +150,26 @@ def venues(movie_id: str, slug: str = "") -> list[Venue]:
     if slug and movie_id in view(slug).venues_by_id:
         return view(slug).venues_by_id[movie_id]
     return _build(_signature(), "").venues_by_id.get(movie_id, [])
+
+
+def selected_venues(movie_id: str, slug: str, codes: list[str]) -> list[Venue]:
+    """The Venue for each chosen code: the movie's own listing when it has
+    one, otherwise the city directory (a theatre being watched for release,
+    carrying the formats it is known to run)."""
+    listed = {v.code: v for v in venues(movie_id, slug)}
+    directory = view(slug).directory
+    out: list[Venue] = []
+    for code in codes:
+        venue = listed.get(code) or directory.get(code)
+        if venue is not None:
+            out.append(venue)
+    return out
+
+
+def coming_soon_codes(movie_id: str, slug: str, codes: list[str]) -> set[str]:
+    """Which of the chosen codes are *not* listed for this movie yet."""
+    listed = {v.code for v in venues(movie_id, slug)}
+    return {c for c in codes if c not in listed}
 
 
 def card(movie_id: str, slug: str) -> MovieCard | None:
@@ -218,24 +254,47 @@ FEATURED: tuple[Featured, ...] = (
 )
 
 
-def featured(candidates: list[Venue]) -> list[tuple[Featured, Venue | None]]:
-    """Each featured theatre paired with the movie's matching venue, or None.
+@dataclass(frozen=True)
+class FeaturedMatch:
+    pick: Featured
+    venue: Venue | None       # the theatre as the catalogue knows it, or None
+    released: bool            # True when this movie is listed there right now
 
-    None means "this movie is not listed there" and is rendered as exactly
-    that. Availability is never assumed from the theatre being featured.
+    @property
+    def selectable(self) -> bool:
+        return self.venue is not None
+
+
+def _match(pick: Featured, candidates) -> Venue | None:
+    for venue in candidates:
+        name = venue.name.lower()
+        area = venue.area.lower()
+        if any(n in name for n in pick.needles) and (
+            not pick.area_needle or pick.area_needle in area or pick.area_needle in name
+        ):
+            return venue
+    return None
+
+
+def featured(candidates: list[Venue], directory: dict[str, Venue] | None = None) -> list[FeaturedMatch]:
+    """Each featured theatre in one of three states.
+
+    *Released*: the movie is listed there now — the tile shows its formats.
+    *Coming soon*: the catalogue knows the theatre (from other films) but not
+    for this movie yet — still selectable, so it can be watched until
+    BookMyShow releases tickets; the formats shown are the ones the theatre
+    is known to run. *Unknown*: the catalogue has never seen the theatre, so
+    there is no venue code to watch — the tile says so and cannot be picked.
+    Availability is never assumed from the theatre being featured.
     """
-    out: list[tuple[Featured, Venue | None]] = []
+    out: list[FeaturedMatch] = []
+    known = list((directory or {}).values())
     for pick in FEATURED:
-        match = None
-        for venue in candidates:
-            name = venue.name.lower()
-            area = venue.area.lower()
-            if any(n in name for n in pick.needles) and (
-                not pick.area_needle or pick.area_needle in area or pick.area_needle in name
-            ):
-                match = venue
-                break
-        out.append((pick, match))
+        listed = _match(pick, candidates)
+        if listed is not None:
+            out.append(FeaturedMatch(pick, listed, True))
+            continue
+        out.append(FeaturedMatch(pick, _match(pick, known), False))
     return out
 
 
@@ -243,8 +302,10 @@ __all__ = [
     "FEATURED",
     "CatalogueView",
     "Featured",
+    "FeaturedMatch",
     "MovieCard",
     "card",
+    "coming_soon_codes",
     "entry",
     "featured",
     "movie",
@@ -252,6 +313,7 @@ __all__ = [
     "popular",
     "search_movies",
     "search_venues",
+    "selected_venues",
     "venues",
     "view",
 ]

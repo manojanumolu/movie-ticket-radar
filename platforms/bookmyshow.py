@@ -937,6 +937,26 @@ class BookMyShowProvider:
             base = re.sub(r"/\d{8}$", "", base)
         return f"{base}/{date_code}" if DATE_CODE_RE.match(date_code or "") else base
 
+    def venue_booking_url(self, movie: MovieRef, venue_code: str, date_code: str = "") -> str:
+        """The booking page for one theatre, on one date.
+
+        Verified on a runner (bms-diagnose, 2026-09-15): BookMyShow answers
+        ``/buytickets/<movie-slug>-<city>/cinema-<region>-<VENUE>-MT/<date>``
+        with a redirect to its canonical theatre page
+        (``/cinemas/hyde/amb-cinemas-gachibowli/buytickets/AMBH/20260925``,
+        titled "AMB Cinemas: Gachibowli | Movie Showtimes & Ticket Booking"),
+        while a bogus venue code lands on the generic cinemas index. The
+        movie slug is the one from the listing's own URL — nothing here is
+        invented, and without a venue code or slug the movie page is used.
+        """
+        code = (venue_code or "").strip().upper()
+        match = re.search(r"/movies/[^/]+/([^/]+)/buytickets/", movie.source_url or "")
+        slug = match.group(1) if match else ""
+        if not code or not slug or not movie.region_slug:
+            return self.booking_url(movie, date_code)
+        url = f"{SITE}/buytickets/{slug}-{movie.region_slug}/cinema-{movie.region_slug[:4]}-{code}-MT"
+        return f"{url}/{date_code}" if DATE_CODE_RE.match(date_code or "") else url
+
     # ── Parsing ──────────────────────────────────────────────────────────
     def _movie_ref(self, payload: dict[str, Any], parsed: dict[str, str],
                    region: tuple[str, str, str, str, str], *, source_url: str,
