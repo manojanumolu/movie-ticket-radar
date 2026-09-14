@@ -1,6 +1,17 @@
 [
   {
     "monitor_id": "bb40ffd88f01",
+    "kind": "STOPPED",
+    "message": "Monitoring stopped — you stopped this alert.",
+    "movie": "The Odyssey",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/the-odyssey-et00452034-1778421685.jpg",
+    "targets": [
+      "Prasads Multiplex · Pcx Screen"
+    ],
+    "at": "2026-09-14T20:25:07.829968+05:30"
+  },
+  {
+    "monitor_id": "bb40ffd88f01",
     "kind": "CREATED",
     "message": "Monitor created.",
     "movie": "The Odyssey",
