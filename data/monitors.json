@@ -1,1 +1,72 @@
-[]
+[
+  {
+    "id": "d751fdcd9942",
+    "movie": {
+      "platform": "bookmyshow",
+      "event_code": "ET00507738",
+      "title": "Hanuman Ansh",
+      "region_code": "HYD",
+      "region_slug": "hyderabad",
+      "city": "Hyderabad",
+      "language": "Hindi",
+      "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+      "source_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738",
+      "variants": []
+    },
+    "targets": [
+      {
+        "venue_code": "ALUC",
+        "venue_name": "ALLU Cinemas",
+        "area": "Kokapet",
+        "fmt": "Dolby Cinema"
+      }
+    ],
+    "interval_minutes": 10,
+    "monitor_until": "2026-09-15T23:59:00+05:30",
+    "start_immediately": true,
+    "notify_email": "manoj.anumolu01@gmail.com",
+    "date_codes": [
+      "20260915"
+    ],
+    "status": "STOPPED",
+    "created_at": "2026-09-14T20:17:10.218122+05:30",
+    "stopped_at": "2026-09-14T20:18:56.968202+05:30",
+    "stopped_reason": "Stopped manually.",
+    "first_check_requested_at": "2026-09-14T20:17:10.218124+05:30",
+    "problem": null
+  },
+  {
+    "id": "12463fd2c5a0",
+    "movie": {
+      "platform": "bookmyshow",
+      "event_code": "ET00507738",
+      "title": "Hanuman Ansh",
+      "region_code": "HYD",
+      "region_slug": "hyderabad",
+      "city": "Hyderabad",
+      "language": "Hindi",
+      "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+      "source_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738",
+      "variants": []
+    },
+    "targets": [
+      {
+        "venue_code": "ALUC",
+        "venue_name": "ALLU Cinemas",
+        "area": "Kokapet",
+        "fmt": "Dolby Cinema"
+      }
+    ],
+    "interval_minutes": 10,
+    "monitor_until": "2026-09-15T23:59:00+05:30",
+    "start_immediately": true,
+    "notify_email": "manoj.anumolu01@gmail.com",
+    "date_codes": [],
+    "status": "STOPPED",
+    "created_at": "2026-09-14T19:08:20.968796+05:30",
+    "stopped_at": "2026-09-14T19:46:48.850118+05:30",
+    "stopped_reason": "Stopped manually.",
+    "first_check_requested_at": null,
+    "problem": null
+  }
+]
