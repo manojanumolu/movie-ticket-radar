@@ -139,10 +139,29 @@ class MovieRef:
     language: str = ""
     poster_url: str = ""
     source_url: str = ""     # the buytickets URL this was resolved from
+    #: Sibling events for the same film in the same language — the premium
+    #: formats BookMyShow lists as separate bookable events ("4DX 3D", "IMAX
+    #: 3D", "EPIQ"…), as ``(event_code, format label)``. Their showtimes are
+    #: *not* part of this event's answer, so a provider sweeps them too; the
+    #: movie is still one row, identified by ``event_code``.
+    variants: tuple[tuple[str, str], ...] = ()
+
+    def __post_init__(self) -> None:
+        # JSON round-trips tuples as lists; keep the field hashable either way.
+        pairs = tuple(
+            (str(pair[0]), str(pair[1]) if len(pair) > 1 else "")
+            for pair in (self.variants or ())
+            if isinstance(pair, (list, tuple)) and pair and pair[0]
+        )
+        object.__setattr__(self, "variants", pairs)
 
     @property
     def id(self) -> str:
         return f"{self.platform}:{self.event_code}"
+
+    @property
+    def variant_codes(self) -> tuple[str, ...]:
+        return tuple(code for code, _ in self.variants if code != self.event_code)
 
 
 @dataclass

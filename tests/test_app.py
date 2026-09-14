@@ -40,9 +40,9 @@ def text(app) -> str:
 @pytest.fixture
 def seeded(provider_factory, monkeypatch):
     """A synced Hyderabad catalogue with theatre/format detail."""
-    from tests.conftest import ALLU_LIVE, QUICKBOOK_HYD, build_payload
+    from tests.conftest import ALLU_LIVE, DETAIL_REQUESTS_HYD, QUICKBOOK_HYD, build_payload
 
-    provider = provider_factory([QUICKBOOK_HYD] + [build_payload(ALLU_LIVE)] * 3)
+    provider = provider_factory([QUICKBOOK_HYD] + [build_payload(ALLU_LIVE)] * DETAIL_REQUESTS_HYD)
     monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
     catalogue.sync_region("hyderabad", mirror=False, detail=True)
     entry = next(e for e in catalogue.list_entries("hyderabad")
@@ -198,9 +198,9 @@ def test_select_all_picks_every_theatre(seeded):
 
 
 def test_a_movie_with_no_theatres_explains_itself(provider_factory, monkeypatch):
-    from tests.conftest import QUICKBOOK_HYD, build_payload
+    from tests.conftest import DETAIL_REQUESTS_HYD, QUICKBOOK_HYD, build_payload
 
-    provider = provider_factory([QUICKBOOK_HYD] + [build_payload([])] * 3)
+    provider = provider_factory([QUICKBOOK_HYD] + [build_payload([])] * DETAIL_REQUESTS_HYD)
     monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
     catalogue.sync_region("hyderabad", mirror=False, detail=True)
     movie_id = catalogue.movie_from_entry(catalogue.list_entries("hyderabad")[0]).id

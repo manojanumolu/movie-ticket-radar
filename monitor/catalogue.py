@@ -112,6 +112,16 @@ def is_detailed(entry: dict[str, Any]) -> bool:
     return entry.get("resolved_at") is not None
 
 
+def siblings_changed(entry: dict[str, Any], listed: MovieRef) -> bool:
+    """Does the listing now name premium-format events the detail never swept?
+
+    A film's sibling events (3D, 4DX, IMAX…) each carry their own theatres,
+    so detail resolved against a different set of siblings is a different —
+    and shorter — theatre list. That detail is stale, not merely old.
+    """
+    return set(movie_from_entry(entry).variant_codes) != set(listed.variant_codes)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Reading
 # ──────────────────────────────────────────────────────────────────────────
@@ -213,7 +223,7 @@ def store_snapshot(snapshot: Snapshot, *, mirror: bool = True) -> dict[str, Any]
     if previous is not None:
         known = movie_from_entry(previous)
         merged = dict(entry["movie"])
-        for field in ("title", "poster_url", "language", "source_url"):
+        for field in ("title", "poster_url", "language", "source_url", "variants"):
             # The listing wins: it is what the user saw and clicked. Resolving
             # detail adds theatres and formats — it must never rename a movie
             # out from under the person who picked it.
@@ -281,7 +291,7 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
     entries: list[dict[str, Any]] = []
     for movie in movies:
         prior = existing.get(movie.id)
-        if prior and is_detailed(prior):
+        if prior and is_detailed(prior) and not siblings_changed(prior, movie):
             # Carry the resolved detail forward, but take the fresher title.
             prior = dict(prior)
             stored = movie_from_entry(prior)
@@ -395,6 +405,7 @@ __all__ = [
     "remove_entry",
     "resolve_url",
     "search_entries",
+    "siblings_changed",
     "store_snapshot",
     "sync_region",
     "sync_state",

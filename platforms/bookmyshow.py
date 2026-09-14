@@ -31,7 +31,7 @@ import json
 import random
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
@@ -290,19 +290,23 @@ BASE_DIMENSIONS = {"2D", ""}
 
 
 def _primary_children(children: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """One bookable event per language, collapsing premium-format variants.
+    """One *row* per language, with the plain screening as its canonical event.
 
     BookMyShow lists a film once per language *and* once per premium format:
-    Mandaadi alone appears as Telugu 2D, Telugu EPIQ, Telugu DOLBY CINEMA 2D,
-    Telugu HDR By Barco, Tamil 2D and Tamil HDR By Barco. Showing all six in a
-    movie picker is noise — the user wants "Mandaadi, Telugu", and then to
-    pick the format per theatre in step 4.
+    Avengers Endgame: Encore appears as English 2D, English 3D, English 4DX
+    3D, English MS-Infinity Vision (twice) and Telugu 2D. Showing all six in a
+    movie picker is noise — the user wants "Avengers Endgame: Encore,
+    English", and then to pick the theatre and format.
 
-    Collapsing is safe because the showtimes endpoint for the base event
-    returns every screen at every venue with its real format in ``screenAttr``
-    — verified live: the Telugu 2D event returns AMB Cinemas' "BARCO FLAGSHIP
-    LASER DOLBY ATMOS" screen. So the base event sees the premium shows too,
-    and nothing is lost by not listing them separately.
+    The premium siblings are **not** interchangeable with the base event,
+    though: each is its own event with its own showtimes, and the base
+    event's answer does not include them. Verified live (bms-diagnose, Sept
+    2026): the English 2D event returned 3 theatres, while the five siblings
+    held the other 6 — every PVR, AMB and Cinepolis screen. So the siblings
+    are kept on the row as :attr:`MovieRef.variants` and swept by
+    :meth:`BookMyShowProvider.fetch`; collapsing them out of the *picker* is
+    fine, dropping them from the *data* is how a theatre list ends up a third
+    of the truth.
     """
     by_language: dict[str, dict[str, Any]] = {}
     for child in children:
@@ -317,6 +321,23 @@ def _primary_children(children: list[dict[str, Any]]) -> dict[str, dict[str, Any
         if dimension in BASE_DIMENSIONS and current_dim not in BASE_DIMENSIONS:
             by_language[language] = child
     return by_language
+
+
+def _sibling_events(children: list[dict[str, Any]], primary: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    """``(event_code, format label)`` for every other event in the primary's language."""
+    language = _text(primary.get("EventLanguage"))
+    primary_code = _text(primary.get("EventCode")).upper()
+    out: list[tuple[str, str]] = []
+    seen = {primary_code}
+    for child in children:
+        code = _text(child.get("EventCode")).upper()
+        if _text(child.get("EventLanguage")) != language or code in seen:
+            continue
+        if not EVENT_CODE_RE.match(code):
+            continue
+        seen.add(code)
+        out.append((code, clean_format(_text(child.get("EventDimension")))))
+    return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -691,6 +712,7 @@ class BookMyShowProvider:
                         region[1], code,
                         _text(child.get("EventURL")) or _text(group.get("EventURLTitle")),
                     ),
+                    variants=_sibling_events(children, child),
                 )
         return list(out.values())
 
@@ -835,12 +857,15 @@ class BookMyShowProvider:
                 continue
 
             if idx == 0:
-                resolved = self._movie_ref(
-                    payload,
-                    {"event_code": movie.event_code, "region_slug": movie.region_slug, "date_code": date_code},
-                    region,
-                    source_url=movie.source_url,
-                    fallback_title=movie.title,
+                resolved = replace(
+                    self._movie_ref(
+                        payload,
+                        {"event_code": movie.event_code, "region_slug": movie.region_slug, "date_code": date_code},
+                        region,
+                        source_url=movie.source_url,
+                        fallback_title=movie.title,
+                    ),
+                    variants=movie.variants,
                 )
             snap = self._snapshot(payload, resolved)
             for v in snap.venues:
@@ -853,6 +878,30 @@ class BookMyShowProvider:
             # Every date failed — we learned nothing. Say so.
             raise PlatformError(errors[0])
 
+        # The premium-format siblings (3D, 4DX, IMAX, EPIQ…) are separate
+        # events whose venues are *not* in the base event's answer — see
+        # `_primary_children`. Sweep them too, so the snapshot is the whole
+        # film. Best-effort per sibling: a refused 4DX event must not lose the
+        # 2D answer we already have, and the checker treats what is returned
+        # as the truth for the venues it contains.
+        for code in resolved.variant_codes:
+            sibling = replace(resolved, event_code=code, variants=(),
+                              source_url=self._sibling_url(resolved, code))
+            fallback = dict(resolved.variants).get(code, "")
+            for date_code in wanted:
+                self._sleep(1.0)
+                try:
+                    payload = self._get(code, date_code, region)
+                except PlatformError as exc:
+                    errors.append(f"{code}: {exc}")
+                    continue
+                snap = self._snapshot(payload, sibling, default_format=fallback)
+                for v in snap.venues:
+                    venues.setdefault(v.code, v)
+                showtimes.extend(snap.showtimes)
+                bookable.extend(snap.bookable_dates)
+                closed.extend(snap.closed_dates)
+
         return Snapshot(
             movie=resolved,
             venues=self._merge_venue_formats(list(venues.values()), showtimes),
@@ -861,6 +910,18 @@ class BookMyShowProvider:
             closed_dates=[d for d in dedupe(closed) if d not in set(bookable)],
             fetched_at=now_ist(),
         )
+
+    def _sibling_url(self, movie: MovieRef, code: str) -> str:
+        """The sibling's own booking page: the base page with its code swapped.
+
+        BookMyShow's buytickets URLs end in the event code, and the form
+        without a title slug is one it documents as accepted (`_listing_url`),
+        so nothing here is guessed.
+        """
+        base = re.sub(r"/\d{8}$", "", (movie.source_url or "").strip().rstrip("/"))
+        if base.upper().endswith("/" + movie.event_code.upper()):
+            return base[: -len(movie.event_code)] + code
+        return self._listing_url(movie.region_slug, code)
 
     def booking_url(self, movie: MovieRef, date_code: str = "") -> str:
         """Derived from the page the user gave us — never guessed.
@@ -950,10 +1011,11 @@ class BookMyShowProvider:
 
         return title, language, poster
 
-    def _snapshot(self, payload: dict[str, Any], movie: MovieRef) -> Snapshot:
+    def _snapshot(self, payload: dict[str, Any], movie: MovieRef, *,
+                  default_format: str = "") -> Snapshot:
         data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
         bookable, closed = self._parse_dates(data)
-        venues, showtimes = self._parse_shows(data, movie)
+        venues, showtimes = self._parse_shows(data, movie, default_format=default_format)
         return Snapshot(
             movie=movie,
             venues=self._merge_venue_formats(venues, showtimes),
@@ -977,7 +1039,8 @@ class BookMyShowProvider:
                 (closed if status == "NOT_OPEN" else bookable).append(code)
         return dedupe(bookable), dedupe(closed)
 
-    def _parse_shows(self, data: dict[str, Any], movie: MovieRef) -> tuple[list[Venue], list[Showtime]]:
+    def _parse_shows(self, data: dict[str, Any], movie: MovieRef, *,
+                     default_format: str = "") -> tuple[list[Venue], list[Showtime]]:
         venues: dict[str, Venue] = {}
         showtimes: list[Showtime] = []
 
@@ -1006,12 +1069,16 @@ class BookMyShowProvider:
                         or area
                     )
                     venues.setdefault(code, Venue(code=code, name=short_name, area=area))
-                    showtimes.extend(self._parse_showtimes(card, code, short_name, movie))
+                    showtimes.extend(self._parse_showtimes(card, code, short_name, movie,
+                                                           default_format=default_format))
 
         return list(venues.values()), showtimes
 
     def _parse_showtimes(self, card: dict[str, Any], venue_code: str, venue_name: str,
-                         movie: MovieRef) -> list[Showtime]:
+                         movie: MovieRef, *, default_format: str = "") -> list[Showtime]:
+        """``default_format`` names the show when the card carries no screen
+        attribute — a sibling event's own format label ("4DX 3D"), which is
+        real BookMyShow data for that event, never a guess."""
         out: list[Showtime] = []
         for show in _dicts(card.get("showtimes")):
             sa = show.get("additionalData")
@@ -1026,7 +1093,7 @@ class BookMyShowProvider:
                 _text(show.get("screenAttr"))
                 or _text(sa.get("attributes"))
                 or _text(sa.get("screenAttr"))
-            )
+            ) or default_format
 
             out.append(
                 Showtime(

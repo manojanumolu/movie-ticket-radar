@@ -445,3 +445,36 @@ def test_one_theatre_going_live_keeps_the_other_watched(make_monitor, provider_f
     state = load_state()[monitor.id]
     assert state.targets["ALLU::Dolby Cinema"].availability is Availability.AVAILABLE
     assert state.targets["AMB::Any format"].availability is Availability.NOT_BOOKABLE
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# A theatre that only screens a premium-format sibling event is watchable
+# ──────────────────────────────────────────────────────────────────────────
+def test_a_monitor_on_a_sibling_only_theatre_sees_it_go_live(make_monitor, provider_factory,
+                                                             monkeypatch, at):
+    """PVR's 4DX screen lives under the "4DX 3D" event, not the base one.
+
+    The catalogue now lists it, so a monitor can target it; the check must
+    sweep that sibling or the theatre would read as "not listed" forever.
+    """
+    from dataclasses import replace
+    from monitor import checker
+
+    monitor = make_monitor(targets=[TheatreTarget("PVFS", "PVR", "Nexus Mall Kukatpally", ANY_FORMAT)])
+    monitor.movie = replace(monitor.movie, variants=(("ET00516729", "4DX 3D"),))
+    upsert_monitor(monitor, mirror=False)
+    loaded = load_monitors()[0]
+    assert loaded.movie.variant_codes == ("ET00516729",)   # survives monitors.json
+
+    pvr_live = [{"venue_code": "PVFS", "venue_name": "PVR", "area": "Nexus Mall Kukatpally",
+                 "time": "08:00 PM", "time_code": "2000", "fmt": "", "status": "3"}]
+    provider = provider_factory([build_payload(ALLU_LIVE), build_payload(pvr_live)])
+    monkeypatch.setattr(checker, "get_provider", lambda slug: provider)
+
+    outcome = check_monitor(loaded, at=at)
+    assert outcome.ok
+    result = outcome.results[0]
+    assert result.availability is Availability.AVAILABLE
+    assert result.time_labels == ["08:00 PM"]
+    # Two reads: the base event and its sibling, in that order.
+    assert [c["params"]["eventCode"] for c in provider.session.calls] == ["ET00478890", "ET00516729"]
