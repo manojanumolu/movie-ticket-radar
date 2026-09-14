@@ -1,47 +1,5 @@
 [
   {
-    "id": "9d249ed20240",
-    "movie": {
-      "platform": "bookmyshow",
-      "event_code": "ET00507738",
-      "title": "Hanuman Ansh",
-      "region_code": "HYD",
-      "region_slug": "hyderabad",
-      "city": "Hyderabad",
-      "language": "Hindi",
-      "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
-      "source_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738",
-      "variants": []
-    },
-    "targets": [
-      {
-        "venue_code": "ALUC",
-        "venue_name": "ALLU Cinemas",
-        "area": "Kokapet",
-        "fmt": "Dolby Cinema"
-      },
-      {
-        "venue_code": "ILKS",
-        "venue_name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
-        "area": "",
-        "fmt": "Pxl"
-      }
-    ],
-    "interval_minutes": 10,
-    "monitor_until": "2026-09-16T23:59:00+05:30",
-    "start_immediately": true,
-    "notify_email": "manoj.anumolu01@gmail.com",
-    "date_codes": [
-      "20260915"
-    ],
-    "status": "STOPPED",
-    "created_at": "2026-09-15T00:38:59.513557+05:30",
-    "stopped_at": "2026-09-15T00:40:18.014816+05:30",
-    "stopped_reason": "Stopped manually.",
-    "first_check_requested_at": "2026-09-15T00:38:59.513561+05:30",
-    "problem": null
-  },
-  {
     "id": "d751fdcd9942",
     "movie": {
       "platform": "bookmyshow",
