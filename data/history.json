@@ -1,5 +1,17 @@
 [
   {
+    "monitor_id": "9d249ed20240",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Hanuman Ansh",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+    "targets": [
+      "ALLU Cinemas · Dolby Cinema",
+      "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction · Pxl"
+    ],
+    "at": "2026-09-15T00:39:01.320694+05:30"
+  },
+  {
     "monitor_id": "bb40ffd88f01",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
