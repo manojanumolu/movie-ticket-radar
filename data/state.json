@@ -25,52 +25,6 @@
       }
     }
   },
-  "96d6bfe6ab1a": {
-    "last_check_at": "2026-09-14T20:00:59.327340+05:30",
-    "last_success_at": "2026-09-14T20:00:59.327340+05:30",
-    "check_count": 1,
-    "success_count": 1,
-    "consecutive_errors": 0,
-    "last_error": "",
-    "last_error_kind": "",
-    "last_email_error": "",
-    "targets": {
-      "AMBH::Barco Flagship Laser Dolby Atmos": {
-        "availability": "AVAILABLE",
-        "since": "2026-09-14T20:00:59.327340+05:30",
-        "showtime_keys": [
-          "AMBH|20260915|118458",
-          "AMBH|20260915|118467"
-        ],
-        "time_labels": [
-          "10:10 AM",
-          "10:20 PM"
-        ],
-        "time_links": [
-          [
-            "10:10 AM",
-            "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738/20260915"
-          ],
-          [
-            "10:20 PM",
-            "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738/20260915"
-          ]
-        ],
-        "date_code": "20260915",
-        "date_codes": [
-          "20260915"
-        ],
-        "booking_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738/20260915",
-        "notified_availability": "AVAILABLE",
-        "notified_at": "2026-09-14T20:00:59.327340+05:30",
-        "notified_showtime_keys": [
-          "AMBH|20260915|118458",
-          "AMBH|20260915|118467"
-        ],
-        "new_showtime_notice_at": null
-      }
-    }
-  },
   "bb40ffd88f01": {
     "last_check_at": "2026-09-14T20:24:41.752110+05:30",
     "last_success_at": "2026-09-14T20:24:41.752110+05:30",
