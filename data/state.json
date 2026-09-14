@@ -44,5 +44,51 @@
         "new_showtime_notice_at": null
       }
     }
+  },
+  "eca65ebc2ce5": {
+    "last_check_at": "2026-09-15T01:46:32.983147+05:30",
+    "last_success_at": "2026-09-15T01:46:32.983147+05:30",
+    "check_count": 1,
+    "success_count": 1,
+    "consecutive_errors": 0,
+    "last_error": "",
+    "last_error_kind": "",
+    "last_email_error": "",
+    "targets": {
+      "PIIC::Pxl": {
+        "availability": "AVAILABLE",
+        "since": "2026-09-15T01:46:32.983147+05:30",
+        "showtime_keys": [
+          "PIIC|20260916|33276",
+          "PIIC|20260916|33278"
+        ],
+        "time_labels": [
+          "01:10 PM",
+          "07:25 PM"
+        ],
+        "time_links": [
+          [
+            "01:10 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/epic/buytickets/ET00515338/20260916"
+          ],
+          [
+            "07:25 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/epic/buytickets/ET00515338/20260916"
+          ]
+        ],
+        "date_code": "20260916",
+        "date_codes": [
+          "20260916"
+        ],
+        "booking_url": "https://in.bookmyshow.com/buytickets/epic-hyderabad/cinema-hyde-PIIC-MT/20260916",
+        "notified_availability": "AVAILABLE",
+        "notified_at": "2026-09-15T01:46:32.983147+05:30",
+        "notified_showtime_keys": [
+          "PIIC|20260916|33276",
+          "PIIC|20260916|33278"
+        ],
+        "new_showtime_notice_at": null
+      }
+    }
   }
 }
