@@ -1,24 +1,24 @@
 [
   {
-    "id": "f822346fc37d",
+    "id": "bb40ffd88f01",
     "movie": {
       "platform": "bookmyshow",
-      "event_code": "ET00487933",
-      "title": "Irumudi",
+      "event_code": "ET00452034",
+      "title": "The Odyssey",
       "region_code": "HYD",
       "region_slug": "hyderabad",
       "city": "Hyderabad",
-      "language": "Telugu",
-      "poster_url": "https://in.bmscdn.com/events/moviecard/irumudi-et00487933-1787303118.jpg",
-      "source_url": "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933",
+      "language": "English",
+      "poster_url": "https://in.bmscdn.com/events/moviecard/the-odyssey-et00452034-1778421685.jpg",
+      "source_url": "https://in.bookmyshow.com/movies/hyderabad/the-odyssey/buytickets/ET00452034",
       "variants": []
     },
     "targets": [
       {
-        "venue_code": "AMBH",
-        "venue_name": "AMB Cinemas",
-        "area": "Gachibowli",
-        "fmt": "Vip Screen"
+        "venue_code": "PRHN",
+        "venue_name": "Prasads Multiplex",
+        "area": "Hyderabad",
+        "fmt": "Pcx Screen"
       }
     ],
     "interval_minutes": 10,
@@ -29,10 +29,10 @@
       "20260915"
     ],
     "status": "STOPPED",
-    "created_at": "2026-09-14T20:22:09.565598+05:30",
-    "stopped_at": "2026-09-14T20:23:12.714649+05:30",
+    "created_at": "2026-09-14T20:23:54.739890+05:30",
+    "stopped_at": "2026-09-14T20:25:05.914939+05:30",
     "stopped_reason": "Stopped manually.",
-    "first_check_requested_at": "2026-09-14T20:22:09.565601+05:30",
+    "first_check_requested_at": "2026-09-14T20:23:54.739892+05:30",
     "problem": null
   },
   {
