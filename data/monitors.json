@@ -1,41 +1,5 @@
 [
   {
-    "id": "080ddf390dde",
-    "movie": {
-      "platform": "bookmyshow",
-      "event_code": "ET00487933",
-      "title": "Irumudi",
-      "region_code": "HYD",
-      "region_slug": "hyderabad",
-      "city": "Hyderabad",
-      "language": "Telugu",
-      "poster_url": "https://in.bmscdn.com/events/moviecard/irumudi-et00487933-1787303118.jpg",
-      "source_url": "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933",
-      "variants": []
-    },
-    "targets": [
-      {
-        "venue_code": "ALUC",
-        "venue_name": "ALLU Cinemas",
-        "area": "Kokapet",
-        "fmt": "Barco Laser 4K Atmos"
-      }
-    ],
-    "interval_minutes": 10,
-    "monitor_until": "2026-09-16T23:59:00+05:30",
-    "start_immediately": true,
-    "notify_email": "manoj.anumolu01@gmail.com",
-    "date_codes": [
-      "20260915"
-    ],
-    "status": "STOPPED",
-    "created_at": "2026-09-15T03:17:52.228165+05:30",
-    "stopped_at": "2026-09-15T03:19:08.914642+05:30",
-    "stopped_reason": "Stopped manually.",
-    "first_check_requested_at": "2026-09-15T03:17:52.228168+05:30",
-    "problem": null
-  },
-  {
     "id": "029be19254bf",
     "movie": {
       "platform": "bookmyshow",
