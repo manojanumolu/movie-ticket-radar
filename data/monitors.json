@@ -28,10 +28,10 @@
     "date_codes": [
       "20260915"
     ],
-    "status": "ACTIVE",
+    "status": "STOPPED",
     "created_at": "2026-09-15T01:42:25.112843+05:30",
-    "stopped_at": null,
-    "stopped_reason": "",
+    "stopped_at": "2026-09-15T01:43:30.961747+05:30",
+    "stopped_reason": "Stopped manually.",
     "first_check_requested_at": "2026-09-15T01:42:25.112848+05:30",
     "problem": null
   }
