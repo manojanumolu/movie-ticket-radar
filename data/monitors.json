@@ -25,10 +25,10 @@
     "start_immediately": true,
     "notify_email": "manoj.anumolu01@gmail.com",
     "date_codes": [],
-    "status": "ACTIVE",
+    "status": "EXPIRED",
     "created_at": "2026-09-14T18:23:19.347368+05:30",
-    "stopped_at": null,
-    "stopped_reason": "",
+    "stopped_at": "2026-09-14T18:35:33.078655+05:30",
+    "stopped_reason": "Reached the end time you set.",
     "first_check_requested_at": "2026-09-14T18:23:28.250903+05:30"
   },
   {
