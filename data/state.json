@@ -90,5 +90,58 @@
         "new_showtime_notice_at": null
       }
     }
+  },
+  "c520573a35f9": {
+    "last_check_at": "2026-09-15T02:29:53.093481+05:30",
+    "last_success_at": "2026-09-15T02:29:53.093481+05:30",
+    "check_count": 1,
+    "success_count": 1,
+    "consecutive_errors": 0,
+    "last_error": "",
+    "last_error_kind": "",
+    "last_email_error": "",
+    "targets": {
+      "ALUC::Barco Laser 4K Atmos": {
+        "availability": "AVAILABLE",
+        "since": "2026-09-15T02:29:53.093481+05:30",
+        "showtime_keys": [
+          "ALUC|20260915|4926",
+          "ALUC|20260915|4968",
+          "ALUC|20260915|4969"
+        ],
+        "time_labels": [
+          "01:45 PM",
+          "07:50 PM",
+          "10:50 PM"
+        ],
+        "time_links": [
+          [
+            "01:45 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933/20260915"
+          ],
+          [
+            "07:50 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933/20260915"
+          ],
+          [
+            "10:50 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933/20260915"
+          ]
+        ],
+        "date_code": "20260915",
+        "date_codes": [
+          "20260915"
+        ],
+        "booking_url": "https://in.bookmyshow.com/buytickets/irumudi-hyderabad/cinema-hyde-ALUC-MT/20260915",
+        "notified_availability": "AVAILABLE",
+        "notified_at": "2026-09-15T02:29:53.093481+05:30",
+        "notified_showtime_keys": [
+          "ALUC|20260915|4926",
+          "ALUC|20260915|4968",
+          "ALUC|20260915|4969"
+        ],
+        "new_showtime_notice_at": null
+      }
+    }
   }
 }
