@@ -1,41 +1,5 @@
 [
   {
-    "id": "bb40ffd88f01",
-    "movie": {
-      "platform": "bookmyshow",
-      "event_code": "ET00452034",
-      "title": "The Odyssey",
-      "region_code": "HYD",
-      "region_slug": "hyderabad",
-      "city": "Hyderabad",
-      "language": "English",
-      "poster_url": "https://in.bmscdn.com/events/moviecard/the-odyssey-et00452034-1778421685.jpg",
-      "source_url": "https://in.bookmyshow.com/movies/hyderabad/the-odyssey/buytickets/ET00452034",
-      "variants": []
-    },
-    "targets": [
-      {
-        "venue_code": "PRHN",
-        "venue_name": "Prasads Multiplex",
-        "area": "Hyderabad",
-        "fmt": "Pcx Screen"
-      }
-    ],
-    "interval_minutes": 10,
-    "monitor_until": "2026-09-15T23:59:00+05:30",
-    "start_immediately": true,
-    "notify_email": "manoj.anumolu01@gmail.com",
-    "date_codes": [
-      "20260915"
-    ],
-    "status": "STOPPED",
-    "created_at": "2026-09-14T20:23:54.739890+05:30",
-    "stopped_at": "2026-09-14T20:25:05.914939+05:30",
-    "stopped_reason": "Stopped manually.",
-    "first_check_requested_at": "2026-09-14T20:23:54.739892+05:30",
-    "problem": null
-  },
-  {
     "id": "d751fdcd9942",
     "movie": {
       "platform": "bookmyshow",
