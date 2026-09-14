@@ -1,6 +1,17 @@
 [
   {
     "monitor_id": "080ddf390dde",
+    "kind": "STOPPED",
+    "message": "Monitoring stopped — you stopped this alert.",
+    "movie": "Irumudi",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/irumudi-et00487933-1787303118.jpg",
+    "targets": [
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-15T03:19:10.798061+05:30"
+  },
+  {
+    "monitor_id": "080ddf390dde",
     "kind": "CREATED",
     "message": "Monitor created.",
     "movie": "Irumudi",
