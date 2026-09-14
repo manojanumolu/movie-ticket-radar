@@ -103,6 +103,14 @@ def running_in_actions() -> bool:
 #: Bookkeeping for the UI's read-through (see ``sync_from_github``).
 _last_sync_at = 0.0
 _mirror_broken = False
+#: What the most recent mirror attempt did — the UI reads this right after a
+#: write to know whether a commit (and therefore a push-triggered worker run)
+#: actually happened. ``{"ok", "committed", "error", "path"}``.
+_last_mirror: dict[str, Any] = {"ok": False, "committed": False, "error": "", "path": ""}
+
+
+def last_mirror() -> dict[str, Any]:
+    return dict(_last_mirror)
 
 
 def push_to_github(path: Path, body: str, message: str) -> bool:
@@ -111,11 +119,13 @@ def push_to_github(path: Path, body: str, message: str) -> bool:
     Skipped inside GitHub Actions: the workflow commits the whole data
     directory in one commit at the end of the run, and doing both would race.
     """
-    global _last_sync_at, _mirror_broken
+    global _last_sync_at, _mirror_broken, _last_mirror
+    _last_mirror = {"ok": False, "committed": False, "error": "", "path": path.name}
     if running_in_actions():
         return False
     token = github_token()
     if not token:
+        _last_mirror["error"] = "No GH_TOKEN configured."
         return False
     try:
         from github import Github, GithubException
@@ -126,6 +136,7 @@ def push_to_github(path: Path, body: str, message: str) -> bool:
             existing = repo.get_contents(rel)
             if existing.decoded_content.decode("utf-8") == body:
                 _mirror_broken = False
+                _last_mirror["ok"] = True
                 return True  # identical; skip the commit
             repo.update_file(rel, message, body, existing.sha)
         except GithubException:
@@ -134,13 +145,29 @@ def push_to_github(path: Path, body: str, message: str) -> bool:
         # back over ourselves.
         _last_sync_at = time.monotonic()
         _mirror_broken = False
+        _last_mirror.update(ok=True, committed=True)
         return True
     except Exception as exc:  # noqa: BLE001 - mirroring is never fatal
         print(f"[store] GitHub mirror failed for {path.name}: {exc}")
         # A local write that never reached the repo must not be overwritten
         # by the next read-through, or a monitor could vanish from the UI.
         _mirror_broken = True
+        _last_mirror["error"] = explain_github_error(exc)
         return False
+
+
+def explain_github_error(exc: BaseException) -> str:
+    """Turn PyGithub's JSON blob into the one sentence a person needs."""
+    text = str(exc)
+    if "Resource not accessible by personal access token" in text or "403" in text[:5]:
+        return ("GitHub refused (403): the GH_TOKEN doesn't have permission for this. "
+                "A fine-grained PAT needs Contents: read & write, and Actions: read & write "
+                "for on-demand checks.")
+    if "Bad credentials" in text or text.startswith("401"):
+        return "GitHub rejected the GH_TOKEN (401): it is invalid or expired."
+    if "Not Found" in text or text.startswith("404"):
+        return "GitHub answered 404: the repository or workflow was not found for this token."
+    return text[:300]
 
 
 #: The files the UI reads that somebody else writes: the worker owns
@@ -232,7 +259,7 @@ def dispatch_workflow(workflow: str, inputs: dict[str, str] | None = None, ref: 
         ok = wf.create_dispatch(ref, {k: str(v) for k, v in (inputs or {}).items()})
         return bool(ok), "Workflow started." if ok else "GitHub refused the dispatch."
     except Exception as exc:  # noqa: BLE001
-        return False, f"Could not start workflow: {exc}"
+        return False, f"Could not start workflow: {explain_github_error(exc)}"
 
 
 def request_check_now(monitor_id: str = "", *, force: bool = True) -> tuple[bool, str]:
@@ -291,7 +318,9 @@ __all__ = [
     "SETTINGS_FILE",
     "STATE_FILE",
     "dispatch_workflow",
+    "explain_github_error",
     "github_status",
+    "last_mirror",
     "github_token",
     "load_catalogue",
     "load_history",

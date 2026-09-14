@@ -235,6 +235,10 @@ class Monitor:
     #: When the UI asked the worker for an immediate first check (a workflow
     #: dispatch). None means it could not, and the schedule will pick it up.
     first_check_requested_at: datetime | None = None
+    #: A failure the UI itself knows about — e.g. the first check could not be
+    #: started. ``{"kind": ..., "message": ..., "at": iso}`` or None. Shown as
+    #: PROBLEM OCCURRED until the worker's first real check supersedes it.
+    problem: dict[str, Any] | None = None
 
     # ── lifecycle ────────────────────────────────────────────────────────
     def is_expired(self, at: datetime | None = None) -> bool:
@@ -264,6 +268,17 @@ class Monitor:
     def target(self, key: str) -> TheatreTarget | None:
         return next((t for t in self.targets if t.key == key), None)
 
+    def set_problem(self, kind: str, message: str, at: datetime | None = None) -> None:
+        self.problem = {"kind": kind, "message": message, "at": to_iso(at or now_ist())}
+
+    def clear_problem(self) -> None:
+        self.problem = None
+
+    @property
+    def date_range_label(self) -> str:
+        """'25 Sep 2026' · '25–28 Sep 2026' · '' when every date is watched."""
+        return describe_date_codes(self.date_codes)
+
     # ── persistence ──────────────────────────────────────────────────────
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -280,6 +295,7 @@ class Monitor:
             "stopped_at": to_iso(self.stopped_at) if self.stopped_at else None,
             "stopped_reason": self.stopped_reason,
             "first_check_requested_at": to_iso(self.first_check_requested_at),
+            "problem": dict(self.problem) if self.problem else None,
         }
 
     @classmethod
@@ -298,6 +314,7 @@ class Monitor:
             stopped_at=parse_iso(raw.get("stopped_at")),
             stopped_reason=raw.get("stopped_reason", ""),
             first_check_requested_at=parse_iso(raw.get("first_check_requested_at")),
+            problem=dict(raw["problem"]) if isinstance(raw.get("problem"), dict) else None,
         )
 
 
@@ -322,10 +339,22 @@ class TargetResult:
         return sorted({s.key for s in self.showtimes})
 
     @property
+    def date_codes(self) -> list[str]:
+        """Every distinct show date in this result, ascending."""
+        return sorted({s.date_code for s in self.showtimes if s.date_code})
+
+    def _label(self, show: Showtime) -> str:
+        """'07:30 PM', or '25 Sep · 07:30 PM' when the result spans dates."""
+        if len(self.date_codes) > 1 and show.date_code:
+            return f"{short_date(show.date_code)} · {show.time_label}"
+        return show.time_label
+
+    @property
     def time_labels(self) -> list[str]:
         seen: dict[str, None] = {}
         for s in sorted(self.showtimes, key=lambda s: (s.date_code, s.time_code or s.time_label)):
-            seen.setdefault(s.time_label, None)
+            if s.time_label:
+                seen.setdefault(self._label(s), None)
         return list(seen)
 
     @property
@@ -339,8 +368,8 @@ class TargetResult:
         """
         seen: dict[str, str] = {}
         for s in sorted(self.showtimes, key=lambda s: (s.date_code, s.time_code or s.time_label)):
-            if s.time_label and s.time_label not in seen:
-                seen[s.time_label] = s.booking_url or self.booking_url
+            if s.time_label:
+                seen.setdefault(self._label(s), s.booking_url or self.booking_url)
         return [[label, url] for label, url in seen.items()]
 
 
@@ -360,6 +389,50 @@ class CheckOutcome:
     @property
     def available_results(self) -> list[TargetResult]:
         return [r for r in self.results if r.availability.is_bookable]
+
+
+def short_date(date_code: str) -> str:
+    """'20260925' -> '25 Sep'."""
+    try:
+        return datetime.strptime(date_code, "%Y%m%d").strftime("%d %b").lstrip("0")
+    except (ValueError, TypeError):
+        return date_code
+
+
+def describe_date_codes(codes: Iterable[str]) -> str:
+    """Human label for a set of show dates: '', '25 Sep 2026', '25–28 Sep 2026',
+    '30 Sep – 2 Oct 2026' or, for gaps, '25 Sep, 27 Sep 2026'."""
+    days = []
+    for c in sorted({c for c in codes if c}):
+        try:
+            days.append(datetime.strptime(c, "%Y%m%d"))
+        except ValueError:
+            continue
+    if not days:
+        return ""
+    first, last = days[0], days[-1]
+    if len(days) == 1:
+        return f"{first.day} {first.strftime('%b %Y')}"
+    contiguous = (last - first).days == len(days) - 1
+    if contiguous and first.month == last.month and first.year == last.year:
+        return f"{first.day}–{last.day} {first.strftime('%b %Y')}"
+    if contiguous and first.year == last.year:
+        return f"{first.day} {first.strftime('%b')} – {last.day} {last.strftime('%b %Y')}"
+    if contiguous:
+        return f"{first.day} {first.strftime('%b %Y')} – {last.day} {last.strftime('%b %Y')}"
+    return ", ".join(f"{d.day} {d.strftime('%b')}" for d in days) + f" {last.year}"
+
+
+def date_codes_between(start, end) -> list[str]:
+    """Inclusive YYYYMMDD codes from ``start`` to ``end`` (date objects)."""
+    if end < start:
+        start, end = end, start
+    out = []
+    day = start
+    while day <= end:
+        out.append(day.strftime("%Y%m%d"))
+        day = day + timedelta(days=1)
+    return out
 
 
 def dedupe(values: Iterable[str]) -> list[str]:
@@ -386,6 +459,9 @@ __all__ = [
     "TargetResult",
     "TheatreTarget",
     "Venue",
+    "date_codes_between",
     "dedupe",
+    "describe_date_codes",
     "normalise_format",
+    "short_date",
 ]

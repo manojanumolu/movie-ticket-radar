@@ -30,7 +30,7 @@ import streamlit as st
 from config.locations import LOCATIONS, enabled_locations, get_location
 from config.timezone import IST, now_ist
 from monitor import catalogue
-from monitor.models import ANY_FORMAT, Venue, dedupe
+from monitor.models import ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes
 from ui import components as C
 
 STEPS = ["Location", "Movie", "Theatres", "Formats", "Monitoring"]
@@ -47,6 +47,8 @@ DEFAULTS = {
     "interval": 10,
     "movie_query": "",
     "start_now": True,
+    "date_mode": "any",     # any · single · range — which show dates count
+    "show_dates": [],       # YYYYMMDD codes; [] = every date BookMyShow offers
 }
 
 
@@ -303,7 +305,12 @@ def step_formats(venues: list[Venue]) -> dict[str, list[str]]:
 # ──────────────────────────────────────────────────────────────────────────
 # 5 · Monitoring
 # ──────────────────────────────────────────────────────────────────────────
-def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool]:
+DATE_MODES = [("any", "Any date", "Every date on sale"),
+              ("single", "Single date", "One show date"),
+              ("range", "Date range", "First to last day")]
+
+
+def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[str]]:
     left, right = st.columns(2, gap="large")
 
     with left:
@@ -339,12 +346,49 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool]:
                                    "instead of waiting for the next scheduled run.")
         st.session_state["start_now"] = bool(start_now)
 
+    # Which *show* dates to watch — a different thing from how long to monitor.
+    st.write("")
+    C.step_header("▤", "Which show dates?",
+                  "Only shows on these dates count. Leave on Any date to watch every date on sale.")
+    st.write("")
+    mode = st.session_state.get("date_mode", "any")
+    if mode not in {m for m, _, _ in DATE_MODES}:
+        mode = "any"
+    cols = st.columns(3)
+    for column, (value, label, sub) in zip(cols, DATE_MODES):
+        with column:
+            if pick(f"datemode_{value}", label,
+                    lambda label=label, sub=sub, sel=(value == mode): C.choice_tile(label, sub, sel)):
+                st.session_state["date_mode"] = value
+                st.rerun()
+    tomorrow = (now_ist() + timedelta(days=1)).date()
+    show_dates: list[str] = []
+    if mode == "single":
+        day = st.date_input("Show date", value=tomorrow, min_value=now_ist().date(),
+                            format="DD/MM/YYYY", key="show_date_single", label_visibility="collapsed")
+        show_dates = date_codes_between(day, day)
+    elif mode == "range":
+        picked = st.date_input("Show dates", value=(tomorrow, tomorrow + timedelta(days=3)),
+                               min_value=now_ist().date(), format="DD/MM/YYYY",
+                               key="show_date_range", label_visibility="collapsed")
+        if isinstance(picked, (tuple, list)) and len(picked) == 2:
+            show_dates = date_codes_between(picked[0], picked[1])
+        elif isinstance(picked, (tuple, list)) and len(picked) == 1:
+            show_dates = date_codes_between(picked[0], picked[0])
+            st.caption("Pick the last day of the range too.")
+    st.session_state["show_dates"] = show_dates
+    if show_dates:
+        st.caption(f"Watching shows on {describe_date_codes(show_dates)} "
+                   f"({len(show_dates)} day{'s' if len(show_dates) != 1 else ''}).")
+    else:
+        st.caption("Watching every date BookMyShow has on sale.")
+
     st.write("")
     C.html('<div class="tr-field-label">Notification email</div>')
     email = st.text_input("Notification email", value=default_email,
                           placeholder="you@gmail.com", label_visibility="collapsed",
                           key="notify_email")
-    return interval, until, email.strip(), bool(start_now)
+    return interval, until, email.strip(), bool(start_now), show_dates
 
 
 # ──────────────────────────────────────────────────────────────────────────

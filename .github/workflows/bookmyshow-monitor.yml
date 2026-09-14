@@ -7,9 +7,12 @@ name: BookMyShow monitor
 # apart — so a monitor created at 02:55 was first checked at 03:57. The
 # schedule below is therefore only a safety net. The real cadence comes from:
 #
-#   1. The Streamlit app dispatching this workflow the moment a monitor is
-#      saved (workflow_dispatch with that monitor's id and force=true), so the
-#      first check happens within about a minute of START MONITORING.
+#   1. The Streamlit app saving a monitor. Its commit to data/monitors.json
+#      is itself the trigger (the `push` event below), so START MONITORING
+#      starts a run within about a minute using nothing more than the
+#      Contents permission the app already has. The app also tries a
+#      workflow_dispatch (force=true for that monitor) when its token allows;
+#      either one is enough, and the concurrency group serialises them.
 #   2. The worker running as a *segment*: `run_monitor.py --loop` stays alive
 #      for up to ~50 minutes, ticking every 30s, checking each monitor when its
 #      own 10/15/30-minute interval is due, pulling main between ticks (so
@@ -27,6 +30,11 @@ name: BookMyShow monitor
 # while anything is being watched.
 
 on:
+  # The app's own commit is the trigger. The worker's commits carry
+  # "[skip ci]" so they never retrigger this.
+  push:
+    branches: [main]
+    paths: ["data/monitors.json"]
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:

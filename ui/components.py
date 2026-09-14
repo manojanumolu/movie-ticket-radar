@@ -28,7 +28,7 @@ from config.timezone import (
     fmt_time,
     now_ist,
 )
-from monitor.models import Availability, Monitor, MonitorStatus
+from monitor.models import Availability, Monitor, MonitorStatus, describe_date_codes
 from monitor.state import MonitorState
 
 ASSETS = Path(__file__).parent / "assets"
@@ -264,6 +264,13 @@ def format_panel_head(name: str, area: str, badge: str = "") -> None:
     )
 
 
+def choice_tile(label: str, sub: str, selected: bool) -> None:
+    html(
+        f'<div class="tr-interval choice{" selected" if selected else ""}">'
+        f'<div class="lbl">{e(label)}</div><div class="unit">{e(sub)}</div></div>'
+    )
+
+
 def interval_tile(minutes: int, selected: bool) -> None:
     html(
         f'<div class="tr-interval{" selected" if selected else ""}">'
@@ -344,6 +351,8 @@ def phase_for(monitor: Monitor, state: MonitorState, *, at: datetime | None = No
             return Phase("blocked", "BLOCKED", "bad", True)
         return Phase("error", "ERROR", "bad", True)
     if state.last_check_at is None:
+        if monitor.problem:
+            return Phase("problem", "PROBLEM OCCURRED", "bad", False)
         return Phase("waiting", "WAITING FOR FIRST CHECK", "warn", True)
     if availabilities and all(a is Availability.SOLD_OUT for a in availabilities):
         return Phase("sold_out", "SOLD OUT", "warn", True)
@@ -362,11 +371,79 @@ def status_for(monitor: Monitor, state: MonitorState) -> str:
     return "active"
 
 
+def problems_for(monitor: Monitor, state: MonitorState, *, at: datetime | None = None) -> list[tuple[str, str]]:
+    """Every genuine failure the system knows about, as (title, cause).
+
+    Empty means nothing is wrong. This is the single source for the red
+    PROBLEM OCCURRED state, so the rail, My Monitors and the pill agree.
+    """
+    at = at or now_ist()
+    out: list[tuple[str, str]] = []
+    if not monitor.is_running(at):
+        return out
+    if monitor.problem and state.check_count == 0:
+        title = {
+            "FIRST_CHECK_NOT_STARTED": "The first check could not be started",
+            "RETRY_FAILED": "Retry could not be started",
+        }.get(str(monitor.problem.get("kind", "")), "Monitoring problem")
+        when = fmt_time(_parse(monitor.problem.get("at")))
+        out.append((title, f"{monitor.problem.get('message', '')} (at {when})"))
+    elif (state.last_check_at is None and monitor.first_check_requested_at
+          and at - monitor.first_check_requested_at > FIRST_CHECK_GRACE):
+        out.append(("The worker hasn't picked this monitor up",
+                    f"A check was requested at {fmt_time(monitor.first_check_requested_at)} but no run "
+                    "has reported back. GitHub may be queueing the run; if this persists, the "
+                    "workflow itself failed — open the repository's Actions tab."))
+    if state.consecutive_errors:
+        if state.is_blocked:
+            out.append(("BookMyShow blocked the request",
+                        f"{state.last_error or 'Bot check refused the request.'} — "
+                        f"{state.consecutive_errors} failed attempt(s); last good check "
+                        f"{fmt_time(state.last_success_at)}. Not a 'no tickets' answer."))
+        else:
+            out.append(("Couldn't reach BookMyShow",
+                        f"{state.last_error or 'Network error.'} — {state.consecutive_errors} failed "
+                        f"attempt(s); last good check {fmt_time(state.last_success_at)}."))
+    if state.last_email_error:
+        out.append(("Email could not be sent",
+                    f"{state.last_email_error} — the alert is retried on every check until it goes out."))
+    if not monitor.targets:
+        out.append(("Invalid monitor configuration", "This monitor has no theatre/format to watch."))
+    return out
+
+
+def _parse(value):
+    from config.timezone import parse_iso
+
+    return parse_iso(value) if isinstance(value, str) else value
+
+
+def problem_card(problems: list[tuple[str, str]]) -> None:
+    """The readable explanation behind PROBLEM OCCURRED."""
+    items = "".join(
+        f'<div class="box" style="margin-top:10px;"><div style="color:#fff;font-weight:600;font-size:13px;">{e(title)}</div>'
+        f'<div style="margin-top:4px;">{e(cause)}</div></div>'
+        for title, cause in problems
+    )
+    html(
+        f"""<div class="tr-state error" style="padding:18px;">
+          <div class="icon">!</div>
+          <div class="h" style="font-size:16px;margin-top:12px;">Problem occurred</div>
+          <div class="p">What actually went wrong, most recent first.</div>
+          {items}
+          <div style="font-size:11.5px;color:#8E8E98;margin-top:14px;">
+            Fix the cause, then press Retry now. The monitor itself is saved and is not lost.</div>
+        </div>"""
+    )
+
+
 def next_check_text(monitor: Monitor, state: MonitorState, at: datetime) -> tuple[str, str]:
     """(value, css) for the "Next check" metric. Never pretends to be exact."""
     next_at = state.next_check_at(monitor.interval_minutes)
     if next_at is None:
         requested = monitor.first_check_requested_at
+        if monitor.problem:
+            return "not started", "bad"
         if requested is None:
             return "on next scheduled run", "soft"
         if at - requested > FIRST_CHECK_GRACE:
@@ -392,6 +469,10 @@ def thumb(poster_url: str, small: bool = False) -> str:
 
 def _note(monitor: Monitor, state: MonitorState, phase: Phase, at: datetime) -> str:
     checks = f"checked {state.success_count} time{'s' if state.success_count != 1 else ''}"
+    if phase.key == "problem":
+        return ('<div class="tr-note bad"><span style="color:#FF6B85;font-size:14px;">!</span>'
+                '<div><div class="t">The first check never started</div>'
+                '<div class="s">Open PROBLEM OCCURRED below for the reason, then Retry.</div></div></div>')
     if phase.key == "waiting":
         requested = monitor.first_check_requested_at
         if requested is None:
@@ -437,7 +518,12 @@ def active_monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime |
     at = at or now_ist()
     phase = phase_for(monitor, state, at=at)
     next_value, next_class = next_check_text(monitor, state, at)
-    card_class = {"waiting": " waiting", "error": " bad", "blocked": " bad"}.get(phase.key, "")
+    card_class = {"waiting": " waiting", "error": " bad", "blocked": " bad", "problem": " bad"}.get(phase.key, "")
+    dates = monitor.date_range_label
+    dates_metric = (
+        f'<div class="tr-metric wide"><div class="k">Show dates</div><div class="v">{e(dates)}</div></div>'
+        if dates else ""
+    )
     checked = (
         f"{state.success_count} of {state.check_count}" if state.check_count != state.success_count
         else str(state.check_count)
@@ -464,6 +550,7 @@ def active_monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime |
               <div class="v">{e(checked)}</div></div>
             <div class="tr-metric wide"><div class="k">Monitoring until</div>
               <div class="v">{e(fmt_datetime(monitor.monitor_until))}</div></div>
+            {dates_metric}
           </div>
           {_note(monitor, state, phase, at)}
         </div>"""
@@ -539,10 +626,11 @@ def live_card(monitor: Monitor, state: MonitorState, target_key: str) -> None:
         if ts.booking_url
         else '<span class="tr-chip" style="text-align:center;">Open BookMyShow to book</span>'
     )
+    dates = list(ts.date_codes) or ([ts.date_code] if ts.date_code else [])
     date_block = (
-        f'<div><div class="tr-eyebrow">Date</div>'
-        f'<div class="date">{e(fmt_date_code(ts.date_code))}</div></div>'
-        if ts.date_code
+        f'<div><div class="tr-eyebrow">{"Dates" if len(dates) > 1 else "Date"}</div>'
+        f'<div class="date">{e(describe_date_codes(dates) if len(dates) > 1 else fmt_date_code(dates[0]))}</div></div>'
+        if dates
         else ""
     )
     others = sum(1 for t in monitor.targets if t.key != target_key)
@@ -682,10 +770,12 @@ def history_rows(history: list[dict], limit: int = 3) -> None:
 __all__ = [
     "AVAILABILITY_UI",
     "FIRST_CHECK_GRACE",
+    "describe_date_codes",
     "Phase",
     "active_monitor_card",
     "asset_uri",
     "catalogue_banner",
+    "choice_tile",
     "e",
     "empty_card",
     "error_card",
@@ -701,6 +791,8 @@ __all__ = [
     "logo",
     "next_check_text",
     "phase_for",
+    "problem_card",
+    "problems_for",
     "platform_selector",
     "poster_tile",
     "rule",

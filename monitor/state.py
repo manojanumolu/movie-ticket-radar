@@ -151,6 +151,8 @@ class TargetState:
     #: ``[[label, url], …]`` — the per-showtime links behind ``time_labels``.
     time_links: list[list[str]] = field(default_factory=list)
     date_code: str = ""
+    #: Every show date behind the current showtimes (``date_code`` is the first).
+    date_codes: list[str] = field(default_factory=list)
     booking_url: str = ""
     notified_availability: Availability = Availability.UNKNOWN
     notified_at: datetime | None = None
@@ -165,6 +167,7 @@ class TargetState:
             "time_labels": self.time_labels,
             "time_links": [list(pair) for pair in self.time_links],
             "date_code": self.date_code,
+            "date_codes": list(self.date_codes),
             "booking_url": self.booking_url,
             "notified_availability": self.notified_availability.value,
             "notified_at": to_iso(self.notified_at),
@@ -191,6 +194,7 @@ class TargetState:
                 if isinstance(pair, (list, tuple)) and len(pair) == 2
             ],
             date_code=raw.get("date_code", ""),
+            date_codes=[str(c) for c in raw.get("date_codes", []) if c],
             booking_url=raw.get("booking_url", ""),
             notified_availability=avail("notified_availability"),
             notified_at=parse_iso(raw.get("notified_at")),
@@ -217,6 +221,9 @@ class MonitorState:
     #: "BLOCKED" when the platform refused us, "ERROR" for anything else, ""
     #: when the last check succeeded. Lets the UI say which one happened.
     last_error_kind: str = ""
+    #: The last email delivery failure, until a send succeeds. Retried
+    #: automatically; surfaced as a problem so it is never silent.
+    last_email_error: str = ""
     targets: dict[str, TargetState] = field(default_factory=dict)
 
     @property
@@ -255,6 +262,7 @@ class MonitorState:
             "consecutive_errors": self.consecutive_errors,
             "last_error": self.last_error,
             "last_error_kind": self.last_error_kind,
+            "last_email_error": self.last_email_error,
             "targets": {k: v.to_dict() for k, v in self.targets.items()},
         }
 
@@ -271,6 +279,7 @@ class MonitorState:
             consecutive_errors=int(raw.get("consecutive_errors", 0) or 0),
             last_error=raw.get("last_error", "") or "",
             last_error_kind=str(raw.get("last_error_kind", "") or ""),
+            last_email_error=str(raw.get("last_email_error", "") or ""),
             targets={
                 k: TargetState.from_dict(v)
                 for k, v in (targets.items() if isinstance(targets, dict) else [])

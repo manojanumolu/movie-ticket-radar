@@ -251,7 +251,8 @@ __NAV_ICONS__
 [class*="st-key-pick_"] > [class*="st-key-loc_"],
 [class*="st-key-pick_"] > [class*="st-key-movie_"],
 [class*="st-key-pick_"] > [class*="st-key-th_"],
-[class*="st-key-pick_"] > [class*="st-key-interval_"] {
+[class*="st-key-pick_"] > [class*="st-key-interval_"],
+[class*="st-key-pick_"] > [class*="st-key-datemode_"] {
   position:absolute !important; inset:0 !important; z-index:3; margin:0 !important;
   height:auto !important; min-height:0 !important; width:100% !important;
 }
@@ -469,6 +470,9 @@ __NAV_ICONS__
 .tr-interval .num { font-size:22px; font-weight:700; letter-spacing:-.02em; line-height:1.1; }
 .tr-interval .unit { font-family:var(--tr-mono); font-size:10px; letter-spacing:.14em;
   text-transform:uppercase; color:var(--tr-text-3); margin-top:3px; }
+.tr-interval.choice { padding:13px 8px; }
+.tr-interval.choice .lbl { font-size:14px; font-weight:700; letter-spacing:-.01em; }
+.tr-interval.choice .unit { text-transform:none; letter-spacing:.04em; font-size:10.5px; }
 
 /* ── catalogue status banner ───────────────────────────────────────── */
 .tr-banner {
@@ -714,6 +718,17 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 }
 .tr-danger .stButton > button:hover, [class*="st-key-stop_"] .stButton > button:hover,
 [class*="st-key-m_stop_"] .stButton > button:hover { background: rgba(255,51,85,.2); color:#fff; }
+/* PROBLEM OCCURRED — solid crimson, the one thing that is allowed to shout. */
+[class*="st-key-prob_"] .stButton > button {
+  background: linear-gradient(135deg,#FF3355,#D4123F); border:none; color:#fff;
+  font-weight:800; letter-spacing:.08em; text-transform:uppercase; font-size:13px;
+  border-radius:11px; padding:.85rem 1rem; box-shadow:0 14px 34px -14px rgba(255,51,85,.9);
+}
+[class*="st-key-prob_"] .stButton > button:hover { filter:brightness(1.08); color:#fff; }
+[class*="st-key-retry_"] .stButton > button {
+  background: rgba(255,51,85,.14); border:1px solid rgba(255,51,85,.42); color:var(--tr-accent-soft);
+  font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+}
 .tr-amber .stButton > button, [class*="st-key-m_ext_"] .stButton > button {
   background: rgba(232,178,92,.14); border:1px solid rgba(232,178,92,.4);
   color: var(--tr-warning); font-weight:700; letter-spacing:.05em; text-transform:uppercase;
@@ -753,7 +768,7 @@ hr { border-color: var(--tr-border) !important; margin:1.2rem 0 !important; }
 .stApp :is(.tr-eyebrow, .tr-metric .k, .tr-metric .v.mono, .tr-version, .tr-badge, .tr-step-num,
   .tr-interval .unit, .tr-throw .ab, .tr-poster .m, .tr-summary .k, .tr-field-label, .tr-hero-mark,
   .tr-hero-mark *, .tr-step-pip .n, .tr-live .foot, .tr-live .foot *, .tr-platform .soon, .tr-step-mobile,
-  .tr-rule .tr-eyebrow, code, kbd, pre, .tr-mono) {
+  .tr-rule .tr-eyebrow, .tr-interval.choice .unit, code, kbd, pre, .tr-mono) {
   font-family: var(--tr-mono) !important;
 }
 .stApp :is([data-testid="stIconMaterial"], .material-symbols-rounded, span[data-testid="stIconMaterial"]) {
