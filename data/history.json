@@ -1,5 +1,16 @@
 [
   {
+    "monitor_id": "8a6a36e44881",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Hanuman Ansh",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+    "targets": [
+      "AMB Cinemas · Barco Flagship Laser Dolby Atmos"
+    ],
+    "at": "2026-09-14T18:23:22.031417+05:30"
+  },
+  {
     "monitor_id": "9a4365ef3ec9",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
