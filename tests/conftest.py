@@ -332,3 +332,10 @@ QUICKBOOK_HYD = build_quickbook([
         ],
     },
 ])
+
+#: Detail requests one full sync of QUICKBOOK_HYD makes: every row's base
+#: event *plus* its premium-format siblings (Telugu 2D + EPIQ + Dolby Cinema,
+#: Tamil 2D + HDR, Hindi 2D). Six, not three, because a sibling event's
+#: theatres are not in the base event's answer — see
+#: ``platforms.bookmyshow._primary_children``.
+DETAIL_REQUESTS_HYD = 6
