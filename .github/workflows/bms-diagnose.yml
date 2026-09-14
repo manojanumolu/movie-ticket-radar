@@ -11,6 +11,10 @@ on:
         description: "City slug"
         type: string
         default: "hyderabad"
+      group:
+        description: "Movie title to dump child events + per-child venues for (optional)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -24,5 +28,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests "curl_cffi>=0.7"
-      - run: python tools/bms_diagnose.py --city "${{ inputs.city }}"
+      - run: pip install -r requirements.txt
+      - run: python tools/bms_diagnose.py --city "${{ inputs.city }}" --group "${{ inputs.group }}"
