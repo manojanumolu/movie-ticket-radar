@@ -22,7 +22,9 @@ the alternative is refreshing a booking page all evening.
 4. Pick formats **per theatre** — only the ones that theatre actually runs.
    AMB's HDR by Barco and Allu's Dolby Cinema are separate choices, and each
    theatre × format is watched independently.
-5. Choose a check interval (10 / 15 / 30 min) and an end time.
+5. Choose a check interval (10 / 15 / 30 min), an end time, and — separately —
+   which **show dates** count: any date, a single date, or a range such as
+   25–28 Sep. Shows outside those dates are ignored.
 6. Press **Start monitoring**. The app saves the monitor and immediately
    dispatches the worker, so the first check happens within about a minute —
    then it keeps checking at the interval you chose. When a target goes from
@@ -146,13 +148,15 @@ repository the `*/5 * * * *` cron fired at 03:57, 05:51, 10:42 and 16:14 IST —
 a monitor created at 02:55 was first checked at 03:57. Three mechanisms fix
 that, in order of importance:
 
-1. **Dispatch on start.** `app.py` calls `request_check_now(monitor.id)` the
-   moment a monitor is saved and mirrored, which triggers
-   `bookmyshow-monitor.yml` with `force=true` for that monitor. The first
-   check is therefore about a minute away. If the dispatch fails (no token,
-   token without *Actions: write*), the monitor is still saved, the UI says
-   "the scheduled worker will pick it up", and the rail shows *Waiting for
-   first check* honestly rather than a countdown.
+1. **Start triggers the worker.** Saving a monitor commits
+   `data/monitors.json` through the GitHub API, and the workflow listens for
+   pushes to that file — so the commit the app already makes *is* the trigger,
+   using nothing beyond the Contents permission. The app also tries a
+   `workflow_dispatch` (`force=true` for that monitor) when its token has
+   *Actions: write*; either one is enough. Only if **neither** happened does
+   the monitor get a persisted problem, shown as a red **PROBLEM OCCURRED**
+   button whose panel names the actual cause (403, no token, …) with a
+   **Retry now** — never a countdown that pretends a check is coming.
 2. **Segments.** `run_monitor.py --loop` (`monitor/worker.py`) keeps one run
    alive for up to 50 minutes. Every 30s it pulls `main` (so monitors created
    or stopped in the UI are noticed), runs `run_once` (which checks only the
@@ -282,9 +286,9 @@ Streamlit Cloud, where the local filesystem is wiped on restart) or to use the
 `.streamlit/secrets.toml` locally, or the *Secrets* box in Streamlit Cloud:
 
 ```toml
-GH_TOKEN = "github_pat_..."          # fine-grained PAT: Contents read & write
-                                     # AND Actions read & write (for the
-                                     # immediate first check on Start)
+GH_TOKEN = "github_pat_..."          # fine-grained PAT: Contents read & write.
+                                     # Add Actions read & write for the
+                                     # Retry now / Run a ticket check now buttons.
 GMAIL_ADDRESS = "you@gmail.com"      # optional, test button only
 GMAIL_APP_PASSWORD = "abcd efgh ijkl mnop"
 ```
@@ -386,10 +390,11 @@ change is still queued for retry. Verify both secrets, and that
 
 **Checks aren't running.**
 Open the monitor's rail card. *Waiting for first check · any moment now* means
-the dispatch went out and a segment is starting (about a minute). *Waiting on
-schedule* means the dispatch could not be made — usually the `GH_TOKEN` lacks
-the *Actions: write* scope — and the cron will pick it up whenever GitHub
-fires it. **Settings → Run a ticket check now** dispatches a segment by hand.
+the commit/dispatch went out and a segment is starting (about a minute).
+A red **PROBLEM OCCURRED** means nothing could be started — press it for the
+cause (no `GH_TOKEN`, a token that cannot write Contents, GitHub down) and
+**Retry now** once fixed. *Retry now* and **Settings → Run a ticket check now**
+need the token to have *Actions: write*.
 GitHub also disables scheduled workflows on repos with no activity for 60
 days — push anything to re-enable.
 

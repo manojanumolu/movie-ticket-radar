@@ -22,7 +22,7 @@ from html import escape
 
 from config.timezone import fmt_date_code, fmt_datetime, fmt_time, now_ist
 from monitor.changes import Change, ChangeKind
-from monitor.models import Monitor
+from monitor.models import Monitor, describe_date_codes
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 465
@@ -139,7 +139,9 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
     detected = change.detected_at or now_ist()
     # The change is the self-contained payload; the monitor is only a fallback.
     title = change.movie_title or monitor.movie.title
-    date_label = fmt_date_code(change.date_code) if change.date_code else ""
+    # Every show date that is actually bookable, not just the first one.
+    dates = list(change.date_codes) or ([change.date_code] if change.date_code else [])
+    date_label = " · ".join(fmt_date_code(d) for d in dates)
     times = change.new_time_labels if not live and change.new_time_labels else change.time_labels
 
     subject = (
@@ -255,11 +257,15 @@ def _html(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: st
     date_row = (
         f'<tr><td style="padding:0 30px 18px;">'
         f'<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;'
-        f'color:#6E6E7A;font-family:Consolas,monospace;">Date</div>'
+        f'color:#6E6E7A;font-family:Consolas,monospace;">{"Dates" if " · " in date_label else "Date"}</div>'
         f'<div style="font-size:19px;font-weight:700;color:{TEXT};margin-top:6px;">'
         f"{escape(date_label)}</div></td></tr>"
         if date_label
         else ""
+    )
+    watched = describe_date_codes(monitor.date_codes)
+    watched_line = (
+        f"Watching shows on {escape(watched)} only.<br>" if watched else ""
     )
 
     return f"""<!doctype html>
@@ -290,7 +296,7 @@ def _html(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: st
   <tr><td style="padding:18px 30px 26px;">
     <div style="font-size:12.5px;color:{TEXT_3};line-height:1.7;">
       Detected at {escape(fmt_time(detected))} IST.<br>
-      The monitor keeps running for your other theatres until
+      {watched_line}The monitor keeps running for your other theatres until
       {escape(fmt_datetime(monitor.monitor_until))} IST.
     </div>
   </td></tr>
@@ -320,7 +326,10 @@ def _text(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: st
     links = links or {}
     lines = [eyebrow, "", title, f"{venue} · {fmt} · {city}", "", lede, ""]
     if date_label:
-        lines += [f"Date: {date_label}"]
+        lines += [f"{'Dates' if ' · ' in date_label else 'Date'}: {date_label}"]
+    watched = describe_date_codes(monitor.date_codes)
+    if watched:
+        lines += [f"Watching shows on: {watched}"]
     if times:
         lines += ["Showtimes:"]
         for t in times:

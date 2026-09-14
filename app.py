@@ -33,6 +33,7 @@ from config.store import (  # noqa: E402
     dispatch_workflow,
     github_status,
     github_token,
+    last_mirror,
     load_history,
     load_settings,
     request_check_now,
@@ -128,7 +129,8 @@ def sidebar(active_count: int) -> str:
 # ──────────────────────────────────────────────────────────────────────────
 # Starting a monitor
 # ──────────────────────────────────────────────────────────────────────────
-def start_monitor(interval: int, until, email: str, start_now: bool) -> None:
+def start_monitor(interval: int, until, email: str, start_now: bool,
+                  date_codes: list[str] | None = None) -> None:
     entry = catalogue.find_entry(st.session_state.get("movie_id", ""))
     venues = {v.code: v for v in catalogue.venues_from_entry(entry or {})}
     formats: dict[str, list[str]] = st.session_state.get("formats", {})
@@ -170,39 +172,91 @@ def start_monitor(interval: int, until, email: str, start_now: bool) -> None:
         monitor_until=until,
         notify_email=email,
         start_immediately=start_now,
+        date_codes=list(date_codes or []),
     )
     # 1. Persist — and mirror to the repo, which is where the worker reads.
+    #    The mirror commit to data/monitors.json is itself what starts the
+    #    worker (the workflow listens for pushes to that file), so record the
+    #    request up front and confirm it against what the mirror reports.
+    if start_now:
+        monitor.first_check_requested_at = now_ist()
     upsert_monitor(monitor, mirror=mirrored())
+    mirror = last_mirror()
     record_history(monitor, "CREATED", "Monitor created.", mirror=mirrored())
 
     settings = load_settings()
     if settings.get("notify_email") != email:
         save_settings({**settings, "notify_email": email}, mirror=mirrored())
 
-    # 2. Ask the worker to check it now. This is what turns "some time in the
-    #    next hour, when GitHub's scheduler feels like it" into "about a
-    #    minute from now". If it can't be asked, the monitor is still saved and
-    #    the scheduled run remains the safety net — the UI just says so.
-    dispatched, why = (False, "not requested")
+    # 2. Make sure a check is actually on its way. The commit above triggers
+    #    the workflow by itself; a workflow_dispatch is tried as well when the
+    #    commit didn't happen (or as belt-and-braces when the token allows).
+    #    If *neither* worked, that is a problem and is shown as one — never as
+    #    "waiting for first check".
+    started_by = ""
+    reasons: list[str] = []
     if start_now:
-        dispatched, why = request_check_now(monitor.id)
-        if dispatched:
-            monitor.first_check_requested_at = now_ist()
+        if mirror.get("committed"):
+            started_by = "push"
+        elif mirror.get("error"):
+            reasons.append(f"Saving the monitor to GitHub failed — {mirror['error']}")
+        ok, why = request_check_now(monitor.id)
+        if ok:
+            started_by = started_by or "dispatch"
+        elif not started_by:
+            reasons.append(f"Starting the worker on demand failed — {why}")
+        if not started_by:
+            monitor.first_check_requested_at = None
+            monitor.set_problem("FIRST_CHECK_NOT_STARTED", " ".join(reasons) or "Unknown reason.")
             upsert_monitor(monitor, mirror=mirrored())
 
     where = (f"Watching **{monitor.movie.title}** across {len(targets)} theatre/format "
-             f"combination(s), every {interval} minutes, until {fmt_datetime(until)}.")
-    if dispatched:
-        flash("success", where + " First check is running now.")
-    elif start_now and mirrored():
-        flash("warning", where + f" Couldn't start an immediate check ({why}); the "
-              "scheduled worker will pick it up.")
+             f"combination(s), every {interval} minutes, until {fmt_datetime(until)}"
+             + (f", shows on {monitor.date_range_label}" if monitor.date_range_label else "") + ".")
+    if started_by:
+        flash("success", where + " First check is starting now.")
+    elif start_now:
+        flash("error", where + " PROBLEM: the first check could not be started — see the "
+              "monitor card for the reason.")
     else:
         flash("success", where + " The scheduled worker will pick it up.")
 
     st.session_state["step"] = 1
     st.session_state["furthest"] = 1
     st.rerun()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Problems
+# ──────────────────────────────────────────────────────────────────────────
+def retry_check(monitor: Monitor) -> None:
+    """Ask for a check again and clear a stale problem if that worked."""
+    ok, msg = request_check_now(monitor.id)
+    if ok:
+        monitor.first_check_requested_at = now_ist()
+        monitor.clear_problem()
+        upsert_monitor(monitor, mirror=mirrored())
+        flash("success", "Retry requested — the worker is checking again.")
+    else:
+        monitor.set_problem("RETRY_FAILED", f"Starting the worker on demand failed — {msg}")
+        upsert_monitor(monitor, mirror=mirrored())
+        flash("error", f"PROBLEM: {msg}")
+    st.rerun()
+
+
+def problem_panel(monitor: Monitor, state: MonitorState) -> None:
+    """A red PROBLEM OCCURRED button; pressing it opens the actual causes."""
+    problems = C.problems_for(monitor, state)
+    if not problems:
+        return
+    key = f"show_problem_{monitor.id}"
+    label = f"!  PROBLEM OCCURRED ({len(problems)})" if len(problems) > 1 else "!  PROBLEM OCCURRED"
+    if st.button(label, key=f"prob_{monitor.id}", use_container_width=True):
+        st.session_state[key] = not st.session_state.get(key, False)
+    if st.session_state.get(key):
+        C.problem_card(problems)
+        if st.button("Retry now", key=f"retry_{monitor.id}", use_container_width=True):
+            retry_check(monitor)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -242,6 +296,7 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
         f'<span class="tr-count">{len(active)}</span></div>'
     )
     status_card(monitor.id)
+    problem_panel(monitor, state)
 
     if st.button("■  Stop monitoring", key=f"stop_{monitor.id}", use_container_width=True):
         stop_monitor(monitor.id, mirror=mirrored())
@@ -293,23 +348,6 @@ def page_home(monitors, states, history, settings) -> None:
                        f"being checked until {fmt_datetime(live_monitor.monitor_until)}.")
             st.write("")
 
-        errored = next(
-            (m for m in monitors if m.is_running()
-             and states.get(m.id, MonitorState()).consecutive_errors), None)
-        if errored is not None:
-            card, action = st.columns([2.2, 1], gap="medium")
-            with card:
-                C.error_card(states[errored.id], errored.interval_minutes)
-            with action:
-                st.write("")
-                if st.button("Retry now", key=f"retry_{errored.id}", use_container_width=True):
-                    ok, msg = request_check_now(errored.id)
-                    flash("success" if ok else "error",
-                          "Retry requested — the worker is checking again." if ok else msg)
-                    st.rerun()
-                st.caption("The monitor keeps running. We retry automatically either way.")
-            st.write("")
-
         step = st.session_state.get("step", 1)
         C.step_strip(flow.STEPS, step, st.session_state.get("furthest", 1))
         st.write("")
@@ -333,13 +371,13 @@ def page_home(monitors, states, history, settings) -> None:
                 flow.step_formats([venues[c] for c in st.session_state.get("theatres", [])
                                    if c in venues])
             else:
-                interval, until, email, start_now = flow.step_monitoring(settings.get("notify_email", ""))
+                interval, until, email, start_now, dates = flow.step_monitoring(settings.get("notify_email", ""))
                 st.write("")
                 cta, helper = st.columns([2.2, 1], gap="medium")
                 with cta:
                     if st.button("▶  Start monitoring", type="primary",
                                  use_container_width=True, key="start"):
-                        start_monitor(interval, until, email, start_now)
+                        start_monitor(interval, until, email, start_now, dates)
                 with helper:
                     C.html(
                         '<div class="tr-cta-help"><span>⚡</span> You\'ll get an email the second '
@@ -379,17 +417,12 @@ def page_monitors(monitors, states) -> None:
         with right:
             st.write("")
             if monitor.is_running():
+                problem_panel(monitor, state)
                 if st.button("■  Stop monitoring", key=f"m_stop_{monitor.id}",
                              use_container_width=True):
                     stop_monitor(monitor.id, mirror=mirrored())
                     flash("success", "Monitoring stopped.")
                     st.rerun()
-                if kind == "error":
-                    if st.button("Retry now", key=f"m_retry_{monitor.id}", use_container_width=True):
-                        ok, msg = request_check_now(monitor.id)
-                        flash("success" if ok else "error",
-                              "Retry requested — the worker is checking again." if ok else msg)
-                        st.rerun()
             else:
                 if st.button("Extend by 24 hours", key=f"m_ext_{monitor.id}",
                              use_container_width=True):
@@ -405,8 +438,8 @@ def page_monitors(monitors, states) -> None:
 
             st.caption(f"Created {fmt_datetime(monitor.created_at)}")
             st.caption(f"Checks run: {state.check_count} · succeeded: {state.success_count}")
-            if state.last_error:
-                st.caption(f"Last error: {state.last_error}")
+            if monitor.date_range_label:
+                st.caption(f"Show dates: {monitor.date_range_label}")
         st.divider()
 
 
@@ -479,8 +512,9 @@ def page_settings(settings) -> None:
         connected, message = github_status()
         st.caption(("✓ " if connected else "! ") + message)
         if connected:
-            st.caption("Immediate first checks need the token to have the *Actions: write* "
-                       "scope as well as *Contents*; without it, monitors wait for the schedule.")
+            st.caption("Starting a monitor triggers the worker through the commit it makes. "
+                       "*Retry now* and *Run a ticket check now* additionally need the token to "
+                       "have the *Actions: write* scope.")
 
 
 # ──────────────────────────────────────────────────────────────────────────

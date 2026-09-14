@@ -51,6 +51,8 @@ class Change:
     #: ``[[label, url], …]`` for every showtime in ``time_labels``. The email
     #: renders each label as a link to its url.
     time_links: list[list[str]] = field(default_factory=list)
+    #: Every show date behind ``time_labels`` (``date_code`` is the earliest).
+    date_codes: list[str] = field(default_factory=list)
     detected_at: datetime | None = None
 
     @property
@@ -74,6 +76,7 @@ class Change:
             "time_labels": self.time_labels,
             "new_time_labels": self.new_time_labels,
             "time_links": [list(pair) for pair in self.time_links],
+            "date_codes": list(self.date_codes),
         }
 
 
@@ -129,6 +132,7 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
             booking_url=result.booking_url,
             time_labels=result.time_labels,
             time_links=result.time_links,
+            date_codes=result.date_codes,
             detected_at=at,
         )
 
@@ -147,7 +151,7 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
         return None
 
     fresh_set = set(fresh)
-    new_labels = [s.time_label for s in result.showtimes if s.key in fresh_set]
+    new_labels = [result._label(s) for s in result.showtimes if s.key in fresh_set]
     return Change(
         kind=ChangeKind.NEW_SHOWTIME,
         monitor_id=monitor.id,
@@ -161,6 +165,7 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
         booking_url=result.booking_url,
         time_labels=result.time_labels,
         time_links=result.time_links,
+        date_codes=result.date_codes,
         new_time_labels=sorted(set(new_labels)),
         new_showtime_keys=fresh,
         detected_at=at,
@@ -207,6 +212,7 @@ def apply_outcome(outcome: CheckOutcome, state: MonitorState) -> MonitorState:
         ts.showtime_keys = result.showtime_keys
         ts.time_labels = result.time_labels
         ts.time_links = result.time_links
+        ts.date_codes = result.date_codes
         ts.date_code = result.date_code or ts.date_code
         ts.booking_url = result.booking_url or ts.booking_url
 

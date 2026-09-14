@@ -360,10 +360,18 @@ def test_a_failed_check_never_renders_as_no_tickets(make_monitor, at):
         last_error="BookMyShow refused the request (HTTP 403).",
     )}, mirror=False)
 
-    body = text(run())
+    app = run()
+    body = text(app)
     assert "Couldn't check BookMyShow" in body
-    assert "Last successful check" in body
     assert "Tickets are unavailable" not in body
+    # The failure is a visible PROBLEM, and opening it names the real cause.
+    prob = next(b for b in app.button if b.key == f"prob_{monitor.id}")
+    assert "PROBLEM OCCURRED" in prob.label
+    app = prob.click().run()
+    opened = text(app)
+    assert "Problem occurred" in opened and "reach BookMyShow" in opened
+    assert "BookMyShow refused the request (HTTP 403)." in opened
+    assert "2 failed attempt(s)" in opened
 
 
 def test_a_live_target_shows_the_booking_link(make_monitor, at):

@@ -275,9 +275,11 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
                 notifier(monitor, change)
             except Exception as exc:  # noqa: BLE001 - retried on the next tick
                 report.email_errors.append(f"{monitor.id}: {exc}")
+                ms.last_email_error = f"{type(exc).__name__}: {exc}"[:300]
                 print(f"    email failed ({exc}) — will retry next check")
                 continue
             report.emails_sent += 1
+            ms.last_email_error = ""
             mark_notified(change, ms, at)
             record_history(
                 monitor,

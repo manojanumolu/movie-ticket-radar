@@ -94,19 +94,68 @@ def test_start_monitoring_dispatches_an_immediate_check(seeded, dispatches):
     # ...and the monitor remembers it asked, so the rail says "any moment now"
     # rather than "on next scheduled run".
     assert monitor.first_check_requested_at is not None
-    assert "First check is running now" in body_of(app)
+    assert monitor.problem is None
+    assert "First check is starting now" in body_of(app)
+    assert not [b for b in app.button if b.key.startswith("prob_")]
 
 
-def test_a_failed_dispatch_still_creates_the_monitor(seeded, monkeypatch):
+def test_a_failed_dispatch_still_creates_the_monitor_and_shows_a_problem(seeded, monkeypatch):
+    """Token can write Contents but the mirror made no commit and dispatch 403s:
+    nothing started, and the UI must say PROBLEM — never 'waiting'."""
     monkeypatch.setattr(store, "github_token", lambda: "test-token")
     monkeypatch.setattr(store, "sync_from_github", lambda **k: False)
     monkeypatch.setattr(store, "dispatch_workflow",
-                        lambda *a, **k: (False, "Could not start workflow: 403 Forbidden"))
+                        lambda *a, **k: (False, "Could not start workflow: GitHub refused (403): "
+                                                "the GH_TOKEN doesn't have permission for this."))
     app = start_from_ui(seeded)
     monitors = load_monitors()
     assert len(monitors) == 1 and monitors[0].is_running()
-    assert monitors[0].first_check_requested_at is None
-    assert any("scheduled worker will pick it up" in w.value for w in app.warning)
+    monitor = monitors[0]
+    assert monitor.first_check_requested_at is None
+    assert monitor.problem and monitor.problem["kind"] == "FIRST_CHECK_NOT_STARTED"
+    assert "403" in monitor.problem["message"]
+    assert any("PROBLEM" in e.value for e in app.error)
+
+    body = body_of(app)
+    assert "PROBLEM OCCURRED" in body
+    assert "WAITING FOR FIRST CHECK" not in body
+    assert "not started" in body
+    fresh = run_app()  # a new session sees the persisted problem too
+    prob = next(b for b in fresh.button if b.key == f"prob_{monitor.id}")
+    opened = body_of(prob.click().run())
+    assert "first check could not be started" in opened
+    assert "403" in opened and "permission" in opened
+
+
+def test_a_mirror_commit_counts_as_started_even_when_dispatch_is_forbidden(seeded, monkeypatch):
+    """The commit to data/monitors.json triggers the workflow by itself, so a
+    PAT without Actions scope still gets an immediate first check."""
+    monkeypatch.setattr(store, "github_token", lambda: "test-token")
+    monkeypatch.setattr(store, "sync_from_github", lambda **k: False)
+    monkeypatch.setattr(store, "dispatch_workflow", lambda *a, **k: (False, "403"))
+
+    def fake_push(path, body, message):
+        store._last_mirror = {"ok": True, "committed": path.name == "monitors.json",
+                              "error": "", "path": path.name}
+        return True
+
+    monkeypatch.setattr(store, "push_to_github", fake_push)
+    app = start_from_ui(seeded)
+    monitor = load_monitors()[0]
+    assert monitor.problem is None
+    assert monitor.first_check_requested_at is not None
+    assert "First check is starting now" in body_of(app)
+    assert not [b for b in app.button if b.key.startswith("prob_")]
+
+
+def test_workflow_is_triggered_by_the_monitors_commit():
+    from pathlib import Path
+    import yaml
+
+    doc = yaml.safe_load(Path(".github/workflows/bookmyshow-monitor.yml").read_text(encoding="utf-8"))
+    on = doc.get(True, doc.get("on"))
+    assert on["push"]["paths"] == ["data/monitors.json"]
+    assert on["push"]["branches"] == ["main"]
 
 
 def test_dispatch_is_skipped_when_start_now_is_off(seeded, dispatches):
@@ -462,3 +511,141 @@ def test_monitor_round_trips_first_check_requested_at(make_monitor, at):
     upsert_monitor(monitor, mirror=False)
     assert get_monitor(monitor.id).first_check_requested_at == at
     assert Monitor.from_dict({**monitor.to_dict(), "first_check_requested_at": None}).first_check_requested_at is None
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Show dates: single date, date range, and shows outside them are ignored
+# ──────────────────────────────────────────────────────────────────────────
+from datetime import date as _date  # noqa: E402
+
+from monitor.checker import check_monitor  # noqa: E402
+from monitor.models import date_codes_between, describe_date_codes  # noqa: E402
+
+
+def test_date_helpers():
+    assert date_codes_between(_date(2026, 9, 25), _date(2026, 9, 28)) == [
+        "20260925", "20260926", "20260927", "20260928"]
+    assert date_codes_between(_date(2026, 9, 25), _date(2026, 9, 25)) == ["20260925"]
+    assert describe_date_codes([]) == ""
+    assert describe_date_codes(["20260925"]) == "25 Sep 2026"
+    assert describe_date_codes(["20260925", "20260926", "20260927", "20260928"]) == "25–28 Sep 2026"
+    assert describe_date_codes(["20260930", "20261001"]) == "30 Sep – 1 Oct 2026"
+    assert describe_date_codes(["20260925", "20260927"]) == "25 Sep, 27 Sep 2026"
+
+
+def _two_date_shows():
+    return [
+        {"venue_code": "ALLU", "venue_name": "Allu Cinemas", "area": "Attapur, Hyderabad",
+         "time": "07:30 PM", "time_code": "1930", "fmt": "DOLBY CINEMA", "status": "3", "date": "20260925"},
+        {"venue_code": "ALLU", "venue_name": "Allu Cinemas", "area": "Attapur, Hyderabad",
+         "time": "09:45 PM", "time_code": "2145", "fmt": "DOLBY CINEMA", "status": "3", "date": "20260929"},
+    ]
+
+
+def test_single_show_date_ignores_other_dates(make_monitor, provider_factory, monkeypatch):
+    monitor = make_monitor(targets=[__import__("monitor.models", fromlist=["TheatreTarget"]).TheatreTarget(
+        "ALLU", "Allu Cinemas", "Attapur, Hyderabad", "Dolby Cinema")])
+    monitor.date_codes = ["20260929"]
+    provider = provider_factory([build_payload(_two_date_shows())])
+    monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider)
+    outcome = check_monitor(monitor)
+    assert outcome.ok
+    result = outcome.results[0]
+    assert result.availability is Availability.AVAILABLE
+    assert result.time_labels == ["09:45 PM"]           # the 25 Sep show is not ours
+    assert result.date_codes == ["20260929"]
+    # …and the provider was asked for exactly the date we watch.
+    assert [c["params"].get("dateCode") for c in provider.session.calls] == ["20260929"]
+
+
+def test_show_date_range_keeps_only_dates_inside_it(make_monitor, provider_factory, monkeypatch):
+    from monitor.models import TheatreTarget
+
+    monitor = make_monitor(targets=[TheatreTarget("ALLU", "Allu Cinemas", "Attapur, Hyderabad", "Dolby Cinema")])
+    monitor.date_codes = date_codes_between(_date(2026, 9, 25), _date(2026, 9, 28))
+    # The fake session answers the same two-date listing for each of the 4 date queries.
+    provider = provider_factory([build_payload(_two_date_shows())] * 4)
+    monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider)
+    result = check_monitor(monitor).results[0]
+    assert result.availability is Availability.AVAILABLE
+    assert result.date_codes == ["20260925"]             # 29 Sep is outside 25–28
+    assert result.time_labels == ["07:30 PM"]
+    assert len(provider.session.calls) == 4
+
+
+def test_no_shows_inside_the_range_is_not_available(make_monitor, provider_factory, monkeypatch):
+    from monitor.models import TheatreTarget
+
+    monitor = make_monitor(targets=[TheatreTarget("ALLU", "Allu Cinemas", "Attapur, Hyderabad", "Dolby Cinema")])
+    monitor.date_codes = ["20261001"]
+    provider = provider_factory([build_payload(_two_date_shows())])
+    monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider)
+    result = check_monitor(monitor).results[0]
+    assert result.availability is Availability.SHOW_NOT_AVAILABLE
+    assert "dates you're watching" in result.detail
+
+
+def test_multi_date_results_label_each_showtime_with_its_date(make_monitor, provider_factory, monkeypatch):
+    from monitor.models import TheatreTarget
+
+    monitor = make_monitor(targets=[TheatreTarget("ALLU", "Allu Cinemas", "Attapur, Hyderabad", "Dolby Cinema")])
+    monitor.date_codes = ["20260925", "20260929"]
+    provider = provider_factory([build_payload(_two_date_shows())] * 2)
+    monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider)
+    result = check_monitor(monitor).results[0]
+    assert result.date_codes == ["20260925", "20260929"]
+    assert result.time_labels == ["25 Sep · 07:30 PM", "29 Sep · 09:45 PM"]
+    assert [u for _, u in result.time_links] == [
+        f"{monitor.movie.source_url}/20260925", f"{monitor.movie.source_url}/20260929"]
+
+
+def test_email_shows_every_available_date_and_the_watched_range(make_monitor, at):
+    from monitor.changes import Change, ChangeKind
+    from notifications.email import render_change
+
+    monitor = make_monitor()
+    monitor.date_codes = date_codes_between(_date(2026, 9, 25), _date(2026, 9, 28))
+    change = Change(kind=ChangeKind.TICKETS_LIVE, monitor_id=monitor.id, target_key="ALLU::Dolby Cinema",
+                    venue_name="Allu Cinemas", fmt="Dolby Cinema", movie_title="X",
+                    previous=Availability.NOT_BOOKABLE, current=Availability.AVAILABLE,
+                    date_code="20260925", date_codes=["20260925", "20260926"],
+                    booking_url=monitor.movie.source_url,
+                    time_labels=["25 Sep · 07:30 PM", "26 Sep · 09:45 PM"], detected_at=at)
+    _, html, text = render_change(monitor, change)
+    assert "25 September 2026 · 26 September 2026" in html
+    assert ">Dates<" in html
+    assert "Watching shows on 25–28 Sep 2026 only." in html
+    assert "Dates: 25 September 2026 · 26 September 2026" in text
+    assert "Watching shows on: 25–28 Sep 2026" in text
+
+
+def test_ui_stores_a_single_show_date_on_the_monitor(seeded, dispatches):
+    app = run_app(step=5, location="hyderabad", movie_id=seeded,
+                  theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]}, date_mode="single")
+    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.date_input(key="show_date_single").set_value(_date(2026, 9, 25)).run()
+    assert "Watching shows on 25 Sep 2026" in body_of(app)
+    app.button(key="start").click().run()
+    monitor = load_monitors()[0]
+    assert monitor.date_codes == ["20260925"]
+    assert monitor.date_range_label == "25 Sep 2026"
+
+
+def test_ui_stores_a_show_date_range_on_the_monitor(seeded, dispatches):
+    app = run_app(step=5, location="hyderabad", movie_id=seeded,
+                  theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]}, date_mode="range")
+    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.date_input(key="show_date_range").set_value((_date(2026, 9, 25), _date(2026, 9, 28))).run()
+    assert "Watching shows on 25–28 Sep 2026 (4 days)" in body_of(app)
+    app.button(key="start").click().run()
+    monitor = load_monitors()[0]
+    assert monitor.date_codes == ["20260925", "20260926", "20260927", "20260928"]
+    # Monitoring duration is a separate thing and is untouched.
+    assert monitor.monitor_until.date() != _date(2026, 9, 28) or monitor.monitor_until.hour == 23
+    # The rail shows the dates being watched.
+    assert "25–28 Sep 2026" in body_of(run_app())
+
+
+def test_ui_default_watches_every_date(seeded, dispatches):
+    start_from_ui(seeded)
+    assert load_monitors()[0].date_codes == []
