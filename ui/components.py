@@ -51,6 +51,39 @@ PIN_GLYPH = (
     'stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5.6 6.5-10.2A6.5 6.5 0 0 0 5.5 10.8'
     'C5.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.4"/></svg>'
 )
+#: One icon family for the whole UI: 24-grid line icons, round caps, 1.8px
+#: stroke — the same style as the sidebar's nav icons. ``icon(name, size,
+#: color)`` renders one inline; nothing in the UI uses an emoji as an icon.
+ICON_PATHS = {
+    "location": "<path d='M12 21s6.5-5.6 6.5-10.2A6.5 6.5 0 0 0 5.5 10.8C5.5 15.4 12 21 12 21z'/><circle cx='12' cy='10.5' r='2.4'/>",
+    "movie": "<rect x='3' y='4.5' width='18' height='15' rx='2.2'/><path d='M7.5 4.5v15M16.5 4.5v15M3 9.5h4.5M3 14.5h4.5M16.5 9.5H21M16.5 14.5H21'/>",
+    "theatre": "<path d='M3 20h18M5 20V9l7-4 7 4v11'/><path d='M9 20v-5h6v5'/><path d='M12 9v3'/>",
+    "format": "<rect x='3' y='5' width='18' height='14' rx='2'/><path d='M8 12h8M12 9v6'/>",
+    "monitor": "<circle cx='12' cy='12' r='8'/><path d='M12 8v4l2.5 2.5'/><path d='M4 4l2 2M20 4l-2 2'/>",
+    "clock": "<circle cx='12' cy='12' r='8.5'/><path d='M12 7.5V12l3 2'/>",
+    "calendar": "<rect x='3.5' y='5' width='17' height='15' rx='2'/><path d='M3.5 10h17M8 3v4M16 3v4'/>",
+    "mail": "<rect x='3' y='5.5' width='18' height='13' rx='2'/><path d='M3.5 7l8.5 6 8.5-6'/>",
+    "search": "<circle cx='11' cy='11' r='7'/><path d='M20 20l-3.5-3.5'/>",
+    "check": "<path d='M5 12.5l4.5 4.5L19 7.5'/>",
+    "warning": "<path d='M12 4l9 16H3z'/><path d='M12 10v4M12 17.5v.5'/>",
+    "error": "<circle cx='12' cy='12' r='8.5'/><path d='M9 9l6 6M15 9l-6 6'/>",
+    "external": "<path d='M14 4h6v6M20 4l-9 9'/><path d='M19 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5'/>",
+    "play": "<path d='M7 5v14l11-7z'/>",
+    "ticket": "<path d='M3 8.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1.2a2.3 2.3 0 0 0 0 4.6v1.2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1.2a2.3 2.3 0 0 0 0-4.6z'/><path d='M13 7.5v9' stroke-dasharray='2 2.2'/>",
+    "radar": "<circle cx='12' cy='12' r='8.5'/><circle cx='12' cy='12' r='4'/><path d='M12 12l6-6'/>",
+    "bolt": "<path d='M13 3L5 13.5h6L10 21l8-10.5h-6z'/>",
+    "catalogue": "<path d='M4 5.5A1.5 1.5 0 0 1 5.5 4H10l2 2h6.5A1.5 1.5 0 0 1 20 7.5v10a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z'/>",
+    "history": "<path d='M3.5 12a8.5 8.5 0 1 0 2.6-6.1'/><path d='M3.2 4.6v3.9h3.9'/><path d='M12 8v4.4l3.2 1.9'/>",
+}
+
+
+def icon(name: str, size: int = 16, color: str = "currentColor", width: str = "1.8") -> str:
+    paths = ICON_PATHS.get(name, ICON_PATHS["radar"])
+    return (f'<svg class="tr-ic" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" '
+            f'stroke="{color}" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round" '
+            f'aria-hidden="true">{paths}</svg>')
+
+
 CHECK_CIRCLE = (
     '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#3ED598" stroke-width="2.2" '
     'stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.2"/></svg>'
@@ -155,20 +188,33 @@ def hero(title: str, lede: str, sub: str) -> None:
             <div class="tr-hero-lede">{e(lede)}</div>
             <div class="tr-hero-sub">{e(sub)}</div>
           </div>
-          <div class="tr-hero-mark"><div>Some stories</div><div>are worth</div><b>the wait</b></div>
+          <div class="tr-hero-mark"><span>Some stories</span><span>are worth</span><b>the wait</b></div>
         </div></div>"""
     )
 
 
 def rule(label: str) -> None:
-    html(f'<div class="tr-rule"><span class="tr-eyebrow">{e(label)}</span><span class="line"></span></div>')
+    """A section eyebrow. ``"All theatres · 9"`` renders the count as a pill."""
+    text, _, count = label.partition(" · ")
+    pill = f'<span class="tr-count">{e(count)}</span>' if count else ""
+    html(f'<div class="tr-rule"><span class="tr-eyebrow">{e(text)}</span>{pill}<span class="line"></span></div>')
+
+
+#: The icon each numbered step carries beside its number.
+STEP_ICONS = {1: "location", 2: "movie", 3: "theatre", 4: "format", 5: "monitor"}
 
 
 def step_header(number: int | str, title: str, help_text: str) -> None:
+    """A section head. ``number`` is 1–5 for the wizard steps (numbered badge)
+    or an icon name for the other sections (clock, calendar, mail…)."""
+    if isinstance(number, int):
+        badge = f'<div class="tr-step-num">{number}</div>'
+    else:
+        badge = f'<div class="tr-step-num ic">{icon(number, 15)}</div>'
     html(
         f"""<div class="tr-step-head">
-          <div class="tr-step-num">{e(number)}</div>
-          <div><div class="tr-step-title">{e(title)}</div>
+          {badge}
+          <div class="tr-step-text"><div class="tr-step-title">{e(title)}</div>
           <div class="tr-step-help">{e(help_text)}</div></div>
         </div>"""
     )
@@ -240,8 +286,8 @@ def flash(kind: str, message: str) -> None:
 
 def status_line(kind: str, text: str) -> None:
     """A one-line fact with a glyph: ok · warn · bad · wait · info."""
-    glyph = {"ok": "✓", "warn": "⚠", "bad": "!", "wait": "◷", "info": "●"}.get(kind, "●")
-    html(f'<div class="tr-status {e(kind)}"><span class="g">{glyph}</span><span>{e(text)}</span></div>')
+    name = {"ok": "check", "warn": "warning", "bad": "error", "wait": "clock", "info": "radar"}.get(kind, "radar")
+    html(f'<div class="tr-status {e(kind)}"><span class="g">{icon(name, 14)}</span><span>{e(text)}</span></div>')
 
 
 def platform_selector(platforms, active_slug: str, theatre_count: int, city: str) -> None:
@@ -294,8 +340,8 @@ def location_tile(name: str, sub: str, selected: bool, enabled: bool = True) -> 
             f'<div class="n">{e(name)}</div><div class="s">Coming soon</div></div>'
         )
         return
-    check = '<div class="tr-check">✓</div>' if selected else ""
-    pin = PIN_GLYPH.format(size=18, color="#FF3355" if selected else "#8E8E98")
+    check = f'<div class="tr-check">{icon("check", 12, "#fff", "2.4")}</div>' if selected else ""
+    pin = f'<div class="pin">{icon("location", 18, "#FF3355" if selected else "#8E8E98")}</div>'
     html(
         f'<div class="tr-loc{" selected" if selected else ""}">{check}{pin}'
         f'<div class="n">{e(name)}</div><div class="s">{e(sub)}</div></div>'
@@ -354,7 +400,7 @@ def featured_tile(name: str, area: str, venue, selected: bool, *, released: bool
             </div>"""
         )
         return
-    check = '<div class="tr-check">✓</div>' if selected else ""
+    check = f'<div class="tr-check">{icon("check", 12, "#fff", "2.4")}</div>' if selected else ""
     formats = list(venue.formats)
     if released:
         badge = '<span class="tr-badge live">Now listed</span>'
@@ -410,7 +456,7 @@ def poster_tile(title: str, meta: str, selected: bool, poster_url: str = "",
         if poster_url
         else FILM_GLYPH.format(size=22)
     )
-    check = '<div class="tr-check">✓</div>' if selected else ""
+    check = f'<div class="tr-check">{icon("check", 12, "#fff", "2.4")}</div>' if selected else ""
     html(
         f"""<div class="tr-poster{' selected' if selected else ''}{' compact' if compact else ''}">
           <div class="art">{art}{check}</div>
@@ -783,13 +829,13 @@ def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None =
           <div class="top">
             {thumb(monitor.movie.poster_url)}
             <div class="info">
+              <div class="pills"><span class="tr-pill {phase.css} lg">{'<span class="tr-dot ok live"></span>' if phase.key == 'available' else ''}{e(PILL_LABEL.get(phase.key, phase.label))}</span>
+                <span class="tr-pill neutral">EVERY {monitor.interval_minutes} MIN</span>
+                <span class="tr-pill neutral">{len(monitor.targets)} TARGET{'S' if len(monitor.targets) != 1 else ''}</span></div>
               <div class="title">{e(monitor.movie.title)}</div>
               <div class="where">BookMyShow · {e(monitor.movie.city)}
                 {(' · ' + e(monitor.movie.language)) if monitor.movie.language else ''}
                 · created {e(fmt_datetime(monitor.created_at))}</div>
-              <div class="pills"><span class="tr-pill {phase.css}">{e(PILL_LABEL.get(phase.key, phase.label))}</span>
-                <span class="tr-pill neutral">EVERY {monitor.interval_minutes} MIN</span>
-                <span class="tr-pill neutral">{len(monitor.targets)} TARGET{'S' if len(monitor.targets) != 1 else ''}</span></div>
             </div>
           </div>
           <div class="grid">
@@ -959,29 +1005,29 @@ def empty_card(message: str = "Set an alert and we'll watch BookMyShow for you �
 
 def history_rows(history: list[dict], limit: int = 3) -> None:
     kind_style = {
-        "TICKETS_LIVE": ("#3ED598", "✓ Tickets found"),
-        "NEW_SHOWTIME": ("#3ED598", "✓ New showtime"),
-        "STOPPED": ("#9A9AA4", "■ Stopped manually"),
-        "EXPIRED": ("#E8B25C", "◷ Expired"),
-        "ERROR": ("#FF6B85", "! Check failed"),
-        "CREATED": ("#B0B0BA", "● Monitor created"),
+        "TICKETS_LIVE": ("ok", "Tickets found"),
+        "NEW_SHOWTIME": ("ok", "New showtime"),
+        "STOPPED": ("neutral", "Stopped manually"),
+        "EXPIRED": ("warn", "Expired"),
+        "ERROR": ("bad", "Check failed"),
+        "CREATED": ("neutral", "Monitor created"),
     }
     for item in history[:limit]:
-        colour, label = kind_style.get(item.get("kind", ""), ("#B0B0BA", item.get("kind", "")))
+        css, label = kind_style.get(item.get("kind", ""), ("neutral", item.get("kind", "")))
         when = item.get("at", "")
         stamp = ""
         try:
-            stamp = f" · {datetime.fromisoformat(when).strftime('%d %b')}" if when else ""
+            stamp = datetime.fromisoformat(when).strftime("%d %b · %I:%M %p").lstrip("0") if when else ""
         except ValueError:
             stamp = ""
         targets = " · ".join(item.get("targets", [])[:2]) or item.get("message", "")
         html(
-            f"""<div class="tr-history">
+            f"""<div class="tr-history {css}">
               {thumb(item.get('poster_url', ''), small=True)}
-              <div style="min-width:0;">
+              <div class="body">
                 <div class="t">{e(item.get('movie', 'Monitor'))}</div>
                 <div class="s">{e(targets)}</div>
-                <div class="k" style="color:{colour};">{e(label)}{e(stamp)}</div>
+                <div class="k"><span class="tr-pill {css}">{e(label)}</span><span class="when">{e(stamp)}</span></div>
               </div>
             </div>"""
         )
@@ -1007,6 +1053,7 @@ __all__ = [
     "hero",
     "history_rows",
     "html",
+    "icon",
     "interval_tile",
     "live_card",
     "location_tile",
