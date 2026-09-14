@@ -1,58 +1,5 @@
 [
   {
-    "id": "f7d7bcc5933e",
-    "movie": {
-      "platform": "bookmyshow",
-      "event_code": "ET00514163",
-      "title": "Avengers Endgame: Encore",
-      "region_code": "HYD",
-      "region_slug": "hyderabad",
-      "city": "Hyderabad",
-      "language": "English",
-      "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00514163-1787720198.jpg",
-      "source_url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/buytickets/ET00514163",
-      "variants": [
-        [
-          "ET00516729",
-          "4DX 3D"
-        ],
-        [
-          "ET00516731",
-          "3D"
-        ],
-        [
-          "ET00516728",
-          "Ms-Infinity Vsn 3D"
-        ],
-        [
-          "ET00516224",
-          "Ms - Infinity Vision"
-        ]
-      ]
-    },
-    "targets": [
-      {
-        "venue_code": "ALUC",
-        "venue_name": "ALLU Cinemas",
-        "area": "Kokapet",
-        "fmt": "Dolby Cinema"
-      }
-    ],
-    "interval_minutes": 10,
-    "monitor_until": "2026-09-25T23:59:00+05:30",
-    "start_immediately": true,
-    "notify_email": "manoj.anumolu01@gmail.com",
-    "date_codes": [
-      "20260925"
-    ],
-    "status": "STOPPED",
-    "created_at": "2026-09-15T01:35:15.712349+05:30",
-    "stopped_at": "2026-09-15T01:39:53.385025+05:30",
-    "stopped_reason": "Stopped manually.",
-    "first_check_requested_at": "2026-09-15T01:35:15.712354+05:30",
-    "problem": null
-  },
-  {
     "id": "9d249ed20240",
     "movie": {
       "platform": "bookmyshow",
