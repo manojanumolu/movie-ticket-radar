@@ -64,7 +64,7 @@ AVAILABILITY_UI: dict[Availability, tuple[str, str, str]] = {
     Availability.SOLD_OUT: ("Sold out", "warn", "◍"),
     Availability.NOT_BOOKABLE: ("Not released yet", "", "◷"),
     Availability.SHOW_NOT_AVAILABLE: ("Not released yet", "", "◷"),
-    Availability.THEATRE_NOT_AVAILABLE: ("Theatre not listed yet", "", "◷"),
+    Availability.THEATRE_NOT_AVAILABLE: ("Waiting for release", "", "◷"),
     Availability.NOT_FOUND: ("Movie not listed", "bad", "!"),
     Availability.UNKNOWN: ("Watching", "", "◌"),
     Availability.ERROR: ("Couldn't check", "bad", "!"),
@@ -79,6 +79,27 @@ FIRST_CHECK_GRACE = timedelta(minutes=8)
 
 def html(markup: str) -> None:
     st.markdown(clean_html(markup), unsafe_allow_html=True)
+
+
+def scroll_to_top(token: str) -> None:
+    """Scroll the page to the top once per ``token`` (a page change).
+
+    Streamlit keeps the scroll position across reruns, so switching to Home
+    from the bottom of My Monitors used to land mid-page. A zero-height
+    component runs one line of script in the parent document; the token in
+    the markup is what makes it run again on the next change, not on every
+    rerun.
+    """
+    import streamlit.components.v1 as components
+
+    components.html(
+        "<script>(function(){"
+        "var d=window.parent.document;"
+        "['[data-testid=\"stAppViewContainer\"]','[data-testid=\"stMain\"]','section.stMain','.stMain']"
+        ".forEach(function(s){var el=d.querySelector(s); if(el){el.scrollTo({top:0});}});"
+        f"window.parent.scrollTo(0,0);}})();/* {e(token)} */</script>",
+        height=0,
+    )
 
 
 def clean_html(markup: str) -> str:
@@ -282,11 +303,13 @@ def location_tile(name: str, sub: str, selected: bool, enabled: bool = True) -> 
 
 
 def theatre_row(name: str, area: str, formats: list[str], selected: bool, abbr: str,
-                featured: bool = False) -> None:
+                featured: bool = False, coming: bool = False) -> None:
     """The design's checkbox row: box · abbreviation tile · name / area · formats.
 
     Long names ("Sai Ranga70MM 4KLaser Dolby7.1 AirCooled") wrap; format
     badges sit on their own line and wrap too, so nothing leaves the card.
+    ``coming`` marks a theatre being watched for release: its formats are the
+    ones it is known to run, and the row says so.
     """
     shown = formats[:3]
     chips = "".join(f'<span class="tr-badge">{e(f)}</span>' for f in shown)
@@ -294,9 +317,11 @@ def theatre_row(name: str, area: str, formats: list[str], selected: bool, abbr: 
         chips += f'<span class="tr-badge muted">+{len(formats) - 3} more</span>'
     if not formats:
         chips = '<span class="tr-badge muted">formats not published yet</span>'
+    if coming:
+        chips = '<span class="tr-badge soon">Coming soon</span>' + chips
     star = '<span class="tr-star" title="Featured theatre">★</span>' if featured else ""
     html(
-        f"""<div class="tr-throw{' selected' if selected else ''}">
+        f"""<div class="tr-throw{' selected' if selected else ''}{' coming' if coming else ''}">
           <div class="box">{'✓' if selected else ''}</div>
           <div class="ab">{e(abbr)}</div>
           <div class="body">
@@ -308,38 +333,59 @@ def theatre_row(name: str, area: str, formats: list[str], selected: bool, abbr: 
     )
 
 
-def featured_tile(name: str, area: str, venue, selected: bool) -> None:
-    """A premium quick-pick. ``venue`` is the movie's matching theatre, or
-    None — in which case the tile says so and cannot be picked."""
+def featured_tile(name: str, area: str, venue, selected: bool, *, released: bool) -> None:
+    """A premium quick-pick, in one of three states.
+
+    *Released* — the movie is listed here now: green badge, its formats.
+    *Coming soon* — ``venue`` is the theatre as the catalogue knows it from
+    other films, but it hasn't listed this movie yet: grey badge, the formats
+    it is known to run, and still selectable — picking it watches the theatre
+    until BookMyShow releases tickets there.
+    *Unknown* — ``venue`` is None: the catalogue has never seen the theatre,
+    so there is nothing to watch; the tile says so and cannot be picked.
+    """
     if venue is None:
         html(
             f"""<div class="tr-feat off">
-              <div class="k">Featured</div>
+              <div class="k"><span class="tr-badge muted">Not in catalogue</span></div>
               <div class="n">{e(name)}</div>
               <div class="a">{e(area)}</div>
-              <div class="s">Not screening this movie</div>
+              <div class="s">Not seen on BookMyShow {e(area and 'for any film yet')}</div>
             </div>"""
         )
         return
-    count = len(venue.formats)
-    sub = (f"{count} format{'s' if count != 1 else ''} · {e(venue.formats[0])}" if count
-           else "formats not published yet")
     check = '<div class="tr-check">✓</div>' if selected else ""
+    formats = list(venue.formats)
+    if released:
+        badge = '<span class="tr-badge live">Now listed</span>'
+        sub = (" · ".join(formats[:2]) + (f" +{len(formats) - 2}" if len(formats) > 2 else "")
+               if formats else "formats not published yet")
+        note = ""
+    else:
+        badge = '<span class="tr-badge soon">Coming soon</span>'
+        sub = ("Expected: " + " · ".join(formats[:2]) + (f" +{len(formats) - 2}" if len(formats) > 2 else "")
+               if formats else "Expected format: as listed by the theatre")
+        note = '<div class="w">We\'ll watch this theatre until BookMyShow releases tickets.</div>'
     html(
-        f"""<div class="tr-feat{' selected' if selected else ''}">{check}
-          <div class="k">Featured</div>
-          <div class="n">{e(venue.name)}</div>
-          <div class="a">{e(venue.area or area)}</div>
-          <div class="s">{sub}</div>
+        f"""<div class="tr-feat{' selected' if selected else ''}{'' if released else ' soon'}">{check}
+          <div class="k">{badge}</div>
+          <div class="n" title="{escape(venue.name, quote=True)}">{e(name)}</div>
+          <div class="a">{e(area or venue.area)}</div>
+          <div class="s" title="{escape(sub, quote=True)}">{e(sub)}</div>
+          {note}
         </div>"""
     )
 
 
-def format_panel_head(name: str, area: str, badge: str = "") -> None:
-    badge_html = f'<div class="b"><span class="tr-badge">{e(badge)}</span></div>' if badge else ""
+def format_panel_head(name: str, area: str, badge: str = "", coming: bool = False) -> None:
+    badges = ('<span class="tr-badge soon">Coming soon</span>' if coming else "") + (
+        f'<span class="tr-badge">{e(badge)}</span>' if badge else "")
+    badge_html = f'<div class="b">{badges}</div>' if badges else ""
+    note = ('<div class="w">Not listed for this movie yet — pick the format to wait for.</div>'
+            if coming else "")
     html(
         f'<div class="tr-fmt-head"><div class="n">{e(name)}</div>'
-        f'<div class="a">{e(area or "Hyderabad")}</div>{badge_html}</div>'
+        f'<div class="a">{e(area or "Hyderabad")}</div>{badge_html}{note}</div>'
     )
 
 
@@ -662,8 +708,11 @@ def target_row_markup(monitor: Monitor, state: MonitorState, target, finished: s
             else f"{target.fmt} · not released yet"
         right = '<div class="r"><span class="tr-spin grey"></span>Watching</div>'
         row_cls = ""
-    elif availability in (Availability.SHOW_NOT_AVAILABLE, Availability.THEATRE_NOT_AVAILABLE,
-                          Availability.NOT_BOOKABLE):
+    elif availability is Availability.THEATRE_NOT_AVAILABLE:
+        sub = f"{target.fmt} · waiting for this theatre to release"
+        right = '<div class="r"><span class="tr-spin grey"></span>Watching</div>'
+        row_cls = ""
+    elif availability in (Availability.SHOW_NOT_AVAILABLE, Availability.NOT_BOOKABLE):
         sub = f"{target.fmt} · {label.lower()}"
         right = '<div class="r"><span class="tr-spin grey"></span>Watching</div>'
         row_cls = ""
@@ -970,6 +1019,7 @@ __all__ = [
     "platform_selector",
     "poster_tile",
     "rule",
+    "scroll_to_top",
     "status_for",
     "status_line",
     "step_header",

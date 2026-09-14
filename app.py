@@ -176,8 +176,12 @@ def sidebar(active_count: int) -> str:
 def start_monitor(interval: int, until, email: str, start_now: bool,
                   date_codes: list[str] | None = None) -> None:
     slug = st.session_state.get("location", "")
-    entry = cv.entry(st.session_state.get("movie_id", ""), slug)
-    venues = {v.code: v for v in cv.venues(st.session_state.get("movie_id", ""), slug)}
+    movie_id = st.session_state.get("movie_id", "")
+    entry = cv.entry(movie_id, slug)
+    # Listed theatres and theatres being watched for release alike: the
+    # worker matches on the venue code either way, and a theatre that isn't
+    # listed yet simply reads THEATRE_NOT_AVAILABLE until the day it is.
+    venues = {v.code: v for v in cv.selected_venues(movie_id, slug, st.session_state.get("theatres", []))}
     formats: dict[str, list[str]] = st.session_state.get("formats", {})
 
     problems = []
@@ -402,9 +406,10 @@ def page_home(monitors, states, history, settings) -> None:
                 flow.step_theatres()
             elif step == 4:
                 slug = st.session_state.get("location", "")
-                venues = {v.code: v for v in cv.venues(st.session_state.get("movie_id", ""), slug)}
-                flow.step_formats([venues[c] for c in st.session_state.get("theatres", [])
-                                   if c in venues])
+                movie_id = st.session_state.get("movie_id", "")
+                codes = st.session_state.get("theatres", [])
+                flow.step_formats(cv.selected_venues(movie_id, slug, codes),
+                                  coming=cv.coming_soon_codes(movie_id, slug, codes))
             else:
                 interval, until, email, start_now, dates = flow.step_monitoring(settings.get("notify_email", ""))
                 cta, helper = st.columns([2.2, 1], gap="medium")
@@ -576,6 +581,12 @@ def main() -> None:
     monitors, states, history = load_view()
     settings = load_settings()
     page = sidebar(sum(1 for m in monitors if m.is_running()))
+
+    # Navigation lands at the top of the new page — the hero, on Home.
+    if st.session_state.get("_page_seen") != page:
+        st.session_state["_page_seen"] = page
+        st.session_state["_nav_count"] = st.session_state.get("_nav_count", 0) + 1
+    C.scroll_to_top(f"{page}#{st.session_state.get('_nav_count', 0)}")
 
     if page == "Home":
         page_home(monitors, states, history, settings)

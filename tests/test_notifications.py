@@ -263,3 +263,14 @@ def test_url_validation_accepts_only_bookmyshow_https():
     assert not is_bookmyshow_url("https://notbookmyshow.com/x")
     assert not is_bookmyshow_url("javascript:alert(1)")
     assert not is_bookmyshow_url("")
+
+
+def test_book_button_opens_the_theatre_page(change):
+    """The email's BOOK ON BOOKMYSHOW lands on the monitored theatre."""
+    from dataclasses import replace
+
+    monitor, ch = change
+    theatre = "https://in.bookmyshow.com/buytickets/avengers-endgame-hyderabad/cinema-hyde-ALLU-MT/20260925"
+    _, html, text = mail.render_change(monitor, replace(ch, booking_url=theatre))
+    assert f'href="{theatre}"' in html and "BOOK ON BOOKMYSHOW" in html
+    assert theatre in text
