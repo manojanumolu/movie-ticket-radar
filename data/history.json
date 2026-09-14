@@ -56,6 +56,17 @@
   },
   {
     "monitor_id": "f7d7bcc5933e",
+    "kind": "ERROR",
+    "message": "Couldn't check BookMyShow — connection problem, not a 'no tickets' answer.",
+    "movie": "Avengers Endgame: Encore",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00514163-1787720198.jpg",
+    "targets": [
+      "ALLU Cinemas · Dolby Cinema"
+    ],
+    "at": "2026-09-15T01:58:34.738836+05:30"
+  },
+  {
+    "monitor_id": "f7d7bcc5933e",
     "kind": "CREATED",
     "message": "Monitor created.",
     "movie": "Avengers Endgame: Encore",

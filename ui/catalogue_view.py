@@ -42,8 +42,13 @@ class MovieCard:
 
     @property
     def label(self) -> str:
-        """What the search box shows: title, then language, never a code."""
-        return f"{self.title} · {self.language}" if self.language else self.title
+        """What the search box shows: title · language · theatre count. Never a code."""
+        parts = [self.title]
+        if self.language:
+            parts.append(self.language)
+        parts.append(f"{self.venue_count} theatre{'s' if self.venue_count != 1 else ''}"
+                     if self.venue_count else "no theatres yet")
+        return " · ".join(parts)
 
     @property
     def meta(self) -> str:

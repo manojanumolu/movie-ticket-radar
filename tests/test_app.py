@@ -37,6 +37,14 @@ def text(app) -> str:
     )
 
 
+def section(body: str, label: str) -> str | None:
+    """The count shown next to a section rule ("Active · 1"), or None if absent."""
+    import re
+
+    m = re.search(rf'>{re.escape(label)}</span><span class="tr-count">([^<]*)<', body)
+    return m.group(1) if m else None
+
+
 @pytest.fixture
 def seeded(provider_factory, monkeypatch):
     """A synced Hyderabad catalogue with theatre/format detail."""
@@ -472,14 +480,15 @@ def test_popular_shelf_follows_catalogue_order_not_the_alphabet(seeded):
 def test_movie_autocomplete_offers_every_catalogue_title(seeded):
     app = run(step=2, location="hyderabad")
     box = app.selectbox(key="movie_query")
-    assert box.options == ["Mandaadi · Telugu", "Mandaadi · Tamil", "Hanuman Ansh · Hindi"]
+    assert box.options == ["Mandaadi · Telugu · 2 theatres", "Mandaadi · Tamil · 2 theatres",
+                           "Hanuman Ansh · Hindi · 2 theatres"]
     # Nothing is asked for that is not a movie name.
     assert "url" not in (box.placeholder or "").lower()
 
 
 def test_choosing_a_suggestion_selects_the_movie_immediately(seeded):
     app = run(step=2, location="hyderabad")
-    app.selectbox(key="movie_query").select("Hanuman Ansh · Hindi").run()
+    app.selectbox(key="movie_query").select("Hanuman Ansh · Hindi · 2 theatres").run()
     assert not app.exception
     assert app.session_state["movie_id"] == "bookmyshow:ET00507738"
     assert app.session_state["step"] == 3
@@ -501,8 +510,9 @@ def test_theatre_search_toggles_a_theatre(seeded):
     app = run(step=3, location="hyderabad", movie_id=seeded)
     box = next(s for s in app.selectbox if s.key.startswith("theatre_query_"))
     # Only this movie's theatres, shown by name and area — never a code.
-    assert box.options == ["Allu Cinemas · Attapur, Hyderabad", "AMB Cinemas · Gachibowli, Hyderabad"]
-    box.select("AMB Cinemas · Gachibowli, Hyderabad").run()
+    assert box.options == ["Allu Cinemas · Attapur, Hyderabad · Dolby Cinema",
+                           "AMB Cinemas · Gachibowli, Hyderabad · HDR By Barco"]
+    box.select("AMB Cinemas · Gachibowli, Hyderabad · HDR By Barco").run()
     assert not app.exception
     assert app.session_state["theatres"] == ["AMB"]
     # The box is cleared for the next search, and the pick shows in the list.
@@ -539,18 +549,18 @@ def test_stopped_monitor_moves_to_finished_and_delete_removes_it(make_monitor):
 
     app = run("My Monitors")
     body = text(app)
-    assert "Active · 1" in body and "Finished · 1" in body
+    assert section(body, "Active") == "1" and section(body, "Finished") == "1"
     assert "STOPPED" in body and "WAITING" in body      # no check has run yet
 
     app.button(key=f"m_del_{stopped.id}").click().run()
     assert not app.exception
     assert [m.id for m in load_monitors()] == [active.id]
     body = text(app)
-    assert "Monitor deleted" in body and "Finished ·" not in body
+    assert "Monitor deleted" in body and section(body, "Finished") is None
 
     app.button(key=f"m_stop_{active.id}").click().run()
     assert get_monitor(active.id).status is MonitorStatus.STOPPED
-    assert "Active · 0" in text(app) and "Finished · 1" in text(app)
+    assert section(text(app), "Active") == "0" and section(text(app), "Finished") == "1"
 
 
 def test_delete_all_finished_clears_the_clutter(make_monitor):
@@ -564,7 +574,7 @@ def test_delete_all_finished_clears_the_clutter(make_monitor):
     app.button(key="m_clear_finished").click().run()
     assert not app.exception
     assert [m.id for m in load_monitors()] == [keep.id]
-    assert "Finished ·" not in text(app)
+    assert section(text(app), "Finished") is None
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -628,24 +638,25 @@ def test_a_theatre_known_from_other_films_is_offered_as_coming_soon(release_watc
     assert "Coming soon" in body and "Expected: Pcx Screen" in body
     assert "watch this theatre until BookMyShow releases tickets" in body
     # The listed set is untouched — Prasads is not pretended into it.
-    assert "All theatres · 2" in body
+    assert section(body, "All theatres") == "2"
     assert {b.key for b in app.button if b.key.startswith("th_")} == {"th_ALLU", "th_AMB"}
 
     app.button(key="feat_PRHN").click().run()
     assert not app.exception
     assert app.session_state["theatres"] == ["PRHN"]
     body = text(app)
-    assert "Watching for release · 1" in body
+    assert section(body, "Watching for release") == "1"
     assert "1 theatre(s) selected: Prasads Multiplex" in body
 
 
 def test_theatre_search_offers_the_whole_city_with_coming_soon_marked(release_watch):
     app = run(step=3, location="hyderabad", movie_id=release_watch)
     box = next(s for s in app.selectbox if s.key.startswith("theatre_query_"))
-    assert box.options == ["Allu Cinemas · Attapur, Hyderabad", "AMB Cinemas · Gachibowli, Hyderabad",
-                           "Prasads Multiplex · Hyderabad · coming soon"]
+    assert box.options == ["Allu Cinemas · Attapur, Hyderabad · Dolby Cinema",
+                           "AMB Cinemas · Gachibowli, Hyderabad · HDR By Barco",
+                           "Prasads Multiplex · Hyderabad · Coming soon · Pcx Screen"]
     assert "example" not in (box.placeholder or "").lower() and "e.g." not in (box.placeholder or "")
-    box.select("Prasads Multiplex · Hyderabad · coming soon").run()
+    box.select("Prasads Multiplex · Hyderabad · Coming soon · Pcx Screen").run()
     assert app.session_state["theatres"] == ["PRHN"]
 
 
@@ -728,3 +739,46 @@ def test_check_picks_up_sibling_events_the_catalogue_learned_later(make_monitor,
     outcome = checker.check_monitor(monitor, at=at)
     assert [c["params"]["eventCode"] for c in provider.session.calls] == ["ET00478890", "ET00516197"]
     assert outcome.results[0].availability is Availability.AVAILABLE
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The theatre page opens on the six featured tiles; the long list is a click away
+# ──────────────────────────────────────────────────────────────────────────
+def test_a_long_theatre_list_waits_behind_view_all(provider_factory, monkeypatch):
+    from tests.conftest import QUICKBOOK_HYD, build_payload
+
+    many = [
+        {"venue_code": f"V{i:02d}", "venue_name": f"Theatre {i}", "area": "Hyderabad",
+         "time": "07:00 PM", "time_code": "1900", "fmt": "2D", "status": None}
+        for i in range(9)
+    ]
+    provider = provider_factory([QUICKBOOK_HYD] + [build_payload(many)] * 6)
+    monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
+    catalogue.sync_region("hyderabad", mirror=False, detail=True)
+    movie_id = catalogue.movie_from_entry(catalogue.list_entries("hyderabad")[0]).id
+
+    app = run(step=3, location="hyderabad", movie_id=movie_id)
+    assert not app.exception
+    # Featured first; the nine listed theatres are not drawn yet.
+    assert not any(b.key.startswith("th_V") for b in app.button)
+    view_all = next(b for b in app.button if b.key == "view_all_theatres")
+    assert "View all 9 theatres" in view_all.label
+    # Select all still applies to the real, listed theatres.
+    app.button(key="select_all").click().run()
+    assert app.session_state["theatres"] == [f"V{i:02d}" for i in range(9)]
+
+    app.button(key="view_all_theatres").click().run()
+    assert not app.exception
+    assert {b.key for b in app.button if b.key.startswith("th_V")} == {f"th_V{i:02d}" for i in range(9)}
+    assert section(text(app), "All theatres") == "9"
+    # Changing the movie folds the list away again.
+    app.session_state["show_all_theatres"] = True
+    from ui import flow
+    assert flow.VIEW_ALL_THRESHOLD == 6
+
+
+def test_a_short_theatre_list_is_shown_outright(seeded):
+    """Two theatres are not worth hiding behind a button."""
+    app = run(step=3, location="hyderabad", movie_id=seeded)
+    assert not any(b.key == "view_all_theatres" for b in app.button)
+    assert {b.key for b in app.button if b.key.startswith("th_")} == {"th_ALLU", "th_AMB"}

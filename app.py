@@ -72,7 +72,7 @@ from ui import components as C  # noqa: E402
 from ui import flow  # noqa: E402
 from ui.theme import inject  # noqa: E402
 
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.3.0"
 
 inject()
 
@@ -304,7 +304,7 @@ def problem_panel(monitor: Monitor, state: MonitorState) -> None:
         st.session_state[key] = not st.session_state.get(key, False)
     if st.session_state.get(key):
         C.problem_card(problems)
-        if st.button("Retry now", key=f"retry_{monitor.id}", use_container_width=True):
+        if st.button("Retry now", key=f"retry_{monitor.id}", use_container_width=True, icon=":material/refresh:"):
             retry_check(monitor)
 
 
@@ -329,7 +329,7 @@ def status_card(monitor_id: str) -> None:
 def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list[dict]) -> None:
     active = [m for m in monitors if m.is_running()]
     if not active:
-        C.html('<div class="tr-eyebrow" style="margin-bottom:9px;">Active monitor</div>')
+        C.html('<div class="tr-rail-title"><span class="tr-dot grey"></span><span>Active monitor</span></div>')
         C.empty_card()
         if history:
             C.html('<div class="tr-rail-head" style="margin-top:18px;"><span class="tr-eyebrow">Recent history</span></div>')
@@ -347,7 +347,7 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
     status_card(monitor.id)
     problem_panel(monitor, state)
 
-    if st.button("■  Stop monitoring", key=f"stop_{monitor.id}", use_container_width=True):
+    if st.button("Stop monitoring", key=f"stop_{monitor.id}", use_container_width=True, icon=":material/stop:"):
         stop_monitor(monitor.id, mirror=mirrored())
         flash("success", "Monitoring stopped. The background worker will skip it from now on.")
         st.rerun()
@@ -414,13 +414,13 @@ def page_home(monitors, states, history, settings) -> None:
                 interval, until, email, start_now, dates = flow.step_monitoring(settings.get("notify_email", ""))
                 cta, helper = st.columns([2.2, 1], gap="medium")
                 with cta:
-                    if st.button("▶  Start monitoring", type="primary",
-                                 use_container_width=True, key="start"):
+                    if st.button("Start monitoring", type="primary",
+                                 use_container_width=True, key="start", icon=":material/play_arrow:"):
                         start_monitor(interval, until, email, start_now, dates)
                 with helper:
                     C.html(
-                        '<div class="tr-cta-help"><span>⚡</span> You\'ll get an email the second '
-                        "tickets appear — and the monitor keeps running for the other theatres.</div>"
+                        f'<div class="tr-cta-help">{C.icon("bolt", 15, "#E8B25C")}<span>You\'ll get an email the second '
+                        "tickets appear — and the monitor keeps running for the other theatres.</span></div>"
                     )
 
     with side:
@@ -435,23 +435,23 @@ def monitor_actions(monitor: Monitor, state: MonitorState) -> None:
         if monitor.is_running():
             problem_panel(monitor, state)
             a, b, _ = st.columns([1, 1, 2.2], gap="small")
-            if a.button("■  Stop", key=f"m_stop_{monitor.id}", use_container_width=True):
+            if a.button("Stop", key=f"m_stop_{monitor.id}", use_container_width=True, icon=":material/stop:"):
                 stop_monitor(monitor.id, mirror=mirrored())
                 flash("success", "Monitoring stopped.")
                 st.rerun()
-            if b.button("Delete", key=f"m_del_{monitor.id}", use_container_width=True):
+            if b.button("Delete", key=f"m_del_{monitor.id}", use_container_width=True, icon=":material/delete:"):
                 delete_monitor(monitor.id, mirror=mirrored())
                 flash("success", "Monitor deleted.")
                 st.rerun()
         else:
             a, b, _ = st.columns([1.3, 1, 1.9], gap="small")
-            if a.button("Extend by 24 hours", key=f"m_ext_{monitor.id}", use_container_width=True):
+            if a.button("Extend by 24 hours", key=f"m_ext_{monitor.id}", use_container_width=True, icon=":material/more_time:"):
                 extend_monitor(monitor.id, 24, mirror=mirrored())
                 ok, _ = request_check_now(monitor.id)
                 flash("success", "Extended by 24 hours — monitoring is active again"
                       + (" and a check is running now." if ok else "."))
                 st.rerun()
-            if b.button("Delete", key=f"m_del_{monitor.id}", use_container_width=True):
+            if b.button("Delete", key=f"m_del_{monitor.id}", use_container_width=True, icon=":material/delete:"):
                 delete_monitor(monitor.id, mirror=mirrored())
                 flash("success", "Monitor deleted.")
                 st.rerun()
@@ -484,7 +484,7 @@ def page_monitors(monitors, states) -> None:
             C.rule(f"Finished · {len(finished)}")
         with clear:
             if st.button(f"Delete all {len(finished)} finished", key="m_clear_finished",
-                         use_container_width=True):
+                         use_container_width=True, icon=":material/delete_sweep:"):
                 for monitor in finished:
                     delete_monitor(monitor.id, mirror=mirrored())
                 flash("success", f"Deleted {len(finished)} finished monitor(s). History keeps their record.")
@@ -514,17 +514,17 @@ def page_settings(settings) -> None:
     left, right = st.columns(2, gap="large")
 
     with left, st.container(border=True, key="trcard_notify"):
-        C.step_header("✉", "Notifications", "The address every alert is sent to.")
+        C.step_header("mail", "Notifications", "The address every alert is sent to.")
         C.html('<div class="tr-field-label">Notification email</div>')
         email = st.text_input("Notification email", value=settings.get("notify_email", ""),
                               placeholder="you@gmail.com", key="settings_email",
                               label_visibility="collapsed")
         a, b = st.columns(2, gap="small")
-        if a.button("Save", use_container_width=True, key="save_settings", type="primary"):
+        if a.button("Save", use_container_width=True, key="save_settings", type="primary", icon=":material/save:"):
             save_settings({**settings, "notify_email": email.strip()}, mirror=mirrored())
             flash("success", "Settings saved.")
             st.rerun()
-        if b.button("Send test email", use_container_width=True, key="test_email"):
+        if b.button("Send test email", use_container_width=True, key="test_email", icon=":material/send:"):
             try:
                 send_test_email(email.strip() or settings.get("notify_email", ""))
             except NotificationError as exc:
@@ -538,7 +538,7 @@ def page_settings(settings) -> None:
                       "the worker reads them from GitHub Actions secrets.")
 
     with right, st.container(border=True, key="trcard_storage"):
-        C.step_header("▤", "Movie catalogue", "What the movie and theatre pickers read.")
+        C.step_header("catalogue", "Movie catalogue", "What the movie and theatre pickers read.")
         slug = st.session_state.get("location") or "hyderabad"
         view = cv.view(slug)
         state = view.sync
@@ -555,11 +555,11 @@ def page_settings(settings) -> None:
                           "catalogue itself — BookMyShow bot-checks plain requests. The "
                           "background job still can.")
         a, b = st.columns(2, gap="small")
-        if a.button("Refresh catalogue now", use_container_width=True, key="sync_now"):
+        if a.button("Refresh catalogue now", use_container_width=True, key="sync_now", icon=":material/sync:"):
             ok, msg = dispatch_workflow("catalogue-sync.yml", {"city": slug})
             flash("success" if ok else "error", msg)
             st.rerun()
-        if b.button("Run a ticket check now", use_container_width=True, key="run_now"):
+        if b.button("Run a ticket check now", use_container_width=True, key="run_now", icon=":material/bolt:"):
             ok, msg = request_check_now()
             flash("success" if ok else "error",
                   "Check started — results land in the rail within a minute or two." if ok else msg)

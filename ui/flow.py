@@ -47,6 +47,9 @@ INTERVALS = [10, 15, 30]
 POPULAR_LIMIT = 6
 #: Posters per row in the movie grids.
 GRID_COLUMNS = 6
+#: A movie's full theatre list stays behind "View all" once it is longer than
+#: this — the six featured tiles are the first screen.
+VIEW_ALL_THRESHOLD = 6
 
 #: Session keys the wizard owns, and what they reset to.
 DEFAULTS = {
@@ -60,6 +63,7 @@ DEFAULTS = {
     "movie_query": None,    # the search box: a catalogue label, free text, or nothing
     "movie_query_seen": None,
     "theatre_nonce": 0,     # bumps to clear the theatre search box after a pick
+    "show_all_theatres": False,   # the full movie-specific list, behind "View all"
     "start_now": True,
     "date_mode": "any",     # any · single · range — which show dates count
     "show_dates": [],       # YYYYMMDD codes; [] = every date BookMyShow offers
@@ -90,6 +94,7 @@ def reset_from(step: int) -> None:
     if step <= 2:
         st.session_state["theatres"] = []
         st.session_state["formats"] = {}
+        st.session_state["show_all_theatres"] = False
     if step <= 3:
         st.session_state["formats"] = {
             k: v for k, v in st.session_state.get("formats", {}).items()
@@ -139,7 +144,7 @@ def back_button(step: int) -> None:
     if step <= 1:
         return
     with st.container(key="trback"):
-        if st.button(f"←  Back to {STEPS[step - 2]}", key="back"):
+        if st.button(f"Back to {STEPS[step - 2]}", key="back", icon=":material/arrow_back:"):
             goto(step - 1)
 
 
@@ -168,8 +173,8 @@ def step_location() -> None:
             C.location_tile(loc.name, loc.state, selected=False, enabled=False)
 
     if current:
-        if st.button("Continue to movies  →", type="primary", use_container_width=True,
-                     key="loc_continue"):
+        if st.button("Continue to movies", type="primary", use_container_width=True,
+                     key="loc_continue", icon=":material/arrow_forward:"):
             goto(2)
 
 
@@ -247,7 +252,7 @@ def step_movie() -> bool:
     else:
         shelf = cv.popular(location.slug, POPULAR_LIMIT)
         if shelf:
-            C.rule("Now showing · popular")
+            C.rule("Now showing")
             _poster_grid(shelf, selected, prefix="pop_")
         rest = catalogue.movies
         st.caption(f"{len(rest)} movie(s) · tap a poster to select it")
@@ -258,8 +263,8 @@ def step_movie() -> bool:
         current = cv.card(selected, location.slug)
         if current is not None:
             C.html(f'<div class="tr-selected"><span class="n">✓</span>Selected: <b>{C.e(current.label)}</b></div>')
-        if st.button("Continue to theatres  →", type="primary", use_container_width=True,
-                     key="movie_continue"):
+        if st.button("Continue to theatres", type="primary", use_container_width=True,
+                     key="movie_continue", icon=":material/arrow_forward:"):
             goto(3)
     return bool(selected)
 
@@ -288,6 +293,16 @@ def _toggle_theatre(code: str, listed: list[Venue]) -> None:
     st.rerun()
 
 
+def _theatre_label(venue: Venue, city: str, listed: bool) -> str:
+    """What the theatre search shows: name · area · status or premium format."""
+    parts = [venue.name, venue.area or city]
+    if not listed:
+        parts.append("Coming soon")
+    if venue.formats:
+        parts.append(venue.formats[0])
+    return " · ".join(parts)
+
+
 def step_theatres() -> list[Venue]:
     slug = st.session_state.get("location", "")
     movie = cv.movie(st.session_state.get("movie_id", ""), slug)
@@ -301,7 +316,8 @@ def step_theatres() -> list[Venue]:
                       f"Theatres showing {movie.title} in {movie.city} — or ones you want watched "
                       "until they release it.")
     with action:
-        select_all = st.button("Select all", key="select_all", use_container_width=True)
+        select_all = st.button("Select all", key="select_all", use_container_width=True,
+                               icon=":material/done_all:")
 
     # Every theatre the catalogue holds for *this* movie — the whole film,
     # every format, nothing added and nothing left out.
@@ -322,8 +338,11 @@ def step_theatres() -> list[Venue]:
 
     chosen = list(st.session_state.get("theatres", []))
     if select_all:
+        # Every theatre listed for the film; release-watch picks stay as they are.
         every = [v.code for v in venues]
-        st.session_state["theatres"] = [] if set(every) <= set(chosen) and every else every
+        extra = [c for c in chosen if c not in every]
+        listed_now = [] if set(every) <= set(chosen) and every else every
+        st.session_state["theatres"] = listed_now + extra
         st.rerun()
 
     # ── search: client-side, over every theatre the city catalogue knows ──
@@ -337,8 +356,7 @@ def step_theatres() -> list[Venue]:
     C.html('<div class="tr-field-label">Search theatres</div>')
     picked_code = st.selectbox(
         "Search theatres", search_codes, index=None,
-        format_func=lambda c: (f"{by_code[c].name} · {by_code[c].area or movie.city}"
-                               + ("" if c in listed_codes else " · coming soon")),
+        format_func=lambda c: _theatre_label(by_code[c], movie.city, c in listed_codes),
         key=f"theatre_query_{nonce}", placeholder=f"Search theatres in {movie.city}…",
         label_visibility="collapsed", filter_mode="contains",
     )
@@ -363,22 +381,42 @@ def step_theatres() -> list[Venue]:
                         m.pick.name, m.pick.area, m.venue, is_sel, released=m.released)):
                 _toggle_theatre(match.venue.code, venues)
 
-    # ── the full list ────────────────────────────────────────────────────
+    # ── the full list: behind "View all" when it is long ─────────────────
+    # Six featured tiles are the first screen. A film playing at 70 theatres
+    # is a wall of cards nobody asked to see yet; a film playing at three is
+    # not worth hiding. The full, movie-specific list is unchanged either way.
     featured_codes = {m.venue.code for m in shelf if m.venue is not None}
-    C.rule(f"All theatres · {len(venues)}")
+    show_all = st.session_state.get("show_all_theatres", False) or len(venues) <= VIEW_ALL_THRESHOLD
     if not venues:
+        C.rule("All theatres · 0")
         st.caption(f"No theatre has listed **{movie.title}** yet — pick the ones you want "
                    "watched, above, and we'll tell you the moment tickets open.")
-    columns = st.columns(2, gap="small")
-    for index, venue in enumerate(venues):
-        with columns[index % 2]:
-            is_sel = venue.code in chosen
-            label = "Selected ✓" if is_sel else f"Select {venue.name}"
-            if pick(f"th_{venue.code}", label,
-                    lambda v=venue, is_sel=is_sel: C.theatre_row(
-                        v.name, v.area, list(v.formats), is_sel, v.abbr,
-                        featured=v.code in featured_codes)):
-                _toggle_theatre(venue.code, venues)
+    elif not show_all:
+        with st.container(key="trviewall"):
+            if st.button(f"View all {len(venues)} theatres", key="view_all_theatres",
+                         use_container_width=True, icon=":material/expand_more:"):
+                st.session_state["show_all_theatres"] = True
+                st.rerun()
+    else:
+        head, hide = st.columns([3, 1], vertical_alignment="center")
+        with head:
+            C.rule(f"All theatres · {len(venues)}")
+        with hide:
+            if len(venues) > VIEW_ALL_THRESHOLD and st.button(
+                    "Show fewer", key="hide_all_theatres", use_container_width=True,
+                    icon=":material/expand_less:"):
+                st.session_state["show_all_theatres"] = False
+                st.rerun()
+        columns = st.columns(2, gap="small")
+        for index, venue in enumerate(venues):
+            with columns[index % 2]:
+                is_sel = venue.code in chosen
+                label = "Selected ✓" if is_sel else f"Select {venue.name}"
+                if pick(f"th_{venue.code}", label,
+                        lambda v=venue, is_sel=is_sel: C.theatre_row(
+                            v.name, v.area, list(v.formats), is_sel, v.abbr,
+                            featured=v.code in featured_codes)):
+                    _toggle_theatre(venue.code, venues)
 
     # ── theatres being watched for release (chosen, not listed yet) ──────
     watching = [by_code[c] for c in chosen if c not in listed_codes and c in by_code]
@@ -395,8 +433,8 @@ def step_theatres() -> list[Venue]:
     picked = cv.selected_venues(movie.id, slug, chosen)
     if picked:
         st.caption(f"{len(picked)} theatre(s) selected: " + ", ".join(v.name for v in picked))
-        if st.button("Continue to formats  →", type="primary", use_container_width=True,
-                     key="th_continue"):
+        if st.button("Continue to formats", type="primary", use_container_width=True,
+                     key="th_continue", icon=":material/arrow_forward:"):
             goto(4)
     else:
         st.caption("Select at least one theatre to continue.")
@@ -455,8 +493,8 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None) -> dict[st
 
     total = sum(len(formats[v.code]) for v in venues)
     st.caption(f"Watching {total} theatre/format combination(s) independently.")
-    if st.button("Continue to monitoring  →", type="primary", use_container_width=True,
-                 key="fmt_continue"):
+    if st.button("Continue to monitoring", type="primary", use_container_width=True,
+                 key="fmt_continue", icon=":material/arrow_forward:"):
         goto(5)
     return formats
 
@@ -470,6 +508,7 @@ DATE_MODES = [("any", "Any date", "Every date on sale"),
 
 
 def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[str]]:
+    C.rule("Schedule")
     left, right = st.columns(2, gap="large")
 
     with left:
@@ -489,7 +528,7 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
                    f"{interval} minutes.")
 
     with right:
-        C.step_header("◷", "Monitor until", "The monitor stops itself after this time.")
+        C.step_header("clock", "Monitor until", "The monitor stops itself after this time.")
         date_col, time_col = st.columns([1.5, 1], gap="small")
         end_date = date_col.date_input("End date", value=(now_ist() + timedelta(days=1)).date(),
                                        min_value=now_ist().date(), format="DD/MM/YYYY",
@@ -505,7 +544,7 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
 
     # Which *show* dates to watch — a different thing from how long to monitor.
     C.rule("Show dates")
-    C.step_header("▤", "Which show dates?",
+    C.step_header("calendar", "Which show dates?",
                   "Only shows on these dates count. Leave on Any date to watch every date on sale.")
     mode = st.session_state.get("date_mode", "any")
     if mode not in {m for m, _, _ in DATE_MODES}:
@@ -540,6 +579,7 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
         st.caption("Watching every date BookMyShow has on sale.")
 
     C.rule("Alerts")
+    C.step_header("mail", "Where should we email you?", "One message the moment tickets open — nothing else.")
     C.html('<div class="tr-field-label">Notification email</div>')
     email = st.text_input("Notification email", value=default_email,
                           placeholder="you@gmail.com", label_visibility="collapsed",
@@ -587,6 +627,7 @@ def ago(when) -> str:
 __all__ = [
     "INTERVALS",
     "STEPS",
+    "VIEW_ALL_THRESHOLD",
     "ago",
     "back_button",
     "boot",

@@ -211,9 +211,9 @@ def _time_chips(times: list[str], links: dict[str, str] | None = None) -> str:
             "Showtimes weren't listed individually — open BookMyShow for the full list.</div>"
         )
     chip_style = (
-        f"display:block;padding:9px 15px;border-radius:9px;background:#17171C;"
-        f"border:1px solid {HAIRLINE};font-size:15px;font-weight:600;color:{TEXT};"
-        f"white-space:nowrap;text-decoration:none;"
+        f"display:block;padding:9px 14px;border-radius:9px;background:#17171C;"
+        f"border:1px solid {HAIRLINE};font-family:'Manrope','Segoe UI',Helvetica,Arial,sans-serif;"
+        f"font-size:14px;font-weight:700;color:{TEXT};white-space:nowrap;text-decoration:none;"
     )
     cells = []
     for t in times[:12]:
@@ -239,71 +239,117 @@ def _time_chips(times: list[str], links: dict[str, str] | None = None) -> str:
 def _html(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: str,
           date_label: str, times: list[str], detected: datetime, booking_url: str,
           monitor: Monitor, links: dict[str, str] | None = None) -> str:
-    accent = SUCCESS if eyebrow == "TICKETS ARE LIVE" else ACCENT
-    ink_on_accent = "#04120C" if eyebrow == "TICKETS ARE LIVE" else "#FFFFFF"
+    """The alert as a premium cinema ticket-stub.
+
+    Tables and inline styles only — Gmail strips <style> blocks and ignores
+    flex/grid — and every colour is a plain hex so dark and light clients
+    both render it. The poster is shown when the catalogue has an https one;
+    it is never a link, so the only anchors in the mail are the verified
+    showtime chips and the BOOK button.
+    """
+    live = eyebrow == "TICKETS ARE LIVE"
+    accent = SUCCESS if live else ACCENT
+    ink_on_accent = "#04120C" if live else "#FFFFFF"
+    font = "'Manrope','Segoe UI',Helvetica,Arial,sans-serif"
+    mono = "'DM Mono',Consolas,'Courier New',monospace"
+
+    poster = (monitor.movie.poster_url or "").strip()
+    poster_cell = (
+        f'<td width="112" valign="top" style="padding:0 18px 0 0;">'
+        f'<img src="{escape(poster, quote=True)}" width="112" height="160" alt="" '
+        f'style="display:block;width:112px;height:160px;border-radius:12px;border:1px solid {HAIRLINE};'
+        f'object-fit:cover;background:#16161C;"></td>'
+        if poster.startswith("https://") else ""
+    )
 
     button = ""
     if booking_url:
-        # Only rendered when we have a real, derived URL — never a guess.
+        # Only rendered when we have a real, derived URL — never a guess. It
+        # is the theatre's own page when the checker had one.
         button = (
-            f'<tr><td style="padding:26px 30px 4px;">'
+            f'<tr><td style="padding:24px 30px 4px;">'
             f'<a href="{escape(booking_url, quote=True)}" '
-            f'style="display:block;padding:17px;border-radius:13px;background:{accent};'
-            f'color:{ink_on_accent};font-size:16px;font-weight:700;letter-spacing:.04em;'
+            f'style="display:block;padding:18px;border-radius:14px;background:{accent};'
+            f'color:{ink_on_accent};font-family:{font};font-size:16px;font-weight:800;letter-spacing:.06em;'
             f'text-align:center;text-decoration:none;">BOOK ON BOOKMYSHOW &#8599;</a>'
+            f'<div style="font-family:{font};font-size:12px;color:{TEXT_3};text-align:center;margin-top:10px;">'
+            f"Opens {escape(venue)} on BookMyShow.</div>"
             f"</td></tr>"
         )
 
-    date_row = (
-        f'<tr><td style="padding:0 30px 18px;">'
-        f'<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;'
-        f'color:#6E6E7A;font-family:Consolas,monospace;">{"Dates" if " · " in date_label else "Date"}</div>'
-        f'<div style="font-size:19px;font-weight:700;color:{TEXT};margin-top:6px;">'
-        f"{escape(date_label)}</div></td></tr>"
+    date_block = (
+        f'<td valign="top" style="padding:0 24px 0 0;">'
+        f'<div style="font-family:{mono};font-size:10px;letter-spacing:.16em;text-transform:uppercase;'
+        f'color:{TEXT_3};">{"Dates" if " · " in date_label else "Date"}</div>'
+        f'<div style="font-family:{font};font-size:19px;font-weight:800;color:{TEXT};margin-top:6px;'
+        f'letter-spacing:-.01em;line-height:1.3;{"white-space:nowrap;" if " · " not in date_label else ""}">'
+        f'{escape(date_label)}</div></td>'
         if date_label
         else ""
     )
     watched = describe_date_codes(monitor.date_codes)
-    watched_line = (
-        f"Watching shows on {escape(watched)} only.<br>" if watched else ""
+    watched_line = f"Watching shows on {escape(watched)} only.<br>" if watched else ""
+
+    dot = (
+        f'<span style="display:inline-block;width:8px;height:8px;border-radius:8px;background:{SUCCESS};'
+        f'vertical-align:middle;margin-right:8px;"></span>' if live else ""
     )
 
     return f"""<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"></head>
 <body style="margin:0;padding:24px 12px;background:{INK};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;
-  background:{SURFACE};border:1px solid {HAIRLINE};border-radius:18px;overflow:hidden;
-  font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
-  <tr><td style="padding:30px 30px 0;">
-    <div style="display:inline-block;padding:6px 12px;border-radius:999px;
-      background:rgba(62,213,152,.14);border:1px solid {accent};font-size:11px;
-      letter-spacing:.2em;color:{accent};font-family:Consolas,monospace;">{escape(eyebrow)}</div>
-    <div style="font-size:30px;font-weight:800;letter-spacing:-.03em;color:{TEXT};
-      margin-top:18px;line-height:1.12;">{escape(title)}</div>
-    <div style="font-size:15px;color:{TEXT_2};margin-top:10px;">{escape(venue)} &middot; {escape(fmt)} &middot; {escape(city)}</div>
-    <div style="font-size:13.5px;color:{TEXT_3};margin-top:8px;line-height:1.55;">{escape(lede)}</div>
+  background:{SURFACE};border:1px solid {HAIRLINE};border-radius:20px;overflow:hidden;font-family:{font};">
+  <tr><td style="padding:22px 30px 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="font-family:{font};font-size:15px;font-weight:800;color:{TEXT};letter-spacing:-.02em;">
+        Ticket<span style="color:{ACCENT};">Radar</span></td>
+      <td align="right" style="font-family:{mono};font-size:10px;letter-spacing:.16em;color:{TEXT_3};text-transform:uppercase;">
+        {escape(city)}</td>
+    </tr></table>
+  </td></tr>
+  <tr><td style="padding:22px 30px 0;">
+    <div style="display:inline-block;padding:7px 14px;border-radius:999px;
+      background:{'#0F2A1F' if live else '#2A0D14'};border:1px solid {accent};font-family:{mono};font-size:11px;
+      letter-spacing:.2em;color:{accent};">{dot}{escape(eyebrow)}</div>
+  </td></tr>
+  <tr><td style="padding:20px 30px 0;">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      {poster_cell}
+      <td valign="top">
+        <div style="font-family:{font};font-size:30px;font-weight:800;letter-spacing:-.03em;color:{TEXT};line-height:1.12;">{escape(title)}</div>
+        <div style="font-family:{font};font-size:15px;font-weight:600;color:{TEXT_2};margin-top:12px;line-height:1.5;">
+          {escape(venue)}<br>
+          <span style="color:{TEXT_3};font-weight:500;">{escape(fmt)} &middot; {escape(city)}</span></div>
+        <div style="font-family:{font};font-size:13.5px;color:{TEXT_3};margin-top:12px;line-height:1.55;">{escape(lede)}</div>
+      </td>
+    </tr></table>
   </td></tr>
   <tr><td style="padding:22px 30px 0;"><div style="height:1px;background:{HAIRLINE};"></div></td></tr>
-  <tr><td style="height:22px;"></td></tr>
-  {date_row}
-  <tr><td style="padding:0 30px 4px;">
-    <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6E6E7A;
-      font-family:Consolas,monospace;">Showtimes</div>
-    <div style="margin-top:10px;">{_time_chips(times, links)}</div>
-    {_chip_hint(times, links)}
+  <tr><td style="padding:20px 30px 4px;">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      {date_block}
+      <td valign="top">
+        <div style="font-family:{mono};font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:{TEXT_3};">Showtimes</div>
+        <div style="margin-top:8px;">{_time_chips(times, links)}</div>
+        {_chip_hint(times, links)}
+      </td>
+    </tr></table>
   </td></tr>
   {button}
-  <tr><td style="padding:18px 30px 26px;">
-    <div style="font-size:12.5px;color:{TEXT_3};line-height:1.7;">
+  <tr><td style="padding:16px 30px 24px;">
+    <div style="font-family:{font};font-size:12.5px;color:{TEXT_3};line-height:1.7;">
       Detected at {escape(fmt_time(detected))} IST.<br>
       {watched_line}The monitor keeps running for your other theatres until
       {escape(fmt_datetime(monitor.monitor_until))} IST.
     </div>
   </td></tr>
-  <tr><td style="padding:16px 30px;background:{SUNKEN};border-top:1px solid {HAIRLINE};">
-    <div style="font-size:11px;color:#5A5A64;font-family:Consolas,monospace;letter-spacing:.1em;">
-      MOVIE TICKET RADAR &middot; {escape(monitor.movie.city.upper())}
-    </div>
+  <tr><td style="padding:14px 30px;background:{SUNKEN};border-top:1px solid {HAIRLINE};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="font-family:{mono};font-size:10.5px;color:#5A5A64;letter-spacing:.14em;">TICKETRADAR &middot; {escape(city.upper())}</td>
+      <td align="right" style="font-family:{font};font-size:11px;color:#5A5A64;">Be first in line.</td>
+    </tr></table>
   </td></tr>
 </table>
 </body></html>"""
