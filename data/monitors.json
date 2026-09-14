@@ -36,7 +36,7 @@
     "problem": null
   },
   {
-    "id": "96d6bfe6ab1a",
+    "id": "d751fdcd9942",
     "movie": {
       "platform": "bookmyshow",
       "event_code": "ET00507738",
@@ -51,24 +51,24 @@
     },
     "targets": [
       {
-        "venue_code": "AMBH",
-        "venue_name": "AMB Cinemas",
-        "area": "Gachibowli",
-        "fmt": "Barco Flagship Laser Dolby Atmos"
+        "venue_code": "ALUC",
+        "venue_name": "ALLU Cinemas",
+        "area": "Kokapet",
+        "fmt": "Dolby Cinema"
       }
     ],
     "interval_minutes": 10,
-    "monitor_until": "2026-09-14T20:05:22.680745+05:30",
+    "monitor_until": "2026-09-15T23:59:00+05:30",
     "start_immediately": true,
     "notify_email": "manoj.anumolu01@gmail.com",
     "date_codes": [
       "20260915"
     ],
-    "status": "EXPIRED",
-    "created_at": "2026-09-14T20:00:22.680745+05:30",
-    "stopped_at": "2026-09-14T20:05:36.238813+05:30",
-    "stopped_reason": "Reached the end time you set.",
-    "first_check_requested_at": "2026-09-14T20:00:22.680745+05:30",
+    "status": "STOPPED",
+    "created_at": "2026-09-14T20:17:10.218122+05:30",
+    "stopped_at": "2026-09-14T20:18:56.968202+05:30",
+    "stopped_reason": "Stopped manually.",
+    "first_check_requested_at": "2026-09-14T20:17:10.218124+05:30",
     "problem": null
   },
   {
