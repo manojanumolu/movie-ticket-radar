@@ -15,6 +15,10 @@ on:
         description: "Movie title to dump child events + per-child venues for (optional)"
         type: string
         default: ""
+      venue_url:
+        description: "EVENT:VENUE:slug:date — probe theatre-page URL shapes (optional)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -29,4 +33,4 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - run: python tools/bms_diagnose.py --city "${{ inputs.city }}" --group "${{ inputs.group }}"
+      - run: python tools/bms_diagnose.py --city "${{ inputs.city }}" --group "${{ inputs.group }}" --venue-url "${{ inputs.venue_url }}"

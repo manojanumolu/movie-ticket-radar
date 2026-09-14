@@ -216,13 +216,75 @@ def probe_group(city: str, needle: str) -> int:
     return 0
 
 
+def probe_venue_urls(city: str, event_code: str, venue_code: str, slug: str, date_code: str) -> int:
+    """Does BookMyShow have a page for one theatre's shows of one movie?
+
+    Reports (a) any URL-like field the showtimes payload itself carries at
+    venue-card level, and (b) what a few candidate cinema-page URL shapes
+    answer — status, <title>, and whether the page names the theatre — with
+    a bogus venue code as the control, so a 200 from the SPA shell cannot be
+    mistaken for a real page.
+    """
+    from platforms.bookmyshow import BookMyShowProvider, _dicts, _text, region_for
+
+    provider = BookMyShowProvider()
+    region = region_for(city)
+    payload = provider._get(event_code, date_code, region)
+    data = payload.get("data", {})
+    print("== venue-card level fields ==")
+    for widget in _dicts(data.get("showtimeWidgets")):
+        for group in _dicts(widget.get("data")):
+            for card in _dicts(group.get("data")):
+                if card.get("type") != "venue-card":
+                    continue
+                addl = card.get("additionalData") or {}
+                print("  card keys:", sorted(card.keys()))
+                print("  additionalData keys:", sorted(addl.keys()))
+                for k, v in card.items():
+                    if k not in ("showtimes", "additionalData") and isinstance(v, (dict, str)):
+                        print(f"  {k}: {json.dumps(v)[:300]}")
+                for k, v in addl.items():
+                    if isinstance(v, str) and ("http" in v or "/" in v):
+                        print(f"  additionalData.{k}: {v[:200]}")
+                break
+            break
+        break
+
+    print("\n== candidate cinema URLs ==")
+    headers = provider._browse_headers(region, accept="text/html,application/xhtml+xml")
+    short = region[1][:4]
+    for code in (venue_code, "ZZZZ"):
+        for url in (
+            f"{SITE}/buytickets/{slug}-{city}/cinema-{short}-{code}-MT/{date_code}",
+            f"{SITE}/buytickets/{slug}-{city}/cinema-{short}-{code}-MT",
+            f"{SITE}/movies/{city}/{slug}/buytickets/{event_code}/{date_code}?venue={code}",
+        ):
+            try:
+                resp = provider._raw_get(url, headers)
+            except Exception as exc:  # noqa: BLE001
+                print(f"  ERR  {url}: {type(exc).__name__}")
+                continue
+            html = resp.text or ""
+            m = re.search(r"<title>(.*?)</title>", html, re.S | re.I)
+            title = (m.group(1).strip() if m else "")[:160]
+            final = getattr(resp, "url", "") or ""
+            print(f"  {resp.status_code}  {url}\n        final={final[:120]}\n        title={title!r}\n"
+                  f"        mentions venue code={code in html}  bytes={len(html)}")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Diagnose BookMyShow reachability")
     parser.add_argument("--city", default="hyderabad")
     parser.add_argument("--group", default="",
                         help="dump the child events (and each one's venues) of a listed movie group")
+    parser.add_argument("--venue-url", default="",
+                        help="EVENT:VENUE:slug:date — probe theatre-page URL shapes for one movie/venue")
     args = parser.parse_args(argv)
 
+    if args.venue_url:
+        event, venue, slug, date = (args.venue_url.split(":") + ["", "", "", ""])[:4]
+        return probe_venue_urls(args.city, event, venue, slug, date)
     if args.group:
         return probe_group(args.city, args.group)
 
