@@ -242,10 +242,23 @@ __NAV_ICONS__
 /* ── the pick pattern: whole tile is the button ────────────────────── */
 [class*="st-key-pick_"] { position:relative; }
 [class*="st-key-pick_"] [data-testid="stVerticalBlock"] { gap:0 !important; }
-[class*="st-key-pick_"] .stButton { position:absolute; inset:0; z-index:3; margin:0; }
+/* Streamlit's element container is itself position:relative and has no
+   height once its button is taken out of flow, so the *container* is what
+   gets stretched over the tile — otherwise the button collapses to a 2px
+   strip under the tile and nothing is clickable. Both the keyed-class and the
+   :has() form are given so it holds even if one of them stops matching. */
+[class*="st-key-pick_"] > [data-testid="stElementContainer"]:has(> .stButton),
+[class*="st-key-pick_"] > [class*="st-key-loc_"],
+[class*="st-key-pick_"] > [class*="st-key-movie_"],
+[class*="st-key-pick_"] > [class*="st-key-th_"],
+[class*="st-key-pick_"] > [class*="st-key-interval_"] {
+  position:absolute !important; inset:0 !important; z-index:3; margin:0 !important;
+  height:auto !important; min-height:0 !important; width:100% !important;
+}
+[class*="st-key-pick_"] .stButton { position:absolute; inset:0; margin:0; height:100%; width:100%; }
 [class*="st-key-pick_"] .stButton > button {
-  width:100% !important; height:100% !important; min-height:0; opacity:0; cursor:pointer;
-  border-radius:13px; padding:0; margin:0;
+  position:absolute; inset:0; width:100% !important; height:100% !important; min-height:0;
+  opacity:0; cursor:pointer; border-radius:13px; padding:0; margin:0;
 }
 [class*="st-key-pick_"]:has(button:focus-visible) { outline:2px solid var(--tr-accent); outline-offset:2px; border-radius:13px; }
 [class*="st-key-pick_"]:hover .tr-poster:not(.selected),
