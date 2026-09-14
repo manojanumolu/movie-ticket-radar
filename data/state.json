@@ -1,7 +1,7 @@
 {
-  "029be19254bf": {
-    "last_check_at": "2026-09-15T01:42:55.103203+05:30",
-    "last_success_at": "2026-09-15T01:42:55.103203+05:30",
+  "080ddf390dde": {
+    "last_check_at": "2026-09-15T03:18:21.019528+05:30",
+    "last_success_at": "2026-09-15T03:18:21.019528+05:30",
     "check_count": 1,
     "success_count": 1,
     "consecutive_errors": 0,
@@ -9,37 +9,44 @@
     "last_error_kind": "",
     "last_email_error": "",
     "targets": {
-      "PIIC::Pxl": {
+      "ALUC::Barco Laser 4K Atmos": {
         "availability": "AVAILABLE",
-        "since": "2026-09-15T01:42:55.103203+05:30",
+        "since": "2026-09-15T03:18:21.019528+05:30",
         "showtime_keys": [
-          "PIIC|20260915|33271",
-          "PIIC|20260915|33273"
+          "ALUC|20260915|4926",
+          "ALUC|20260915|4968",
+          "ALUC|20260915|4969"
         ],
         "time_labels": [
-          "01:10 PM",
-          "07:25 PM"
+          "01:45 PM",
+          "07:50 PM",
+          "10:50 PM"
         ],
         "time_links": [
           [
-            "01:10 PM",
-            "https://in.bookmyshow.com/movies/hyderabad/epic/buytickets/ET00515338/20260915"
+            "01:45 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933/20260915"
           ],
           [
-            "07:25 PM",
-            "https://in.bookmyshow.com/movies/hyderabad/epic/buytickets/ET00515338/20260915"
+            "07:50 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933/20260915"
+          ],
+          [
+            "10:50 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933/20260915"
           ]
         ],
         "date_code": "20260915",
         "date_codes": [
           "20260915"
         ],
-        "booking_url": "https://in.bookmyshow.com/buytickets/epic-hyderabad/cinema-hyde-PIIC-MT/20260915",
+        "booking_url": "https://in.bookmyshow.com/buytickets/irumudi-hyderabad/cinema-hyde-ALUC-MT/20260915",
         "notified_availability": "AVAILABLE",
-        "notified_at": "2026-09-15T01:42:55.103203+05:30",
+        "notified_at": "2026-09-15T03:18:21.019528+05:30",
         "notified_showtime_keys": [
-          "PIIC|20260915|33271",
-          "PIIC|20260915|33273"
+          "ALUC|20260915|4926",
+          "ALUC|20260915|4968",
+          "ALUC|20260915|4969"
         ],
         "new_showtime_notice_at": null
       }
