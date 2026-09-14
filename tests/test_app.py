@@ -249,8 +249,11 @@ def test_monitoring_step_offers_the_three_intervals(seeded):
               theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]})
     assert not app.exception
     body = text(app)
-    assert "Check frequency" in body and "Monitor until" in body
+    assert "How often should I check?" in body and "Monitor until" in body
     assert "Notification email" in body
+    # The three interval tiles, each a real control.
+    assert {b.key for b in app.button if b.key.startswith("interval_")} == {
+        "interval_10", "interval_15", "interval_30"}
     assert any(b.key == "start" for b in app.button)
 
 
@@ -306,7 +309,7 @@ def test_active_monitoring_state_is_displayed(make_monitor, at):
     save_state({monitor.id: state}, mirror=False)
 
     body = text(run())
-    assert "Active monitoring" in body
+    assert "Active monitor" in body
     assert "MONITORING ACTIVE" in body
     assert "Avengers: Endgame Encore" in body
     assert "10 minutes" in body

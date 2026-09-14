@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -99,12 +100,18 @@ def running_in_actions() -> bool:
     return os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
 
 
+#: Bookkeeping for the UI's read-through (see ``sync_from_github``).
+_last_sync_at = 0.0
+_mirror_broken = False
+
+
 def push_to_github(path: Path, body: str, message: str) -> bool:
     """Mirror one data file into the repo. Best effort — never raises.
 
     Skipped inside GitHub Actions: the workflow commits the whole data
     directory in one commit at the end of the run, and doing both would race.
     """
+    global _last_sync_at, _mirror_broken
     if running_in_actions():
         return False
     token = github_token()
@@ -118,13 +125,70 @@ def push_to_github(path: Path, body: str, message: str) -> bool:
         try:
             existing = repo.get_contents(rel)
             if existing.decoded_content.decode("utf-8") == body:
+                _mirror_broken = False
                 return True  # identical; skip the commit
             repo.update_file(rel, message, body, existing.sha)
         except GithubException:
             repo.create_file(rel, message, body)
+        # The repo now matches what we just wrote; don't immediately pull it
+        # back over ourselves.
+        _last_sync_at = time.monotonic()
+        _mirror_broken = False
         return True
     except Exception as exc:  # noqa: BLE001 - mirroring is never fatal
         print(f"[store] GitHub mirror failed for {path.name}: {exc}")
+        # A local write that never reached the repo must not be overwritten
+        # by the next read-through, or a monitor could vanish from the UI.
+        _mirror_broken = True
+        return False
+
+
+#: The files the UI reads that somebody else writes: the worker owns
+#: ``state.json`` and appends to ``history.json``, and flips monitors to
+#: EXPIRED in ``monitors.json``.
+SYNCED_FILES = ("monitors.json", "state.json", "history.json")
+
+
+def sync_from_github(*, ttl: float = 20.0, force: bool = False) -> bool:
+    """Pull the worker's latest observations into the local data files.
+
+    The worker commits every check to the repository; a Streamlit Cloud
+    container only sees those commits when it is redeployed. Reading through
+    to the repo (rate-limited by ``ttl``) is what keeps "Last checked" honest
+    on any host. Returns True when a fetch actually happened.
+    """
+    global _last_sync_at
+    if running_in_actions() or _mirror_broken:
+        return False
+    token = github_token()
+    if not token:
+        return False
+    now = time.monotonic()
+    if not force and now - _last_sync_at < ttl:
+        return False
+    _last_sync_at = now
+    try:
+        from github import Github
+
+        repo = Github(token).get_repo(GITHUB_REPO)
+        for name in SYNCED_FILES:
+            path = DATA_DIR / name
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            try:
+                body = repo.get_contents(rel).decoded_content.decode("utf-8")
+                json.loads(body)  # never replace a good file with a broken one
+            except Exception as exc:  # noqa: BLE001
+                print(f"[store] read-through skipped {name}: {exc}")
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not path.exists() or path.read_text(encoding="utf-8") != body:
+                fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(body)
+                os.replace(tmp, path)
+        return True
+    except Exception as exc:  # noqa: BLE001 - reading through is never fatal
+        print(f"[store] read-through failed: {exc}")
         return False
 
 
@@ -143,21 +207,44 @@ def github_status() -> tuple[bool, str]:
         return False, f"GitHub unreachable: {exc}"
 
 
-def dispatch_workflow(workflow: str, inputs: dict[str, str] | None = None, ref: str = "main") -> tuple[bool, str]:
-    """Trigger a workflow_dispatch run. Used to resolve movies when the
-    local network cannot reach the platform (see README §Troubleshooting)."""
+MONITOR_WORKFLOW = "bookmyshow-monitor.yml"
+
+
+def dispatch_workflow(workflow: str, inputs: dict[str, str] | None = None, ref: str = "") -> tuple[bool, str]:
+    """Trigger a workflow_dispatch run. Never raises.
+
+    Used by the UI to start a check the moment a monitor is created, and by
+    the worker to hand over to its next segment. Inside Actions the token is
+    the run's own ``GITHUB_TOKEN`` (needs ``permissions: actions: write``);
+    from the UI it is the configured PAT (needs the *Actions: write* scope —
+    without it GitHub answers 403 and the monitor simply waits for the
+    schedule, which the caller reports honestly).
+    """
     token = github_token()
     if not token:
         return False, "No GH_TOKEN configured."
+    ref = ref or os.environ.get("GITHUB_REF_NAME", "") or "main"
     try:
         from github import Github
 
         repo = Github(token).get_repo(GITHUB_REPO)
         wf = repo.get_workflow(workflow)
-        ok = wf.create_dispatch(ref, inputs or {})
+        ok = wf.create_dispatch(ref, {k: str(v) for k, v in (inputs or {}).items()})
         return bool(ok), "Workflow started." if ok else "GitHub refused the dispatch."
     except Exception as exc:  # noqa: BLE001
         return False, f"Could not start workflow: {exc}"
+
+
+def request_check_now(monitor_id: str = "", *, force: bool = True) -> tuple[bool, str]:
+    """Ask the worker to run right now instead of waiting for the schedule.
+
+    ``monitor_id`` narrows the *first* pass of the run to that monitor so a
+    brand-new alert is checked within seconds of being saved; the run then
+    keeps serving every active monitor at its own interval.
+    """
+    inputs = {"force": "true" if force else "false", "dry_run": "false",
+              "monitor_id": monitor_id or ""}
+    return dispatch_workflow(MONITOR_WORKFLOW, inputs)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -199,6 +286,7 @@ __all__ = [
     "GITHUB_REPO",
     "HISTORY_FILE",
     "MONITORS_FILE",
+    "MONITOR_WORKFLOW",
     "REPO_ROOT",
     "SETTINGS_FILE",
     "STATE_FILE",
@@ -209,9 +297,11 @@ __all__ = [
     "load_history",
     "load_settings",
     "read_json",
+    "request_check_now",
     "running_in_actions",
     "save_catalogue",
     "save_history",
     "save_settings",
+    "sync_from_github",
     "write_json",
 ]

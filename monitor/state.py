@@ -35,6 +35,11 @@ from monitor.models import Availability, Monitor, MonitorStatus
 #: bursts; without this a staggered release becomes an inbox full of mail.
 NEW_SHOWTIME_COOLDOWN = timedelta(minutes=45)
 
+#: How early a check may run and still count as "on the interval". Absorbs
+#: scheduler jitter; without it a run landing 8 seconds early would skip and
+#: the effective interval would drift outwards run after run.
+DUE_TOLERANCE_SECONDS = 30
+
 
 # ──────────────────────────────────────────────────────────────────────────
 # Monitors
@@ -143,6 +148,8 @@ class TargetState:
     since: datetime | None = None
     showtime_keys: list[str] = field(default_factory=list)
     time_labels: list[str] = field(default_factory=list)
+    #: ``[[label, url], …]`` — the per-showtime links behind ``time_labels``.
+    time_links: list[list[str]] = field(default_factory=list)
     date_code: str = ""
     booking_url: str = ""
     notified_availability: Availability = Availability.UNKNOWN
@@ -156,6 +163,7 @@ class TargetState:
             "since": to_iso(self.since),
             "showtime_keys": self.showtime_keys,
             "time_labels": self.time_labels,
+            "time_links": [list(pair) for pair in self.time_links],
             "date_code": self.date_code,
             "booking_url": self.booking_url,
             "notified_availability": self.notified_availability.value,
@@ -177,6 +185,11 @@ class TargetState:
             since=parse_iso(raw.get("since")),
             showtime_keys=list(raw.get("showtime_keys", [])),
             time_labels=list(raw.get("time_labels", [])),
+            time_links=[
+                [str(pair[0]), str(pair[1])]
+                for pair in raw.get("time_links", [])
+                if isinstance(pair, (list, tuple)) and len(pair) == 2
+            ],
             date_code=raw.get("date_code", ""),
             booking_url=raw.get("booking_url", ""),
             notified_availability=avail("notified_availability"),
@@ -201,7 +214,14 @@ class MonitorState:
     success_count: int = 0
     consecutive_errors: int = 0
     last_error: str = ""
+    #: "BLOCKED" when the platform refused us, "ERROR" for anything else, ""
+    #: when the last check succeeded. Lets the UI say which one happened.
+    last_error_kind: str = ""
     targets: dict[str, TargetState] = field(default_factory=dict)
+
+    @property
+    def is_blocked(self) -> bool:
+        return bool(self.consecutive_errors) and self.last_error_kind == "BLOCKED"
 
     def target(self, key: str) -> TargetState:
         return self.targets.setdefault(key, TargetState())
@@ -219,7 +239,7 @@ class MonitorState:
             return True
         at = at or now_ist()
         elapsed = (at - self.last_check_at).total_seconds()
-        return elapsed >= interval_minutes * 60 - 30
+        return elapsed >= interval_minutes * 60 - DUE_TOLERANCE_SECONDS
 
     def next_check_at(self, interval_minutes: int) -> datetime | None:
         if self.last_check_at is None:
@@ -234,6 +254,7 @@ class MonitorState:
             "success_count": self.success_count,
             "consecutive_errors": self.consecutive_errors,
             "last_error": self.last_error,
+            "last_error_kind": self.last_error_kind,
             "targets": {k: v.to_dict() for k, v in self.targets.items()},
         }
 
@@ -249,6 +270,7 @@ class MonitorState:
             success_count=int(raw.get("success_count", 0) or 0),
             consecutive_errors=int(raw.get("consecutive_errors", 0) or 0),
             last_error=raw.get("last_error", "") or "",
+            last_error_kind=str(raw.get("last_error_kind", "") or ""),
             targets={
                 k: TargetState.from_dict(v)
                 for k, v in (targets.items() if isinstance(targets, dict) else [])
@@ -311,6 +333,7 @@ def record_history(monitor: Monitor, kind: str, message: str, *, mirror: bool = 
             "kind": kind,
             "message": message,
             "movie": monitor.movie.title,
+            "poster_url": monitor.movie.poster_url,
             "targets": [t.label for t in monitor.targets],
             "at": to_iso(at),
             **(extra or {}),
@@ -320,6 +343,7 @@ def record_history(monitor: Monitor, kind: str, message: str, *, mirror: bool = 
 
 
 __all__ = [
+    "DUE_TOLERANCE_SECONDS",
     "MonitorState",
     "NEW_SHOWTIME_COOLDOWN",
     "TargetState",

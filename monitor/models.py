@@ -98,6 +98,9 @@ class Showtime:
     time_code: str          # "1930"
     format_label: str       # "Dolby Cinema 2D", "IMAX", "" when unknown
     availability: Availability
+    #: Where a click on this showtime should land. Either a show-level link the
+    #: platform itself published, or the most specific page we can *derive*
+    #: (the date's booking page). Never a guessed pattern.
     booking_url: str = ""
 
     @property
@@ -229,6 +232,9 @@ class Monitor:
     created_at: datetime = field(default_factory=now_ist)
     stopped_at: datetime | None = None
     stopped_reason: str = ""
+    #: When the UI asked the worker for an immediate first check (a workflow
+    #: dispatch). None means it could not, and the schedule will pick it up.
+    first_check_requested_at: datetime | None = None
 
     # ── lifecycle ────────────────────────────────────────────────────────
     def is_expired(self, at: datetime | None = None) -> bool:
@@ -273,6 +279,7 @@ class Monitor:
             "created_at": to_iso(self.created_at),
             "stopped_at": to_iso(self.stopped_at) if self.stopped_at else None,
             "stopped_reason": self.stopped_reason,
+            "first_check_requested_at": to_iso(self.first_check_requested_at),
         }
 
     @classmethod
@@ -290,6 +297,7 @@ class Monitor:
             created_at=parse_iso(raw.get("created_at")) or now_ist(),
             stopped_at=parse_iso(raw.get("stopped_at")),
             stopped_reason=raw.get("stopped_reason", ""),
+            first_check_requested_at=parse_iso(raw.get("first_check_requested_at")),
         )
 
 
@@ -320,6 +328,21 @@ class TargetResult:
             seen.setdefault(s.time_label, None)
         return list(seen)
 
+    @property
+    def time_links(self) -> list[list[str]]:
+        """``[[label, url], …]`` in showtime order — what the email links.
+
+        The URL is whatever the provider attached to the showtime; when a
+        label has no URL of its own it inherits the target's booking page, so
+        a chip is never a dead end. Serialised as lists so it round-trips
+        through JSON unchanged.
+        """
+        seen: dict[str, str] = {}
+        for s in sorted(self.showtimes, key=lambda s: (s.date_code, s.time_code or s.time_label)):
+            if s.time_label and s.time_label not in seen:
+                seen[s.time_label] = s.booking_url or self.booking_url
+        return [[label, url] for label, url in seen.items()]
+
 
 @dataclass
 class CheckOutcome:
@@ -330,6 +353,9 @@ class CheckOutcome:
     ok: bool
     results: list[TargetResult] = field(default_factory=list)
     error: str = ""
+    #: True when the platform *refused* us (bot check / WAF), as opposed to a
+    #: network or parsing failure. The UI words the two differently.
+    blocked: bool = False
 
     @property
     def available_results(self) -> list[TargetResult]:

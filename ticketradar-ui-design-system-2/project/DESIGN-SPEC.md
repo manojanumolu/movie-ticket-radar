@@ -71,7 +71,13 @@ Scale: 44 / 38 (hero, page titles) · 27 (mobile hero) · 20–22 (state titles)
 **Secondary button** — transparent, `border-strong`, `text-2`.
 **Checkbox row** — 20px box, radius 6; unselected `1.5px rgba(255,255,255,.2)`; selected solid accent + white `✓`; the whole row is the hit target (min height 44px).
 **Radio row** — 14px circle, selected = `4px solid accent` ring on sunken ground; row gets accent tint + border.
-**Poster tile** — 13px radius, striped placeholder, mono `POSTER` caption; selected = 1.5px accent border + glow + accent check badge top-right.
+**Poster tile** — 13px radius, 172px image area on flat `#14141A` (selected `#1B1216`), real poster art fills it edge to edge; selected = 1.5px accent border + glow + accent check badge top-right. In the reference file these are drop slots — drag a poster file onto one to fill it.
+**Small thumbnail** (rail 62×88, history 34×46) — flat `#16161C`, 1px border, centred 13px film-strip glyph. Never a text caption at this size.
+**Logo mark** — 36px rounded-10 crimson gradient tile, white 1.8px-stroke ticket glyph (notched stub + dashed perforation). Not a letter.
+**Nav item** — 18px line icon (1.5–1.8px stroke) + 14.5px label, 12×14 padding, radius 11. Icons: home, monitor-with-lens, clock-with-rewind-arrow, gear. Active = crimson horizontal gradient wash + `rgba(accent,.32)` border + accent-tinted icon + white label. Inactive icons `#8E8E98`.
+**Platform lockup** — the platform's own logo as an image, not redrawn type: BookMyShow at 35px height (`assets/logo-bookmyshow.png`, alpha-keyed, neutral glyphs recoloured white for the dark ground), District as a 34px rounded-9 app-icon tile (`assets/logo-district.png`), PVR at 32px height + "Cinemas" label (`assets/logo-pvr.png`, `opacity:.85`). City line below: 15px accent map-pin + 13.5px/600 text. Status pill top-right: mint check-circle glyph + label, `white-space:nowrap`.
+
+Logo files in `assets/` are user-supplied brand marks, trimmed to their alpha bounds. Swap in official SVGs when available — reference them at the same heights.
 **Status pill** — 999 radius, tinted bg, 1px tinted border, 10.5px/700, `.1em`, optional 6–7px dot; dot animates (`pulse 1.8s`) only when live.
 **Spinner** — 12–15px ring, 2px, `border-top-color` accent/mint, `spin 1s linear`.
 **Eyebrow** — mono 10px uppercase `.18em` `text-4`.
@@ -82,7 +88,8 @@ Scale: 44 / 38 (hero, page titles) · 27 (mobile hero) · 20–22 (state titles)
 ```
 Home (Setup)                     → screenshots/01-setup-dashboard.png
  ├ Hero: title + promise line
- ├ Platform selector: BookMyShow (enabled) · District/PVR/Cinépolis (Coming soon)
+ ├ Platform selector: BookMyShow (enabled) · District / PVR Cinemas (Coming soon)
+ │   each tile = 34px icon tile (ticket / map-pin / film-strip, 1.7–1.8px stroke SVG) + wordmark
  ├ 1 Select movie      (search + poster grid, single select)
  ├ 2 Select theatres   (multi select + Select all)
  ├ 3 Select formats    (contextual per selected theatre, "Any format" default)

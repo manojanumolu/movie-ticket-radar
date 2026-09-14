@@ -10,6 +10,7 @@
 <helmet>
 <meta name="design_doc_mode" content="canvas">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="./image-slot.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   body { margin:0; background:#08080A; color:#F2F2F4; font-family:'Archivo',Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; line-height:1.4; text-wrap:pretty; }
@@ -34,7 +35,7 @@
       <!-- sidebar -->
       <aside style="width:236px;flex:none;background:linear-gradient(180deg,#0E0E12,#0A0A0D);border-right:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;padding:26px 18px;box-sizing:border-box;">
         <div style="display:flex;align-items:center;gap:11px;padding:0 6px 4px;">
-          <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,#FF3355,#B3123A);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;box-shadow:0 8px 24px -8px rgba(255,51,85,.8);">R</div>
+          <div style="width:36px;height:36px;flex:none;border-radius:10px;background:linear-gradient(140deg,#FF3355,#B3123A);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px -8px rgba(255,51,85,.8);"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1.2a2.3 2.3 0 0 0 0 4.6v1.2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1.2a2.3 2.3 0 0 0 0-4.6z"/><path d="M13 7.5v9" stroke-dasharray="2 2.2"/></svg></div>
           <div>
             <div style="font-size:17px;font-weight:700;letter-spacing:-.02em;">Ticket<span style="color:#FF3355;">Radar</span></div>
             <div style="font-size:11px;color:#77777F;margin-top:1px;">Be first in line.</div>
@@ -42,15 +43,15 @@
         </div>
 
         <nav style="display:flex;flex-direction:column;gap:4px;margin-top:28px;">
-          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:11px;background:linear-gradient(90deg,rgba(255,51,85,.16),rgba(255,51,85,.02));border:1px solid rgba(255,51,85,.32);font-size:14px;font-weight:600;color:#fff;">
-            <span style="width:7px;height:7px;border-radius:50%;background:#FF3355;box-shadow:0 0 12px #FF3355;"></span>Home
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:11px;background:linear-gradient(90deg,rgba(255,51,85,.16),rgba(255,51,85,.02));border:1px solid rgba(255,51,85,.32);font-size:14.5px;font-weight:600;color:#fff;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#FF5573" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19z"/><path d="M9.5 20.5v-6h5v6"/></svg>Home
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-radius:11px;font-size:14px;color:#9A9AA4;">
-            <span>My Monitors</span>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:11px;font-size:14.5px;color:#9A9AA4;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#8E8E98" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="13" rx="2"/><circle cx="12" cy="11" r="2.6"/><path d="M8 21h8"/></svg><span style="flex:1;">My Monitors</span>
             <span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:2px 7px;border-radius:6px;background:rgba(255,51,85,.14);color:#FF6B85;">1</span>
           </div>
-          <div style="padding:11px 14px;border-radius:11px;font-size:14px;color:#9A9AA4;">History</div>
-          <div style="padding:11px 14px;border-radius:11px;font-size:14px;color:#9A9AA4;">Settings</div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:11px;font-size:14.5px;color:#9A9AA4;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#8E8E98" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.2 4.6v3.9h3.9"/><path d="M12 8v4.4l3.2 1.9"/></svg>History</div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:11px;font-size:14.5px;color:#9A9AA4;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#8E8E98" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.9"/><path d="M19.2 14.6a1.5 1.5 0 0 0 .3 1.65l.06.06a1.6 1.6 0 1 1-2.26 2.26l-.06-.06a1.5 1.5 0 0 0-1.65-.3 1.5 1.5 0 0 0-.91 1.37v.17a1.6 1.6 0 1 1-3.2 0v-.09a1.5 1.5 0 0 0-.98-1.37 1.5 1.5 0 0 0-1.65.3l-.06.06A1.6 1.6 0 1 1 4.5 16.4l.06-.06a1.5 1.5 0 0 0 .3-1.65 1.5 1.5 0 0 0-1.37-.91H3.3a1.6 1.6 0 1 1 0-3.2h.09a1.5 1.5 0 0 0 1.37-.98 1.5 1.5 0 0 0-.3-1.65L4.4 7.9A1.6 1.6 0 1 1 6.66 5.64l.06.06a1.5 1.5 0 0 0 1.65.3h.07a1.5 1.5 0 0 0 .91-1.37V4.5a1.6 1.6 0 1 1 3.2 0v.09a1.5 1.5 0 0 0 .91 1.37 1.5 1.5 0 0 0 1.65-.3l.06-.06a1.6 1.6 0 1 1 2.26 2.26l-.06.06a1.5 1.5 0 0 0-.3 1.65v.07a1.5 1.5 0 0 0 1.37.91h.17a1.6 1.6 0 1 1 0 3.2h-.09a1.5 1.5 0 0 0-1.37.91z"/></svg>Settings</div>
         </nav>
 
         <div style="margin-top:auto;display:flex;flex-direction:column;gap:16px;">
@@ -89,30 +90,31 @@
               <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#8E8E98;">Platform</div>
               <div style="height:1px;flex:1;background:rgba(255,255,255,.07);"></div>
             </div>
-            <div style="display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr;gap:12px;">
+            <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:12px;">
               <div style="position:relative;padding:18px 20px;border-radius:14px;border:1.5px solid #FF3355;background:linear-gradient(135deg,rgba(255,51,85,.14),rgba(255,51,85,.03));overflow:hidden;">
                 <div style="position:absolute;top:0;left:0;width:60px;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent);animation:tr-sweep 3.4s ease-in-out infinite;"></div>
-                <div style="position:relative;display:flex;justify-content:space-between;align-items:center;">
-                  <div style="font-size:21px;font-weight:700;letter-spacing:-.02em;">Book<span style="color:#FF3355;">My</span>Show</div>
-                  <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(62,213,152,.12);border:1px solid rgba(62,213,152,.3);font-size:11px;font-weight:600;color:#3ED598;">
-                    <span style="width:6px;height:6px;border-radius:50%;background:#3ED598;"></span>Connected
+                <div style="position:relative;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                  <img src="./assets/logo-bookmyshow.png" alt="BookMyShow" style="height:35px;width:auto;display:block;flex:none;">
+                  <div style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:rgba(62,213,152,.12);border:1px solid rgba(62,213,152,.32);font-size:11.5px;font-weight:600;color:#3ED598;white-space:nowrap;">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#3ED598" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.2"/></svg>Connected
                   </div>
                 </div>
-                <div style="margin-top:12px;display:flex;align-items:center;gap:7px;font-size:13px;color:#C9C9D2;">
-                  <span style="width:5px;height:5px;border-radius:50%;background:#FF3355;"></span>Hyderabad · 42 theatres tracked
+                <div style="margin-top:12px;display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:#E3E3E8;">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#FF3355" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5.6 6.5-10.2A6.5 6.5 0 0 0 5.5 10.8C5.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.4"/></svg>Hyderabad · 42 theatres tracked
                 </div>
               </div>
-              <div style="padding:18px 20px;border-radius:14px;border:1px dashed rgba(255,255,255,.10);background:rgba(255,255,255,.015);opacity:.55;">
-                <div style="font-size:17px;font-weight:600;color:#9A9AA4;">District</div>
-                <div style="margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6E6E7A;">Coming soon</div>
+              <div style="padding:18px 20px;border-radius:14px;border:1px dashed rgba(255,255,255,.10);background:rgba(255,255,255,.015);">
+                <div style="display:flex;align-items:center;gap:11px;">
+                  <img src="./assets/logo-district.png" alt="District by Zomato" style="width:34px;height:34px;flex:none;display:block;border-radius:9px;">
+                  <div style="font-size:18px;font-weight:600;color:#9A9AA4;letter-spacing:-.01em;">District</div>
+                </div>
+                <div style="margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6E6E7A;">Coming soon</div>
               </div>
-              <div style="padding:18px 20px;border-radius:14px;border:1px dashed rgba(255,255,255,.10);background:rgba(255,255,255,.015);opacity:.55;">
-                <div style="font-size:17px;font-weight:600;color:#9A9AA4;">PVR Cinemas</div>
-                <div style="margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6E6E7A;">Coming soon</div>
-              </div>
-              <div style="padding:18px 20px;border-radius:14px;border:1px dashed rgba(255,255,255,.10);background:rgba(255,255,255,.015);opacity:.55;">
-                <div style="font-size:17px;font-weight:600;color:#9A9AA4;">Cinépolis</div>
-                <div style="margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6E6E7A;">Coming soon</div>
+              <div style="padding:18px 20px;border-radius:14px;border:1px dashed rgba(255,255,255,.10);background:rgba(255,255,255,.015);">
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <img src="./assets/logo-pvr.png" alt="PVR Cinemas" style="height:36px;width:auto;flex:none;display:block;opacity:.88;">
+                </div>
+                <div style="margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6E6E7A;">Coming soon</div>
               </div>
             </div>
           </div>
@@ -134,9 +136,9 @@
               <sc-for list="{{ movies }}" as="m" hint-placeholder-count="6">
                 <div onClick="{{ m.pick }}" style="{{ m.cardStyle }}">
                   <div style="{{ m.posterStyle }}">
-                    <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:rgba(255,255,255,.42);text-transform:uppercase;">poster</span>
+                    <image-slot id="{{ m.slotId }}" shape="rect" fit="cover" placeholder="{{ m.slotHint }}" style="position:absolute;inset:0;width:100%;height:100%;"></image-slot>
                     <sc-if value="{{ m.selected }}" hint-placeholder-val="{{ false }}">
-                      <div style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:#FF3355;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(255,51,85,.7);">✓</div>
+                      <div style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:#FF3355;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(255,51,85,.7);pointer-events:none;">✓</div>
                     </sc-if>
                   </div>
                   <div style="padding:10px 11px 12px;">
@@ -277,9 +279,7 @@
 
         <div style="border-radius:16px;border:1px solid rgba(62,213,152,.22);background:linear-gradient(180deg,rgba(62,213,152,.07),rgba(255,255,255,.015));padding:18px;">
           <div style="display:flex;gap:14px;">
-            <div style="width:62px;height:88px;flex:none;border-radius:9px;background:repeating-linear-gradient(135deg,#1C1C22 0 6px,#15151A 6px 12px);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;">
-              <span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.1em;">ART</span>
-            </div>
+            <div style="width:62px;height:88px;flex:none;border-radius:9px;background:#16161C;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7.5 4.5v15M16.5 4.5v15"/></svg></div>
             <div style="min-width:0;">
               <div style="font-size:16px;font-weight:700;line-height:1.25;">Avengers:<br>Endgame Encore</div>
               <div style="font-size:12px;color:#8E8E98;margin-top:5px;">BookMyShow · Hyderabad</div>
@@ -346,7 +346,7 @@
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <div style="display:flex;gap:12px;padding:12px;border-radius:12px;background:#101014;border:1px solid rgba(255,255,255,.07);">
-              <div style="width:34px;height:46px;flex:none;border-radius:7px;background:repeating-linear-gradient(135deg,#1C1C22 0 6px,#15151A 6px 12px);"></div>
+              <div style="width:34px;height:46px;flex:none;border-radius:7px;background:#16161C;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7.5 4.5v15M16.5 4.5v15"/></svg></div>
               <div style="min-width:0;">
                 <div style="font-size:13px;font-weight:600;">Oppenheimer</div>
                 <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;">AMB Cinemas · IMAX</div>
@@ -354,7 +354,7 @@
               </div>
             </div>
             <div style="display:flex;gap:12px;padding:12px;border-radius:12px;background:#101014;border:1px solid rgba(255,255,255,.07);">
-              <div style="width:34px;height:46px;flex:none;border-radius:7px;background:repeating-linear-gradient(135deg,#1C1C22 0 6px,#15151A 6px 12px);"></div>
+              <div style="width:34px;height:46px;flex:none;border-radius:7px;background:#16161C;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7.5 4.5v15M16.5 4.5v15"/></svg></div>
               <div style="min-width:0;">
                 <div style="font-size:13px;font-weight:600;">Dune: Part Two</div>
                 <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;white-space:nowrap;">Allu Cinemas · Dolby Cinema</div>
@@ -362,7 +362,7 @@
               </div>
             </div>
             <div style="display:flex;gap:12px;padding:12px;border-radius:12px;background:#101014;border:1px solid rgba(255,255,255,.07);">
-              <div style="width:34px;height:46px;flex:none;border-radius:7px;background:repeating-linear-gradient(135deg,#1C1C22 0 6px,#15151A 6px 12px);"></div>
+              <div style="width:34px;height:46px;flex:none;border-radius:7px;background:#16161C;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7.5 4.5v15M16.5 4.5v15"/></svg></div>
               <div style="min-width:0;">
                 <div style="font-size:13px;font-weight:600;">Spider-Man: No Way Home</div>
                 <div style="font-size:11.5px;color:#8E8E98;margin-top:2px;">PVR Inorbit · 2D</div>
@@ -527,26 +527,29 @@
         <div style="font-size:14px;color:#9A9AA4;margin-top:7px;">Know the moment your tickets go live.</div>
         <div style="margin-top:18px;padding:14px;border-radius:13px;border:1.5px solid #FF3355;background:linear-gradient(135deg,rgba(255,51,85,.14),rgba(255,51,85,.03));">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-size:16px;font-weight:700;">Book<span style="color:#FF3355;">My</span>Show</div>
+            <img src="./assets/logo-bookmyshow.png" alt="BookMyShow" style="height:24px;width:auto;display:block;flex:none;">
             <div style="font-size:10.5px;color:#3ED598;font-weight:600;">● Connected</div>
           </div>
-          <div style="font-size:12px;color:#9A9AA4;margin-top:6px;">Hyderabad</div>
+          <div style="margin-top:7px;display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#E3E3E8;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#FF3355" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5.6 6.5-10.2A6.5 6.5 0 0 0 5.5 10.8C5.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.4"/></svg>Hyderabad</div>
         </div>
         <div style="margin-top:14px;display:flex;gap:8px;">
-          <div style="flex:1;padding:9px;border-radius:9px;border:1px dashed rgba(255,255,255,.1);text-align:center;font-size:10.5px;color:#6E6E7A;">District · soon</div>
-          <div style="flex:1;padding:9px;border-radius:9px;border:1px dashed rgba(255,255,255,.1);text-align:center;font-size:10.5px;color:#6E6E7A;">PVR · soon</div>
+          <div style="flex:1;padding:8px 9px;border-radius:9px;border:1px dashed rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;gap:7px;font-size:11px;color:#8E8E98;"><img src="./assets/logo-district.png" alt="District" style="width:19px;height:19px;border-radius:5px;display:block;">District · soon</div>
+          <div style="flex:1;padding:8px 9px;border-radius:9px;border:1px dashed rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;gap:7px;font-size:11px;color:#8E8E98;"><img src="./assets/logo-pvr.png" alt="PVR" style="height:19px;width:auto;display:block;opacity:.85;">· soon</div>
         </div>
         <div style="margin-top:20px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;color:#6E6E7A;">STEP 1 OF 5 — MOVIE</div>
         <div style="margin-top:11px;padding:13px 14px;border-radius:11px;background:#0A0A0D;border:1px solid rgba(255,255,255,.09);font-size:13.5px;color:#6E6E7A;">⌕ Search for a movie…</div>
         <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div style="border-radius:12px;border:1.5px solid #FF3355;overflow:hidden;background:rgba(255,51,85,.06);">
-            <div style="height:110px;background:repeating-linear-gradient(135deg,#22161A 0 7px,#1A1116 7px 14px);position:relative;">
-              <div style="position:absolute;top:7px;right:7px;width:20px;height:20px;border-radius:50%;background:#FF3355;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;">✓</div>
+            <div style="aspect-ratio:2/3;position:relative;overflow:hidden;background:#1B1216;">
+              <image-slot id="tr-mob-1" shape="rect" fit="cover" placeholder="Poster" style="position:absolute;inset:0;width:100%;height:100%;"></image-slot>
+              <div style="position:absolute;top:7px;right:7px;width:20px;height:20px;border-radius:50%;background:#FF3355;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;pointer-events:none;">✓</div>
             </div>
             <div style="padding:9px;font-size:12px;font-weight:600;line-height:1.3;">Avengers: Endgame Encore</div>
           </div>
           <div style="border-radius:12px;border:1px solid rgba(255,255,255,.08);overflow:hidden;">
-            <div style="height:110px;background:repeating-linear-gradient(135deg,#1C1C22 0 7px,#15151A 7px 14px);"></div>
+            <div style="aspect-ratio:2/3;position:relative;overflow:hidden;background:#14141A;">
+              <image-slot id="tr-mob-2" shape="rect" fit="cover" placeholder="Poster" style="position:absolute;inset:0;width:100%;height:100%;"></image-slot>
+            </div>
             <div style="padding:9px;font-size:12px;font-weight:600;color:#C9C9D2;">Dune: Part Two</div>
           </div>
         </div>
@@ -639,8 +642,9 @@ class Component extends DCLogic {
         cardStyle: 'cursor:pointer;border-radius:13px;overflow:hidden;background:' + (sel ? 'rgba(255,51,85,.07)' : '#0A0A0D') +
           ';border:' + (sel ? '1.5px solid #FF3355' : '1px solid rgba(255,255,255,.08)') +
           ';box-shadow:' + (sel ? '0 14px 40px -18px rgba(255,51,85,.8)' : 'none') + ';transition:border-color .15s;',
-        posterStyle: 'position:relative;height:168px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:9px;background:repeating-linear-gradient(135deg,' +
-          (sel ? '#26161B 0 7px,#1C1015 7px 14px' : '#1C1C22 0 7px,#15151A 7px 14px') + ');'
+        slotId: 'tr-poster-' + i,
+        slotHint: 'Drop poster',
+        posterStyle: 'position:relative;height:172px;overflow:hidden;background:' + (sel ? '#1B1216' : '#14141A') + ';'
       };
     });
 

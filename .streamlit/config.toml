@@ -1,5 +1,5 @@
 # TicketRadar — dark cinematic shell.
-# Palette mirrors TicketRadar UI Design System/DESIGN-SPEC.md §2.
+# Palette mirrors ticketradar-ui-design-system-2/project/DESIGN-SPEC.md §2.
 
 [theme]
 base = "dark"

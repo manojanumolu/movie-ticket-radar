@@ -200,7 +200,7 @@ def check_monitor(monitor: Monitor, *, at: datetime | None = None) -> CheckOutco
         provider = get_provider(monitor.movie.platform)
         snapshot = provider.fetch(monitor.movie, monitor.date_codes or None)
     except PlatformBlocked as exc:
-        return CheckOutcome(monitor.id, at, ok=False, error=str(exc))
+        return CheckOutcome(monitor.id, at, ok=False, error=str(exc), blocked=True)
     except PlatformError as exc:
         return CheckOutcome(monitor.id, at, ok=False, error=str(exc))
     except Exception as exc:  # noqa: BLE001 - a parser bug must not kill the run

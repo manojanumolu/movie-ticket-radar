@@ -203,3 +203,63 @@ def test_a_failed_resolve_writes_nothing(provider_factory, listing_url, monkeypa
     with pytest.raises(PlatformBlocked):
         catalogue.resolve_url(listing_url, mirror=False)
     assert catalogue.list_entries() == []
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Clickable showtimes — real links only (Tests 13–15)
+# ──────────────────────────────────────────────────────────────────────────
+DATE_PAGE = "https://in.bookmyshow.com/movies/hyderabad/x/buytickets/ET00478890/20260925"
+
+
+def test_showtimes_are_rendered_as_links(change):
+    monitor, ch = change
+    ch.time_links = [["07:30 PM", DATE_PAGE], ["09:45 PM", DATE_PAGE]]
+    _, html, text = mail.render_change(monitor, ch)
+    assert html.count(f'<a href="{DATE_PAGE}"') >= 3          # two chips + the button
+    assert "07:30 PM &#8599;</a>" in html and "09:45 PM &#8599;</a>" in html
+    assert "Tap a showtime to open it on BookMyShow" in html
+    assert f"  07:30 PM  {DATE_PAGE}" in text                 # plain-text part links too
+    assert 'href="' + DATE_PAGE + '"' in html and "BOOK ON BOOKMYSHOW" in html
+
+
+def test_a_show_level_link_from_the_platform_is_used_when_present(change):
+    monitor, ch = change
+    show_page = "https://in.bookmyshow.com/buytickets/x-hyderabad/movie-hyd-ET00478890-MT/20260925?sid=118452"
+    ch.time_links = [["07:30 PM", show_page], ["09:45 PM", DATE_PAGE]]
+    _, html, text = mail.render_change(monitor, ch)
+    assert f'<a href="{show_page}"' in html
+    assert f"  07:30 PM  {show_page}" in text
+
+
+def test_showtimes_without_their_own_link_fall_back_to_the_booking_page(change):
+    monitor, ch = change
+    ch.time_links = []                     # older state files have none
+    _, html, _ = mail.render_change(monitor, ch)
+    assert html.count(f'<a href="{ch.booking_url}"') == 3     # 2 chips + button
+
+
+def test_fabricated_or_foreign_links_are_never_emitted(change):
+    monitor, ch = change
+    ch.time_links = [
+        ["07:30 PM", "javascript:alert(1)"],
+        ["09:45 PM", "https://evil.example.com/bookmyshow.com/x"],
+    ]
+    ch.booking_url = "http://in.bookmyshow.com/insecure"      # not https
+    _, html, text = mail.render_change(monitor, ch)
+    assert "javascript:" not in html and "evil.example.com" not in html
+    assert "insecure" not in html and "BOOK ON BOOKMYSHOW" not in html
+    assert "<a " not in html                                   # nothing left to link
+    assert "07:30 PM" in html and "09:45 PM" in html           # still listed, just not linked
+    assert "Book:" not in text
+
+
+def test_url_validation_accepts_only_bookmyshow_https():
+    from platforms.bookmyshow import is_bookmyshow_url
+
+    assert is_bookmyshow_url("https://in.bookmyshow.com/movies/hyderabad/x/buytickets/ET1/20260925")
+    assert is_bookmyshow_url("https://bookmyshow.com/x")
+    assert not is_bookmyshow_url("http://in.bookmyshow.com/x")
+    assert not is_bookmyshow_url("https://in.bookmyshow.com.evil.io/x")
+    assert not is_bookmyshow_url("https://notbookmyshow.com/x")
+    assert not is_bookmyshow_url("javascript:alert(1)")
+    assert not is_bookmyshow_url("")
