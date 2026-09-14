@@ -1,5 +1,16 @@
 [
   {
+    "monitor_id": "029be19254bf",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Epic",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/epic-2026-et00515338-1788358210.jpg",
+    "targets": [
+      "PVR Superplex Inorbit · Pxl"
+    ],
+    "at": "2026-09-15T01:42:27.356845+05:30"
+  },
+  {
     "monitor_id": "f7d7bcc5933e",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
