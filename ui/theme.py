@@ -299,9 +299,9 @@ __NAV_ICONS__
 }
 [class*="st-key-trcard"] [class*="st-key-trcard"] { border:none !important; padding:0 !important; box-shadow:none; }
 [class*="st-key-trpanel"] {
-  background: linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0) 40%), var(--tr-sunken) !important;
-  border:1px solid var(--tr-border) !important; border-radius:14px !important; padding:16px !important;
-  box-shadow: var(--tr-hi);
+  background: linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.012) 45%), var(--tr-surface) !important;
+  border:1px solid rgba(255,255,255,.11) !important; border-radius:16px !important; padding:18px 18px 16px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 16px 34px -22px rgba(0,0,0,.95);
 }
 @media (max-width:1100px) { [class*="st-key-trcard"] { padding:16px !important; } }
 
@@ -522,8 +522,8 @@ __NAV_ICONS__
 .tr-throw.coming.selected { border-style:solid; }
 .tr-star { color:var(--tr-warning); font-size:11px; margin-left:6px; vertical-align:1px; }
 .tr-badge {
-  display:inline-block; padding:3px 7px; border-radius:6px; background:rgba(232,178,92,.10);
-  border:1px solid rgba(232,178,92,.26); font-family:var(--tr-mono); font-size:9.5px;
+  display:inline-block; padding:4px 8px; border-radius:7px; background:linear-gradient(180deg,rgba(232,178,92,.16),rgba(232,178,92,.07));
+  border:1px solid rgba(232,178,92,.32); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); font-family:var(--tr-mono); font-size:9.5px;
   letter-spacing:.08em; text-transform:uppercase; color:var(--tr-warning); white-space:nowrap;
   max-width:100%; overflow:hidden; text-overflow:ellipsis; line-height:1.4; box-sizing:border-box;
 }
@@ -567,22 +567,24 @@ __NAV_ICONS__
 
 /* ── format panels ─────────────────────────────────────────────────── */
 .tr-fmt-head { min-width:0; }
-.tr-fmt-head .n { font-size:13px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; line-height:1.35; overflow-wrap:anywhere; }
-.tr-fmt-head .a { font-size:11.5px; color:var(--tr-text-3); margin-top:3px; overflow-wrap:anywhere; }
-.tr-fmt-head .b { margin-top:10px; min-width:0; display:flex; flex-wrap:wrap; gap:4px; }
+.tr-fmt-head .n { font-size:15px; font-weight:800; letter-spacing:-.01em; line-height:1.3; overflow-wrap:anywhere; }
+.tr-fmt-head .a { font-size:12.5px; color:var(--tr-text-3); margin-top:2px; overflow-wrap:anywhere; font-weight:500; }
+.tr-fmt-head .b { margin-top:12px; min-width:0; display:flex; flex-wrap:wrap; gap:5px; }
 .tr-fmt-head .w { font-size:11.5px; color:var(--tr-text-3); margin-top:8px; line-height:1.45; }
 [class*="st-key-trpanel"] .stCheckbox, [class*="st-key-trpanel"] [data-testid="stCheckbox"],
 [class*="st-key-trpanel"] [class*="st-key-fmt_"] { margin:0; width:100% !important; max-width:100% !important; }
-[class*="st-key-trpanel"] [data-testid="stVerticalBlock"] { gap:7px; }
+[class*="st-key-trpanel"] [data-testid="stVerticalBlock"] { gap:8px; }
 [class*="st-key-trpanel"] .stCheckbox label {
-  display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:10px; margin:0;
-  border:1px solid var(--tr-border); background:rgba(255,255,255,.015); min-height:42px; cursor:pointer;
+  display:flex; align-items:center; gap:11px; padding:10px 13px; border-radius:12px; margin:0;
+  border:1px solid rgba(255,255,255,.13); background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+  min-height:46px; cursor:pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
   transition:all var(--tr-fast) var(--tr-ease); width:100% !important; box-sizing:border-box;
 }
-[class*="st-key-trpanel"] .stCheckbox label:hover { border-color:var(--tr-border-hover); background:var(--tr-raised); }
+[class*="st-key-trpanel"] .stCheckbox label:hover { border-color:rgba(255,255,255,.24); background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.04)); transform:translateY(-1px); }
 [class*="st-key-trpanel"] .stCheckbox label:has(input:checked),
 [class*="st-key-trpanel"] .stCheckbox label[data-selected="true"] {
-  background:linear-gradient(90deg,rgba(255,51,85,.14),rgba(255,51,85,.04)); border-color:rgba(255,51,85,.5);
+  background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,0) 50%), linear-gradient(90deg,rgba(255,51,85,.22),rgba(255,51,85,.06));
+  border-color:rgba(255,51,85,.65); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 10px 24px -16px rgba(255,51,85,.8);
 }
 [class*="st-key-trpanel"] .stCheckbox label [data-testid="stMarkdownContainer"] p {
   font-size:13px; font-weight:600; color:var(--tr-text-2);
@@ -593,6 +595,8 @@ __NAV_ICONS__
 }
 /* "Any format" is the special row: a dashed, labelled option, not another format. */
 [class*="st-key-trpanel"] [class*="st-key-fmt_"][class*="_any"] label { border-style:dashed; }
+[class*="st-key-trpanel"] [class*="st-key-fmt_"][class*="_any"] label [data-testid="stMarkdownContainer"] { flex:1; min-width:0; }
+[class*="st-key-trpanel"] [class*="st-key-fmt_"][class*="_any"] label [data-testid="stMarkdownContainer"] p { display:flex; align-items:center; gap:10px; width:100%; }
 [class*="st-key-trpanel"] [class*="st-key-fmt_"][class*="_any"] label [data-testid="stMarkdownContainer"] p::after {
   content:'ANY'; margin-left:auto; font-family:var(--tr-mono); font-size:9px; letter-spacing:.16em;
   padding:2px 6px; border-radius:5px; background:rgba(255,255,255,.06); color:var(--tr-text-4); border:1px solid var(--tr-border);
@@ -605,7 +609,7 @@ __NAV_ICONS__
 }
 [class*="st-key-trpanel"] .stCheckbox label:has(input:checked) > div:first-of-type,
 [class*="st-key-trpanel"] .stCheckbox label[data-selected="true"] > div:first-of-type {
-  border:4px solid var(--tr-accent) !important; background:var(--tr-sunken) !important;
+  border:4px solid var(--tr-accent) !important; background:#fff !important; box-shadow:0 0 0 3px rgba(255,51,85,.22) !important;
 }
 [class*="st-key-trpanel"] .stCheckbox label > div:first-of-type svg { display:none !important; }
 
@@ -663,20 +667,21 @@ __NAV_ICONS__
   box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 20px 48px -18px rgba(255,51,85,.9), 0 0 0 4px rgba(255,51,85,.07);
 }
 .tr-poster .art {
-  position:relative; aspect-ratio:2/3; max-height:210px; overflow:hidden; background:#14141A;
+  position:relative; width:100%; aspect-ratio:2/3; overflow:hidden; background:#14141A; flex:none;
   display:flex; align-items:center; justify-content:center;
 }
-.tr-poster .art::after { content:''; position:absolute; inset:auto 0 0 0; height:40%;
-  background:linear-gradient(180deg,transparent,rgba(8,8,10,.55)); pointer-events:none; }
-.tr-poster.compact .art { max-height:150px; }
 .tr-poster.selected .art { background:#1B1216; }
-.tr-poster .art img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+.tr-poster .art img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;
+  transition:transform .22s var(--tr-ease); }
+[class*="st-key-pick_"]:hover .tr-poster .art img { transform:scale(1.04); }
 .tr-poster .art svg { opacity:.9; }
-.tr-poster .body { padding:9px 10px 11px; min-width:0; }
-.tr-poster .t { font-size:14px; font-weight:800; letter-spacing:-.01em; line-height:1.25; overflow-wrap:anywhere;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:2.6em; }
+.tr-poster .body { padding:10px 11px 10px; min-width:0; height:88px; box-sizing:border-box; display:flex; flex-direction:column; }
+.tr-poster .t { font-size:13.5px; font-weight:800; letter-spacing:-.01em; line-height:1.25; overflow-wrap:anywhere;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; height:2.5em; }
 .tr-poster.compact .t { font-size:12px; }
-.tr-poster .m { font-family:var(--tr-mono); font-size:10px; letter-spacing:.04em; color:var(--tr-text-3); margin-top:5px; line-height:1.4; overflow-wrap:anywhere; }
+.tr-poster .m { font-family:var(--tr-mono); font-size:10px; letter-spacing:.04em; color:var(--tr-text-3); margin-top:auto; line-height:1.3;
+  height:2.6em; display:flex; flex-direction:column; justify-content:flex-end; }
+.tr-poster .m span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* ── Streamlit widgets ─────────────────────────────────────────────── */
 .stTextInput input, .stDateInput input, .stTimeInput input, .stTextArea textarea,
@@ -730,8 +735,12 @@ __NAV_ICONS__
 /* Streamlit 1.59's selectbox is a react-aria ComboBox: a [role=group] box
    holding the input and the chevron. This is the glass search field. */
 .stSelectbox .react-aria-ComboBox { position:relative; }
+.stSelectbox .react-aria-ComboBox > [role="group"]::after {
+  content:''; position:absolute; left:1px; right:1px; top:1px; height:46%; border-radius:14px 14px 40% 40%; pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,0));
+}
 .stSelectbox .react-aria-ComboBox > [role="group"] {
-  min-height:56px; border-radius:15px !important; padding:0 8px 0 50px !important; box-sizing:border-box;
+  position:relative; min-height:56px; border-radius:15px !important; padding:0 8px 0 50px !important; box-sizing:border-box;
   border:1px solid rgba(255,255,255,.20) !important;
   background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.05)) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 14px 32px -16px rgba(0,0,0,.95);
@@ -741,9 +750,11 @@ __NAV_ICONS__
   border-color:rgba(255,255,255,.32) !important; background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.06)) !important;
 }
 .stSelectbox .react-aria-ComboBox > [role="group"]:focus-within {
-  border-color:rgba(255,51,85,.8) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 0 0 4px rgba(255,51,85,.20), 0 16px 38px -14px rgba(255,51,85,.65);
+  border-color:rgba(255,51,85,.85) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 1px rgba(255,51,85,.22), inset 0 0 22px rgba(255,51,85,.08),
+    0 0 0 4px rgba(255,51,85,.18), 0 16px 38px -14px rgba(255,51,85,.6);
 }
+.stSelectbox .react-aria-ComboBox input, .stSelectbox .react-aria-ComboBox button { position:relative; z-index:1; }
 .stSelectbox .react-aria-ComboBox input {
   background:transparent !important; border:none !important; box-shadow:none !important; color:var(--tr-text) !important;
   font-family:var(--tr-sans) !important; font-size:15.5px !important; font-weight:600 !important; height:54px; padding:0 !important;
@@ -860,11 +871,17 @@ __NAV_ICONS__
 }
 /* Expander (the "Browse all" grid): secondary */
 [data-testid="stExpander"] details {
-  background: transparent; border:1px dashed rgba(255,255,255,.12) !important;
-  border-radius:14px !important;
+  background: linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.16) !important;
+  border-radius:14px !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 12px 26px -18px rgba(0,0,0,.95);
+  transition: transform var(--tr-fast) var(--tr-ease), border-color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease);
 }
-[data-testid="stExpander"] summary { font-size:13px; font-weight:700; color:var(--tr-text-3); }
-[data-testid="stExpander"] summary:hover { color:var(--tr-text); }
+[data-testid="stExpander"] details:hover { border-color:rgba(255,255,255,.26) !important; background: linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.045)); transform:translateY(-2px); }
+[data-testid="stExpander"] summary { font-size:14px; font-weight:700; color:var(--tr-text); padding:14px 16px; min-height:54px; align-items:center; }
+[data-testid="stExpander"] summary:hover { color:#fff; }
+[data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"], [data-testid="stExpander"] summary svg { color:var(--tr-accent-soft); width:22px; height:22px; }
+[data-testid="stExpander"] summary::after { content:'BROWSE ALL'; margin-left:auto; white-space:nowrap; flex:none; font-family:var(--tr-mono) !important; font-size:9.5px; letter-spacing:.18em;
+  color:var(--tr-text-3); padding:3px 8px; border:1px solid var(--tr-border); border-radius:6px; }
+[data-testid="stExpander"] details[open] summary::after { content:'COLLAPSE'; }
 
 /* Alerts — the palette's meanings, not Streamlit's */
 [data-testid="stAlert"] { border-radius:12px; border:1px solid var(--tr-border); font-size:13.5px; }

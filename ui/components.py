@@ -461,7 +461,7 @@ def poster_tile(title: str, meta: str, selected: bool, poster_url: str = "",
         f"""<div class="tr-poster{' selected' if selected else ''}{' compact' if compact else ''}">
           <div class="art">{art}{check}</div>
           <div class="body"><div class="t" title="{escape(title, quote=True)}">{e(title)}</div>
-          <div class="m">{e(meta)}</div></div>
+          <div class="m">{"".join(f"<span>{e(part)}</span>" for part in meta.split(" · "))}</div></div>
         </div>"""
     )
 
