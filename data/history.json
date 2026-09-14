@@ -1,5 +1,16 @@
 [
   {
+    "monitor_id": "12463fd2c5a0",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Hanuman Ansh",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+    "targets": [
+      "ALLU Cinemas · Dolby Cinema"
+    ],
+    "at": "2026-09-14T19:08:22.725986+05:30"
+  },
+  {
     "monitor_id": "0368d3117bd3",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
