@@ -649,3 +649,111 @@ def test_ui_stores_a_show_date_range_on_the_monitor(seeded, dispatches):
 def test_ui_default_watches_every_date(seeded, dispatches):
     start_from_ui(seeded)
     assert load_monitors()[0].date_codes == []
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Cards never leak markup; the exact-show path; email failure is a PROBLEM
+# ──────────────────────────────────────────────────────────────────────────
+def _rendered_markdown(monkeypatch, render):
+    """Capture what a component hands to st.markdown."""
+    import streamlit as st
+    from ui import components as C
+
+    seen: list[str] = []
+    monkeypatch.setattr(st, "markdown", lambda body, **kw: seen.append(body))
+    render(C)
+    return "\n".join(seen)
+
+
+def test_active_card_has_no_blank_or_indented_lines_that_markdown_would_render_as_code(
+        make_monitor, at, monkeypatch):
+    monitor = make_monitor()  # no show dates → the optional metric is empty
+    state = MonitorState(last_check_at=at, last_success_at=at, check_count=1, success_count=1)
+    out = _rendered_markdown(monkeypatch, lambda C: C.active_monitor_card(monitor, state, at=at))
+    assert "</div>" in out                      # it is HTML…
+    for line in out.splitlines():
+        assert line.strip(), "blank line inside an HTML block"
+        assert not line.startswith("    "), f"indented line would become a code block: {line!r}"
+    # …and the same holds with show dates set (both branches of the optional slot).
+    monitor.date_codes = ["20260915"]
+    out = _rendered_markdown(monkeypatch, lambda C: C.active_monitor_card(monitor, state, at=at))
+    assert "15 Sep 2026" in out and all(l.strip() and not l.startswith("    ") for l in out.splitlines())
+
+
+def test_raw_markup_is_not_visible_in_the_rail(make_monitor, at):
+    """End to end through Streamlit: the card text must not contain literal tags."""
+    monitor = make_monitor()
+    upsert_monitor(monitor, mirror=False)
+    save_state({monitor.id: MonitorState(last_check_at=at, last_success_at=at, check_count=3,
+                                         success_count=3)}, mirror=False)
+    app = run_app()
+    # A code block is how the leak showed up; Streamlit renders it as a distinct element.
+    assert not app.code, [c.value for c in app.code]
+    for block in app.markdown:
+        assert "&lt;/div&gt;" not in block.value
+
+
+def test_exact_show_on_the_selected_date_is_detected_and_emailed_on_the_first_tick(
+        make_monitor, provider_factory, monkeypatch, at):
+    """Movie + theatre + format + a single show date → AVAILABLE and one email, immediately."""
+    from monitor.models import TheatreTarget
+
+    monitor = make_monitor(interval=10, until=at + timedelta(hours=6),
+                           targets=[TheatreTarget("ALLU", "Allu Cinemas", "Attapur, Hyderabad", "Dolby Cinema")])
+    monitor.date_codes = ["20260925"]
+    upsert_monitor(monitor, mirror=False)
+    provider = _endless_provider(provider_factory, ALLU_LIVE)
+    monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider)
+    sent = []
+    clock = Clock(at)
+    loop = worker.run_loop(max_minutes=1, poll_seconds=30, use_git=False, chain=False,
+                           clock=clock, sleeper=clock.sleep, notifier=lambda m, c: sent.append(c))
+    assert loop.reports[0].checked == [monitor.id]       # first tick, no waiting
+    assert loop.reports[0].started_at == at
+    assert len(sent) == 1 and sent[0].date_codes == ["20260925"]
+    ts = load_state()[monitor.id].targets["ALLU::Dolby Cinema"]
+    assert ts.availability is Availability.AVAILABLE and ts.notified_at == at
+
+
+def test_email_failure_is_persisted_and_shown_as_a_problem(make_monitor, provider_factory, monkeypatch, at):
+    monitor = make_monitor()
+    upsert_monitor(monitor, mirror=False)
+    monkeypatch.setattr("monitor.checker.get_provider",
+                        lambda slug: provider_factory([build_payload(ALLU_LIVE)]))
+
+    def broken(m, change):
+        raise RuntimeError("Gmail rejected the login (535)")
+
+    run_once(at=at, mirror=False, notifier=broken)
+    state = load_state()[monitor.id]
+    assert "Gmail rejected the login" in state.last_email_error
+    assert state.targets["ALLU::Dolby Cinema"].notified_at is None   # not marked delivered
+
+    app = run_app()
+    body = body_of(app)
+    assert "WAITING FOR FIRST CHECK" not in body
+    prob = next(b for b in app.button if b.key == f"prob_{monitor.id}")
+    opened = body_of(prob.click().run())
+    assert "Email could not be sent" in opened and "Gmail rejected the login" in opened
+
+    # A later successful send clears it.
+    monkeypatch.setattr("monitor.checker.get_provider",
+                        lambda slug: provider_factory([build_payload(ALLU_LIVE)]))
+    run_once(at=at + timedelta(minutes=10), mirror=False, notifier=lambda m, c: None)
+    assert load_state()[monitor.id].last_email_error == ""
+    assert not [b for b in run_app().button if b.key.startswith("prob_")]
+
+
+def test_checker_explains_why_shows_were_filtered_out(make_monitor, provider_factory, monkeypatch, capsys):
+    from monitor.models import TheatreTarget
+
+    monitor = make_monitor(targets=[TheatreTarget("ALLU", "Allu Cinemas", "Attapur, Hyderabad", "IMAX")])
+    monitor.date_codes = ["20260929"]
+    provider = provider_factory([build_payload(_two_date_shows())])
+    monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider)
+    result = check_monitor(monitor).results[0]
+    log = capsys.readouterr().out
+    assert "ignoring 1 show(s) on ['20260925']" in log          # wrong date, said out loud
+    assert "none in 'IMAX'" in log and "Dolby Cinema" in log       # wrong format, with what was listed
+    assert result.availability is Availability.SHOW_NOT_AVAILABLE
+    assert "none in IMAX" in result.detail

@@ -77,7 +77,21 @@ FIRST_CHECK_GRACE = timedelta(minutes=8)
 
 
 def html(markup: str) -> None:
-    st.markdown(markup, unsafe_allow_html=True)
+    st.markdown(clean_html(markup), unsafe_allow_html=True)
+
+
+def clean_html(markup: str) -> str:
+    """Make a multi-line HTML fragment safe for ``st.markdown``.
+
+    Streamlit runs the fragment through a Markdown parser first. A blank (or
+    whitespace-only) line ends the HTML block, and any indented line after it
+    is rendered as a *code block* — which is how an empty optional slot in a
+    card once turned the rest of the card into visible ``</div>`` text. So:
+    drop empty lines and leading indentation, and never leave a line that
+    starts with four spaces.
+    """
+    lines = [line.strip() for line in markup.splitlines()]
+    return "\n".join(line for line in lines if line)
 
 
 def e(value: object) -> str:
@@ -776,6 +790,7 @@ __all__ = [
     "asset_uri",
     "catalogue_banner",
     "choice_tile",
+    "clean_html",
     "e",
     "empty_card",
     "error_card",

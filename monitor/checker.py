@@ -100,25 +100,32 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
         )
 
     if wanted_dates:
+        on_other_dates = [s for s in shows if s.date_code not in wanted_dates]
         shows = [s for s in shows if s.date_code in wanted_dates]
+        if on_other_dates:
+            print(f"    [filter] {target.venue_name}: ignoring {len(on_other_dates)} show(s) on "
+                  f"{sorted({s.date_code for s in on_other_dates})} — watching {sorted(wanted_dates)} only")
         if not shows:
             return TargetResult(
                 target_key=target.key,
                 venue_name=target.venue_name,
                 fmt=target.fmt,
                 availability=Availability.SHOW_NOT_AVAILABLE,
-                detail="No showtimes on the dates you're watching.",
+                detail=f"No showtimes on the dates you're watching ({', '.join(sorted(wanted_dates))}).",
                 booking_url=_booking_url(monitor, snapshot, sorted(wanted_dates)[0]),
             )
 
     matching = [s for s in shows if target.matches_format(s.format_label)]
     if not matching:
+        seen = sorted({s.format_label or "(no format)" for s in shows})
+        print(f"    [filter] {target.venue_name}: {len(shows)} show(s) but none in '{target.fmt}' "
+              f"— formats listed: {seen}")
         return TargetResult(
             target_key=target.key,
             venue_name=target.venue_name,
             fmt=target.fmt,
             availability=Availability.SHOW_NOT_AVAILABLE,
-            detail=f"Shows are listed, but none in {target.fmt}.",
+            detail=f"Shows are listed, but none in {target.fmt} (listed: {', '.join(seen)}).",
             date_code=shows[0].date_code,
             booking_url=_booking_url(monitor, snapshot, shows[0].date_code),
         )
@@ -259,7 +266,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
         if outcome.ok:
             report.checked.append(monitor.id)
             for result in outcome.results:
-                print(f"    {result.venue_name} · {result.fmt} -> {result.availability.value}")
+                print(f"    {result.venue_name} · {result.fmt} -> {result.availability.value}"
+                      f"{' — ' + result.detail if result.detail else ''}")
         else:
             report.failed.append(monitor.id)
             print(f"    check failed: {outcome.error}")
