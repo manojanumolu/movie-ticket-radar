@@ -1,5 +1,40 @@
 [
   {
+    "id": "f822346fc37d",
+    "movie": {
+      "platform": "bookmyshow",
+      "event_code": "ET00487933",
+      "title": "Irumudi",
+      "region_code": "HYD",
+      "region_slug": "hyderabad",
+      "city": "Hyderabad",
+      "language": "Telugu",
+      "poster_url": "https://in.bmscdn.com/events/moviecard/irumudi-et00487933-1787303118.jpg",
+      "source_url": "https://in.bookmyshow.com/movies/hyderabad/irumudi/buytickets/ET00487933"
+    },
+    "targets": [
+      {
+        "venue_code": "AMBH",
+        "venue_name": "AMB Cinemas",
+        "area": "Gachibowli",
+        "fmt": "Vip Screen"
+      }
+    ],
+    "interval_minutes": 10,
+    "monitor_until": "2026-09-15T23:59:00+05:30",
+    "start_immediately": true,
+    "notify_email": "manoj.anumolu01@gmail.com",
+    "date_codes": [
+      "20260915"
+    ],
+    "status": "ACTIVE",
+    "created_at": "2026-09-14T20:22:09.565598+05:30",
+    "stopped_at": null,
+    "stopped_reason": "",
+    "first_check_requested_at": "2026-09-14T20:22:09.565601+05:30",
+    "problem": null
+  },
+  {
     "id": "d751fdcd9942",
     "movie": {
       "platform": "bookmyshow",
