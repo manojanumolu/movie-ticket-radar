@@ -352,3 +352,33 @@ def test_detail_is_re_read_when_the_listing_gains_a_sibling(provider_factory, mo
     result = catalogue.sync_region("hyderabad", mirror=False, detail=True)
     assert result["detailed"] == 0
     assert len(catalogue.venues_from_entry(english)) == 4
+
+
+def test_stale_detail_is_re_read_on_the_next_sync(provider_factory, monkeypatch):
+    """Theatres come and go during the day; detail read once is not kept forever."""
+    from datetime import timedelta
+
+    from config.timezone import now_ist, to_iso
+    from config.store import load_catalogue, save_catalogue
+
+    _patch_provider(monkeypatch, provider_factory([QUICKBOOK_HYD] + [build_payload(ALLU_LIVE)] * DETAIL_REQUESTS_HYD))
+    catalogue.sync_region("hyderabad", mirror=False, detail=True)
+
+    # Fresh detail is kept: a listing-only sync re-reads nothing.
+    _patch_provider(monkeypatch, provider_factory([QUICKBOOK_HYD]))
+    assert catalogue.sync_region("hyderabad", mirror=False, detail=True)["detailed"] == 0
+
+    # Age one row past the TTL; only that row is re-read, with fresher data.
+    data = load_catalogue()
+    row = next(e for e in data["movies"] if catalogue.movie_from_entry(e).language == "Hindi")
+    row["resolved_at"] = to_iso(now_ist() - catalogue.DETAIL_TTL - timedelta(minutes=1))
+    save_catalogue(data, mirror=False)
+    assert catalogue.is_stale(row)
+
+    _patch_provider(monkeypatch, provider_factory([QUICKBOOK_HYD, build_payload([])]))
+    result = catalogue.sync_region("hyderabad", mirror=False, detail=True)
+    assert result["detailed"] == 1 and result["failed"] == 0
+    hindi = next(e for e in catalogue.list_entries("hyderabad")
+                 if catalogue.movie_from_entry(e).language == "Hindi")
+    assert catalogue.venues_from_entry(hindi) == []          # today's read, not the old one
+    assert not catalogue.is_stale(hindi)

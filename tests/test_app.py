@@ -417,3 +417,177 @@ def test_history_page_lists_events(make_monitor):
     body = text(run("History"))
     assert "Avengers: Endgame Encore" in body
     assert "Tickets found" in body
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Navigation: the step rail is a breadcrumb, and Back keeps what was chosen
+# ──────────────────────────────────────────────────────────────────────────
+def test_step_rail_goes_back_without_losing_selections(seeded):
+    app = run(step=4, furthest=4, location="hyderabad", movie_id=seeded,
+              theatres=["ALLU", "AMB"], formats={"ALLU": ["Dolby Cinema"]})
+    # Reached steps are buttons; the current and unreached ones are not.
+    keys = {b.key for b in app.button if b.key.startswith("step_")}
+    assert keys == {"step_1", "step_2", "step_3"}
+
+    app.button(key="step_2").click().run()
+    assert not app.exception
+    assert app.session_state["step"] == 2
+    assert app.session_state["furthest"] == 4          # progress is remembered
+    assert app.session_state["movie_id"] == seeded
+    assert app.session_state["theatres"] == ["ALLU", "AMB"]
+    assert app.session_state["formats"]["ALLU"] == ["Dolby Cinema"]
+    assert "Selected:" in text(app) and "Mandaadi" in text(app)
+
+    # And forward again, straight to a later step already reached.
+    app.button(key="step_4").click().run()
+    assert app.session_state["step"] == 4
+
+
+def test_back_button_steps_back_one_and_keeps_selections(seeded):
+    app = run(step=3, furthest=3, location="hyderabad", movie_id=seeded, theatres=["ALLU"])
+    back = next(b for b in app.button if b.key == "back")
+    assert "Movie" in back.label
+    back.click().run()
+    assert app.session_state["step"] == 2
+    assert app.session_state["movie_id"] == seeded
+    assert app.session_state["theatres"] == ["ALLU"]
+    assert not any(b.key == "back" for b in run(step=1).button)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Movie step: popular shelf + autocomplete
+# ──────────────────────────────────────────────────────────────────────────
+def test_popular_shelf_follows_catalogue_order_not_the_alphabet(seeded):
+    app = run(step=2, location="hyderabad")
+    shelf = [b.key for b in app.button if b.key.startswith("pop_")]
+    # Catalogue order is BookMyShow's own: Mandaadi (Telugu) before Hanuman
+    # Ansh — the alphabet would put Hanuman first. One tile per film.
+    assert len(shelf) <= 6
+    assert shelf == [f"pop_{seeded}", "pop_bookmyshow:ET00507738"]
+    # The full catalogue is still there underneath, every movie a button.
+    assert {b.key for b in app.button if b.key.startswith("movie_bookmyshow:")} == {
+        f"movie_{seeded}", "movie_bookmyshow:ET00442702", "movie_bookmyshow:ET00507738"}
+
+
+def test_movie_autocomplete_offers_every_catalogue_title(seeded):
+    app = run(step=2, location="hyderabad")
+    box = app.selectbox(key="movie_query")
+    assert box.options == ["Mandaadi · Telugu", "Mandaadi · Tamil", "Hanuman Ansh · Hindi"]
+    # Nothing is asked for that is not a movie name.
+    assert "url" not in (box.placeholder or "").lower()
+
+
+def test_choosing_a_suggestion_selects_the_movie_immediately(seeded):
+    app = run(step=2, location="hyderabad")
+    app.selectbox(key="movie_query").select("Hanuman Ansh · Hindi").run()
+    assert not app.exception
+    assert app.session_state["movie_id"] == "bookmyshow:ET00507738"
+    assert app.session_state["step"] == 3
+
+
+def test_free_text_in_the_search_box_filters_the_grid(seeded):
+    # Enter on free text (accept_new_options) leaves the typed text in the box.
+    app = run(step=2, location="hyderabad", movie_query="mand")
+    assert not app.exception
+    assert app.session_state["step"] == 2
+    body = text(app)
+    assert "2 movie(s) matching" in body and "Hanuman Ansh" not in body
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Theatre step: search + featured quick-picks, all from the movie's own list
+# ──────────────────────────────────────────────────────────────────────────
+def test_theatre_search_toggles_a_theatre(seeded):
+    app = run(step=3, location="hyderabad", movie_id=seeded)
+    box = next(s for s in app.selectbox if s.key.startswith("theatre_query_"))
+    # Only this movie's theatres, shown by name and area — never a code.
+    assert box.options == ["Allu Cinemas · Attapur, Hyderabad", "AMB Cinemas · Gachibowli, Hyderabad"]
+    box.select("AMB Cinemas · Gachibowli, Hyderabad").run()
+    assert not app.exception
+    assert app.session_state["theatres"] == ["AMB"]
+    # The box is cleared for the next search, and the pick shows in the list.
+    box = next(s for s in app.selectbox if s.key.startswith("theatre_query_"))
+    assert box.value is None
+    assert "1 theatre(s) selected: AMB Cinemas" in text(app)
+
+
+def test_featured_picks_only_offer_theatres_showing_this_movie(seeded):
+    app = run(step=3, location="hyderabad", movie_id=seeded)
+    body = text(app)
+    # Allu and AMB screen it — quick-pickable. The other four are named but
+    # say plainly that they are not screening it, and have no button.
+    assert {b.key for b in app.button if b.key.startswith("feat_")} == {"feat_ALLU", "feat_AMB"}
+    assert body.count("Not screening this movie") == 4
+    assert "Prasads Multiplex" in body and "PVR Lakeshore Mall" in body
+    app.button(key="feat_ALLU").click().run()
+    assert app.session_state["theatres"] == ["ALLU"]
+    # The full list is untouched: still exactly the movie's theatres.
+    assert {b.key for b in app.button if b.key.startswith("th_")} == {"th_ALLU", "th_AMB", "th_continue"}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# My Monitors: finished monitors are separate, and deleting really deletes
+# ──────────────────────────────────────────────────────────────────────────
+def test_stopped_monitor_moves_to_finished_and_delete_removes_it(make_monitor):
+    active = make_monitor()
+    stopped = make_monitor()
+    stopped.stop()
+    upsert_monitor(active, mirror=False)
+    upsert_monitor(stopped, mirror=False)
+
+    app = run("My Monitors")
+    body = text(app)
+    assert "Active · 1" in body and "Finished · 1" in body
+    assert "STOPPED" in body and "WAITING" in body      # no check has run yet
+
+    app.button(key=f"m_del_{stopped.id}").click().run()
+    assert not app.exception
+    assert [m.id for m in load_monitors()] == [active.id]
+    body = text(app)
+    assert "Monitor deleted" in body and "Finished ·" not in body
+
+    app.button(key=f"m_stop_{active.id}").click().run()
+    assert get_monitor(active.id).status is MonitorStatus.STOPPED
+    assert "Active · 0" in text(app) and "Finished · 1" in text(app)
+
+
+def test_delete_all_finished_clears_the_clutter(make_monitor):
+    keep = make_monitor()
+    upsert_monitor(keep, mirror=False)
+    for _ in range(3):
+        m = make_monitor()
+        m.stop()
+        upsert_monitor(m, mirror=False)
+    app = run("My Monitors")
+    app.button(key="m_clear_finished").click().run()
+    assert not app.exception
+    assert [m.id for m in load_monitors()] == [keep.id]
+    assert "Finished ·" not in text(app)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# No markup ever reaches the reader as text
+# ──────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("page", ["Home", "My Monitors", "History", "Settings"])
+def test_no_card_renders_its_own_tags_as_text(make_monitor, at, page):
+    """Every HTML block must survive Streamlit's Markdown pass intact: no
+    blank line inside a card (which would end the HTML block and render the
+    rest as text) and no indented line (which would become a code block)."""
+    from monitor.state import record_history
+
+    monitor = make_monitor()
+    upsert_monitor(monitor, mirror=False)
+    record_history(monitor, "TICKETS_LIVE", "Allu Cinemas · Dolby Cinema", mirror=False)
+    state = MonitorState(last_check_at=at, last_success_at=at, check_count=3, success_count=3)
+    state.target("ALLU::Dolby Cinema").availability = Availability.AVAILABLE
+    save_state({monitor.id: state}, mirror=False)
+
+    app = run(page, step=3, location="hyderabad")
+    assert not app.exception
+    for block in app.markdown:
+        value = block.value
+        if "<" not in value or value.lstrip().startswith(("<style", "<link")):
+            continue
+        lines = value.split("\n")
+        assert "" not in lines[1:-1], f"blank line inside an HTML block on {page}: {value[:120]!r}"
+        assert not any(line.startswith("    ") for line in lines), f"indented line on {page}: {value[:120]!r}"
