@@ -1,5 +1,37 @@
 [
   {
+    "id": "8a6a36e44881",
+    "movie": {
+      "platform": "bookmyshow",
+      "event_code": "ET00507738",
+      "title": "Hanuman Ansh",
+      "region_code": "HYD",
+      "region_slug": "hyderabad",
+      "city": "Hyderabad",
+      "language": "Hindi",
+      "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+      "source_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738"
+    },
+    "targets": [
+      {
+        "venue_code": "AMBH",
+        "venue_name": "AMB Cinemas",
+        "area": "Gachibowli",
+        "fmt": "Barco Flagship Laser Dolby Atmos"
+      }
+    ],
+    "interval_minutes": 10,
+    "monitor_until": "2026-09-14T18:35:19.347368+05:30",
+    "start_immediately": true,
+    "notify_email": "manoj.anumolu01@gmail.com",
+    "date_codes": [],
+    "status": "ACTIVE",
+    "created_at": "2026-09-14T18:23:19.347368+05:30",
+    "stopped_at": null,
+    "stopped_reason": "",
+    "first_check_requested_at": null
+  },
+  {
     "id": "9a4365ef3ec9",
     "movie": {
       "platform": "bookmyshow",
@@ -34,6 +66,7 @@
     "status": "STOPPED",
     "created_at": "2026-09-14T02:55:38.582856+05:30",
     "stopped_at": "2026-09-14T04:00:44.935526+05:30",
-    "stopped_reason": "Stopped manually."
+    "stopped_reason": "Stopped manually.",
+    "first_check_requested_at": null
   }
 ]
