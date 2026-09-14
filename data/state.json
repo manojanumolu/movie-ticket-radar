@@ -6,6 +6,7 @@
     "success_count": 1,
     "consecutive_errors": 0,
     "last_error": "",
+    "last_error_kind": "",
     "targets": {
       "ALUC::Dolby Cinema": {
         "availability": "AVAILABLE",
@@ -18,6 +19,7 @@
           "09:50 AM",
           "04:55 PM"
         ],
+        "time_links": [],
         "date_code": "20260914",
         "booking_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738/20260914",
         "notified_availability": "AVAILABLE",
@@ -43,6 +45,7 @@
           "04:00 PM",
           "07:05 PM"
         ],
+        "time_links": [],
         "date_code": "20260914",
         "booking_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738/20260914",
         "notified_availability": "AVAILABLE",
@@ -52,6 +55,41 @@
           "AMBH|20260914|118402",
           "AMBH|20260914|118425",
           "AMBH|20260914|118445"
+        ],
+        "new_showtime_notice_at": null
+      }
+    }
+  },
+  "8a6a36e44881": {
+    "last_check_at": "2026-09-14T18:24:00.151180+05:30",
+    "last_success_at": "2026-09-14T18:24:00.151180+05:30",
+    "check_count": 1,
+    "success_count": 1,
+    "consecutive_errors": 0,
+    "last_error": "",
+    "last_error_kind": "",
+    "targets": {
+      "AMBH::Barco Flagship Laser Dolby Atmos": {
+        "availability": "AVAILABLE",
+        "since": "2026-09-14T18:24:00.151180+05:30",
+        "showtime_keys": [
+          "AMBH|20260914|118406"
+        ],
+        "time_labels": [
+          "10:40 PM"
+        ],
+        "time_links": [
+          [
+            "10:40 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738/20260914"
+          ]
+        ],
+        "date_code": "20260914",
+        "booking_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738/20260914",
+        "notified_availability": "AVAILABLE",
+        "notified_at": "2026-09-14T18:24:00.151180+05:30",
+        "notified_showtime_keys": [
+          "AMBH|20260914|118406"
         ],
         "new_showtime_notice_at": null
       }
