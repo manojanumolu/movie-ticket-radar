@@ -1,5 +1,16 @@
 [
   {
+    "monitor_id": "f822346fc37d",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Irumudi",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/irumudi-et00487933-1787303118.jpg",
+    "targets": [
+      "AMB Cinemas · Vip Screen"
+    ],
+    "at": "2026-09-14T20:22:11.968733+05:30"
+  },
+  {
     "monitor_id": "d751fdcd9942",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
