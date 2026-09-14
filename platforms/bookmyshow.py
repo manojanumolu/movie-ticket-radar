@@ -212,6 +212,41 @@ def _first_url(node: dict[str, Any], keys: tuple[str, ...]) -> str:
     return value if value.startswith("http") else ""
 
 
+#: Keys under which a showtime *could* carry its own link. Live payloads
+#: (see tools/bms_shape2.py output, Sept 2026) carry none of these — a
+#: showtime's ``cta`` is ``{"type": "showTimeRedirect"}`` with analytics only,
+#: and the web client builds the seat-layout navigation in JavaScript. So this
+#: is opportunistic: if BookMyShow ever publishes one, we use it; until then
+#: the showtime links to the date's booking page, which is derived, not made up.
+SHOW_URL_KEYS = ("url", "webUrl", "deeplink", "deepLink", "redirectUrl",
+                 "navigationUrl", "seatLayoutUrl", "href")
+
+
+def is_bookmyshow_url(value: str) -> bool:
+    """Only an absolute https link on a BookMyShow host is ever used."""
+    try:
+        parsed = urlparse((value or "").strip())
+    except ValueError:
+        return False
+    host = (parsed.netloc or "").lower()
+    return parsed.scheme == "https" and (host == "bookmyshow.com" or host.endswith(".bookmyshow.com"))
+
+
+def published_show_url(show: dict[str, Any]) -> str:
+    """A show-level link, if and only if the payload itself contains one."""
+    for node in (show, show.get("cta"), _dig(show, "cta", "additionalData"),
+                 show.get("additionalData")):
+        if not isinstance(node, dict):
+            continue
+        for key in SHOW_URL_KEYS:
+            value = _text(node.get(key))
+            if value.startswith("//"):
+                value = f"https:{value}"
+            if is_bookmyshow_url(value):
+                return value
+    return ""
+
+
 #: Script blocks that carry a page's server-rendered data.
 _EMBEDDED_JSON_RE = re.compile(
     r"<script[^>]*(?:id=[\"'](?:__NEXT_DATA__|__NUXT_DATA__)[\"']|"
@@ -1003,7 +1038,7 @@ class BookMyShowProvider:
                     time_code=_text(sa.get("showTimeCode")),
                     format_label=fmt,
                     availability=self._availability(sa),
-                    booking_url=self.booking_url(movie, date_code),
+                    booking_url=published_show_url(show) or self.booking_url(movie, date_code),
                 )
             )
         return out
@@ -1051,6 +1086,8 @@ __all__ = [
     "DEFAULT_CITY",
     "REGIONS",
     "clean_format",
+    "is_bookmyshow_url",
     "parse_listing_url",
+    "published_show_url",
     "region_for",
 ]

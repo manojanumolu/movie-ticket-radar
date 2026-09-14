@@ -154,6 +154,13 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
         if live
         else "A showtime that wasn't there on the last check has appeared."
     )
+    # Every showtime chip links somewhere real: the show-level link when the
+    # platform published one, else the date's booking page. Anything that is
+    # not a BookMyShow https URL is dropped rather than rendered.
+    links = {label: url for label, url in change.time_links if _safe_url(url)}
+    booking_url = change.booking_url if _safe_url(change.booking_url) else ""
+    for label in times:
+        links.setdefault(label, booking_url)
 
     html = _html(
         eyebrow=eyebrow,
@@ -164,8 +171,9 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
         city=monitor.movie.city,
         date_label=date_label,
         times=times,
+        links=links,
         detected=detected,
-        booking_url=change.booking_url,
+        booking_url=booking_url,
         monitor=monitor,
     )
     text = _text(
@@ -177,26 +185,46 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
         city=monitor.movie.city,
         date_label=date_label,
         times=times,
+        links=links,
         detected=detected,
-        booking_url=change.booking_url,
+        booking_url=booking_url,
         monitor=monitor,
     )
     return subject, html, text
 
 
-def _time_chips(times: list[str]) -> str:
+def _safe_url(url: str) -> bool:
+    """The only links that go into mail are the platform's own https pages."""
+    from platforms.bookmyshow import is_bookmyshow_url
+
+    return is_bookmyshow_url(url or "")
+
+
+def _time_chips(times: list[str], links: dict[str, str] | None = None) -> str:
+    """Showtime chips. Each one is an ``<a>`` when it has a verified link."""
+    links = links or {}
     if not times:
         return (
             f'<div style="font-size:14px;color:{TEXT_3};">'
             "Showtimes weren't listed individually — open BookMyShow for the full list.</div>"
         )
-    cells = "".join(
-        f'<td style="padding:0 8px 8px 0;">'
-        f'<div style="padding:9px 15px;border-radius:9px;background:#17171C;'
-        f'border:1px solid {HAIRLINE};font-size:15px;font-weight:600;color:{TEXT};'
-        f'white-space:nowrap;">{escape(t)}</div></td>'
-        for t in times[:12]
+    chip_style = (
+        f"display:block;padding:9px 15px;border-radius:9px;background:#17171C;"
+        f"border:1px solid {HAIRLINE};font-size:15px;font-weight:600;color:{TEXT};"
+        f"white-space:nowrap;text-decoration:none;"
     )
+    cells = []
+    for t in times[:12]:
+        url = links.get(t, "")
+        if url:
+            chip = (
+                f'<a href="{escape(url, quote=True)}" style="{chip_style}'
+                f'border-color:rgba(62,213,152,.45);">{escape(t)} &#8599;</a>'
+            )
+        else:
+            chip = f'<div style="{chip_style}">{escape(t)}</div>'
+        cells.append(f'<td style="padding:0 8px 8px 0;">{chip}</td>')
+    cells = "".join(cells)
     extra = (
         f'<td style="padding:0 0 8px 0;font-size:13px;color:{TEXT_3};">'
         f"+{len(times) - 12} more</td>"
@@ -208,7 +236,7 @@ def _time_chips(times: list[str]) -> str:
 
 def _html(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: str,
           date_label: str, times: list[str], detected: datetime, booking_url: str,
-          monitor: Monitor) -> str:
+          monitor: Monitor, links: dict[str, str] | None = None) -> str:
     accent = SUCCESS if eyebrow == "TICKETS ARE LIVE" else ACCENT
     ink_on_accent = "#04120C" if eyebrow == "TICKETS ARE LIVE" else "#FFFFFF"
 
@@ -255,14 +283,15 @@ def _html(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: st
   <tr><td style="padding:0 30px 4px;">
     <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6E6E7A;
       font-family:Consolas,monospace;">Showtimes</div>
-    <div style="margin-top:10px;">{_time_chips(times)}</div>
+    <div style="margin-top:10px;">{_time_chips(times, links)}</div>
+    {_chip_hint(times, links)}
   </td></tr>
   {button}
   <tr><td style="padding:18px 30px 26px;">
     <div style="font-size:12.5px;color:{TEXT_3};line-height:1.7;">
-      Detected at {escape(fmt_time(detected))}.<br>
+      Detected at {escape(fmt_time(detected))} IST.<br>
       The monitor keeps running for your other theatres until
-      {escape(fmt_datetime(monitor.monitor_until))}.
+      {escape(fmt_datetime(monitor.monitor_until))} IST.
     </div>
   </td></tr>
   <tr><td style="padding:16px 30px;background:{SUNKEN};border-top:1px solid {HAIRLINE};">
@@ -274,18 +303,36 @@ def _html(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: st
 </body></html>"""
 
 
+def _chip_hint(times: list[str], links: dict[str, str] | None) -> str:
+    """Say what a showtime click does, so a date page never surprises anyone."""
+    links = links or {}
+    if not times or not any(links.get(t) for t in times):
+        return ""
+    return (
+        f'<div style="font-size:11.5px;color:{TEXT_3};margin-top:4px;line-height:1.5;">'
+        "Tap a showtime to open it on BookMyShow.</div>"
+    )
+
+
 def _text(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: str,
           date_label: str, times: list[str], detected: datetime, booking_url: str,
-          monitor: Monitor) -> str:
+          monitor: Monitor, links: dict[str, str] | None = None) -> str:
+    links = links or {}
     lines = [eyebrow, "", title, f"{venue} · {fmt} · {city}", "", lede, ""]
     if date_label:
         lines += [f"Date: {date_label}"]
-    lines += [f"Showtimes: {', '.join(times) if times else 'see BookMyShow'}", ""]
+    if times:
+        lines += ["Showtimes:"]
+        for t in times:
+            lines += [f"  {t}" + (f"  {links[t]}" if links.get(t) else "")]
+    else:
+        lines += ["Showtimes: see BookMyShow"]
+    lines += [""]
     if booking_url:
         lines += [f"Book: {booking_url}", ""]
     lines += [
-        f"Detected at {fmt_time(detected)}.",
-        f"Monitoring continues until {fmt_datetime(monitor.monitor_until)}.",
+        f"Detected at {fmt_time(detected)} IST.",
+        f"Monitoring continues until {fmt_datetime(monitor.monitor_until)} IST.",
         "",
         "— Movie Ticket Radar",
     ]

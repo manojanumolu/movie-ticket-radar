@@ -23,9 +23,11 @@ the alternative is refreshing a booking page all evening.
    AMB's HDR by Barco and Allu's Dolby Cinema are separate choices, and each
    theatre × format is watched independently.
 5. Choose a check interval (10 / 15 / 30 min) and an end time.
-6. A scheduled GitHub Action checks BookMyShow in the background. When a target
-   goes from *not bookable* (or *sold out*) to *available*, you get one email
-   with the showtimes and a booking link.
+6. Press **Start monitoring**. The app saves the monitor and immediately
+   dispatches the worker, so the first check happens within about a minute —
+   then it keeps checking at the interval you chose. When a target goes from
+   *not bookable* (or *sold out*) to *available*, you get one email with each
+   showtime as a link and a booking button.
 7. The monitor stops itself at the end time you set. You can also stop it
    manually, and either way the *persisted* state changes — not just the view.
 
@@ -56,7 +58,8 @@ string `bookmyshow.com` appears anywhere in the user-facing flow.
 | City | Hyderabad (other Indian cities are wired up in `platforms/bookmyshow.py` but untested). |
 | BookMyShow API | **Undocumented internal endpoints.** They can change shape or start refusing us with no notice. Every parse step is defensive and every failure is surfaced as an error, never as an availability. |
 | Bot checks | BookMyShow is behind Cloudflare, which fingerprints the **TLS handshake**. Plain `requests` is refused every single time, from every host tested. See [The bot check](#the-bot-check) — the single most important thing to understand about this project. |
-| Scheduling | GitHub Actions cron is **best-effort**. Runs are commonly a few minutes late and can be much later under load. The UI shows a configured interval and an expected next check, and never pretends a check happened that didn't. |
+| Scheduling | GitHub Actions cron is **not** a clock: measured on this repo, a `*/5` schedule fired one to five *hours* apart. So the cron is only a safety net. Starting a monitor dispatches the worker at once, and the worker runs as a ~50-minute *segment* that ticks every 30s, checks each monitor when its own interval is due, and hands over to the next segment. See [How checks get their cadence](#how-checks-get-their-cadence). |
+| Showtime links | Each showtime in the email is a link. BookMyShow's payload publishes **no** show-level URL (its showtime `cta` is `showTimeRedirect` with analytics only), so a showtime links to the date's booking page — a real, derived BookMyShow URL — never a guessed pattern. If the payload ever carries a show-level link, it is used. |
 | Email | Gmail SMTP with an app password. One recipient. |
 
 **Verified against the live site.** The catalogue sync has run on a GitHub
@@ -109,7 +112,9 @@ the table above for the current runner and changes nothing.
   3 pick theatres                 formats per theatre
   4 pick formats
   5 interval+end ---writes-----> monitors.json   ----reads--->  bookmyshow-monitor.yml
-                                                                (every 5 min)
+     START ---------dispatches-------------------------------->  (now, then every
+                                                                 10/15/30 min inside
+                                                                 a 50-min segment)
                                                                      |
   active monitoring <--reads---- state.json      <---writes---  check, compare,
                                                                 notify, commit
@@ -134,11 +139,39 @@ Two files, two owners, so they never race:
 - `data/monitors.json` — what you asked for. Written by the UI.
 - `data/state.json` — what we observed. Written by the worker.
 
+### How checks get their cadence
+
+The one thing GitHub's scheduler does not give you is timing. On this
+repository the `*/5 * * * *` cron fired at 03:57, 05:51, 10:42 and 16:14 IST —
+a monitor created at 02:55 was first checked at 03:57. Three mechanisms fix
+that, in order of importance:
+
+1. **Dispatch on start.** `app.py` calls `request_check_now(monitor.id)` the
+   moment a monitor is saved and mirrored, which triggers
+   `bookmyshow-monitor.yml` with `force=true` for that monitor. The first
+   check is therefore about a minute away. If the dispatch fails (no token,
+   token without *Actions: write*), the monitor is still saved, the UI says
+   "the scheduled worker will pick it up", and the rail shows *Waiting for
+   first check* honestly rather than a countdown.
+2. **Segments.** `run_monitor.py --loop` (`monitor/worker.py`) keeps one run
+   alive for up to 50 minutes. Every 30s it pulls `main` (so monitors created
+   or stopped in the UI are noticed), runs `run_once` (which checks only the
+   monitors whose interval is due — so 10/15/30 minutes mean what they say),
+   and commits any new observation immediately. When time is up and monitors
+   are still running it dispatches the next segment; when nothing is running
+   it exits at once and dispatches nothing.
+3. **The cron stays** as the net under both. A concurrency group makes sure
+   two segments never overlap, so no monitor is ever checked twice at once.
+
+The UI reads through to the repository (rate-limited to once per 20s) so
+"Last checked" and "Next check" reflect what the worker committed, even on
+Streamlit Cloud where the container's files are otherwise frozen at deploy.
+
 ### Layout
 
 ```
 app.py                      Streamlit entrypoint (page + rail)
-run_monitor.py              worker CLI — what the ticket schedule runs
+run_monitor.py              worker CLI — one pass, or --loop for a segment
 sync_catalogue.py           catalogue CLI — what the catalogue schedule runs
 resolve_movie.py            admin-only: resolve one listing URL. Not user-facing.
 
@@ -151,7 +184,8 @@ monitor/
   catalogue.py              city listing cache + sync, with SyncStatus
   state.py                  persistence + monitor lifecycle
   changes.py                when something is actually worth an email
-  checker.py                the engine
+  checker.py                the engine (one pass)
+  worker.py                 the segment loop: tick, pull, commit, hand over
 notifications/
   email.py                  Gmail SMTP + the alert template
 config/
@@ -164,9 +198,10 @@ ui/
   components.py             status cards
 tools/
   bms_diagnose.py           reachability diagnostics (run it on a runner)
-tests/                      122 tests, no network, no SMTP
+tests/                      158 tests, no network, no SMTP
+ticketradar-ui-design-system-2/   the design (visual source of truth)
 .github/workflows/
-  bookmyshow-monitor.yml    ticket checks, every 5 min
+  bookmyshow-monitor.yml    ticket checks: dispatched on start, then segments; cron as fallback
   catalogue-sync.yml        city catalogue, 4x/day + manual
   bms-diagnose.yml          diagnostics, manual, changes nothing
 ```
@@ -247,7 +282,9 @@ Streamlit Cloud, where the local filesystem is wiped on restart) or to use the
 `.streamlit/secrets.toml` locally, or the *Secrets* box in Streamlit Cloud:
 
 ```toml
-GH_TOKEN = "github_pat_..."          # fine-grained PAT, Contents: read & write
+GH_TOKEN = "github_pat_..."          # fine-grained PAT: Contents read & write
+                                     # AND Actions read & write (for the
+                                     # immediate first check on Start)
 GMAIL_ADDRESS = "you@gmail.com"      # optional, test button only
 GMAIL_APP_PASSWORD = "abcd efgh ijkl mnop"
 ```
@@ -348,9 +385,13 @@ change is still queued for retry. Verify both secrets, and that
 `GMAIL_APP_PASSWORD` is an app password.
 
 **Checks aren't running.**
-GitHub disables scheduled workflows on repos with no activity for 60 days —
-push anything to re-enable. Also, scheduled runs are delayed under load; the
-interval is a floor, not a promise.
+Open the monitor's rail card. *Waiting for first check · any moment now* means
+the dispatch went out and a segment is starting (about a minute). *Waiting on
+schedule* means the dispatch could not be made — usually the `GH_TOKEN` lacks
+the *Actions: write* scope — and the cron will pick it up whenever GitHub
+fires it. **Settings → Run a ticket check now** dispatches a segment by hand.
+GitHub also disables scheduled workflows on repos with no activity for 60
+days — push anything to re-enable.
 
 **The theatre list is stale.**
 **Settings → Refresh every movie's theatres**, or press *Refresh* on the
@@ -387,4 +428,4 @@ was last resolved.
   with a different state model, error handling and notification design.
 - Architecture — Streamlit + scheduled Actions + JSON-in-repo + Gmail SMTP —
   follows [manojanumolu/job-tracker](https://github.com/manojanumolu/job-tracker).
-- UI from `TicketRadar UI Design System/` in this repo.
+- UI from `ticketradar-ui-design-system-2/` in this repo (Claude Design handoff).

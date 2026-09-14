@@ -185,3 +185,47 @@ def test_booking_url_without_a_source_is_still_a_real_bms_path(provider_factory)
     assert provider.booking_url(movie) == (
         "https://in.bookmyshow.com/movies/hyderabad/buytickets/ET9"
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Show-level links: only what the payload actually publishes
+# ──────────────────────────────────────────────────────────────────────────
+def test_showtimes_link_to_the_date_page_when_the_payload_has_no_deep_link(provider_factory, listing_url):
+    """The live payload (tools/bms_shape2.py, Sept 2026) carries no URL per
+    showtime — its cta is {"type": "showTimeRedirect"} with analytics only.
+    So every showtime links to the derived date page, never a guessed pattern."""
+    snap = provider_factory([build_payload(ALLU_LIVE)]).resolve(listing_url)
+    for show in snap.showtimes:
+        assert show.booking_url == f"{listing_url}/{show.date_code}"
+
+
+def test_a_published_show_url_is_picked_up(provider_factory, listing_url):
+    payload = build_payload(ALLU_LIVE)
+    card = payload["data"]["showtimeWidgets"][1]["data"][0]["data"][0]
+    deep = "https://in.bookmyshow.com/buytickets/x-hyderabad/movie-hyd-ET00478890-MT/20260925?sid=SALLU1930"
+    card["showtimes"][0]["cta"] = {"type": "showTimeRedirect", "additionalData": {"webUrl": deep}}
+    snap = provider_factory([payload]).resolve(listing_url)
+    allu = [s for s in snap.showtimes if s.venue_code == "ALLU"][0]
+    assert allu.booking_url == deep
+
+
+def test_a_non_bookmyshow_show_url_is_ignored(provider_factory, listing_url):
+    payload = build_payload(ALLU_LIVE)
+    card = payload["data"]["showtimeWidgets"][1]["data"][0]["data"][0]
+    card["showtimes"][0]["cta"] = {"additionalData": {"url": "https://tracker.example.com/r?x=1"}}
+    card["showtimes"][0]["additionalData"]["deeplink"] = "bms://seatlayout/118452"
+    snap = provider_factory([payload]).resolve(listing_url)
+    allu = [s for s in snap.showtimes if s.venue_code == "ALLU"][0]
+    assert allu.booking_url == f"{listing_url}/20260925"
+
+
+def test_target_result_time_links_follow_showtime_order(provider_factory, listing_url, make_monitor):
+    from monitor.checker import evaluate_target
+    from tests.conftest import ALLU_LIVE_EXTRA_SHOW
+
+    monitor = make_monitor()
+    snap = provider_factory([build_payload(ALLU_LIVE_EXTRA_SHOW)]).resolve(listing_url)
+    result = evaluate_target(monitor, monitor.targets[0], snap)
+    assert result.time_labels == ["07:30 PM", "09:45 PM"]
+    assert result.time_links == [["07:30 PM", f"{listing_url}/20260925"],
+                                 ["09:45 PM", f"{listing_url}/20260925"]]

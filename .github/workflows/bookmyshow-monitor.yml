@@ -1,13 +1,26 @@
 name: BookMyShow monitor
 
-# The schedule ticks every 5 minutes; the worker decides per monitor whether
-# enough time has actually elapsed for its 10/15/30-minute interval. That keeps
-# one workflow serving every interval without rewriting this cron each time the
-# user changes their mind in the UI.
+# How checks actually get their cadence
+# -------------------------------------
+# GitHub does not honour a "*/5" schedule. Measured on this repo (Sept 2026)
+# the scheduled runs landed at 03:57, 05:51, 10:42 and 16:14 IST — hours
+# apart — so a monitor created at 02:55 was first checked at 03:57. The
+# schedule below is therefore only a safety net. The real cadence comes from:
 #
-# GitHub does not run scheduled workflows on time. Delays of several minutes
-# are normal and delays of 15+ minutes happen under load, so the UI shows
-# "next check ~" rather than a countdown that pretends to be exact.
+#   1. The Streamlit app dispatching this workflow the moment a monitor is
+#      saved (workflow_dispatch with that monitor's id and force=true), so the
+#      first check happens within about a minute of START MONITORING.
+#   2. The worker running as a *segment*: `run_monitor.py --loop` stays alive
+#      for up to ~50 minutes, ticking every 30s, checking each monitor when its
+#      own 10/15/30-minute interval is due, pulling main between ticks (so
+#      monitors created or stopped in the UI are picked up) and committing each
+#      observation as it happens. When the segment ends with monitors still
+#      running it dispatches the next segment itself.
+#
+# The concurrency group below is what guarantees two segments never run at
+# once, so no monitor is ever checked twice simultaneously. If a dispatch
+# arrives while a segment is running it waits, and the running segment has
+# already picked the new monitor up from main in the meantime.
 #
 # Note: GitHub disables scheduled workflows on repos with no activity for 60
 # days. The monitor commits state on every real check, which keeps it alive
@@ -19,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: "Check now, ignoring each monitor's interval"
+        description: "Check now, ignoring each monitor's interval (first pass only)"
         type: boolean
         default: true
       dry_run:
@@ -27,28 +40,30 @@ on:
         type: boolean
         default: false
       monitor_id:
-        description: "Restrict to a single monitor id (optional)"
+        description: "Check this monitor first (optional). The segment then serves every monitor."
         type: string
         default: ""
 
-# Runs write data/ and push. Queue them instead of letting two runs race.
+# Segments write data/ and push, and must never overlap. Queue, don't cancel:
+# a pending dispatch is how the next segment (or a new monitor) gets its turn.
 concurrency:
   group: bookmyshow-monitor
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: write   # commit data/
+  actions: write    # dispatch the next segment
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 65   # a 50-minute segment plus setup and the final commit
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # the rebase below needs a merge base
+          fetch-depth: 0   # the rebase needs a merge base
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -59,36 +74,38 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run monitor
+      - name: Run monitor segment
         id: monitor
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # commits + next-segment dispatch
           TZ: Asia/Kolkata
+          PYTHONUNBUFFERED: "1"
         run: |
-          python run_monitor.py \
+          python run_monitor.py --loop --max-minutes 50 --poll-seconds 30 \
             ${{ (github.event_name == 'workflow_dispatch' && inputs.force) && '--force' || '' }} \
             ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }} \
             ${{ (github.event_name == 'workflow_dispatch' && inputs.monitor_id != '') && format('--monitor {0}', inputs.monitor_id) || '' }}
 
       - name: Commit state
-        # Runs even if the check step failed, so a freshly observed state is
-        # never lost. Anything that failed to notify stays un-notified in
-        # state.json and the next run retries it.
+        # The segment commits after every check; this is the net under it. It
+        # runs even if the segment failed, so an observation is never lost and
+        # anything that failed to notify stays un-notified for the next run.
         if: ${{ !cancelled() }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
-          if git diff --cached --quiet; then
-            echo "No state changes to commit"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: monitoring state $(date -u +'%Y-%m-%dT%H:%MZ') [skip ci]"
+          fi
+          if [ "$(git rev-list --count origin/${GITHUB_REF_NAME}..HEAD)" = "0" ]; then
+            echo "Nothing left to push"
             exit 0
           fi
-          git commit -m "chore: monitoring state $(date -u +'%Y-%m-%dT%H:%MZ') [skip ci]"
           # main may have moved while this run executed (the Streamlit app
           # saving a monitor, or a manual push). Rebase on top and retry.
-          # -X ours keeps THIS run's observations for data/ files touched on
-          # both sides — the worker owns state.json.
           for attempt in 1 2 3; do
             if git pull --rebase -X ours origin "${GITHUB_REF_NAME}" && git push; then
               echo "State pushed"

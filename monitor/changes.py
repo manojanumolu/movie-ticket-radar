@@ -48,6 +48,9 @@ class Change:
     time_labels: list[str] = field(default_factory=list)
     new_time_labels: list[str] = field(default_factory=list)
     new_showtime_keys: list[str] = field(default_factory=list)
+    #: ``[[label, url], …]`` for every showtime in ``time_labels``. The email
+    #: renders each label as a link to its url.
+    time_links: list[list[str]] = field(default_factory=list)
     detected_at: datetime | None = None
 
     @property
@@ -70,6 +73,7 @@ class Change:
             "booking_url": self.booking_url,
             "time_labels": self.time_labels,
             "new_time_labels": self.new_time_labels,
+            "time_links": [list(pair) for pair in self.time_links],
         }
 
 
@@ -124,6 +128,7 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
             date_code=result.date_code,
             booking_url=result.booking_url,
             time_labels=result.time_labels,
+            time_links=result.time_links,
             detected_at=at,
         )
 
@@ -155,6 +160,7 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
         date_code=result.date_code,
         booking_url=result.booking_url,
         time_labels=result.time_labels,
+        time_links=result.time_links,
         new_time_labels=sorted(set(new_labels)),
         new_showtime_keys=fresh,
         detected_at=at,
@@ -174,12 +180,14 @@ def apply_outcome(outcome: CheckOutcome, state: MonitorState) -> MonitorState:
     if not outcome.ok:
         state.consecutive_errors += 1
         state.last_error = outcome.error
+        state.last_error_kind = "BLOCKED" if outcome.blocked else "ERROR"
         return state
 
     state.success_count += 1
     state.last_success_at = outcome.checked_at
     state.consecutive_errors = 0
     state.last_error = ""
+    state.last_error_kind = ""
 
     for result in outcome.results:
         if not result.availability.is_answer:
@@ -198,6 +206,7 @@ def apply_outcome(outcome: CheckOutcome, state: MonitorState) -> MonitorState:
 
         ts.showtime_keys = result.showtime_keys
         ts.time_labels = result.time_labels
+        ts.time_links = result.time_links
         ts.date_code = result.date_code or ts.date_code
         ts.booking_url = result.booking_url or ts.booking_url
 

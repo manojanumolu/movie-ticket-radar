@@ -15,6 +15,10 @@ Two rules run through all of it:
   from what a provider returned. When the catalogue could not be built, the
   UI says so — it never falls back to an empty grid that reads as "nothing's
   on".
+
+Selectable tiles use the *pick* pattern from ``ui/theme.py``: the design's
+exact HTML inside ``st.container(key="pick_…")`` plus one ``st.button`` that
+the CSS stretches over the tile, so the whole tile is the hit target.
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ from datetime import datetime, time as dtime, timedelta
 
 import streamlit as st
 
-from config.locations import enabled_locations, get_location
+from config.locations import LOCATIONS, enabled_locations, get_location
 from config.timezone import IST, now_ist
 from monitor import catalogue
 from monitor.models import ANY_FORMAT, Venue, dedupe
@@ -42,6 +46,7 @@ DEFAULTS = {
     "formats": {},
     "interval": 10,
     "movie_query": "",
+    "start_now": True,
 }
 
 
@@ -75,6 +80,20 @@ def reset_from(step: int) -> None:
         }
 
 
+def pick(key: str, label: str, render, *, disabled: bool = False) -> bool:
+    """Render a tile and return True when it was clicked.
+
+    ``render`` draws the design HTML; the button underneath is what Streamlit
+    sees. ``key`` is the button's key (what tests click); the container gets
+    ``pick_<key>`` so the theme can find the pair.
+    """
+    with st.container(key=f"pick_{key}"):
+        render()
+        if disabled:
+            return False
+        return st.button(label, key=key, use_container_width=True)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # 1 · Location
 # ──────────────────────────────────────────────────────────────────────────
@@ -83,24 +102,20 @@ def step_location() -> None:
     st.write("")
 
     locations = enabled_locations()
-    coming = [loc for loc in __import__("config.locations", fromlist=["LOCATIONS"]).LOCATIONS
-              if not loc.enabled]
+    coming = [loc for loc in LOCATIONS if not loc.enabled][:2]
     current = st.session_state.get("location", "")
 
-    columns = st.columns(max(3, len(locations) + min(2, len(coming))))
+    columns = st.columns(max(3, len(locations) + len(coming)))
     for index, loc in enumerate(locations):
         with columns[index]:
-            C.location_tile(loc.name, loc.state, selected=loc.slug == current)
-            if st.button(
-                "Selected" if loc.slug == current else f"Choose {loc.name}",
-                key=f"loc_{loc.slug}",
-                use_container_width=True,
-            ):
+            selected = loc.slug == current
+            if pick(f"loc_{loc.slug}", "Selected" if selected else f"Choose {loc.name}",
+                    lambda loc=loc, selected=selected: C.location_tile(loc.name, loc.state, selected)):
                 if loc.slug != current:
                     st.session_state["location"] = loc.slug
                     reset_from(1)
                 goto(2)
-    for offset, loc in enumerate(coming[:2]):
+    for offset, loc in enumerate(coming):
         with columns[len(locations) + offset]:
             C.location_tile(loc.name, loc.state, selected=False, enabled=False)
 
@@ -123,7 +138,6 @@ def step_movie() -> bool:
     entries = catalogue.list_entries(location.slug)
     C.catalogue_banner(state["status"].value, state["message"],
                        ago(state["at"]), len(entries))
-    st.write("")
 
     if not entries:
         # Never let an unreadable catalogue masquerade as "no movies".
@@ -136,7 +150,7 @@ def step_movie() -> bool:
             st.caption("Nothing cached for this city yet — run a sync from **Settings**.")
         return False
 
-    query = st.text_input("Search movies", placeholder="Search movie name…",
+    query = st.text_input("Search movies", placeholder="⌕  Search for a movie…",
                           label_visibility="collapsed", key="movie_query")
     matches = catalogue.search_entries(query, location.slug)
     if not matches:
@@ -144,15 +158,15 @@ def step_movie() -> bool:
         return False
 
     selected = st.session_state.get("movie_id", "")
-    st.caption(f"{len(matches)} movie(s)")
+    st.caption(f"{len(matches)} movie(s) · tap a poster to select it")
     columns = st.columns(6)
     for index, entry in enumerate(matches[:36]):
         movie = catalogue.movie_from_entry(entry)
         with columns[index % 6]:
-            C.poster_tile(movie.title, movie.language or "", movie.id == selected,
-                          movie.poster_url)
-            if st.button("Selected" if movie.id == selected else "Select",
-                         key=f"movie_{movie.id}", use_container_width=True):
+            is_sel = movie.id == selected
+            meta = movie.language or ""
+            if pick(f"movie_{movie.id}", "Selected" if is_sel else f"Select {movie.title}",
+                    lambda m=movie, meta=meta, is_sel=is_sel: C.poster_tile(m.title, meta, is_sel, m.poster_url)):
                 if movie.id != selected:
                     st.session_state["movie_id"] = movie.id
                     reset_from(2)
@@ -176,12 +190,11 @@ def step_theatres() -> list[Venue]:
         return []
     movie = catalogue.movie_from_entry(entry)
 
-    head, action = st.columns([3, 1])
+    head, action = st.columns([3.2, 1])
     with head:
-        C.step_header(3, "Select theatres",
-                      f"Where {movie.title} is showing in {movie.city}.")
+        C.step_header(3, "Where do you want to watch?",
+                      f"One or more theatres showing {movie.title} in {movie.city}.")
     with action:
-        st.write("")
         select_all = st.button("Select all", key="select_all", use_container_width=True)
     st.write("")
 
@@ -202,17 +215,19 @@ def step_theatres() -> list[Venue]:
             )
         return []
 
+    chosen = set(st.session_state.get("theatres", []))
     if select_all:
-        st.session_state["theatres"] = [v.code for v in venues]
+        chosen = set(v.code for v in venues) if chosen != set(v.code for v in venues) else set()
+        st.session_state["theatres"] = [v.code for v in venues if v.code in chosen]
         st.rerun()
 
-    chosen = set(st.session_state.get("theatres", []))
     columns = st.columns(2)
     for index, venue in enumerate(venues):
         with columns[index % 2]:
-            C.theatre_tile(venue.name, venue.area, list(venue.formats), venue.code in chosen)
-            label = "Selected ✓" if venue.code in chosen else "Select theatre"
-            if st.button(label, key=f"th_{venue.code}", use_container_width=True):
+            is_sel = venue.code in chosen
+            label = "Selected ✓" if is_sel else f"Select {venue.name}"
+            if pick(f"th_{venue.code}", label,
+                    lambda v=venue, is_sel=is_sel: C.theatre_row(v.name, v.area, list(v.formats), is_sel, v.abbr)):
                 if venue.code in chosen:
                     chosen.discard(venue.code)
                     st.session_state["formats"].pop(venue.code, None)
@@ -237,7 +252,7 @@ def step_theatres() -> list[Venue]:
 # 4 · Formats
 # ──────────────────────────────────────────────────────────────────────────
 def step_formats(venues: list[Venue]) -> dict[str, list[str]]:
-    C.step_header(4, "Select formats", "Only the formats each theatre actually runs.")
+    C.step_header(4, "Formats, per theatre", "Only formats that theatre actually runs.")
     st.write("")
 
     if not venues:
@@ -247,31 +262,29 @@ def step_formats(venues: list[Venue]) -> dict[str, list[str]]:
     formats: dict[str, list[str]] = dict(st.session_state.get("formats", {}))
     for venue in venues:
         options = dedupe(venue.formats)
-        C.html(
-            f'<div class="tr-fmt-head"><div class="n">{C.e(venue.name)}</div>'
-            f'<div class="a">{C.e(venue.area or "Hyderabad")}</div></div>'
-        )
-        if not options:
-            st.caption("No format published for this theatre yet — watching every show.")
-            formats[venue.code] = [ANY_FORMAT]
-            continue
+        with st.container(key=f"trpanel_{venue.code}"):
+            left, right = st.columns([1, 1.6], gap="medium")
+            with left:
+                C.format_panel_head(venue.name, venue.area, options[0] if options else "")
+            with right:
+                if not options:
+                    st.caption("No format published for this theatre yet — watching every show.")
+                    formats[venue.code] = [ANY_FORMAT]
+                    continue
 
-        # Widget keys are namespaced by venue code, which is what keeps
-        # "AMB → HDR by Barco" from ever leaking into "Allu → Dolby Cinema".
-        chosen: list[str] = []
-        columns = st.columns(min(3, len(options)))
-        for index, fmt in enumerate(options):
-            with columns[index % len(columns)]:
-                if st.checkbox(fmt, key=f"fmt_{venue.code}_{fmt}",
-                               value=fmt in formats.get(venue.code, [])):
-                    chosen.append(fmt)
-        any_key = f"fmt_{venue.code}_any"
-        if st.checkbox("Any format", key=any_key,
-                       value=ANY_FORMAT in formats.get(venue.code, []),
-                       help="Watch every show at this theatre, whatever the format."):
-            chosen = [ANY_FORMAT]
-        formats[venue.code] = chosen
-        st.write("")
+                # Widget keys are namespaced by venue code, which is what keeps
+                # "AMB → HDR by Barco" from ever leaking into "Allu → Dolby Cinema".
+                chosen: list[str] = []
+                any_key = f"fmt_{venue.code}_any"
+                any_on = st.checkbox("Any format", key=any_key,
+                                     value=ANY_FORMAT in formats.get(venue.code, []))
+                for fmt in options:
+                    if st.checkbox(fmt, key=f"fmt_{venue.code}_{fmt}",
+                                   value=fmt in formats.get(venue.code, [])):
+                        chosen.append(fmt)
+                if any_on:
+                    chosen = [ANY_FORMAT]
+                formats[venue.code] = chosen
 
     st.session_state["formats"] = formats
     unset = [v.name for v in venues if not formats.get(v.code)]
@@ -290,46 +303,48 @@ def step_formats(venues: list[Venue]) -> dict[str, list[str]]:
 # ──────────────────────────────────────────────────────────────────────────
 # 5 · Monitoring
 # ──────────────────────────────────────────────────────────────────────────
-def step_monitoring(default_email: str) -> tuple[int, datetime, str]:
-    C.step_header(5, "Monitoring", "How often to check, and when to stop.")
-    st.write("")
+def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool]:
+    left, right = st.columns(2, gap="large")
 
-    C.html('<div class="tr-field-label">Check frequency</div>')
-    current = st.session_state.get("interval", 10)
-    try:
-        chosen = st.segmented_control(
-            "Interval", INTERVALS,
-            default=current if current in INTERVALS else 10,
-            format_func=lambda m: f"Every {m} minutes",
-            label_visibility="collapsed", key="interval_pick",
-        )
-    except AttributeError:  # older Streamlit
-        chosen = st.radio("Interval", INTERVALS,
-                          index=INTERVALS.index(current) if current in INTERVALS else 0,
-                          format_func=lambda m: f"Every {m} minutes", horizontal=True,
-                          label_visibility="collapsed", key="interval_pick")
-    interval = chosen if chosen in INTERVALS else current
-    st.session_state["interval"] = interval
-    st.caption("Checks run in the background. They're scheduled, so treat this as a "
-               "floor rather than a promise.")
+    with left:
+        C.step_header(5, "How often should I check?", "Checks run automatically in the background.")
+        st.write("")
+        current = st.session_state.get("interval", 10)
+        if current not in INTERVALS:
+            current = 10
+        cols = st.columns(3)
+        for column, minutes in zip(cols, INTERVALS):
+            with column:
+                if pick(f"interval_{minutes}", f"Every {minutes} minutes",
+                        lambda m=minutes, sel=(minutes == current): C.interval_tile(m, sel)):
+                    st.session_state["interval"] = minutes
+                    st.rerun()
+        interval = current
+        st.caption("The first check runs as soon as you start; after that, about every "
+                   f"{interval} minutes.")
 
-    st.write("")
-    C.html('<div class="tr-field-label">Monitor until</div>')
-    left, right = st.columns([1.5, 1])
-    end_date = left.date_input("End date", value=(now_ist() + timedelta(days=1)).date(),
-                               min_value=now_ist().date(), format="DD/MM/YYYY",
-                               key="until_date", label_visibility="collapsed")
-    end_time = right.time_input("End time", value=dtime(23, 59), step=timedelta(minutes=15),
-                                key="until_time", label_visibility="collapsed")
-    until = datetime.combine(end_date, end_time, tzinfo=IST)
-    st.caption("The monitor stops itself at this time — you never have to remember to.")
+    with right:
+        C.step_header("◷", "Monitor until", "The monitor stops itself after this time.")
+        st.write("")
+        date_col, time_col = st.columns([1.5, 1])
+        end_date = date_col.date_input("End date", value=(now_ist() + timedelta(days=1)).date(),
+                                       min_value=now_ist().date(), format="DD/MM/YYYY",
+                                       key="until_date", label_visibility="collapsed")
+        end_time = time_col.time_input("End time", value=dtime(23, 59), step=timedelta(minutes=15),
+                                       key="until_time", label_visibility="collapsed")
+        until = datetime.combine(end_date, end_time, tzinfo=IST)
+        start_now = st.toggle("Start checking immediately", key="start_now_toggle",
+                              value=bool(st.session_state.get("start_now", True)),
+                              help="Runs the first check the moment you press Start, "
+                                   "instead of waiting for the next scheduled run.")
+        st.session_state["start_now"] = bool(start_now)
 
     st.write("")
     C.html('<div class="tr-field-label">Notification email</div>')
     email = st.text_input("Notification email", value=default_email,
                           placeholder="you@gmail.com", label_visibility="collapsed",
                           key="notify_email")
-    return interval, until, email.strip()
+    return interval, until, email.strip(), bool(start_now)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -378,6 +393,7 @@ __all__ = [
     "ago",
     "boot",
     "goto",
+    "pick",
     "reset_from",
     "step_formats",
     "step_location",

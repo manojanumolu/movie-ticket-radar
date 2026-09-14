@@ -1,6 +1,6 @@
 """Movie Ticket Radar — Streamlit front end.
 
-Flow (TicketRadar UI Design System, extended to lead with location):
+Flow (ticketradar-ui-design-system-2, led by location):
 
     1 Location → 2 Movie → 3 Theatres → 4 Formats → 5 Monitoring → START
 
@@ -12,7 +12,9 @@ host. ``ui/flow.py`` owns the wizard; this module owns the page and the rail.
 
 The app only ever *configures* monitoring and *reports* what the worker saw.
 It never claims a check happened: every timestamp on screen comes from
-``data/state.json``, which only the worker writes.
+``data/state.json``, which only the worker writes. What it *does* do, the
+moment a monitor is saved, is ask the worker to run right now — so the first
+check is a minute away, not the next time GitHub's scheduler gets round to it.
 """
 
 from __future__ import annotations
@@ -33,7 +35,9 @@ from config.store import (  # noqa: E402
     github_token,
     load_history,
     load_settings,
+    request_check_now,
     save_settings,
+    sync_from_github,
 )
 from config.timezone import fmt_datetime, fmt_time, now_ist  # noqa: E402
 from monitor import catalogue  # noqa: E402
@@ -56,7 +60,7 @@ from ui import components as C  # noqa: E402
 from ui import flow  # noqa: E402
 from ui.theme import inject  # noqa: E402
 
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.1.0"
 
 inject()
 
@@ -73,16 +77,30 @@ def drain_flash() -> None:
     if not payload:
         return
     kind, message = payload
-    {"success": st.success, "error": st.error, "warning": st.warning}.get(kind, st.info)(message)
+    # The design's own voice for feedback; st.warning/st.error stay for the
+    # tests' sake and are restyled by the theme.
+    if kind == "warning":
+        st.warning(message)
+    elif kind == "error":
+        st.error(message)
+    else:
+        C.flash(kind, message)
+
+
+def mirrored() -> bool:
+    return bool(github_token())
 
 
 def load_view():
     """Persisted config + state, expiring anything past its end time.
 
-    Expiry runs here as well as in the worker, so a monitor can never look
-    alive in the UI merely because no scheduled run has happened yet.
+    Reads through to the repository first (rate-limited), because the worker
+    commits every observation there and this container may be behind. Expiry
+    then runs here as well as in the worker, so a monitor can never look
+    alive in the UI merely because no run has happened yet.
     """
-    monitors, _ = expire_due_monitors(mirror=bool(github_token()))
+    sync_from_github()
+    monitors, _ = expire_due_monitors(mirror=mirrored())
     return monitors, load_state(), load_history()
 
 
@@ -91,18 +109,12 @@ def load_view():
 # ──────────────────────────────────────────────────────────────────────────
 def sidebar(active_count: int) -> str:
     with st.sidebar:
-        C.html(
-            """<div class="tr-logo">
-              <div class="tr-logo-mark">R</div>
-              <div><div class="tr-logo-name">Ticket<em>Radar</em></div>
-              <div class="tr-logo-sub">Be first in line.</div></div>
-            </div>"""
-        )
-        st.write("")
+        C.logo()
         pages = ["Home", "My Monitors", "History", "Settings"]
-        labels = {"My Monitors": f"My Monitors  ·  {active_count}"} if active_count else {}
+        labels = {"My Monitors": f"My Monitors `{active_count}`"} if active_count else {}
         choice = st.radio("Navigation", pages, format_func=lambda p: labels.get(p, p),
                           key="page", label_visibility="collapsed")
+        st.write("")
         st.write("")
         C.html(
             '<div class="tr-quote">“Good movies find their audience. '
@@ -116,7 +128,7 @@ def sidebar(active_count: int) -> str:
 # ──────────────────────────────────────────────────────────────────────────
 # Starting a monitor
 # ──────────────────────────────────────────────────────────────────────────
-def start_monitor(interval: int, until, email: str) -> None:
+def start_monitor(interval: int, until, email: str, start_now: bool) -> None:
     entry = catalogue.find_entry(st.session_state.get("movie_id", ""))
     venues = {v.code: v for v in catalogue.venues_from_entry(entry or {})}
     formats: dict[str, list[str]] = st.session_state.get("formats", {})
@@ -157,19 +169,37 @@ def start_monitor(interval: int, until, email: str) -> None:
         interval_minutes=interval,
         monitor_until=until,
         notify_email=email,
+        start_immediately=start_now,
     )
-    upsert_monitor(monitor, mirror=bool(github_token()))
-    record_history(monitor, "CREATED", "Monitor created.", mirror=bool(github_token()))
+    # 1. Persist — and mirror to the repo, which is where the worker reads.
+    upsert_monitor(monitor, mirror=mirrored())
+    record_history(monitor, "CREATED", "Monitor created.", mirror=mirrored())
 
     settings = load_settings()
     if settings.get("notify_email") != email:
-        save_settings({**settings, "notify_email": email}, mirror=bool(github_token()))
+        save_settings({**settings, "notify_email": email}, mirror=mirrored())
 
-    flash(
-        "success",
-        f"Watching **{monitor.movie.title}** across {len(targets)} theatre/format "
-        f"combination(s), every {interval} minutes, until {fmt_datetime(until)}.",
-    )
+    # 2. Ask the worker to check it now. This is what turns "some time in the
+    #    next hour, when GitHub's scheduler feels like it" into "about a
+    #    minute from now". If it can't be asked, the monitor is still saved and
+    #    the scheduled run remains the safety net — the UI just says so.
+    dispatched, why = (False, "not requested")
+    if start_now:
+        dispatched, why = request_check_now(monitor.id)
+        if dispatched:
+            monitor.first_check_requested_at = now_ist()
+            upsert_monitor(monitor, mirror=mirrored())
+
+    where = (f"Watching **{monitor.movie.title}** across {len(targets)} theatre/format "
+             f"combination(s), every {interval} minutes, until {fmt_datetime(until)}.")
+    if dispatched:
+        flash("success", where + " First check is running now.")
+    elif start_now and mirrored():
+        flash("warning", where + f" Couldn't start an immediate check ({why}); the "
+              "scheduled worker will pick it up.")
+    else:
+        flash("success", where + " The scheduled worker will pick it up.")
+
     st.session_state["step"] = 1
     st.session_state["furthest"] = 1
     st.rerun()
@@ -186,6 +216,7 @@ def status_card(monitor_id: str) -> None:
     without resetting the wizard above it, and picks up a check the worker
     committed while you were looking at the page.
     """
+    sync_from_github()
     monitor = next((m for m in load_monitors() if m.id == monitor_id), None)
     if monitor is None:
         return
@@ -195,10 +226,10 @@ def status_card(monitor_id: str) -> None:
 def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list[dict]) -> None:
     active = [m for m in monitors if m.is_running()]
     if not active:
-        C.html('<div class="tr-eyebrow" style="margin-bottom:9px;">Active monitoring</div>')
+        C.html('<div class="tr-eyebrow" style="margin-bottom:9px;">Active monitor</div>')
         C.empty_card()
         if history:
-            C.html('<div class="tr-eyebrow" style="margin:18px 0 9px;">Recent history</div>')
+            C.html('<div class="tr-rail-head" style="margin-top:18px;"><span class="tr-eyebrow">Recent history</span></div>')
             C.history_rows(history)
         return
 
@@ -206,19 +237,16 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
     state = states.get(monitor.id, MonitorState())
     C.html(
         '<div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;">'
-        '<span class="tr-dot ok live"></span>'
-        '<span style="font-size:14px;font-weight:700;">Active monitoring</span>'
+        '<span class="tr-dot ok live big"></span>'
+        '<span style="font-size:14px;font-weight:700;">Active monitor</span>'
         f'<span class="tr-count">{len(active)}</span></div>'
     )
     status_card(monitor.id)
-    st.write("")
 
-    C.html('<div class="tr-danger">')
     if st.button("■  Stop monitoring", key=f"stop_{monitor.id}", use_container_width=True):
-        stop_monitor(monitor.id, mirror=bool(github_token()))
+        stop_monitor(monitor.id, mirror=mirrored())
         flash("success", "Monitoring stopped. The background worker will skip it from now on.")
         st.rerun()
-    C.html("</div>")
 
     st.write("")
     C.target_rows(monitor, state)
@@ -226,7 +254,7 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
     if len(active) > 1:
         st.caption(f"+{len(active) - 1} more active — see **My Monitors**.")
     if history:
-        C.html('<div class="tr-eyebrow" style="margin:18px 0 9px;">Recent history</div>')
+        C.html('<div class="tr-rail-head" style="margin-top:14px;"><span class="tr-eyebrow">Recent history</span></div>')
         C.history_rows(history)
 
 
@@ -269,7 +297,17 @@ def page_home(monitors, states, history, settings) -> None:
             (m for m in monitors if m.is_running()
              and states.get(m.id, MonitorState()).consecutive_errors), None)
         if errored is not None:
-            C.error_card(states[errored.id], errored.interval_minutes)
+            card, action = st.columns([2.2, 1], gap="medium")
+            with card:
+                C.error_card(states[errored.id], errored.interval_minutes)
+            with action:
+                st.write("")
+                if st.button("Retry now", key=f"retry_{errored.id}", use_container_width=True):
+                    ok, msg = request_check_now(errored.id)
+                    flash("success" if ok else "error",
+                          "Retry requested — the worker is checking again." if ok else msg)
+                    st.rerun()
+                st.caption("The monitor keeps running. We retry automatically either way.")
             st.write("")
 
         step = st.session_state.get("step", 1)
@@ -281,7 +319,6 @@ def page_home(monitors, states, history, settings) -> None:
             back, _ = st.columns([1, 4])
             if back.button("←  Back", key="back", use_container_width=True):
                 flow.goto(step - 1)
-            st.write("")
 
         with st.container(border=True, key="trcard_step"):
             if step == 1:
@@ -296,17 +333,16 @@ def page_home(monitors, states, history, settings) -> None:
                 flow.step_formats([venues[c] for c in st.session_state.get("theatres", [])
                                    if c in venues])
             else:
-                interval, until, email = flow.step_monitoring(settings.get("notify_email", ""))
+                interval, until, email, start_now = flow.step_monitoring(settings.get("notify_email", ""))
                 st.write("")
                 cta, helper = st.columns([2.2, 1], gap="medium")
                 with cta:
                     if st.button("▶  Start monitoring", type="primary",
                                  use_container_width=True, key="start"):
-                        start_monitor(interval, until, email)
+                        start_monitor(interval, until, email, start_now)
                 with helper:
                     C.html(
-                        '<div style="font-size:12.5px;line-height:1.5;color:#8E8E98;padding-top:8px;">'
-                        '<span style="color:#E8B25C;">⚡</span> You\'ll get an email the second '
+                        '<div class="tr-cta-help"><span>⚡</span> You\'ll get an email the second '
                         "tickets appear — and the monitor keeps running for the other theatres.</div>"
                     )
 
@@ -343,23 +379,27 @@ def page_monitors(monitors, states) -> None:
         with right:
             st.write("")
             if monitor.is_running():
-                C.html('<div class="tr-danger">')
                 if st.button("■  Stop monitoring", key=f"m_stop_{monitor.id}",
                              use_container_width=True):
-                    stop_monitor(monitor.id, mirror=bool(github_token()))
+                    stop_monitor(monitor.id, mirror=mirrored())
                     flash("success", "Monitoring stopped.")
                     st.rerun()
-                C.html("</div>")
+                if kind == "error":
+                    if st.button("Retry now", key=f"m_retry_{monitor.id}", use_container_width=True):
+                        ok, msg = request_check_now(monitor.id)
+                        flash("success" if ok else "error",
+                              "Retry requested — the worker is checking again." if ok else msg)
+                        st.rerun()
             else:
-                C.html('<div class="tr-amber">')
                 if st.button("Extend by 24 hours", key=f"m_ext_{monitor.id}",
                              use_container_width=True):
-                    extend_monitor(monitor.id, 24, mirror=bool(github_token()))
-                    flash("success", "Extended by 24 hours — monitoring is active again.")
+                    extend_monitor(monitor.id, 24, mirror=mirrored())
+                    ok, _ = request_check_now(monitor.id)
+                    flash("success", "Extended by 24 hours — monitoring is active again"
+                          + (" and a check is running now." if ok else "."))
                     st.rerun()
-                C.html("</div>")
             if st.button("Delete", key=f"m_del_{monitor.id}", use_container_width=True):
-                delete_monitor(monitor.id, mirror=bool(github_token()))
+                delete_monitor(monitor.id, mirror=mirrored())
                 flash("success", "Monitor deleted.")
                 st.rerun()
 
@@ -394,8 +434,7 @@ def page_settings(settings) -> None:
                               placeholder="you@gmail.com", key="settings_email")
         a, b = st.columns(2)
         if a.button("Save", use_container_width=True, key="save_settings"):
-            save_settings({**settings, "notify_email": email.strip()},
-                          mirror=bool(github_token()))
+            save_settings({**settings, "notify_email": email.strip()}, mirror=mirrored())
             flash("success", "Settings saved.")
             st.rerun()
         if b.button("Send test email", use_container_width=True, key="test_email"):
@@ -433,11 +472,15 @@ def page_settings(settings) -> None:
             flash("success" if ok else "error", msg)
             st.rerun()
         if st.button("Run a ticket check now", use_container_width=True, key="run_now"):
-            ok, msg = dispatch_workflow("bookmyshow-monitor.yml", {"force": "true"})
-            flash("success" if ok else "error", msg)
+            ok, msg = request_check_now()
+            flash("success" if ok else "error",
+                  "Check started — results land in the rail within a minute or two." if ok else msg)
             st.rerun()
         connected, message = github_status()
         st.caption(("✓ " if connected else "! ") + message)
+        if connected:
+            st.caption("Immediate first checks need the token to have the *Actions: write* "
+                       "scope as well as *Contents*; without it, monitors wait for the schedule.")
 
 
 # ──────────────────────────────────────────────────────────────────────────
