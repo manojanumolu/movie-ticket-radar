@@ -125,6 +125,15 @@ the table above for the current runner and changes nothing.
                                                             Gmail SMTP --> inbox
 ```
 
+A film is one row per language in the picker, but BookMyShow lists each
+premium format (3D, 4DX 3D, IMAX, EPIQ, MS-Infinity Vision…) as a *separate
+event* with its own theatres. The sync records those sibling events on the row
+(`MovieRef.variants`) and the provider sweeps them on every read — for the
+catalogue and for the worker's checks alike — so the theatre list is the whole
+film, not one format of it. (Avengers Endgame: Encore was 3 theatres before
+this and 9 after.) Detail is re-read every six hours, because theatres are
+added as a release approaches and drop off as the day's shows run out.
+
 The UI **never calls BookMyShow to build its movie grid.** It reads what the
 sync job committed. That is the whole point: a Streamlit Cloud container is
 exactly the kind of host the bot check refuses, and the user should not have to
@@ -197,12 +206,13 @@ config/
   store.py                  atomic JSON IO + GitHub mirroring
   timezone.py               everything is IST
 ui/
-  theme.py                  the design system, as CSS
-  flow.py                   the five-step wizard
-  components.py             status cards
+  theme.py                  the design system, as CSS (Manrope + DM Mono)
+  flow.py                   the five-step wizard: rail, search, featured picks
+  components.py             cards, rows, pills
+  catalogue_view.py         the catalogue parsed once per file, for the UI
 tools/
   bms_diagnose.py           reachability diagnostics (run it on a runner)
-tests/                      158 tests, no network, no SMTP
+tests/                      195 tests, no network, no SMTP
 ticketradar-ui-design-system-2/   the design (visual source of truth)
 .github/workflows/
   bookmyshow-monitor.yml    ticket checks: dispatched on start, then segments; cron as fallback
@@ -399,9 +409,9 @@ GitHub also disables scheduled workflows on repos with no activity for 60
 days — push anything to re-enable.
 
 **The theatre list is stale.**
-**Settings → Refresh every movie's theatres**, or press *Refresh* on the
-individual movie. Theatres and formats are whatever the listing said when it
-was last resolved.
+**Settings → Refresh catalogue now**. Theatres and formats are whatever the
+listing said when it was last resolved; the sync re-reads any movie older than
+six hours, and re-reads immediately when BookMyShow adds a new format event.
 
 ---
 

@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import lru_cache
 from html import escape
 from pathlib import Path
 
@@ -98,8 +99,13 @@ def e(value: object) -> str:
     return escape(str(value if value is not None else ""))
 
 
+@lru_cache(maxsize=16)
 def asset_uri(name: str) -> str:
-    """A bundled image as a data URI (st.markdown can't serve local files)."""
+    """A bundled image as a data URI (st.markdown can't serve local files).
+
+    Cached: the three platform logos are ~37 KB of PNG that every rerun was
+    re-reading and re-encoding.
+    """
     path = ASSETS / name
     try:
         return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
@@ -147,21 +153,25 @@ def step_header(number: int | str, title: str, help_text: str) -> None:
     )
 
 
-def step_strip(steps: list[str], current: int, furthest: int) -> None:
-    """The 1–5 progress rail (desktop) and the "STEP n OF 5" eyebrow (mobile).
+def step_pip(index: int, label: str, state: str) -> None:
+    """One cell of the 1–5 progress rail. ``state`` is now · done · todo.
 
-    ``current`` is where the user is; ``furthest`` is how far they have got,
-    so a completed step reads as done even while they are back editing an
-    earlier one.
+    ``done`` cells are rendered inside a *pick* container by the flow, so the
+    rail doubles as a breadcrumb: clicking a completed step goes back to it
+    with everything already chosen still chosen.
     """
+    mark = "✓" if state == "done" else str(index)
+    html(
+        f'<div class="tr-step-pip {e(state)}">'
+        f'<span class="n">{mark}</span><span class="l">{e(label)}</span></div>'
+    )
+
+
+def step_strip(steps: list[str], current: int, furthest: int) -> None:
+    """The whole rail as one block (non-interactive; the flow draws the live one)."""
     cells = []
     for index, label in enumerate(steps, start=1):
-        if index == current:
-            state = "now"
-        elif index <= furthest:
-            state = "done"
-        else:
-            state = "todo"
+        state = "now" if index == current else ("done" if index <= furthest else "todo")
         mark = "✓" if state == "done" else str(index)
         cells.append(
             f'<div class="tr-step-pip {state}">'
@@ -184,6 +194,18 @@ def summary_row(number: int, label: str, value: str) -> None:
     )
 
 
+def summary_strip(items: list[tuple[int, str, str]]) -> None:
+    """Everything already answered, as one row of chips: (step, label, value)."""
+    if not items:
+        return
+    chips = "".join(
+        f'<div class="i"><span class="n">✓</span><span class="k">{n} · {e(label)}</span>'
+        f'<span class="v" title="{escape(value, quote=True)}">{e(value)}</span></div>'
+        for n, label, value in items
+    )
+    html(f'<div class="tr-summary-strip">{chips}</div>')
+
+
 def flash(kind: str, message: str) -> None:
     """A message in the palette's own voice (success / warning / error / info).
 
@@ -193,6 +215,12 @@ def flash(kind: str, message: str) -> None:
     parts = e(message).split("**")
     body = "".join(f"<b>{p}</b>" if i % 2 else p for i, p in enumerate(parts))
     html(f'<div class="tr-flash {e(kind)}"><span class="g">{glyph}</span><div>{body}</div></div>')
+
+
+def status_line(kind: str, text: str) -> None:
+    """A one-line fact with a glyph: ok · warn · bad · wait · info."""
+    glyph = {"ok": "✓", "warn": "⚠", "bad": "!", "wait": "◷", "info": "●"}.get(kind, "●")
+    html(f'<div class="tr-status {e(kind)}"><span class="g">{glyph}</span><span>{e(text)}</span></div>')
 
 
 def platform_selector(platforms, active_slug: str, theatre_count: int, city: str) -> None:
@@ -253,25 +281,62 @@ def location_tile(name: str, sub: str, selected: bool, enabled: bool = True) -> 
     )
 
 
-def theatre_row(name: str, area: str, formats: list[str], selected: bool, abbr: str) -> None:
-    """The design's checkbox row: box · abbreviation tile · name / area · formats."""
-    chips = "".join(f'<span class="tr-badge">{e(f)}</span>' for f in formats[:2])
-    if len(formats) > 2:
-        chips += f'<span class="tr-badge muted">+{len(formats) - 2}</span>'
+def theatre_row(name: str, area: str, formats: list[str], selected: bool, abbr: str,
+                featured: bool = False) -> None:
+    """The design's checkbox row: box · abbreviation tile · name / area · formats.
+
+    Long names ("Sai Ranga70MM 4KLaser Dolby7.1 AirCooled") wrap; format
+    badges sit on their own line and wrap too, so nothing leaves the card.
+    """
+    shown = formats[:3]
+    chips = "".join(f'<span class="tr-badge">{e(f)}</span>' for f in shown)
+    if len(formats) > 3:
+        chips += f'<span class="tr-badge muted">+{len(formats) - 3} more</span>'
     if not formats:
         chips = '<span class="tr-badge muted">formats not published yet</span>'
+    star = '<span class="tr-star" title="Featured theatre">★</span>' if featured else ""
     html(
         f"""<div class="tr-throw{' selected' if selected else ''}">
           <div class="box">{'✓' if selected else ''}</div>
           <div class="ab">{e(abbr)}</div>
-          <div style="min-width:0;"><div class="n">{e(name)}</div><div class="a">{e(area or 'Hyderabad')}</div></div>
-          <div class="fmts">{chips}</div>
+          <div class="body">
+            <div class="n">{e(name)}{star}</div>
+            <div class="a">{e(area or 'Hyderabad')}</div>
+            <div class="fmts">{chips}</div>
+          </div>
+        </div>"""
+    )
+
+
+def featured_tile(name: str, area: str, venue, selected: bool) -> None:
+    """A premium quick-pick. ``venue`` is the movie's matching theatre, or
+    None — in which case the tile says so and cannot be picked."""
+    if venue is None:
+        html(
+            f"""<div class="tr-feat off">
+              <div class="k">Featured</div>
+              <div class="n">{e(name)}</div>
+              <div class="a">{e(area)}</div>
+              <div class="s">Not screening this movie</div>
+            </div>"""
+        )
+        return
+    count = len(venue.formats)
+    sub = (f"{count} format{'s' if count != 1 else ''} · {e(venue.formats[0])}" if count
+           else "formats not published yet")
+    check = '<div class="tr-check">✓</div>' if selected else ""
+    html(
+        f"""<div class="tr-feat{' selected' if selected else ''}">{check}
+          <div class="k">Featured</div>
+          <div class="n">{e(venue.name)}</div>
+          <div class="a">{e(venue.area or area)}</div>
+          <div class="s">{sub}</div>
         </div>"""
     )
 
 
 def format_panel_head(name: str, area: str, badge: str = "") -> None:
-    badge_html = f'<div><span class="tr-badge">{e(badge)}</span></div>' if badge else ""
+    badge_html = f'<div class="b"><span class="tr-badge">{e(badge)}</span></div>' if badge else ""
     html(
         f'<div class="tr-fmt-head"><div class="n">{e(name)}</div>'
         f'<div class="a">{e(area or "Hyderabad")}</div>{badge_html}</div>'
@@ -292,17 +357,19 @@ def interval_tile(minutes: int, selected: bool) -> None:
     )
 
 
-def poster_tile(title: str, meta: str, selected: bool, poster_url: str = "") -> None:
+def poster_tile(title: str, meta: str, selected: bool, poster_url: str = "",
+                compact: bool = False) -> None:
     art = (
-        f'<img src="{escape(poster_url, quote=True)}" alt="" loading="lazy">'
+        f'<img src="{escape(poster_url, quote=True)}" alt="" loading="lazy" decoding="async">'
         if poster_url
         else FILM_GLYPH.format(size=22)
     )
     check = '<div class="tr-check">✓</div>' if selected else ""
     html(
-        f"""<div class="tr-poster{' selected' if selected else ''}">
+        f"""<div class="tr-poster{' selected' if selected else ''}{' compact' if compact else ''}">
           <div class="art">{art}{check}</div>
-          <div class="body"><div class="t">{e(title)}</div><div class="m">{e(meta)}</div></div>
+          <div class="body"><div class="t" title="{escape(title, quote=True)}">{e(title)}</div>
+          <div class="m">{e(meta)}</div></div>
         </div>"""
     )
 
@@ -571,49 +638,139 @@ def active_monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime |
     )
 
 
+def target_row_markup(monitor: Monitor, state: MonitorState, target, finished: str = "") -> str:
+    """One theatre/format row. ``finished`` is 'stopped' / 'expired' / ''."""
+    ts = state.targets.get(target.key)
+    availability = ts.availability if ts else Availability.UNKNOWN
+    label, cls, glyph = AVAILABILITY_UI.get(availability, ("Watching", "", "◌"))
+
+    if finished and availability is not Availability.AVAILABLE:
+        # A stopped or expired monitor is not "watching" anything.
+        word = "Expired" if finished == "expired" else "Stopped"
+        last = label.lower() if ts else "never checked"
+        sub = f"{target.fmt} · {last}"
+        right = (f'<div class="r warn">◷ {word}</div>' if finished == "expired"
+                 else f'<div class="r">■ {word}</div>')
+        row_cls = ""
+    elif availability is Availability.AVAILABLE:
+        times = ts.time_labels if ts else []
+        sub = f"{target.fmt} · {len(times)} showtime{'s' if len(times) != 1 else ''}"
+        right = f'<div class="r ok">✓ {e(label)}</div>'
+        row_cls = " ok"
+    elif availability is Availability.UNKNOWN:
+        sub = f"{target.fmt} · waiting for first check" if state.last_check_at is None \
+            else f"{target.fmt} · not released yet"
+        right = '<div class="r"><span class="tr-spin grey"></span>Watching</div>'
+        row_cls = ""
+    elif availability in (Availability.SHOW_NOT_AVAILABLE, Availability.THEATRE_NOT_AVAILABLE,
+                          Availability.NOT_BOOKABLE):
+        sub = f"{target.fmt} · {label.lower()}"
+        right = '<div class="r"><span class="tr-spin grey"></span>Watching</div>'
+        row_cls = ""
+    else:
+        sub = f"{target.fmt} · {label.lower()}"
+        right = f'<div class="r {cls}">{e(glyph)} {e(label)}</div>'
+        row_cls = f" {cls}" if cls else ""
+
+    return (
+        f'<div class="tr-row{row_cls}">'
+        f'<div class="body"><div class="n">{e(target.venue_name)}</div><div class="s">{e(sub)}</div></div>'
+        f'{right}</div>'
+    )
+
+
 def target_rows(monitor: Monitor, state: MonitorState) -> None:
     """Per-theatre status. One theatre going live never mutes the others."""
     html(f'<div class="tr-eyebrow" style="margin-bottom:9px;">Theatres ({len(monitor.targets)})</div>')
     finished = phase_for(monitor, state).key if not monitor.is_running() else ""
     for target in monitor.targets:
-        ts = state.targets.get(target.key)
-        availability = ts.availability if ts else Availability.UNKNOWN
-        label, cls, glyph = AVAILABILITY_UI.get(availability, ("Watching", "", "◌"))
+        html(target_row_markup(monitor, state, target, finished))
 
-        if finished and availability is not Availability.AVAILABLE:
-            # A stopped or expired monitor is not "watching" anything.
-            word = "Expired" if finished == "expired" else "Stopped"
-            last = label.lower() if ts else "never checked"
-            sub = f"{target.fmt} · {last}"
-            right = (f'<div class="r warn">◷ {word}</div>' if finished == "expired"
-                     else f'<div class="r">■ {word}</div>')
-            row_cls = ""
-        elif availability is Availability.AVAILABLE:
-            times = ts.time_labels if ts else []
-            sub = f"{target.fmt} · {len(times)} showtime{'s' if len(times) != 1 else ''}"
-            right = f'<div class="r ok">✓ {e(label)}</div>'
-            row_cls = " ok"
-        elif availability is Availability.UNKNOWN:
-            sub = f"{target.fmt} · waiting for first check" if state.last_check_at is None \
-                else f"{target.fmt} · not released yet"
-            right = '<div class="r"><span class="tr-spin grey"></span>Watching</div>'
-            row_cls = ""
-        elif availability in (Availability.SHOW_NOT_AVAILABLE, Availability.THEATRE_NOT_AVAILABLE,
-                              Availability.NOT_BOOKABLE):
-            sub = f"{target.fmt} · {label.lower()}"
-            right = '<div class="r"><span class="tr-spin grey"></span>Watching</div>'
-            row_cls = ""
-        else:
-            sub = f"{target.fmt} · {label.lower()}"
-            right = f'<div class="r {cls}">{e(glyph)} {e(label)}</div>'
-            row_cls = f" {cls}" if cls else ""
 
-        html(
-            f"""<div class="tr-row{row_cls}">
-              <div style="min-width:0;"><div class="n">{e(target.venue_name)}</div><div class="s">{e(sub)}</div></div>
-              {right}
-            </div>"""
-        )
+#: The short word the My Monitors pills use for each phase.
+PILL_LABEL = {
+    "available": "AVAILABLE", "sold_out": "SOLD OUT", "stopped": "STOPPED", "expired": "EXPIRED",
+    "problem": "PROBLEM", "blocked": "BLOCKED", "error": "ERROR", "waiting": "WAITING",
+    "not_released": "ACTIVE",
+}
+
+
+def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None = None) -> None:
+    """One monitor as a single scannable card, for My Monitors.
+
+    Everything the user asked to know is here as a labelled fact, and every
+    timestamp comes from the worker's state — the card never implies a check
+    happened that the worker did not report.
+    """
+    at = at or now_ist()
+    phase = phase_for(monitor, state, at=at)
+    finished = phase.key if not monitor.is_running(at) else ""
+    tone = {"available": "ok", "sold_out": "warn", "waiting": "warn", "expired": "warn",
+            "problem": "bad", "blocked": "bad", "error": "bad", "stopped": "muted"}.get(phase.key, "ok")
+    next_value, next_class = next_check_text(monitor, state, at) if not finished else ("—", "soft")
+
+    venues = dedupe_names([t.venue_name for t in monitor.targets])
+    formats = dedupe_names([t.fmt for t in monitor.targets])
+    dates = monitor.date_range_label or "Any date on sale"
+    checked = (
+        f"{state.success_count} of {state.check_count}" if state.check_count != state.success_count
+        else str(state.check_count)
+    )
+    rows = "".join(target_row_markup(monitor, state, t, finished) for t in monitor.targets)
+
+    if finished == "stopped":
+        note = ('<div class="tr-note"><span style="color:#C9C9D2;">■</span>'
+                f'<div><div class="t">Monitoring stopped</div><div class="s">You stopped this alert at '
+                f'{e(fmt_time(monitor.stopped_at))}. We are no longer checking BookMyShow.</div></div></div>')
+    elif finished == "expired":
+        note = ('<div class="tr-note warn"><span style="color:#E8B25C;">◷</span>'
+                '<div><div class="t">Monitoring expired</div><div class="s">This alert stopped on its own '
+                'at the end time you set. Nothing went wrong.</div></div></div>')
+    else:
+        note = _note(monitor, state, phase, at)
+
+    html(
+        f"""<div class="tr-mcard {tone}">
+          <div class="top">
+            {thumb(monitor.movie.poster_url)}
+            <div class="info">
+              <div class="title">{e(monitor.movie.title)}</div>
+              <div class="where">BookMyShow · {e(monitor.movie.city)}
+                {(' · ' + e(monitor.movie.language)) if monitor.movie.language else ''}
+                · created {e(fmt_datetime(monitor.created_at))}</div>
+              <div class="pills"><span class="tr-pill {phase.css}">{e(PILL_LABEL.get(phase.key, phase.label))}</span>
+                <span class="tr-pill neutral">EVERY {monitor.interval_minutes} MIN</span>
+                <span class="tr-pill neutral">{len(monitor.targets)} TARGET{'S' if len(monitor.targets) != 1 else ''}</span></div>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="tr-metric span2"><div class="k">Theatre{'s' if len(venues) != 1 else ''}</div>
+              <div class="v soft">{e(', '.join(venues))}</div></div>
+            <div class="tr-metric span2"><div class="k">Format{'s' if len(formats) != 1 else ''}</div>
+              <div class="v soft">{e(' · '.join(formats))}</div></div>
+            <div class="tr-metric"><div class="k">Show dates</div><div class="v soft">{e(dates)}</div></div>
+            <div class="tr-metric"><div class="k">Monitoring until</div>
+              <div class="v soft">{e(fmt_datetime(monitor.monitor_until))}</div></div>
+            <div class="tr-metric"><div class="k">Last checked</div>
+              <div class="v">{e(fmt_time(state.last_check_at))}</div></div>
+            <div class="tr-metric"><div class="k">Next check</div>
+              <div class="v {next_class}">{e(next_value)}</div></div>
+            <div class="tr-metric"><div class="k">Checks run</div><div class="v">{e(checked)}</div></div>
+            <div class="tr-metric"><div class="k">Status</div>
+              <div class="v soft">{e(phase.label.capitalize())}</div></div>
+          </div>
+          <div class="targets">{rows}</div>
+          {note}
+        </div>"""
+    )
+
+
+def dedupe_names(values: list[str]) -> list[str]:
+    seen: list[str] = []
+    for v in values:
+        if v and v not in seen:
+            seen.append(v)
+    return seen
 
 
 def _chip(label: str, url: str) -> str:
@@ -795,6 +952,7 @@ __all__ = [
     "empty_card",
     "error_card",
     "expired_card",
+    "featured_tile",
     "flash",
     "format_panel_head",
     "hero",
@@ -804,6 +962,7 @@ __all__ = [
     "live_card",
     "location_tile",
     "logo",
+    "monitor_card",
     "next_check_text",
     "phase_for",
     "problem_card",
@@ -812,10 +971,14 @@ __all__ = [
     "poster_tile",
     "rule",
     "status_for",
+    "status_line",
     "step_header",
+    "step_pip",
     "step_strip",
     "stopped_card",
     "summary_row",
+    "summary_strip",
+    "target_row_markup",
     "target_rows",
     "theatre_row",
     "thumb",

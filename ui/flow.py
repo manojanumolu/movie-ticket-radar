@@ -14,11 +14,18 @@ Two rules run through all of it:
 * **Nothing is invented.** Movies, theatres and formats are only ever rendered
   from what a provider returned. When the catalogue could not be built, the
   UI says so — it never falls back to an empty grid that reads as "nothing's
-  on".
+  on". The featured-theatre shelf is a shortcut into that same list: a
+  featured theatre that isn't screening the chosen film says so and cannot
+  be picked.
 
 Selectable tiles use the *pick* pattern from ``ui/theme.py``: the design's
 exact HTML inside ``st.container(key="pick_…")`` plus one ``st.button`` that
-the CSS stretches over the tile, so the whole tile is the hit target.
+the CSS stretches over the tile, so the whole tile is the hit target. The
+numbered step rail uses the same pattern, which is what makes it a working
+breadcrumb and not just a progress indicator.
+
+Catalogue reads go through ``ui.catalogue_view`` — parsed once per file, so
+every rerun (each click is one) costs a dictionary lookup, not a JSON parse.
 """
 
 from __future__ import annotations
@@ -29,12 +36,17 @@ import streamlit as st
 
 from config.locations import LOCATIONS, enabled_locations, get_location
 from config.timezone import IST, now_ist
-from monitor import catalogue
 from monitor.models import ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes
+from ui import catalogue_view as cv
 from ui import components as C
 
 STEPS = ["Location", "Movie", "Theatres", "Formats", "Monitoring"]
 INTERVALS = [10, 15, 30]
+
+#: How many posters the "Now showing" shelf holds.
+POPULAR_LIMIT = 6
+#: Posters per row in the movie grids.
+GRID_COLUMNS = 6
 
 #: Session keys the wizard owns, and what they reset to.
 DEFAULTS = {
@@ -45,7 +57,9 @@ DEFAULTS = {
     "theatres": [],
     "formats": {},
     "interval": 10,
-    "movie_query": "",
+    "movie_query": None,    # the search box: a catalogue label, free text, or nothing
+    "movie_query_seen": None,
+    "theatre_nonce": 0,     # bumps to clear the theatre search box after a pick
     "start_now": True,
     "date_mode": "any",     # any · single · range — which show dates count
     "show_dates": [],       # YYYYMMDD codes; [] = every date BookMyShow offers
@@ -68,7 +82,8 @@ def reset_from(step: int) -> None:
 
     Changing the city has to drop the movie, and changing the movie has to
     drop theatres and formats — carrying them forward would silently attach a
-    monitor to theatres that do not screen the newly chosen film.
+    monitor to theatres that do not screen the newly chosen film. Merely
+    *revisiting* a step (the Back button, the step rail) resets nothing.
     """
     if step <= 1:
         st.session_state["movie_id"] = ""
@@ -97,11 +112,42 @@ def pick(key: str, label: str, render, *, disabled: bool = False) -> bool:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Navigation: the step rail and the Back button
+# ──────────────────────────────────────────────────────────────────────────
+def step_rail(step: int, furthest: int) -> None:
+    """The 1–5 rail, and a second way back.
+
+    Every step already reached is a button: clicking *2 Movie* from *3
+    Theatres* returns to the movie step with the movie, theatres and formats
+    still selected. Steps not yet reached are inert — there is nothing there
+    to go to.
+    """
+    columns = st.columns(len(STEPS), gap="small")
+    for index, (column, label) in enumerate(zip(columns, STEPS), start=1):
+        state = "now" if index == step else ("done" if index <= furthest else "todo")
+        with column:
+            reachable = state == "done"
+            if pick(f"step_{index}", f"Go to step {index}: {label}",
+                    lambda i=index, lb=label, s=state: C.step_pip(i, lb, s),
+                    disabled=not reachable):
+                goto(index)
+    C.html(f'<div class="tr-step-mobile">Step {step} of {len(STEPS)} — {C.e(STEPS[step - 1])}</div>')
+
+
+def back_button(step: int) -> None:
+    """The explicit way back, at the top of every step after the first."""
+    if step <= 1:
+        return
+    with st.container(key="trback"):
+        if st.button(f"←  Back to {STEPS[step - 2]}", key="back"):
+            goto(step - 1)
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # 1 · Location
 # ──────────────────────────────────────────────────────────────────────────
 def step_location() -> None:
     C.step_header(1, "Where are you watching?", "Pick your city and we'll load what's on.")
-    st.write("")
 
     locations = enabled_locations()
     coming = [loc for loc in LOCATIONS if not loc.enabled][:2]
@@ -122,7 +168,6 @@ def step_location() -> None:
             C.location_tile(loc.name, loc.state, selected=False, enabled=False)
 
     if current:
-        st.write("")
         if st.button("Continue to movies  →", type="primary", use_container_width=True,
                      key="loc_continue"):
             goto(2)
@@ -131,17 +176,37 @@ def step_location() -> None:
 # ──────────────────────────────────────────────────────────────────────────
 # 2 · Movie
 # ──────────────────────────────────────────────────────────────────────────
+def _select_movie(movie_id: str) -> None:
+    if movie_id != st.session_state.get("movie_id", ""):
+        st.session_state["movie_id"] = movie_id
+        reset_from(2)
+    goto(3)
+
+
+def _poster_grid(cards: list[cv.MovieCard], selected: str, *, compact: bool = False,
+                 prefix: str = "movie_") -> None:
+    """``prefix`` keeps the shelf's buttons distinct from the full grid's —
+    the same movie can legitimately appear in both."""
+    columns = st.columns(GRID_COLUMNS, gap="small")
+    for index, card in enumerate(cards):
+        with columns[index % GRID_COLUMNS]:
+            is_sel = card.id == selected
+            if pick(f"{prefix}{card.id}", "Selected" if is_sel else f"Select {card.title}",
+                    lambda c=card, is_sel=is_sel: C.poster_tile(
+                        c.title, c.meta, is_sel, c.poster_url, compact=compact)):
+                _select_movie(card.id)
+
+
 def step_movie() -> bool:
     location = get_location(st.session_state["location"])
     C.step_header(2, "Select movie", f"What's on in {location.name} right now.")
-    st.write("")
 
-    state = catalogue.sync_state(location.slug)
-    entries = catalogue.list_entries(location.slug)
-    C.catalogue_banner(state["status"].value, state["message"],
-                       ago(state["at"]), len(entries))
+    catalogue = cv.view(location.slug)
+    state = catalogue.sync
+    C.catalogue_banner(state["status"].value, state["message"], ago(state["at"]),
+                       len(catalogue.movies))
 
-    if not entries:
+    if not catalogue.movies:
         # Never let an unreadable catalogue masquerade as "no movies".
         if state["status"].is_failure:
             st.caption(
@@ -152,30 +217,47 @@ def step_movie() -> bool:
             st.caption("Nothing cached for this city yet — run a sync from **Settings**.")
         return False
 
-    query = st.text_input("Search movies", placeholder="⌕  Search for a movie…",
-                          label_visibility="collapsed", key="movie_query")
-    matches = catalogue.search_entries(query, location.slug)
-    if not matches:
-        st.caption(f"No movie in the {location.name} listing matches “{query}”.")
-        return False
-
     selected = st.session_state.get("movie_id", "")
-    st.caption(f"{len(matches)} movie(s) · tap a poster to select it")
-    columns = st.columns(6)
-    for index, entry in enumerate(matches[:36]):
-        movie = catalogue.movie_from_entry(entry)
-        with columns[index % 6]:
-            is_sel = movie.id == selected
-            meta = movie.language or ""
-            if pick(f"movie_{movie.id}", "Selected" if is_sel else f"Select {movie.title}",
-                    lambda m=movie, meta=meta, is_sel=is_sel: C.poster_tile(m.title, meta, is_sel, m.poster_url)):
-                if movie.id != selected:
-                    st.session_state["movie_id"] = movie.id
-                    reset_from(2)
-                goto(3)
+
+    # ── search: the whole catalogue, filtered in the browser as you type ──
+    # A selectbox filters its options client-side on every keystroke, so
+    # "av" shows "Avengers Endgame: Encore" immediately with no round trip.
+    # Choosing a suggestion selects the movie; pressing Enter on free text
+    # (accept_new_options) filters the grid below instead.
+    C.html('<div class="tr-field-label">Search movies</div>')
+    choice = st.selectbox(
+        "Search movies", [m.label for m in catalogue.movies], index=None, key="movie_query",
+        placeholder="Type a movie name — e.g. ave, mand, hanu…", label_visibility="collapsed",
+        accept_new_options=True, filter_mode="contains",
+    )
+    chosen_id = cv.movie_for_label(choice or "", location.slug)
+    if chosen_id and choice != st.session_state.get("movie_query_seen"):
+        st.session_state["movie_query_seen"] = choice
+        _select_movie(chosen_id)
+    st.session_state["movie_query_seen"] = choice
+    query = "" if chosen_id else (choice or "")
+
+    if query:
+        matches = cv.search_movies(query, location.slug)
+        if not matches:
+            st.caption(f"No movie in the {location.name} listing matches “{query}”.")
+            return False
+        st.caption(f"{len(matches)} movie(s) matching “{query}” · tap a poster to select it")
+        _poster_grid(matches[:GRID_COLUMNS * 4], selected)
+    else:
+        shelf = cv.popular(location.slug, POPULAR_LIMIT)
+        if shelf:
+            C.rule("Now showing · popular")
+            _poster_grid(shelf, selected, prefix="pop_")
+        rest = catalogue.movies
+        st.caption(f"{len(rest)} movie(s) · tap a poster to select it")
+        with st.expander(f"Browse all {len(rest)} movies in {location.name}", expanded=not shelf):
+            _poster_grid(rest, selected, compact=True)
 
     if selected:
-        st.write("")
+        current = cv.card(selected, location.slug)
+        if current is not None:
+            C.html(f'<div class="tr-selected"><span class="n">✓</span>Selected: <b>{C.e(current.label)}</b></div>')
         if st.button("Continue to theatres  →", type="primary", use_container_width=True,
                      key="movie_continue"):
             goto(3)
@@ -185,12 +267,23 @@ def step_movie() -> bool:
 # ──────────────────────────────────────────────────────────────────────────
 # 3 · Theatres
 # ──────────────────────────────────────────────────────────────────────────
+def _toggle_theatre(code: str, venues: list[Venue]) -> None:
+    chosen = set(st.session_state.get("theatres", []))
+    if code in chosen:
+        chosen.discard(code)
+        st.session_state["formats"].pop(code, None)
+    else:
+        chosen.add(code)
+    st.session_state["theatres"] = [v.code for v in venues if v.code in chosen]
+    st.rerun()
+
+
 def step_theatres() -> list[Venue]:
-    entry = catalogue.find_entry(st.session_state.get("movie_id", ""))
-    if entry is None:
+    slug = st.session_state.get("location", "")
+    movie = cv.movie(st.session_state.get("movie_id", ""), slug)
+    if movie is None:
         st.caption("Pick a movie first.")
         return []
-    movie = catalogue.movie_from_entry(entry)
 
     head, action = st.columns([3.2, 1])
     with head:
@@ -198,18 +291,16 @@ def step_theatres() -> list[Venue]:
                       f"One or more theatres showing {movie.title} in {movie.city}.")
     with action:
         select_all = st.button("Select all", key="select_all", use_container_width=True)
-    st.write("")
 
-    venues = catalogue.venues_from_entry(entry)
+    # Every theatre the catalogue holds for *this* movie — the whole film,
+    # every format, nothing added and nothing left out.
+    venues = cv.venues(movie.id, slug)
     if not venues:
         problem = st.session_state.get("detail_problem", "")
         if problem:
             C.catalogue_banner("BLOCKED", problem, "", 0)
         else:
-            C.catalogue_banner(
-                "EMPTY", "",
-                ago(catalogue.sync_state(movie.region_slug)["at"]), 0,
-            )
+            C.catalogue_banner("EMPTY", "", ago(cv.view(movie.region_slug).sync["at"]), 0)
             st.caption(
                 f"BookMyShow lists **{movie.title}** but hasn't published any theatres for "
                 "it yet — that's normal before a release opens. The background sync will "
@@ -223,23 +314,49 @@ def step_theatres() -> list[Venue]:
         st.session_state["theatres"] = [v.code for v in venues if v.code in chosen]
         st.rerun()
 
-    columns = st.columns(2)
+    # ── search: client-side, over this movie's theatres only ─────────────
+    by_code = {v.code: v for v in venues}
+    nonce = st.session_state.get("theatre_nonce", 0)
+    C.html('<div class="tr-field-label">Search theatres</div>')
+    picked_code = st.selectbox(
+        "Search theatres", [v.code for v in venues], index=None,
+        format_func=lambda c: f"{by_code[c].name} · {by_code[c].area or movie.city}",
+        key=f"theatre_query_{nonce}", placeholder="Type a theatre name — e.g. am, allu, pvr…",
+        label_visibility="collapsed", filter_mode="contains",
+    )
+    if picked_code:
+        st.session_state["theatre_nonce"] = nonce + 1    # clears the box on the rerun
+        _toggle_theatre(picked_code, venues)
+
+    # ── featured quick-picks: a shortcut into the same list ──────────────
+    shelf = cv.featured(venues)
+    C.rule("Featured theatres")
+    columns = st.columns(3, gap="small")
+    for index, (feat, venue) in enumerate(shelf):
+        with columns[index % 3]:
+            if venue is None:
+                C.featured_tile(feat.name, feat.area, None, False)
+                continue
+            is_sel = venue.code in chosen
+            if pick(f"feat_{venue.code}", "Selected ✓" if is_sel else f"Select {venue.name}",
+                    lambda v=venue, f=feat, is_sel=is_sel: C.featured_tile(f.name, f.area, v, is_sel)):
+                _toggle_theatre(venue.code, venues)
+
+    # ── the full list ────────────────────────────────────────────────────
+    featured_codes = {venue.code for _, venue in shelf if venue is not None}
+    C.rule(f"All theatres · {len(venues)}")
+    columns = st.columns(2, gap="small")
     for index, venue in enumerate(venues):
         with columns[index % 2]:
             is_sel = venue.code in chosen
             label = "Selected ✓" if is_sel else f"Select {venue.name}"
             if pick(f"th_{venue.code}", label,
-                    lambda v=venue, is_sel=is_sel: C.theatre_row(v.name, v.area, list(v.formats), is_sel, v.abbr)):
-                if venue.code in chosen:
-                    chosen.discard(venue.code)
-                    st.session_state["formats"].pop(venue.code, None)
-                else:
-                    chosen.add(venue.code)
-                st.session_state["theatres"] = [v.code for v in venues if v.code in chosen]
-                st.rerun()
+                    lambda v=venue, is_sel=is_sel: C.theatre_row(
+                        v.name, v.area, list(v.formats), is_sel, v.abbr,
+                        featured=v.code in featured_codes)):
+                _toggle_theatre(venue.code, venues)
 
     picked = [v for v in venues if v.code in chosen]
-    st.write("")
     if picked:
         st.caption(f"{len(picked)} theatre(s) selected: " + ", ".join(v.name for v in picked))
         if st.button("Continue to formats  →", type="primary", use_container_width=True,
@@ -255,7 +372,6 @@ def step_theatres() -> list[Venue]:
 # ──────────────────────────────────────────────────────────────────────────
 def step_formats(venues: list[Venue]) -> dict[str, list[str]]:
     C.step_header(4, "Formats, per theatre", "Only formats that theatre actually runs.")
-    st.write("")
 
     if not venues:
         st.caption("Pick a theatre first.")
@@ -315,11 +431,10 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
 
     with left:
         C.step_header(5, "How often should I check?", "Checks run automatically in the background.")
-        st.write("")
         current = st.session_state.get("interval", 10)
         if current not in INTERVALS:
             current = 10
-        cols = st.columns(3)
+        cols = st.columns(3, gap="small")
         for column, minutes in zip(cols, INTERVALS):
             with column:
                 if pick(f"interval_{minutes}", f"Every {minutes} minutes",
@@ -332,8 +447,7 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
 
     with right:
         C.step_header("◷", "Monitor until", "The monitor stops itself after this time.")
-        st.write("")
-        date_col, time_col = st.columns([1.5, 1])
+        date_col, time_col = st.columns([1.5, 1], gap="small")
         end_date = date_col.date_input("End date", value=(now_ist() + timedelta(days=1)).date(),
                                        min_value=now_ist().date(), format="DD/MM/YYYY",
                                        key="until_date", label_visibility="collapsed")
@@ -347,14 +461,13 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
         st.session_state["start_now"] = bool(start_now)
 
     # Which *show* dates to watch — a different thing from how long to monitor.
-    st.write("")
+    C.rule("Show dates")
     C.step_header("▤", "Which show dates?",
                   "Only shows on these dates count. Leave on Any date to watch every date on sale.")
-    st.write("")
     mode = st.session_state.get("date_mode", "any")
     if mode not in {m for m, _, _ in DATE_MODES}:
         mode = "any"
-    cols = st.columns(3)
+    cols = st.columns(3, gap="small")
     for column, (value, label, sub) in zip(cols, DATE_MODES):
         with column:
             if pick(f"datemode_{value}", label,
@@ -383,7 +496,7 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
     else:
         st.caption("Watching every date BookMyShow has on sale.")
 
-    st.write("")
+    C.rule("Alerts")
     C.html('<div class="tr-field-label">Notification email</div>')
     email = st.text_input("Notification email", value=default_email,
                           placeholder="you@gmail.com", label_visibility="collapsed",
@@ -393,29 +506,27 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
 
 # ──────────────────────────────────────────────────────────────────────────
 def summary(step: int) -> None:
-    """Collapsed rows for everything already answered."""
-    if step > 1 and st.session_state.get("location"):
-        C.summary_row(1, "Location", get_location(st.session_state["location"]).label)
-    if step > 2 and st.session_state.get("movie_id"):
-        entry = catalogue.find_entry(st.session_state["movie_id"])
-        if entry:
-            movie = catalogue.movie_from_entry(entry)
-            C.summary_row(2, "Movie",
-                          f"{movie.title}{f' · {movie.language}' if movie.language else ''}")
+    """Everything already answered, as one compact strip above the step card."""
+    slug = st.session_state.get("location", "")
+    items: list[tuple[int, str, str]] = []
+    if step > 1 and slug:
+        items.append((1, "Location", get_location(slug).label))
+    movie = cv.movie(st.session_state.get("movie_id", ""), slug) if step > 2 else None
+    if movie is not None:
+        items.append((2, "Movie", f"{movie.title}{f' · {movie.language}' if movie.language else ''}"))
     if step > 3 and st.session_state.get("theatres"):
-        entry = catalogue.find_entry(st.session_state.get("movie_id", ""))
-        names = {v.code: v.name for v in catalogue.venues_from_entry(entry or {})}
+        names = {v.code: v.name for v in cv.venues(st.session_state.get("movie_id", ""), slug)}
         picked = [names.get(c, c) for c in st.session_state["theatres"]]
-        C.summary_row(3, "Theatres", ", ".join(picked))
+        items.append((3, "Theatres", ", ".join(picked)))
     if step > 4 and st.session_state.get("formats"):
-        entry = catalogue.find_entry(st.session_state.get("movie_id", ""))
-        names = {v.code: v.name for v in catalogue.venues_from_entry(entry or {})}
+        names = {v.code: v.name for v in cv.venues(st.session_state.get("movie_id", ""), slug)}
         parts = [
             f"{names.get(code, code)} → {', '.join(fmts)}"
             for code, fmts in st.session_state["formats"].items()
             if fmts
         ]
-        C.summary_row(4, "Formats", " · ".join(parts))
+        items.append((4, "Formats", " · ".join(parts)))
+    C.summary_strip(items)
 
 
 def ago(when) -> str:
@@ -435,6 +546,7 @@ __all__ = [
     "INTERVALS",
     "STEPS",
     "ago",
+    "back_button",
     "boot",
     "goto",
     "pick",
@@ -443,6 +555,7 @@ __all__ = [
     "step_location",
     "step_monitoring",
     "step_movie",
+    "step_rail",
     "step_theatres",
     "summary",
 ]

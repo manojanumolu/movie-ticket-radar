@@ -21,7 +21,7 @@ catalogue untouched rather than replacing it with an empty one.
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable
 
@@ -38,6 +38,12 @@ DETAIL_LIMIT = 60
 
 #: Politeness gap between per-movie detail requests, in seconds.
 DETAIL_DELAY = 1.2
+
+#: How long a movie's resolved theatre/format detail is trusted before a sync
+#: re-reads it. Theatres are added as a release approaches and drop off as
+#: the day's shows run out, so a list read once and kept forever is wrong in
+#: both directions. Six hours, with four syncs a day, keeps it current.
+DETAIL_TTL = timedelta(hours=6)
 
 
 class SyncStatus(str, Enum):
@@ -110,6 +116,14 @@ def venues_from_entry(entry: dict[str, Any]) -> list[Venue]:
 def is_detailed(entry: dict[str, Any]) -> bool:
     """Has this movie's theatre/format detail been read yet?"""
     return entry.get("resolved_at") is not None
+
+
+def is_stale(entry: dict[str, Any], *, at: datetime | None = None) -> bool:
+    """Is the detail older than ``DETAIL_TTL``? (Never-resolved counts as stale.)"""
+    resolved = parse_iso(entry.get("resolved_at"))
+    if resolved is None:
+        return True
+    return (at or now_ist()) - resolved >= DETAIL_TTL
 
 
 def siblings_changed(entry: dict[str, Any], listed: MovieRef) -> bool:
@@ -313,7 +327,11 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
 
     detailed = failed = 0
     if detail:
-        pending = [e for e in entries if not is_detailed(e)][:detail_limit]
+        # Never-detailed rows first, then the stalest, up to the limit.
+        pending = sorted(
+            (e for e in entries if not is_detailed(e) or is_stale(e)),
+            key=lambda e: (is_detailed(e), e.get("resolved_at") or ""),
+        )[:detail_limit]
         say(f"resolving theatres/formats for {len(pending)} movie(s)")
         for index, entry in enumerate(pending):
             movie = movie_from_entry(entry)
@@ -393,12 +411,14 @@ def ensure_detail(movie_id: str, *, mirror: bool = True) -> tuple[dict[str, Any]
 
 __all__ = [
     "DETAIL_LIMIT",
+    "DETAIL_TTL",
     "SyncStatus",
     "ensure_detail",
     "entry_from_movie",
     "entry_from_snapshot",
     "find_entry",
     "is_detailed",
+    "is_stale",
     "list_entries",
     "movie_from_entry",
     "refresh_entry",
