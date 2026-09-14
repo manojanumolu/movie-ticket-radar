@@ -1,5 +1,16 @@
 [
   {
+    "monitor_id": "f65d7e2ada9a",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Avengers Endgame: Encore",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00514163-1787720198.jpg",
+    "targets": [
+      "ALLU Cinemas · Dolby Cinema"
+    ],
+    "at": "2026-09-15T01:24:35.442752+05:30"
+  },
+  {
     "monitor_id": "9d249ed20240",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
