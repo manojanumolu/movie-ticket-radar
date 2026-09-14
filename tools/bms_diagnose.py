@@ -166,10 +166,65 @@ def probe_curl_cffi(city: str) -> None:
             record(f"curl_cffi[{impersonate}]", "ERR", f"{type(exc).__name__}: {exc}")
 
 
+def probe_group(city: str, needle: str) -> int:
+    """Dump how BookMyShow lists one movie *group* and what each child sees.
+
+    A group ("Avengers Endgame: Encore") has one child event per language and
+    per premium format. This prints every child with its code, language and
+    dimension, then fetches each child's showtimes and prints the venues it
+    returned — so the question "does the base event see the premium-format
+    venues?" is answered from evidence, not from the docstring.
+    """
+    from platforms.bookmyshow import BookMyShowProvider, _dicts, _text, region_for
+    from monitor.models import MovieRef
+
+    provider = BookMyShowProvider()
+    region = region_for(city)
+    headers = provider._browse_headers(region)
+    headers["Cookie"] = f"Rgn=Code%3D{region[0]}"
+    resp = provider._raw_get(f"{SITE}/serv/getData", headers,
+                             {"cmd": "QUICKBOOK", "type": "MT", "f": "json"})
+    print(f"quickbook status={resp.status_code}")
+    if resp.status_code != 200:
+        return 1
+    groups = resp.json().get("moviesData", {}).get("BookMyShow", {}).get("arrEvents", [])
+    wanted = needle.lower()
+    hits = [g for g in groups if wanted in _text(g.get("EventTitle")).lower()]
+    print(f"{len(groups)} group(s) listed; {len(hits)} match '{needle}'")
+    for group in hits:
+        print(f"\n== {_text(group.get('EventTitle'))} [{_text(group.get('EventCode'))}] ==")
+        children = list(_dicts(group.get("ChildEvents"))) or [group]
+        for child in children:
+            code = _text(child.get("EventCode"))
+            print(f"  child {code}: lang={_text(child.get('EventLanguage'))!r} "
+                  f"dim={_text(child.get('EventDimension'))!r} name={_text(child.get('EventName'))!r} "
+                  f"status={_text(child.get('EventStatus'))!r}")
+        for child in children:
+            code = _text(child.get("EventCode"))
+            movie = MovieRef(platform="bookmyshow", event_code=code, title=_text(group.get("EventTitle")),
+                             region_code=region[0], region_slug=region[1])
+            try:
+                snap = provider.fetch(movie)
+            except Exception as exc:  # noqa: BLE001 - diagnostics
+                print(f"  -- {code}: fetch failed: {type(exc).__name__}: {exc}")
+                continue
+            print(f"  -- {code} ({_text(child.get('EventLanguage'))} {_text(child.get('EventDimension'))}): "
+                  f"{len(snap.venues)} venue(s), {len(snap.showtimes)} showtime(s), "
+                  f"dates={snap.bookable_dates} closed={snap.closed_dates}")
+            for v in snap.venues:
+                print(f"       {v.code:<6} {v.name} | {v.area} | {', '.join(v.formats)}")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Diagnose BookMyShow reachability")
     parser.add_argument("--city", default="hyderabad")
+    parser.add_argument("--group", default="",
+                        help="dump the child events (and each one's venues) of a listed movie group")
     args = parser.parse_args(argv)
+
+    if args.group:
+        return probe_group(args.city, args.group)
 
     print(f"BookMyShow reachability diagnosis — city={args.city}")
     probe_requests(args.city)
