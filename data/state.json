@@ -78,31 +78,5 @@
         "new_showtime_notice_at": null
       }
     }
-  },
-  "f65d7e2ada9a": {
-    "last_check_at": "2026-09-15T01:25:04.953927+05:30",
-    "last_success_at": "2026-09-15T01:25:04.953927+05:30",
-    "check_count": 1,
-    "success_count": 1,
-    "consecutive_errors": 0,
-    "last_error": "",
-    "last_error_kind": "",
-    "last_email_error": "",
-    "targets": {
-      "ALUC::Dolby Cinema": {
-        "availability": "THEATRE_NOT_AVAILABLE",
-        "since": "2026-09-15T01:25:04.953927+05:30",
-        "showtime_keys": [],
-        "time_labels": [],
-        "time_links": [],
-        "date_code": "",
-        "date_codes": [],
-        "booking_url": "https://in.bookmyshow.com/buytickets/avengers-endgame-encore-hyderabad/cinema-hyde-ALUC-MT",
-        "notified_availability": "THEATRE_NOT_AVAILABLE",
-        "notified_at": null,
-        "notified_showtime_keys": [],
-        "new_showtime_notice_at": null
-      }
-    }
   }
 }
