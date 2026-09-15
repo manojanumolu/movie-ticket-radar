@@ -27,6 +27,7 @@ page's GitHub probe is cached. Nothing here makes a BookMyShow request.
 
 from __future__ import annotations
 
+import os
 import threading
 
 import streamlit as st
@@ -90,6 +91,18 @@ def _scope() -> Scope | None:
     from Streamlit's own session (so it is right for the thread asking),
     in the configured Firebase project. None → nobody signed in, or no
     project configured (tests, a laptop without secrets) → the JSON files."""
+    # Firebase Authentication and Firestore are separate products. A project
+    # id alone must not switch a working login deployment to Firestore before
+    # its database and rules have been provisioned.
+    enabled = os.environ.get("TICKETRADAR_FIRESTORE_ENABLED", "").strip().lower()
+    if enabled not in {"1", "true", "yes", "on"}:
+        try:
+            enabled = str(st.secrets.get("firestore", {}).get("enabled", "")).strip().lower()
+        except Exception:  # noqa: BLE001 - no secrets file in tests/local runs
+            enabled = ""
+    if enabled not in {"1", "true", "yes", "on"}:
+        return None
+
     user = auth_session.current_user()
     project = firebase.config().project_id
     if user is None or not project:

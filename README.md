@@ -364,6 +364,15 @@ settings are stored per Firebase UID. The app can only read its own documents;
 the Actions worker uses a service account to process all active monitors. The
 movie catalogue remains shared, read-only repository data.
 
+After that setup, explicitly enable it in Streamlit secrets:
+
+```toml
+[firestore]
+enabled = true
+```
+
+Until this flag is enabled, the app keeps its existing JSON-backed storage.
+
 For the worker, add these GitHub Actions secrets alongside the Gmail secrets:
 `FIREBASE_PROJECT_ID` (the Firebase project ID) and
 `FIREBASE_SERVICE_ACCOUNT` (the complete service-account JSON, as one secret

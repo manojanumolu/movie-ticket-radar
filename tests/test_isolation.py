@@ -171,6 +171,9 @@ def cloud(monkeypatch):
     monkeypatch.setattr(state_mod, "_admin", None)
     monkeypatch.setattr(state_mod, "_owner_of", {})
     monkeypatch.setenv("FIREBASE_PROJECT_ID", PROJECT)
+    # The app uses Firestore only when a deployment explicitly opts in after
+    # creating the database and publishing its rules.
+    monkeypatch.setenv("TICKETRADAR_FIRESTORE_ENABLED", "true")
 
     class Cloud:
         docs = store.docs
