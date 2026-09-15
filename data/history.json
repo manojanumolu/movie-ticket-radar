@@ -1,6 +1,17 @@
 [
   {
     "monitor_id": "7b3f4a058a97",
+    "kind": "STOPPED",
+    "message": "Monitoring stopped — you stopped this alert.",
+    "movie": "Avengers Endgame: Encore",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00514163-1787720198.jpg",
+    "targets": [
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-15T19:30:44.957258+05:30"
+  },
+  {
+    "monitor_id": "7b3f4a058a97",
     "kind": "CREATED",
     "message": "Monitor created.",
     "movie": "Avengers Endgame: Encore",
