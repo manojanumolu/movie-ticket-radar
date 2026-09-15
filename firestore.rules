@@ -1,0 +1,61 @@
+rules_version = '2';
+
+// TicketRadar — user-owned data, keyed on the Firebase Authentication UID.
+//
+// Deploy: Firebase console → Firestore Database → Rules → paste → Publish
+// (or `firebase deploy --only firestore:rules` with the CLI).
+//
+// Every user-owned document carries `owner_uid`. A signed-in person can only
+// read and write documents whose owner_uid is their own UID; nothing else
+// about them (email, display name, anything typed on the page) counts. The
+// worker on GitHub Actions uses a service account, which bypasses these
+// rules by design — it is the only privileged writer and never runs where a
+// browser could reach it.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function ownsExisting() {
+      return signedIn() && resource.data.owner_uid == request.auth.uid;
+    }
+
+    function ownsIncoming() {
+      return signedIn() && request.resource.data.owner_uid == request.auth.uid;
+    }
+
+    // users/{uid}: the person's own settings document.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // monitors/{id}: created and managed by their owner.
+    match /monitors/{id} {
+      allow read: if ownsExisting();
+      allow create: if ownsIncoming();
+      allow update: if ownsExisting() && ownsIncoming();
+      allow delete: if ownsExisting();
+    }
+
+    // monitor_state/{id}: written by the worker only; the owner may read it,
+    // and remove it when deleting the monitor.
+    match /monitor_state/{id} {
+      allow read, delete: if ownsExisting();
+      allow create, update: if false;
+    }
+
+    // history/{id}: append-only for the owner; the worker appends the rest.
+    match /history/{id} {
+      allow read: if ownsExisting();
+      allow create: if ownsIncoming();
+      allow update, delete: if false;
+    }
+
+    // Everything else (the catalogue stays in the repository) is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

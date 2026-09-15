@@ -384,7 +384,9 @@ def test_the_gate_is_the_first_thing_main_does():
     tree = ast.parse(Path("app.py").read_text(encoding="utf-8"))
     calls = [ast.unparse(n.value.func) for n in tree.body
              if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)]
-    assert calls == ["st.set_page_config", "inject", "main"]
+    # set_page_config → the CSS → the store learns how to find the signed-in
+    # user (no rendering) → main(), whose first statement is the gate.
+    assert calls == ["st.set_page_config", "inject", "state_store.set_scope_provider", "main"]
     main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
     first = main.body[0]
     assert isinstance(first, ast.Assign) and ast.unparse(first.value) == "require_user()"
@@ -473,7 +475,7 @@ def test_signup_creates_an_account_and_signs_in(visitor, fake):
     assert not in_the_app(app)
     assert "auth_user" not in app.session_state
     text = body(app)
-    assert "You're almost in." in text and "Verify your email address to activate" in text
+    assert "Your TicketRadar account is almost ready." in text and "VERIFY YOUR EMAIL" in text
     assert "arjun@example.com" in text
     assert {b.key for b in app.button} >= {"auth_resend", "auth_verify_back"}
     pend = app.session_state["auth_pending"]
@@ -616,7 +618,7 @@ def test_an_unverified_account_cannot_sign_in_and_lands_on_verify(visitor, fake)
     app = settle(app)
     assert not in_the_app(app)
     assert "auth_user" not in app.session_state
-    assert "You're almost in." in body(app)
+    assert "Your TicketRadar account is almost ready." in body(app)
     pend = app.session_state["auth_pending"]
     assert pend["email"] == "newbie@example.com"
     # No email was requested at sign-in, so nothing claims one was sent and
@@ -640,8 +642,8 @@ def test_A_firebase_accepts_the_request_then_success_and_cooldown(visitor, fake)
     assert fake.calls[-1] == ("sendOobCode", {"requestType": "VERIFY_EMAIL", "idToken": "id.uid-newbie"})
     assert fake.verification_sent == ["newbie@example.com"]
     text = body(app)
-    assert "Firebase accepted the verification email request." in text
-    assert "not the same as delivered" in text                 # accepted ≠ delivered, said on screen
+    assert "Verification email sent to newbie@example.com" in text
+    assert "Inbox, Spam, or Promotions" in text                 # never a claim of Inbox delivery
     assert re.search(r"RESEND AVAILABLE IN (59|60)s", text)
     assert "LAST REQUEST HTTP 200 OK" in text                  # the diagnostic line
     assert app.session_state["auth_pending"]["last_answer"]["status"] == 200
@@ -672,7 +674,7 @@ def test_B_firebase_refuses_the_request_then_error_and_no_cooldown(visitor, fake
     assert "accepted" not in text.lower()
     app = settle(app)
     text = body(app)
-    assert "You're almost in." in text                              # the account does exist
+    assert "Your TicketRadar account is almost ready." in text                              # the account does exist
     assert "Sent" not in text and "AVAILABLE IN" not in text
     pend = app.session_state["auth_pending"]
     assert pend["sends"] == 0 and pend["cooldown_until"] == 0
@@ -855,7 +857,7 @@ def test_legacy_json_monitors_are_global_until_firestore(visitor, fake, make_mon
 # ──────────────────────────────────────────────────────────────────────────
 # The sidebar and the pages behind the gate
 # ──────────────────────────────────────────────────────────────────────────
-def test_the_sidebar_is_the_original_with_the_account_row_at_the_foot():
+def test_the_sidebar_is_navigation_only_and_the_account_control_is_top_right():
     app = run()
     side = " ".join(m.value for m in app.sidebar.markdown)
     assert '<div class="tr-logo">' in side and "Ticket<em>Radar</em>" in side
@@ -863,14 +865,18 @@ def test_the_sidebar_is_the_original_with_the_account_row_at_the_foot():
     assert nav.key == "page" and list(nav.options) == ["Home", "My Monitors", "History", "Settings"]
     assert nav.value == "Home"
     assert "tr-quote" in side and "tr-version" in side
-    # The account row: initial, name, address — then the menu.
-    assert '<div class="tr-acct">' in side
-    assert '<div class="av">T</div>' in side and "Test Person" in side and "tester@example.com" in side
-    assert "Account" in side
-    # Order: brand, nav, foot, account — the account row is last.
-    assert side.index("tr-logo") < side.index("tr-quote") < side.index("tr-acct")
-    # No standalone Sign out in the nav: it lives in the menu, with Account settings.
-    assert {b.key for b in app.sidebar.button} == {"acct_settings", "auth_signout"}
+    # Nothing about the account in the sidebar: no chip, no menu, no buttons.
+    assert "tr-acct" not in side and "tester@example.com" not in side and "Test Person" not in side
+    assert not app.sidebar.button
+    # The account control is in the main content: a chip with the initial and
+    # first name, and a menu holding Account settings and Sign out.
+    main = " ".join(m.value for m in app.main.markdown)
+    assert '<div class="tr-acct-chip">' in main
+    assert '<div class="av">T</div>' in main and '<div class="n">Test</div>' in main
+    assert "tester@example.com" in main                         # inside the menu
+    assert {b.key for b in app.main.button} >= {"acct_settings", "auth_signout"}
+    # …and it is drawn before the page, i.e. at the top.
+    assert main.index("tr-acct-chip") < main.index('<div class="tr-hero">')
 
 
 def test_account_settings_opens_the_existing_settings_page():
@@ -918,10 +924,10 @@ def test_the_identity_is_never_read_from_a_form_url_or_monitor(visitor, fake, ma
     user = app.session_state["auth_user"]
     assert (user.uid, user.email) == ("uid-ravi", "ravi@example.com")
     assert session.current_uid.__module__ == "auth.session"
-    # The sidebar shows Firebase's account, not any of the addresses above.
-    side = " ".join(m.value for m in app.sidebar.markdown)
-    assert "ravi@example.com" in side
-    assert "forged@example.com" not in side and "someone-else@example.com" not in side
+    # The account menu shows Firebase's account, not any of the addresses above.
+    main = " ".join(m.value for m in app.main.markdown)
+    assert "ravi@example.com" in main and '<div class="n">Ravi</div>' in main
+    assert "forged@example.com" not in main and "someone-else@example.com" not in main
 
 
 def test_refresh_tokens_never_reach_the_page(visitor, fake):

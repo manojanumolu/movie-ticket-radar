@@ -49,6 +49,10 @@ NOTICE_KEY = "auth_notice"
 #: and never two inside the cooldown.
 RESEND_LIMIT = 3
 RESEND_COOLDOWN = 60
+#: While an account waits for its link, the tab asks Firebase whether the
+#: address has been verified this often — and continues by itself when it has.
+VERIFY_POLL = 10
+VERIFIED_KEY = "auth_verified_banner"
 
 #: The four promises under the headline, in the design's order.
 PROMISES = [
@@ -271,6 +275,18 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 .tr-auth-foot-text { font-size:14px; color:var(--tr-text-2); font-weight:500; text-align:right; white-space:nowrap; line-height:34px; }
 .tr-auth-hint { font-size:12.5px; color:var(--tr-text-3); margin:-2px 0 0 2px; line-height:1.45; }
 .tr-auth-count { font-family:var(--tr-mono); font-size:11px; letter-spacing:.2em; color:var(--tr-text-3); margin-top:2px; font-variant-numeric:tabular-nums; }
+.tr-auth-sent .eyebrow { font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.3em; color:#FF6B85; margin-bottom:12px; }
+.tr-auth-sent .eyebrow.ok { color:#3ED598; }
+.tr-auth-sent .ic.wait { color:#FF6B85; background: radial-gradient(circle at 50% 40%, rgba(255,51,85,.22), rgba(255,51,85,.04) 70%); border-color:rgba(255,51,85,.45);
+  box-shadow: 0 0 0 8px rgba(255,51,85,.05), 0 14px 40px -18px rgba(255,51,85,.9); }
+.tr-auth-sent .folders { display:inline-flex; align-items:center; gap:8px; margin:14px auto 0; padding:8px 12px; border-radius:10px; font-size:12.5px; color:var(--tr-text-2);
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); }
+.tr-auth-sent .folders svg { color:#FF6B85; flex:none; }
+[class*="st-key-auth_resend"] .stButton > button:disabled { opacity:.5; transform:none; box-shadow:none; cursor:default; background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); border-color:rgba(255,255,255,.12); color:var(--tr-text-3); }
+[class*="st-key-auth_continue"] .stButton > button { min-height:50px; border-radius:16px; font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  background: linear-gradient(180deg, rgba(62,213,152,.16), rgba(62,213,152,.06)); border:1px solid rgba(62,213,152,.4); color:#9FEBC9; }
+[class*="st-key-auth_continue"] .stButton > button:hover { color:#fff; border-color:rgba(62,213,152,.7); background: linear-gradient(180deg, rgba(62,213,152,.22), rgba(62,213,152,.1)); }
+[class*="st-key-auth_continue"] .stButton > button p { font-size:13px; font-weight:700; letter-spacing:.1em; }
 .tr-auth-diag { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.14em; color:var(--tr-text-4); text-align:center; margin-top:10px; line-height:1.6; overflow-wrap:anywhere; }
 
 /* feedback */
@@ -595,8 +611,14 @@ def _welcome(placeholder, user: session.AuthUser) -> None:
 # The three panels
 # ──────────────────────────────────────────────────────────────────────────
 def _signin() -> None:
-    C.html('<h2 class="tr-auth-h">Welcome back.</h2>'
-           '<p class="tr-auth-p">Track movie ticket releases and get notified the moment they go live.</p>')
+    verified = st.session_state.pop(VERIFIED_KEY, "")
+    if verified:
+        C.html('<h2 class="tr-auth-h">Email verified.</h2>'
+               '<p class="tr-auth-p">Your TicketRadar account is active. Sign in with your password to continue.</p>')
+        _alert("success", f"{verified} is verified — welcome to TicketRadar.")
+    else:
+        C.html('<h2 class="tr-auth-h">Welcome back.</h2>'
+               '<p class="tr-auth-p">Track movie ticket releases and get notified the moment they go live.</p>')
     with st.form("auth_signin_form", border=False, clear_on_submit=False):
         _label("Email address")
         email = st.text_input("Email address", key="auth_email", placeholder="you@example.com",
@@ -698,7 +720,7 @@ def _signup() -> None:
             session.set_pending(creds)
             st.session_state[MODE_KEY] = "verify"
             try:
-                client.send_email_verification(creds.id_token)
+                client.send_email_verification(creds.id_token, _continue_url(creds.email))
             except AuthError as exc:
                 session.record_verification_answer(exc.status, exc.code)
                 st.session_state[ERROR_KEY] = _send_failure(exc, created=True)
@@ -721,10 +743,45 @@ def _send_failure(exc: AuthError, *, created: bool = False) -> str:
 
 
 def _accepted(email: str) -> str:
-    """Accepted is not delivered — say exactly that."""
-    return (f"Firebase accepted the verification email request. Its email to {email} is on its way "
-            "— check spam too. Accepted by Firebase is not the same as delivered by your mail "
-            "provider; if nothing arrives, the Firebase project's email settings need a look.")
+    """Accepted is not delivered — say exactly that, without saying "Inbox"."""
+    return (f"Verification email sent to {email}. Check your Inbox, Spam, or Promotions folder — "
+            "it comes from Firebase, not from TicketRadar's own address.")
+
+
+def _continue_url(email: str) -> str:
+    """Where Firebase's verification page offers to send the person next:
+    this app, with a flag and the address to prefill — never a credential.
+    "" when the app's own URL can't be read (tests, an old runtime)."""
+    from urllib.parse import quote, urlsplit
+
+    try:
+        parts = urlsplit(str(st.context.url or ""))
+    except Exception:  # noqa: BLE001
+        return ""
+    if not parts.scheme or not parts.netloc or parts.netloc.startswith("localhost"):
+        return ""
+    return f"{parts.scheme}://{parts.netloc}/?verified={quote(email)}"
+
+
+def _returned_verified() -> None:
+    """Back from Firebase's "email verified" page (its Continue button):
+    show the verified banner on the sign-in form with the address ready.
+    The flag proves nothing by itself — sign-in still needs the password
+    and Firebase's own record still decides ``email_verified``."""
+    try:
+        email = str(st.query_params.get("verified") or "").strip()
+    except Exception:  # noqa: BLE001
+        return
+    if not email:
+        return
+    st.session_state[VERIFIED_KEY] = email
+    st.session_state[MODE_KEY] = "signin"
+    if firebase.valid_email(email):
+        st.session_state["auth_email"] = email
+    try:
+        st.query_params.clear()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _cooldown_remaining(pend: dict | None, now: float | None = None) -> int:
@@ -759,7 +816,7 @@ def _resend() -> None:
         return
     client = firebase.FirebaseAuth()
     try:
-        client.send_email_verification(pend["id_token"])
+        client.send_email_verification(pend["id_token"], _continue_url(pend["email"]))
     except AuthError as exc:
         session.record_verification_answer(exc.status, exc.code)
         if exc.code in ("INVALID_ID_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND", "CREDENTIAL_TOO_OLD_LOGIN_AGAIN"):
@@ -775,44 +832,68 @@ def _resend() -> None:
 
 
 def _verify() -> None:
-    """You're almost in: the account exists, the address isn't proven yet."""
+    """Verify your email: the account exists, the address isn't proven yet.
+    The hierarchy is deliberate — verify first; resend is the fallback."""
     pend = session.pending()
     email = pend["email"] if pend else ""
+    sent = bool(pend and pend.get("sends", 0) > 0)
+    lead = (f"We sent a verification link to <strong>{C.e(email)}</strong>." if sent else
+            f"Your address <strong>{C.e(email)}</strong> still needs verifying — open the link we "
+            "emailed when you created the account, or request a new one below.")
     C.html(f"""<div class="tr-auth-sent">
-      <div class="ic">{_icon("mail", 32, "currentColor", "1.6")}</div>
-      <h3>You're almost in.</h3>
-      <p>Verify your email address to activate your TicketRadar account.</p>
+      <div class="eyebrow">VERIFY YOUR EMAIL</div>
+      <div class="ic wait">{_icon("mail", 32, "currentColor", "1.6")}</div>
+      <h3>Your TicketRadar account is almost ready.</h3>
+      <p>{lead}</p>
       <div class="steps">
-        <div class="step"><b>1</b><span>Open the email we sent to <strong>{C.e(email) or "your inbox"}</strong>.</span></div>
-        <div class="step"><b>2</b><span>Click <strong>Verify email</strong>. It only takes a moment.</span></div>
-        <div class="step"><b>3</b><span>Come back here and sign in.</span></div>
+        <div class="step"><b>1</b><span>Open the verification email.</span></div>
+        <div class="step"><b>2</b><span>Click <strong>Verify email</strong>.</span></div>
+        <div class="step"><b>3</b><span>Come back to TicketRadar — this page continues by itself.</span></div>
       </div>
+      <div class="folders">{_icon("search", 14)}<span>Check your Inbox, Spam, or Promotions folder.</span></div>
     </div>""")
     _countdown()
     st.button("BACK TO SIGN IN", key="auth_verify_back", use_container_width=True,
               on_click=_switch, args=("signin",))
 
 
+def _check_verified() -> None:
+    """An ``on_click``: ask Firebase now, rather than waiting for the poll."""
+    if session.continue_if_verified() is None:
+        st.session_state[NOTICE_KEY] = ("info", "Not verified yet — open the link in the email first, "
+                                                "then try again.")
+
+
 def _countdown() -> None:
-    """The resend button and its countdown, in a fragment that reruns
-    itself once a second while an account is waiting — the rest of the page
-    (and the app) stays put. Each tick reads the absolute deadline, so a
-    tab that was asleep shows the right number the moment it wakes."""
+    """The resend button, its countdown and the "I've verified" check, in a
+    fragment that reruns itself once a second while an account is waiting —
+    the rest of the page (and the app) stays put. Each tick reads the
+    absolute deadline, so a tab that was asleep shows the right number the
+    moment it wakes; every ``VERIFY_POLL`` seconds it also asks Firebase
+    whether the link has been used, and continues into the app when it has."""
     pend = session.pending()
-    live = pend is not None and pend.get("sends", 0) < RESEND_LIMIT
+    live = pend is not None and (pend.get("sends", 0) < RESEND_LIMIT or bool(pend.get("refresh_token")))
 
     @st.fragment(run_every=1 if live else None)
     def block() -> None:
+        pend = session.pending()
+        if pend and pend.get("refresh_token") and time.time() - float(pend.get("checked_at", 0)) >= VERIFY_POLL:
+            if session.continue_if_verified() is not None:
+                st.rerun()
         _feedback()
         allowed, why = _resend_state()
-        st.button("RESEND VERIFICATION EMAIL", key="auth_resend", use_container_width=True,
-                  disabled=not allowed, help=why or None, on_click=_resend)
         pend = session.pending()
-        if allowed and pend is not None and pend.get("sends", 0) > 0:
+        sent = bool(pend and pend.get("sends", 0) > 0)
+        st.button("RESEND VERIFICATION EMAIL" if sent else "SEND VERIFICATION EMAIL", key="auth_resend",
+                  use_container_width=True, disabled=not allowed, help=why or None, on_click=_resend)
+        if allowed and sent:
             why = "RESEND AVAILABLE"
         if why:
             klass = "tr-auth-count" if why.startswith("RESEND") else "tr-auth-hint"
             C.html(f'<div class="{klass}" style="text-align:center;">{C.e(why)}</div>')
+        if pend and pend.get("refresh_token"):
+            st.button("I'VE VERIFIED MY EMAIL — CONTINUE", key="auth_continue", use_container_width=True,
+                      on_click=_check_verified)
         C.html(f'<div class="tr-auth-diag">{_diagnostic(pend)}</div>')
 
     block()
@@ -891,6 +972,7 @@ def render() -> None:
     """Draw the whole entrance. The caller stops the script afterwards."""
     st.markdown(CSS, unsafe_allow_html=True)
     session.flush_cookie()
+    _returned_verified()
     with st.container(key="trauth_shell"):
         C.html(_topbar())
         visual, panel = st.columns([1.16, 0.84], gap="large")
@@ -931,4 +1013,4 @@ def entrance() -> None:
         st.markdown(ENTRANCE_CSS, unsafe_allow_html=True)
 
 
-__all__ = ["CSS", "ENTRANCE_CSS", "MODE_KEY", "ERROR_KEY", "NOTICE_KEY", "entrance", "render"]
+__all__ = ["CSS", "ENTRANCE_CSS", "MODE_KEY", "ERROR_KEY", "NOTICE_KEY", "VERIFIED_KEY", "entrance", "render"]

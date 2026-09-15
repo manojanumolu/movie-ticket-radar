@@ -258,6 +258,10 @@ class Monitor:
     #: started. ``{"kind": ..., "message": ..., "at": iso}`` or None. Shown as
     #: PROBLEM OCCURRED until the worker's first real check supersedes it.
     problem: dict[str, Any] | None = None
+    #: The Firebase UID of the account that created this monitor. Ownership
+    #: — who may see it, whose history it writes — is keyed on this and only
+    #: this; the legacy JSON store predates it and leaves it "".
+    owner_uid: str = ""
 
     # ── lifecycle ────────────────────────────────────────────────────────
     def is_expired(self, at: datetime | None = None) -> bool:
@@ -315,6 +319,7 @@ class Monitor:
             "stopped_reason": self.stopped_reason,
             "first_check_requested_at": to_iso(self.first_check_requested_at),
             "problem": dict(self.problem) if self.problem else None,
+            "owner_uid": self.owner_uid,
         }
 
     @classmethod
@@ -334,6 +339,7 @@ class Monitor:
             stopped_reason=raw.get("stopped_reason", ""),
             first_check_requested_at=parse_iso(raw.get("first_check_requested_at")),
             problem=dict(raw["problem"]) if isinstance(raw.get("problem"), dict) else None,
+            owner_uid=str(raw.get("owner_uid", "") or ""),
         )
 
 

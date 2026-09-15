@@ -207,26 +207,24 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 }
 .tr-page-foot { max-width:1600px; margin-top:28px; }
 
-/* ── the account row at the foot of the sidebar ─────────────────────
-   Who Firebase says you are, as one compact row; the row *is* the menu's
-   trigger (the popover button is stretched over it, transparent — the same
-   "pick" pattern as the tiles), and the menu holds Account settings and
-   Sign out. Nothing here touches the nav above it.                       */
-[class*="st-key-tracct"] { position:relative; margin-top:14px; gap:0 !important; }
-.tr-acct { display:flex; flex-direction:column; gap:0; padding:10px 11px 11px; border-radius:14px; min-width:0;
-  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08);
-  transition:border-color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease); }
-[class*="st-key-tracct"]:hover .tr-acct { border-color:rgba(255,51,85,.45); background:rgba(255,51,85,.06); }
-.tr-acct .top { display:flex; align-items:center; gap:9px; margin-bottom:9px; }
-.tr-acct .av { width:30px; height:30px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+/* ── the account control, top-right of the main content ─────────────
+   Who Firebase says you are, as one compact chip on the right edge of the
+   page; the chip *is* the menu's trigger (the popover button is stretched
+   over it, transparent — the same "pick" pattern as the tiles), and the
+   menu holds Account settings and Sign out. The sidebar carries nav only. */
+[class*="st-key-tracct_top"] { position:relative; width:max-content !important; max-width:100%; margin:0 0 6px auto; gap:0 !important; }
+.tr-acct-chip { display:flex; align-items:center; gap:9px; padding:5px 10px 5px 5px; border-radius:999px; min-width:0;
+  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.035)); border:1px solid rgba(255,255,255,.12);
+  box-shadow: var(--tr-hi), 0 10px 24px -16px rgba(0,0,0,.9);
+  transition:border-color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease), transform var(--tr-fast) var(--tr-ease); }
+[class*="st-key-tracct_top"]:hover .tr-acct-chip { border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); transform:translateY(-1px); }
+.tr-acct-chip .av { width:30px; height:30px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
   font-family:var(--tr-mono); font-size:12.5px; font-weight:500; color:#fff;
   background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
-.tr-acct .a { font-family:var(--tr-mono); font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--tr-text-4); flex:1; }
-.tr-acct .chev { color:var(--tr-text-4); display:flex; flex:none; }
-.tr-acct .n { font-size:13px; font-weight:700; line-height:1.25; color:var(--tr-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.tr-acct .m { font-size:10.5px; letter-spacing:-.01em; line-height:1.3; color:var(--tr-text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
-[class*="st-key-tracct"] [data-testid="stPopover"] { position:absolute; inset:0; margin:0; }
-[class*="st-key-tracct"] [data-testid="stPopover"] > button, [class*="st-key-tracct"] [data-testid="stPopoverButton"] {
+.tr-acct-chip .n { font-size:13px; font-weight:700; color:var(--tr-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+.tr-acct-chip .chev { color:var(--tr-text-4); display:flex; flex:none; }
+[class*="st-key-tracct_top"] [data-testid="stPopover"] { position:absolute; inset:0; margin:0; }
+[class*="st-key-tracct_top"] [data-testid="stPopover"] > button, [class*="st-key-tracct_top"] [data-testid="stPopoverButton"] {
   position:absolute; inset:0; width:100%; height:100%; min-height:0; margin:0; padding:0; opacity:0; cursor:pointer; }
 /* the menu itself (portaled to <body>) */
 [data-testid="stPopoverBody"] { background:var(--tr-surface) !important; border:1px solid var(--tr-border-strong) !important;
@@ -1165,6 +1163,9 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   /* the sidebar is an overlay here; the toolbar's "open" control is the nav */
   [data-testid="stSidebar"] { width: min(300px, 86vw) !important; min-width: 0 !important; }
   .block-container { padding-top: 3.2rem !important; }
+  /* the account chip: same row as the toolbar's open-sidebar button, right edge */
+  [class*="st-key-tracct_top"] { margin: -2.6rem 0 10px auto; }
+  .tr-acct-chip .n { max-width: 110px; font-size: 12.5px; }
 
   /* hero: responsive type, the mark becomes one quiet line under the copy */
   .tr-hero { padding: 24px 20px 20px; border-radius: 18px; margin-bottom: 16px; }

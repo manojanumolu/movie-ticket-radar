@@ -266,16 +266,42 @@ class FirebaseAuth:
                 creds = replace(creds, display_name=name)
         return replace(creds, email_verified=False)
 
-    def send_email_verification(self, id_token: str) -> None:
+    def send_email_verification(self, id_token: str, continue_url: str = "") -> None:
         """``POST accounts:sendOobCode {requestType: VERIFY_EMAIL, idToken}``:
         Firebase sends its own verification email (Authentication →
         Templates) to the account behind ``id_token``. Returns only when
         Firebase answered 2xx — "accepted the request", which is not the
         same as "delivered"; anything else raises with the status and code.
+
+        ``continue_url`` is where Firebase's verification page offers to
+        send the person afterwards — the app, which then shows "email
+        verified, sign in". It carries no credential. If the host isn't in
+        the project's authorized domains Firebase refuses the URL, and the
+        request is repeated without it rather than lost.
         """
         if not id_token:
             raise AuthError(MESSAGES["INVALID_ID_TOKEN"], "INVALID_ID_TOKEN")
-        self._call("sendOobCode", {"requestType": "VERIFY_EMAIL", "idToken": id_token})
+        payload: dict[str, Any] = {"requestType": "VERIFY_EMAIL", "idToken": id_token}
+        if continue_url:
+            try:
+                self._call("sendOobCode", {**payload, "continueUrl": continue_url})
+                return
+            except AuthError as exc:
+                if exc.code not in ("UNAUTHORIZED_DOMAIN", "INVALID_CONTINUE_URI", "MISSING_CONTINUE_URI"):
+                    raise
+                print(f"[auth] continueUrl refused ({exc.code}); sending without it", flush=True)
+        self._call("sendOobCode", payload)
+
+    def account_verified(self, refresh_token: str) -> Credentials | None:
+        """Has the person clicked the link yet? Refreshes the parked
+        account's token and reads its record; returns verified credentials
+        (enough to open a session) or None while it is still unverified."""
+        creds = self.refresh(refresh_token)
+        info = self.lookup(creds.id_token)
+        if not info["email_verified"]:
+            return None
+        return replace(creds, email=info["email"], display_name=info["display_name"],
+                       email_verified=True)
 
     def send_password_reset(self, email: str) -> None:
         """Ask Firebase to email a reset link. Says nothing about whether the

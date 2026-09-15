@@ -322,8 +322,8 @@ In the repo: **Settings → Secrets and variables → Actions → New repository
 | `GMAIL_ADDRESS` | the Gmail address that sends |
 | `GMAIL_APP_PASSWORD` | the 16-character app password |
 
-That is all the worker needs — it uses the built-in `GITHUB_TOKEN` to commit
-state.
+The worker also needs the Firestore project ID and service-account secret
+listed below. It uses the built-in `GITHUB_TOKEN` for repository work.
 
 ### 4. Firebase Authentication (the app's sign-in)
 
@@ -356,7 +356,22 @@ Verification and password-reset emails come from Firebase's own templates
 (*Authentication → Templates*), which is where you brand them. TicketRadar's
 Gmail SMTP is only ever used for ticket alerts.
 
-### 5. Streamlit secrets
+### 5. Firestore (private monitor data)
+
+Create a **Firestore Database** in the same Firebase project, then publish
+[`firestore.rules`](firestore.rules). Monitors, observed state, history and
+settings are stored per Firebase UID. The app can only read its own documents;
+the Actions worker uses a service account to process all active monitors. The
+movie catalogue remains shared, read-only repository data.
+
+For the worker, add these GitHub Actions secrets alongside the Gmail secrets:
+`FIREBASE_PROJECT_ID` (the Firebase project ID) and
+`FIREBASE_SERVICE_ACCOUNT` (the complete service-account JSON, as one secret
+value). Create that identity in Google Cloud IAM with the *Cloud Datastore
+User* role. It is worker-only: never put its JSON in Streamlit, a local file,
+or this repository.
+
+### 6. Streamlit secrets
 
 `.streamlit/secrets.toml` locally, or the *Secrets* box in Streamlit Cloud:
 
@@ -379,7 +394,7 @@ restart); the Gmail pair only for the **Send test email** button.
 
 This file is gitignored. **Never commit it.**
 
-### 6. Deploy to Streamlit Cloud
+### 7. Deploy to Streamlit Cloud
 
 1. <https://share.streamlit.io> → New app → this repo.
 2. Main file: `app.py`.
@@ -440,7 +455,7 @@ itself broke.
 python -m pytest
 ```
 
-287 tests, no network, no SMTP and no Firebase — a fixture fails the run if
+305 tests, no network, no SMTP and no Firebase — a fixture fails the run if
 anything tries to open a real SMTP connection or to call Firebase. BookMyShow is replaced by a fake session
 replaying payloads **rebuilt from responses captured on a live runner**, so the
 suite is deterministic without being fictional.
@@ -457,9 +472,10 @@ real error codes, password mismatch and duplicate accounts, the reset flow,
 sign-out, a reload restored from the cookie only because Google vouched for
 it, email verification (a new or unverified account never gets a session),
 and account switching in one tab starting the second person from a clean
-session. One test pins, on purpose, that `data/monitors.json` and
-`data/history.json` are still global: per-user data arrives with the
-Firestore step.
+  session. The Firestore suite simulates its security rules and proves that an
+  account can neither read nor change another account's monitors, state,
+  history or settings; it also proves that the privileged worker keeps each
+  document attached to its owner.
 
 Two of these tests exist because they caught real bugs during this work: one
 where resolving theatre detail blanked every poster in the grid, and one where
@@ -513,19 +529,21 @@ six hours, and re-reads immediately when BookMyShow adds a new format event.
 - Signing out, or signing in as somebody else in the same tab, wipes the
   session before the next run draws anything — the wizard's picks, the page,
   pending messages — so nothing of one person is shown to the next.
-- **Not yet per user:** monitors, history and settings still live in the
-  repository's global JSON files and are visible to every signed-in account.
-  That is the legacy architecture, not a leak of session state; the Firestore
-  migration (next step) keys them on the Firebase UID.
+- Monitors, observed state, history and settings are Firestore documents keyed
+  on the verified Firebase UID. Rules in `firestore.rules` restrict the app to
+  its own documents; only the GitHub Actions service account processes all due
+  monitors. JSON files remain a local/test fallback when Firebase is not
+  configured, not production shared data.
 - No credential is ever written to a file in this repo or printed to a log.
   Recipient addresses are masked in worker output (`m***@gmail.com`), and the
   SMTP auth-failure path deliberately discards the server's message body,
   which can echo the password.
 - `.gitignore` covers `.env`, `.streamlit/secrets.toml`, keys and tokens.
-- The worker needs only `contents: write` and the built-in `GITHUB_TOKEN`.
-- `data/` holds monitor configuration and observed state — movie titles,
-  theatre names, timestamps and your notification address. If that repo is
-  public, so is your email address. Consider keeping it private.
+- The worker needs its service-account secret plus the built-in `GITHUB_TOKEN`
+  for catalogue/state mirroring where applicable.
+- In production, `data/` is no longer the source of monitor configuration,
+  state or recipient addresses. Treat legacy fallback contents as local
+  development data nonetheless.
 
 ## Roadmap
 

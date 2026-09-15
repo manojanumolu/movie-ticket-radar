@@ -40,6 +40,7 @@ st.set_page_config(
     initial_sidebar_state="auto",
 )
 
+from auth import firebase  # noqa: E402
 from auth import session as auth_session  # noqa: E402
 from auth.gate import require_user  # noqa: E402
 from config.locations import get_location  # noqa: E402
@@ -48,23 +49,25 @@ from config.store import (  # noqa: E402
     github_status,
     github_token,
     last_mirror,
-    load_history,
-    load_settings,
     request_check_now,
-    save_settings,
     sync_from_github,
 )
 from config.timezone import fmt_datetime, fmt_time, now_ist  # noqa: E402
 from monitor import catalogue  # noqa: E402
 from monitor.models import ANY_FORMAT, Availability, Monitor, MonitorStatus, TheatreTarget  # noqa: E402
+from monitor import state as state_store  # noqa: E402
 from monitor.state import (  # noqa: E402
     MonitorState,
+    Scope,
     delete_monitor,
     expire_due_monitors,
     extend_monitor,
+    load_history,
     load_monitors,
+    load_settings,
     load_state,
     record_history,
+    save_settings,
     stop_monitor,
     upsert_monitor,
 )
@@ -77,9 +80,24 @@ from ui import flow  # noqa: E402
 from ui import login  # noqa: E402
 from ui.theme import inject  # noqa: E402
 
-APP_VERSION = "2.5.1"
+APP_VERSION = "2.6.0"
 
 inject()
+
+
+def _scope() -> Scope | None:
+    """Whose data a store call is for: the signed-in Firebase account, read
+    from Streamlit's own session (so it is right for the thread asking),
+    in the configured Firebase project. None → nobody signed in, or no
+    project configured (tests, a laptop without secrets) → the JSON files."""
+    user = auth_session.current_user()
+    project = firebase.config().project_id
+    if user is None or not project:
+        return None
+    return Scope(project, user.uid, auth_session.id_token)
+
+
+state_store.set_scope_provider(_scope)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -124,6 +142,8 @@ def refresh_from_github() -> None:
     own; it is at most one interaction staler than before.
     """
     global _refresh_thread
+    if state_store.backend_name() == "firestore":
+        return   # the store is read directly; there is nothing to pull from the repo
     if not st.session_state.get("_synced_once"):
         # The first paint waits, so a fresh tab never shows a stale monitor.
         sync_from_github()
@@ -172,7 +192,6 @@ def sidebar(active_count: int) -> str:
             f"<span>{C.e(get_location(st.session_state.get('location') or 'hyderabad').name.upper())}</span></div>"
             "</div>"
         )
-        account()
         return choice
 
 
@@ -183,22 +202,22 @@ def open_account_settings() -> None:
     st.session_state["page"] = "Settings"
 
 
-def account() -> None:
-    """The account row at the foot of the sidebar: who Firebase says you are
-    — never a name the browser supplied — and a compact menu with Account
-    settings and Sign out. The whole row is the menu's trigger."""
+def account_bar() -> None:
+    """The account control, top-right of the main content: who Firebase
+    says you are — never a name the browser supplied — as a compact chip
+    that opens a small menu with Account settings and Sign out. It is part
+    of the TicketRadar page, not the sidebar and not Streamlit's toolbar."""
     user = auth_session.current_user()
     if user is None:
         return
-    with st.container(key="tracct"):
+    with st.container(key="tracct_top"):
         C.html(
-            '<div class="tr-acct">'
-            f'<div class="top"><div class="av">{C.e(user.first_name[:1].upper() or "·")}</div>'
-            f'<div class="a">Account</div><div class="chev">{C.icon("chevron", 14, "currentColor", "2")}</div></div>'
-            f'<div class="n">{C.e(user.label)}</div>'
-            f'<div class="m">{C.e(user.email)}</div></div>'
+            '<div class="tr-acct-chip">'
+            f'<div class="av">{C.e(user.first_name[:1].upper() or "·")}</div>'
+            f'<div class="n">{C.e(user.first_name)}</div>'
+            f'<div class="chev">{C.icon("chevron", 14, "currentColor", "2")}</div></div>'
         )
-        with st.popover("Account", key="acct_menu", use_container_width=True):
+        with st.popover("Account", key="acct_menu"):
             C.html(
                 '<div class="tr-acct-menu">'
                 f'<div class="n">{C.e(user.label)}</div>'
@@ -264,15 +283,18 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
         notify_email=email,
         start_immediately=start_now,
         date_codes=list(date_codes or []),
+        # Ownership: the verified Firebase UID, nothing typed on this page.
+        owner_uid=auth_session.current_uid(),
     )
-    # 1. Persist — and mirror to the repo, which is where the worker reads.
-    #    The mirror commit to data/monitors.json is itself what starts the
-    #    worker (the workflow listens for pushes to that file), so record the
-    #    request up front and confirm it against what the mirror reports.
+    # 1. Persist. In Firestore the monitor is the signed-in person's and the
+    #    worker reads it from there; with the JSON store it is mirrored to
+    #    the repo, and that commit is itself what starts the worker (the
+    #    workflow listens for pushes to data/monitors.json).
     if start_now:
         monitor.first_check_requested_at = now_ist()
     upsert_monitor(monitor, mirror=mirrored())
-    mirror = last_mirror()
+    firestore = state_store.backend_name() == "firestore"
+    mirror = {"committed": False, "error": ""} if firestore else last_mirror()
     record_history(monitor, "CREATED", "Monitor created.", mirror=mirrored())
 
     settings = load_settings()
@@ -361,7 +383,8 @@ def status_card(monitor_id: str) -> None:
     without resetting the wizard above it, and picks up a check the worker
     committed while you were looking at the page.
     """
-    sync_from_github()
+    if state_store.backend_name() != "firestore":
+        sync_from_github()
     monitor = next((m for m in load_monitors() if m.id == monitor_id), None)
     if monitor is None:
         return
@@ -637,6 +660,7 @@ def main() -> None:
     monitors, states, history = load_view()
     settings = load_settings()
     page = sidebar(sum(1 for m in monitors if m.is_running()))
+    account_bar()
 
     # Navigation lands at the top of the new page — the hero, on Home.
     if st.session_state.get("_page_seen") != page:
