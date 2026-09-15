@@ -13,6 +13,7 @@ gate from the outside.
 
 from __future__ import annotations
 
+import re
 import time
 
 import pytest
@@ -37,6 +38,7 @@ class FakeFirebase:
         self.reset_requests: list[str] = []
         self.verification_sent: list[str] = []   # emails a VERIFY_EMAIL went to
         self.fail_with: str | None = None        # force one Firebase error code
+        self.fail_verify_with: str | None = None  # …or only for VERIFY_EMAIL
 
     def add(self, email: str, password: str, *, uid: str = "uid-1", name: str = "", verified: bool = True) -> None:
         self.accounts[email] = {"password": password, "uid": uid, "name": name, "verified": verified}
@@ -89,6 +91,8 @@ class FakeFirebase:
         if action == "sendOobCode":
             kind = payload.get("requestType")
             if kind == "VERIFY_EMAIL":
+                if self.fail_verify_with:
+                    return self._error(self.fail_verify_with)
                 email, acct = self._by_token(payload.get("idToken", ""))
                 if acct is None:
                     return self._error("INVALID_ID_TOKEN")
@@ -199,15 +203,28 @@ def test_a_wrong_password_is_a_clean_error(fake):
     assert str(exc.value) == firebase.MESSAGES["INVALID_LOGIN_CREDENTIALS"]
 
 
-def test_sign_up_creates_the_account_sends_verification_and_is_unverified(fake):
-    creds = firebase.FirebaseAuth().sign_up("Arjun Rao", "arjun@example.com", "Interval99")
+def test_sign_up_creates_the_account_unverified_and_the_verification_call_is_separate(fake):
+    client = firebase.FirebaseAuth()
+    creds = client.sign_up("Arjun Rao", "arjun@example.com", "Interval99")
     assert creds.display_name == "Arjun Rao"
     assert fake.accounts["arjun@example.com"]["name"] == "Arjun Rao"
     assert creds.email_verified is False
-    assert fake.verification_sent == ["arjun@example.com"]      # Firebase's email, not Gmail SMTP
-    assert [a for a, _ in fake.calls] == ["signUp", "update", "sendOobCode"]
-    assert fake.calls[-1][1]["requestType"] == "VERIFY_EMAIL"
-    assert "password" not in fake.calls[-1][1]
+    assert [a for a, _ in fake.calls] == ["signUp", "update"]     # nothing hidden in here
+    # The verification request is its own call — exactly Firebase's documented shape.
+    client.send_email_verification(creds.id_token)
+    action, payload = fake.calls[-1]
+    assert action == "sendOobCode"
+    assert payload == {"requestType": "VERIFY_EMAIL", "idToken": creds.id_token}
+    assert fake.verification_sent == ["arjun@example.com"]       # Firebase's email, not Gmail SMTP
+    # …and a refusal is an AuthError carrying the status and code, not a silent print.
+    fake.fail_with = "TOO_MANY_ATTEMPTS_TRY_LATER"
+    with pytest.raises(AuthError) as exc:
+        client.send_email_verification(creds.id_token)
+    assert (exc.value.status, exc.value.code) == (400, "TOO_MANY_ATTEMPTS_TRY_LATER")
+    assert exc.value.diagnostic == "HTTP 400, TOO_MANY_ATTEMPTS_TRY_LATER"
+    with pytest.raises(AuthError) as exc:
+        client.send_email_verification("")
+    assert exc.value.code == "INVALID_ID_TOKEN"
 
 
 def test_sign_in_user_refuses_an_unverified_account(fake, monkeypatch):
@@ -459,8 +476,10 @@ def test_signup_creates_an_account_and_signs_in(visitor, fake):
     assert "You're almost in." in text and "Verify your email address to activate" in text
     assert "arjun@example.com" in text
     assert {b.key for b in app.button} >= {"auth_resend", "auth_verify_back"}
-    assert app.session_state["auth_pending"]["email"] == "arjun@example.com"
-    assert "Interval99" not in repr(app.session_state)
+    pend = app.session_state["auth_pending"]
+    assert pend["email"] == "arjun@example.com" and pend["sends"] == 1
+    assert pend["cooldown_until"] > time.time() + 50                 # Firebase said 2xx → cooldown
+    assert "Interval99" not in repr(pend) and "auth_user" not in app.session_state
 
 
 def test_password_mismatch_is_caught_before_firebase(visitor, fake):
@@ -598,35 +617,126 @@ def test_an_unverified_account_cannot_sign_in_and_lands_on_verify(visitor, fake)
     assert not in_the_app(app)
     assert "auth_user" not in app.session_state
     assert "You're almost in." in body(app)
-    assert app.session_state["auth_pending"]["email"] == "newbie@example.com"
-    # Nothing else in session state carries the password or a signed-in user.
-    assert "Trailer2026" not in repr(app.session_state)
+    pend = app.session_state["auth_pending"]
+    assert pend["email"] == "newbie@example.com"
+    # No email was requested at sign-in, so nothing claims one was sent and
+    # there is no cooldown: the button is live straight away.
+    assert fake.verification_sent == [] and pend["sends"] == 0 and pend["cooldown_until"] == 0
+    assert "Sent" not in body(app) and "AVAILABLE IN" not in body(app)
+    assert next(b for b in app.button if b.key == "auth_resend").disabled is False
+    assert "Trailer2026" not in repr(pend)
 
 
-def test_resend_verification_is_rate_limited_and_uses_firebase(visitor, fake):
+def resend_button(app):
+    return next(b for b in app.button if b.key == "auth_resend")
+
+
+def test_A_firebase_accepts_the_request_then_success_and_cooldown(visitor, fake):
+    """HTTP 200 from sendOobCode → "sent" is shown and the 60s cooldown starts."""
     app = run()
     app = sign_in_as(app, "newbie@example.com", "Trailer2026")
-    # Sign-in of an unverified account did not itself send an email…
-    assert fake.verification_sent == []
-    resend = next(b for b in app.button if b.key == "auth_resend")
-    # …and the first resend is inside the cooldown of the sign-up/sign-in moment.
-    assert resend.disabled is True
-    assert "You can ask for another" in body(app)
-    # Once the cooldown has passed the button works, exactly once per cooldown.
-    app.session_state["auth_pending"] = {**app.session_state["auth_pending"], "sent_at": 0}
-    app = app.run()
-    resend = next(b for b in app.button if b.key == "auth_resend")
-    assert resend.disabled is False
-    resend.click().run()
+    assert resend_button(app).disabled is False
+    resend_button(app).click().run()
+    assert fake.calls[-1] == ("sendOobCode", {"requestType": "VERIFY_EMAIL", "idToken": "id.uid-newbie"})
     assert fake.verification_sent == ["newbie@example.com"]
-    assert fake.calls[-1][0] == "sendOobCode" and fake.calls[-1][1]["requestType"] == "VERIFY_EMAIL"
-    assert "sent again" in body(app)
-    assert next(b for b in app.button if b.key == "auth_resend").disabled is True
-    # And never more than the limit, however long you wait.
-    app.session_state["auth_pending"] = {**app.session_state["auth_pending"], "sent_at": 0, "sends": 3}
+    text = body(app)
+    assert "Verification email sent to newbie@example.com" in text
+    assert re.search(r"RESEND AVAILABLE IN (59|60)s", text)
+    pend = app.session_state["auth_pending"]
+    assert pend["sends"] == 1 and 55 < pend["cooldown_until"] - time.time() <= 60
+    assert resend_button(app).disabled is True
+    # Never more than the limit, however long you wait.
+    app.session_state["auth_pending"] = {**pend, "cooldown_until": 0, "sends": 3}
     app = app.run()
-    assert next(b for b in app.button if b.key == "auth_resend").disabled is True
-    assert "limit" in body(app)
+    assert resend_button(app).disabled is True and "limit" in body(app)
+
+
+def test_B_firebase_refuses_the_request_then_error_and_no_cooldown(visitor, fake):
+    """A 4xx from sendOobCode → the safe error (status + code) is shown, no
+    "sent", no cooldown, the button stays live. Both at sign-up and on resend."""
+    fake.fail_with = None
+    app = run(auth_mode="signup")
+    app.text_input(key="auth_su_name").set_value("Arjun")
+    app.text_input(key="auth_su_email").set_value("arjun@example.com")
+    app.text_input(key="auth_su_password").set_value("Interval99")
+    app.text_input(key="auth_su_confirm").set_value("Interval99")
+
+    fake.fail_verify_with = "OPERATION_NOT_ALLOWED"       # only VERIFY_EMAIL is refused
+    app.button(key="auth_signup").click().run()
+    text = body(app)                                                # the rerun that shows the error
+    assert "Firebase didn't accept the verification email request (HTTP 400, OPERATION_NOT_ALLOWED)" in text
+    assert "Your account was created, but" in text
+    app = settle(app)
+    text = body(app)
+    assert "You're almost in." in text                              # the account does exist
+    assert "Sent" not in text and "AVAILABLE IN" not in text
+    pend = app.session_state["auth_pending"]
+    assert pend["sends"] == 0 and pend["cooldown_until"] == 0
+    assert fake.verification_sent == []
+    assert resend_button(app).disabled is False
+    # Resend refused too: same honesty.
+    resend_button(app).click().run()
+    text = body(app)
+    assert "(HTTP 400, OPERATION_NOT_ALLOWED)" in text and "Verification email sent" not in text
+    assert app.session_state["auth_pending"]["sends"] == 0
+    assert resend_button(app).disabled is False
+
+
+def test_C_the_countdown_is_computed_from_the_absolute_deadline():
+    from ui import login
+
+    pend = {"email": "x@y.z", "cooldown_until": 1000.0, "sends": 1}
+    assert [login._cooldown_remaining(pend, now=1000.0 - n) for n in (60, 59, 58, 2, 1, 0.4, 0)] == [60, 59, 58, 2, 1, 1, 0]
+    assert login._cooldown_remaining(pend, now=1005.0) == 0            # a tab that slept past it
+    assert login._cooldown_remaining(None) == 0
+
+
+def test_C_the_countdown_on_screen_tracks_the_deadline(visitor, fake, monkeypatch):
+    from ui import login
+
+    app = run()
+    app = sign_in_as(app, "newbie@example.com", "Trailer2026")
+    deadline = time.time() + 60
+    app.session_state["auth_pending"] = {**app.session_state["auth_pending"], "cooldown_until": deadline, "sends": 1}
+    seen = []
+    for skew in (0.5, 1.5, 2.5):                                          # 59 → 58 → 57
+        monkeypatch.setattr(login.time, "time", lambda skew=skew: deadline - 60 + skew)
+        app = app.run()
+        seen.append(re.search(r"RESEND AVAILABLE IN (\d+)s", body(app)).group(1))
+        assert resend_button(app).disabled is True
+    assert seen == ["60", "59", "58"]
+
+
+def test_D_when_the_deadline_passes_resend_is_available(visitor, fake):
+    app = run()
+    app = sign_in_as(app, "newbie@example.com", "Trailer2026")
+    app.session_state["auth_pending"] = {**app.session_state["auth_pending"], "cooldown_until": time.time() - 1, "sends": 1}
+    app = app.run()
+    assert "RESEND AVAILABLE" in body(app) and "AVAILABLE IN" not in body(app)
+    assert resend_button(app).disabled is False
+    resend_button(app).click().run()
+    assert fake.verification_sent == ["newbie@example.com"]
+    assert app.session_state["auth_pending"]["sends"] == 2
+
+
+def test_E_no_key_token_or_password_reaches_the_page_or_the_log(visitor, fake, capsys):
+    app = run()
+    app = sign_in_as(app, "newbie@example.com", "Trailer2026")
+    resend_button(app).click().run()                                      # a 200
+    fake.fail_with = "TOO_MANY_ATTEMPTS_TRY_LATER"
+    app.session_state["auth_pending"] = {**app.session_state["auth_pending"], "cooldown_until": 0}
+    app = app.run()
+    resend_button(app).click().run()                                      # a 400
+    fake.fail_with = None
+    log = capsys.readouterr().out
+    page_text = " ".join(m.value for m in app.markdown)
+    for secret in ("test-web-api-key", "id.uid-newbie", "refresh.uid-newbie", "Trailer2026"):
+        assert secret not in log, secret
+        assert secret not in page_text, secret
+    # …while the safe diagnostic is in both.
+    assert "[auth] sendOobCode VERIFY_EMAIL: HTTP 200 ok" in log
+    assert "[auth] sendOobCode VERIFY_EMAIL: HTTP 400 TOO_MANY_ATTEMPTS_TRY_LATER" in log
+    assert "(HTTP 400, TOO_MANY_ATTEMPTS_TRY_LATER)" in page_text
 
 
 def test_once_verified_the_same_account_signs_in_normally(visitor, fake):

@@ -164,13 +164,27 @@ def sign_out() -> None:
 # ──────────────────────────────────────────────────────────────────────────
 def set_pending(creds: Credentials) -> None:
     """Park an unverified account: its email and a short-lived ID token, so
-    the verification email can be resent. Not a signed-in user."""
+    the verification email can be requested. Not a signed-in user, and —
+    until :func:`mark_verification_sent` says otherwise — no email has been
+    accepted by Firebase: ``sends`` is 0 and there is no cooldown."""
     st.session_state[PENDING_KEY] = {
         "email": creds.email,
         "id_token": creds.id_token,
-        "sent_at": time.time(),
-        "sends": 1,
+        "cooldown_until": 0.0,   # absolute deadline; 0 = resend allowed now
+        "sends": 0,              # requests Firebase actually accepted (HTTP 2xx)
     }
+
+
+def mark_verification_sent(cooldown: float) -> None:
+    """Firebase answered 2xx to a VERIFY_EMAIL request: count it and start
+    the cooldown from an absolute deadline, so a stale tab or a delayed
+    rerun can never make the countdown wrong."""
+    pend = pending()
+    if pend is None:
+        return
+    pend["cooldown_until"] = time.time() + cooldown
+    pend["sends"] = int(pend.get("sends", 0)) + 1
+    st.session_state[PENDING_KEY] = pend
 
 
 def pending() -> dict | None:
@@ -293,6 +307,7 @@ __all__ = [
     "current_user",
     "flush_cookie",
     "id_token",
+    "mark_verification_sent",
     "pending",
     "apply_pending_reset",
     "request_reset",

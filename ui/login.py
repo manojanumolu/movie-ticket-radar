@@ -31,6 +31,7 @@ gone rather than squeezed.
 
 from __future__ import annotations
 
+import math
 import time
 from typing import Callable
 
@@ -269,6 +270,7 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 [class*="st-key-trpair_auth_foot"] [data-testid="stColumn"] { flex:0 0 auto !important; width:auto !important; min-width:0 !important; }
 .tr-auth-foot-text { font-size:14px; color:var(--tr-text-2); font-weight:500; text-align:right; white-space:nowrap; line-height:34px; }
 .tr-auth-hint { font-size:12.5px; color:var(--tr-text-3); margin:-2px 0 0 2px; line-height:1.45; }
+.tr-auth-count { font-family:var(--tr-mono); font-size:11px; letter-spacing:.2em; color:var(--tr-text-3); margin-top:2px; font-variant-numeric:tabular-nums; }
 
 /* feedback */
 .tr-auth-alert { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:12px; font-size:13.5px; line-height:1.45; font-weight:500; margin:4px 0 2px;
@@ -687,14 +689,43 @@ def _signup() -> None:
             _fail("Those passwords don't match. Type them again.")
 
         def go() -> None:
-            creds = firebase.FirebaseAuth().sign_up(name, email, password)
-            # Firebase has the account and has emailed the verification
-            # link; the person is not signed in until they use it.
+            client = firebase.FirebaseAuth()
+            creds = client.sign_up(name, email, password)
+            # Firebase has the account. The person is not signed in until
+            # they use the verification link — which is requested here, and
+            # only counted as sent when Firebase says 2xx.
             session.set_pending(creds)
             st.session_state[MODE_KEY] = "verify"
+            try:
+                client.send_email_verification(creds.id_token)
+            except AuthError as exc:
+                st.session_state[ERROR_KEY] = _send_failure(exc, created=True)
+            else:
+                session.mark_verification_sent(RESEND_COOLDOWN)
+                st.session_state[NOTICE_KEY] = ("success", f"Verification email sent to {creds.email}. "
+                                                           "Not there in a minute? Check spam.")
             st.rerun()
 
         _attempt(status, "CREATING YOUR ACCOUNT…", go)
+
+
+def _send_failure(exc: AuthError, *, created: bool = False) -> str:
+    """What to say when Firebase did not accept a VERIFY_EMAIL request.
+    Names the status and code, because that is what fixes the project
+    configuration; never a key, a token or an address."""
+    lead = "Your account was created, but " if created else ""
+    return (f"{lead}Firebase didn't accept the verification email request ({exc.diagnostic}). "
+            f"{exc}")
+
+
+def _cooldown_remaining(pend: dict | None, now: float | None = None) -> int:
+    """Whole seconds until the resend is allowed again — from the absolute
+    deadline Firebase's acceptance set, never a counter."""
+    if not pend:
+        return 0
+    now = time.time() if now is None else now
+    left = float(pend.get("cooldown_until", 0)) - now
+    return max(0, math.ceil(left))
 
 
 def _resend_state() -> tuple[bool, str]:
@@ -704,14 +735,15 @@ def _resend_state() -> tuple[bool, str]:
         return False, "Sign in again to request a new link."
     if pend.get("sends", 0) >= RESEND_LIMIT:
         return False, "That's the limit for now — check spam, or try again later."
-    remaining = int(RESEND_COOLDOWN - (time.time() - pend.get("sent_at", 0)))
+    remaining = _cooldown_remaining(pend)
     if remaining > 0:
-        return False, f"Sent. You can ask for another in {remaining}s."
+        return False, f"RESEND AVAILABLE IN {remaining}s"
     return True, ""
 
 
 def _resend() -> None:
-    """An ``on_click``: one more verification email, within the limits."""
+    """An ``on_click``: one more verification email. "Sent" and the
+    cooldown happen only after Firebase answered 2xx."""
     allowed, _ = _resend_state()
     pend = session.pending()
     if not allowed or pend is None:
@@ -719,16 +751,16 @@ def _resend() -> None:
     try:
         firebase.FirebaseAuth().send_email_verification(pend["id_token"])
     except AuthError as exc:
-        if exc.code in ("INVALID_ID_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND"):
+        if exc.code in ("INVALID_ID_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND", "CREDENTIAL_TOO_OLD_LOGIN_AGAIN"):
             session.clear_pending()
-            st.session_state[ERROR_KEY] = "That link request has expired — sign in again and we'll send a fresh one."
+            st.session_state[ERROR_KEY] = ("That request has expired — sign in again and we'll send a fresh link "
+                                           f"({exc.diagnostic}).")
         else:
-            st.session_state[ERROR_KEY] = str(exc)
+            st.session_state[ERROR_KEY] = _send_failure(exc)
         return
-    pend["sent_at"] = time.time()
-    pend["sends"] = pend.get("sends", 0) + 1
-    st.session_state[session.PENDING_KEY] = pend
-    st.session_state[NOTICE_KEY] = ("success", f"Verification email sent again to {pend['email']}.")
+    session.mark_verification_sent(RESEND_COOLDOWN)
+    st.session_state[NOTICE_KEY] = ("success", f"Verification email sent to {pend['email']}. "
+                                               "Not there in a minute? Check spam.")
 
 
 def _verify() -> None:
@@ -745,14 +777,33 @@ def _verify() -> None:
         <div class="step"><b>3</b><span>Come back here and sign in.</span></div>
       </div>
     </div>""")
-    _feedback()
-    allowed, why = _resend_state()
-    st.button("RESEND VERIFICATION EMAIL", key="auth_resend", use_container_width=True,
-              disabled=not allowed, help=why or None, on_click=_resend)
-    if why:
-        C.html(f'<div class="tr-auth-hint" style="text-align:center;">{C.e(why)}</div>')
+    _countdown()
     st.button("BACK TO SIGN IN", key="auth_verify_back", use_container_width=True,
               on_click=_switch, args=("signin",))
+
+
+def _countdown() -> None:
+    """The resend button and its countdown, in a fragment that reruns
+    itself once a second while an account is waiting — the rest of the page
+    (and the app) stays put. Each tick reads the absolute deadline, so a
+    tab that was asleep shows the right number the moment it wakes."""
+    pend = session.pending()
+    live = pend is not None and pend.get("sends", 0) < RESEND_LIMIT
+
+    @st.fragment(run_every=1 if live else None)
+    def block() -> None:
+        _feedback()
+        allowed, why = _resend_state()
+        st.button("RESEND VERIFICATION EMAIL", key="auth_resend", use_container_width=True,
+                  disabled=not allowed, help=why or None, on_click=_resend)
+        pend = session.pending()
+        if allowed and pend is not None and pend.get("sends", 0) > 0:
+            why = "RESEND AVAILABLE"
+        if why:
+            klass = "tr-auth-count" if why.startswith("RESEND") else "tr-auth-hint"
+            C.html(f'<div class="{klass}" style="text-align:center;">{C.e(why)}</div>')
+
+    block()
 
 
 def _reset() -> None:
