@@ -144,6 +144,23 @@ def is_configured() -> bool:
     return config().configured
 
 
+_config_logged = False
+
+
+def log_config_once() -> None:
+    """One line per process saying whether the host handed the app its
+    Firebase configuration — the project id (public: it is in every Firebase
+    web app's config) and *whether* the key and auth domain are present.
+    Never the key itself."""
+    global _config_logged
+    if _config_logged:
+        return
+    _config_logged = True
+    cfg = config()
+    print(f"[auth] Firebase config: project_id={cfg.project_id or '(missing)'}, "
+          f"api_key_present={bool(cfg.api_key)}, auth_domain_present={bool(cfg.auth_domain)}", flush=True)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Transport — one function, so the tests can replace the network
 # ──────────────────────────────────────────────────────────────────────────
@@ -184,6 +201,10 @@ class FirebaseAuth:
 
     def __init__(self, api_key: str = ""):
         self.api_key = api_key or config().api_key
+        #: (HTTP status, "OK" or Firebase's code) of the most recent exchange —
+        #: the safe diagnostic, for the UI to show next to a result.
+        self.last_status: int = 0
+        self.last_code: str = ""
 
     # -- plumbing ---------------------------------------------------------
     def _call(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -200,15 +221,18 @@ class FirebaseAuth:
         try:
             status, body = _post(url, {"key": self.api_key}, payload)
         except (requests.RequestException, OSError) as exc:  # DNS, TLS, timeout …
-            print(f"[auth] {label}: Firebase unreachable ({type(exc).__name__})")
+            self.last_status, self.last_code = 0, "network"
+            print(f"[auth] {label}: HTTP 0 network ({type(exc).__name__})", flush=True)
             raise AuthError(MESSAGES["network"], "network") from None
         if status >= 400 or "error" in body:
             error = body.get("error") or {}
             code = str(error.get("message") or error.get("status") or f"HTTP_{status}")
             short = code.split(":")[0].strip()
-            print(f"[auth] {label}: HTTP {status} {short}")
+            self.last_status, self.last_code = status, short
+            print(f"[auth] {label}: HTTP {status} {short}", flush=True)
             raise AuthError(explain(code), short, status)
-        print(f"[auth] {label}: HTTP {status} ok")
+        self.last_status, self.last_code = status, "OK"
+        print(f"[auth] {label}: HTTP {status} OK", flush=True)
         return body
 
     # -- the calls --------------------------------------------------------
@@ -238,7 +262,7 @@ class FirebaseAuth:
                                                 "returnSecureToken": False})
                 creds = replace(creds, display_name=str(updated.get("displayName") or name))
             except AuthError as exc:
-                print(f"[auth] display name not saved for new account: {exc.code}")
+                print(f"[auth] display name not saved for new account: {exc.code}", flush=True)
                 creds = replace(creds, display_name=name)
         return replace(creds, email_verified=False)
 
@@ -335,6 +359,7 @@ __all__ = [
     "config",
     "explain",
     "is_configured",
+    "log_config_once",
     "password_problem",
     "valid_email",
 ]

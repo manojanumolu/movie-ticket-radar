@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import streamlit as st
 
-from auth import session
+from auth import firebase, session
 from auth.session import AuthUser
 
 
 def require_user() -> AuthUser:
+    firebase.log_config_once()
     # A sign-out or a sign-in on the previous run asked for the session to
     # be wiped; this is the first thing that runs, before any widget.
     session.apply_pending_reset()
