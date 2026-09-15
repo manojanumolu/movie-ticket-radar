@@ -88,6 +88,10 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # commits + next-segment dispatch
+          # User-owned monitors live in Firestore; the worker reads every
+          # owner's with a service account (never a file in the repository).
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TZ: Asia/Kolkata
           PYTHONUNBUFFERED: "1"
         run: |

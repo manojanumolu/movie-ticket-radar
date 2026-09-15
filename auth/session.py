@@ -169,10 +169,37 @@ def set_pending(creds: Credentials) -> None:
     accepted by Firebase: ``sends`` is 0 and there is no cooldown."""
     st.session_state[PENDING_KEY] = {
         "email": creds.email,
+        "display_name": creds.display_name,
         "id_token": creds.id_token,
+        # Server-side only, like a signed-in session's: what lets this tab
+        # notice the verification and continue without a second password.
+        "refresh_token": creds.refresh_token,
         "cooldown_until": 0.0,   # absolute deadline; 0 = resend allowed now
         "sends": 0,              # requests Firebase actually accepted (HTTP 2xx)
+        "checked_at": 0.0,       # when the account record was last read
     }
+
+
+def continue_if_verified() -> AuthUser | None:
+    """Ask Firebase whether the parked account has verified its address; if
+    so, open its session — the password was proven at sign-up, the tokens
+    are Firebase's own and never left this process — and forget the
+    parking. None while still unverified (or if the tokens have lapsed)."""
+    pend = pending()
+    if pend is None or not pend.get("refresh_token"):
+        return None
+    pend["checked_at"] = time.time()
+    st.session_state[PENDING_KEY] = pend
+    try:
+        creds = firebase.FirebaseAuth().account_verified(pend["refresh_token"])
+    except AuthError as exc:
+        print(f"[auth] verification check: {exc.code}", flush=True)
+        return None
+    if creds is None:
+        return None
+    user = sign_in_user(creds)
+    st.session_state.pop(PENDING_KEY, None)
+    return user
 
 
 def mark_verification_sent(cooldown: float) -> None:
@@ -313,6 +340,7 @@ __all__ = [
     "PENDING_KEY",
     "AuthUser",
     "clear_pending",
+    "continue_if_verified",
     "current_uid",
     "current_user",
     "flush_cookie",

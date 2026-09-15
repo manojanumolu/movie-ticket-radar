@@ -1,30 +1,50 @@
 """Persistent monitoring state — the memory that survives between runs.
 
-Every GitHub Actions run is a cold start. Without this file the checker would
-have nothing to compare against and would email on every single run, which is
-the failure mode this application exists to avoid.
+Every GitHub Actions run is a cold start. Without this the checker would
+have nothing to compare against and would email on every single run, which
+is the failure mode this application exists to avoid.
 
-Two files, two jobs:
+Three kinds of record, two owners:
 
-* ``data/monitors.json`` — what the user asked for (owned by the UI).
-* ``data/state.json``    — what we have observed (owned by the worker).
+* monitors      — what a person asked for (owned by the UI)
+* monitor state — what the worker observed (owned by the worker)
+* history       — the activity log both of them append to
 
-Keeping them apart means the worker can rewrite observations every ten minutes
-without ever touching, or racing, the user's configuration.
+…and two places they can live, behind one set of functions so the checker
+and the worker never know which:
+
+* **Firestore**, keyed on the Firebase UID that created each monitor. The
+  app reads and writes as the signed-in person (their ID token; the rules
+  in ``firestore.rules`` allow only ``owner_uid == uid``), and the worker
+  reads everything with a service account. This is what a deployment uses.
+* **``data/*.json``** in the repository — the original store, still what the
+  tests and a machine without Firebase use. It has no notion of owner and
+  is global; that is exactly why it is no longer the store for people.
+
+The app registers a *scope provider* (:func:`set_scope_provider`) that
+answers "who is this call for?" from Streamlit's own session, so nothing in
+this module ever holds a user in a module-level variable. With no provider
+answer and a service account in the environment, calls are the worker's;
+with neither, they hit the JSON files.
 """
 
 from __future__ import annotations
 
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 
+from config import firestore as fs
 from config.store import (
+    DEFAULTS,
     MONITORS_FILE,
     STATE_FILE,
-    load_history,
+    load_history as _json_load_history,
+    load_settings as _json_load_settings,
     read_json,
-    save_history,
+    save_history as _json_save_history,
+    save_settings as _json_save_settings,
     write_json,
 )
 from config.timezone import now_ist, parse_iso, to_iso
@@ -42,28 +62,269 @@ DUE_TOLERANCE_SECONDS = 30
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Monitors
+# Which store, for whom
+# ──────────────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class Scope:
+    """One signed-in person's view of Firestore: the project, the UID that
+    owns what they may see, and a way to get their current ID token."""
+
+    project_id: str
+    uid: str
+    token: Callable[[], str]
+
+
+ScopeProvider = Callable[[], "Scope | None"]
+_scope_provider: ScopeProvider | None = None
+#: The worker's client, built once from the environment.
+_admin: "_FirestoreStore | None" = None
+#: Injected by tests to stand in for the service.
+_transport: Callable[..., tuple[int, Any]] | None = None
+
+
+def set_scope_provider(provider: ScopeProvider | None) -> None:
+    """The app calls this once at import with a function that reads the
+    signed-in user out of Streamlit's session (thread-correct by Streamlit's
+    own design). ``None`` — from the provider or as the provider — means
+    "nobody", and the JSON files are used."""
+    global _scope_provider
+    _scope_provider = provider
+
+
+def backend_name() -> str:
+    """``"firestore"`` or ``"json"`` — what the *next* call would use."""
+    return "firestore" if isinstance(_backend(), _FirestoreStore) else "json"
+
+
+def _backend() -> "_Store":
+    global _admin
+    if _scope_provider is not None:
+        scope = _scope_provider()
+        if scope is not None and scope.project_id and scope.uid:
+            client = fs.FirestoreClient(scope.project_id, scope.token, transport=_transport or fs._http)
+            return _FirestoreStore(client, uid=scope.uid)
+    info = fs.service_account_from_env()
+    project = fs.project_from_env()
+    if info and project:
+        if _admin is None or _admin.client.project_id != project:
+            client = fs.FirestoreClient(project, fs.service_account_token_getter(info),
+                                        transport=_transport or fs._http)
+            _admin = _FirestoreStore(client, uid=None)
+        return _admin
+    return _JSON
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The JSON store — the original, unchanged in behaviour
+# ──────────────────────────────────────────────────────────────────────────
+class _JsonStore:
+    name = "json"
+
+    def load_monitors(self) -> list[Monitor]:
+        raw = read_json(MONITORS_FILE)
+        if not isinstance(raw, list):
+            return []
+        monitors: list[Monitor] = []
+        for item in raw:
+            try:
+                monitors.append(Monitor.from_dict(item))
+            except (KeyError, TypeError, ValueError) as exc:
+                print(f"[state] skipping unreadable monitor: {exc}")
+        return monitors
+
+    def save_monitors(self, monitors: list[Monitor], *, mirror: bool = True) -> None:
+        write_json(MONITORS_FILE, [m.to_dict() for m in monitors], mirror=mirror,
+                   message="chore: update monitors")
+
+    def delete_monitor(self, monitor_id: str, *, mirror: bool = True) -> None:
+        self.save_monitors([m for m in self.load_monitors() if m.id != monitor_id], mirror=mirror)
+        self.clear_monitor_state(monitor_id, mirror=mirror)
+
+    def load_state(self) -> dict[str, MonitorState]:
+        raw = read_json(STATE_FILE)
+        if not isinstance(raw, dict):
+            return {}
+        return {k: MonitorState.from_dict(v) for k, v in raw.items()}
+
+    def save_state(self, state: dict[str, MonitorState], *, mirror: bool = True) -> None:
+        write_json(STATE_FILE, {k: v.to_dict() for k, v in state.items()}, mirror=mirror,
+                   message="chore: update monitoring state")
+
+    def clear_monitor_state(self, monitor_id: str, *, mirror: bool = True) -> None:
+        state = self.load_state()
+        if state.pop(monitor_id, None) is not None:
+            self.save_state(state, mirror=mirror)
+
+    def load_history(self) -> list[dict[str, Any]]:
+        return _json_load_history()
+
+    def append_history(self, monitor: Monitor, item: dict[str, Any], *, mirror: bool = True) -> None:
+        history = self.load_history()
+        history.insert(0, item)
+        _json_save_history(history, mirror=mirror)
+
+    def recent_history_for(self, monitor: Monitor) -> list[dict[str, Any]]:
+        return self.load_history()[:8]
+
+    def load_settings(self) -> dict[str, Any]:
+        return _json_load_settings()
+
+    def save_settings(self, settings: dict[str, Any], *, mirror: bool = True) -> None:
+        _json_save_settings(settings, mirror=mirror)
+
+
+_JSON = _JsonStore()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The Firestore store — every record carries owner_uid
+# ──────────────────────────────────────────────────────────────────────────
+MONITORS, STATES, HISTORY, USERS = "monitors", "monitor_state", "history", "users"
+HISTORY_LIMIT = 50
+#: monitor id → owner, remembered from the last load so the worker (which
+#: has no UID of its own) can write each state document to its owner.
+_owner_of: dict[str, str] = {}
+
+
+class _FirestoreStore:
+    """``uid`` set: the signed-in person's store — queries are filtered on
+    their UID *and* every document that comes back is re-checked, so even a
+    misdeployed rule set could not show one person another's data through
+    this code. ``uid`` None: the worker, every owner."""
+
+    name = "firestore"
+
+    def __init__(self, client: fs.FirestoreClient, uid: str | None):
+        self.client = client
+        self.uid = uid
+
+    # -- helpers ----------------------------------------------------------
+    def _mine(self) -> dict[str, Any] | None:
+        return {fs.OWNER: self.uid} if self.uid else None
+
+    def _owned(self, doc: dict[str, Any]) -> bool:
+        return self.uid is None or doc.get(fs.OWNER) == self.uid
+
+    def _stamp(self, monitor: Monitor) -> str:
+        """The owner a monitor is written under. A person can only ever
+        write their own; the worker keeps whatever owner a monitor has."""
+        if self.uid:
+            if monitor.owner_uid and monitor.owner_uid != self.uid:
+                raise PermissionError("a monitor cannot be written under another account")
+            monitor.owner_uid = self.uid
+        return monitor.owner_uid
+
+    # -- monitors ---------------------------------------------------------
+    def load_monitors(self) -> list[Monitor]:
+        monitors: list[Monitor] = []
+        for doc_id, doc in self.client.query(MONITORS, equals=self._mine()).items():
+            if not self._owned(doc):
+                continue
+            try:
+                monitor = Monitor.from_dict({**doc, "id": doc_id})
+            except (KeyError, TypeError, ValueError) as exc:
+                print(f"[state] skipping unreadable monitor {doc_id}: {exc}")
+                continue
+            _owner_of[monitor.id] = monitor.owner_uid
+            monitors.append(monitor)
+        monitors.sort(key=lambda m: m.created_at, reverse=True)
+        return monitors
+
+    def save_monitors(self, monitors: list[Monitor], *, mirror: bool = True) -> None:
+        writes = []
+        for monitor in monitors:
+            owner = self._stamp(monitor)
+            _owner_of[monitor.id] = owner
+            writes.append((MONITORS, monitor.id, monitor.to_dict()))
+        self.client.commit(writes)
+
+    def delete_monitor(self, monitor_id: str, *, mirror: bool = True) -> None:
+        # A direct document read of somebody else's monitor is rightly denied
+        # by Firestore before we can inspect ``owner_uid``.  From the UI this
+        # is indistinguishable from an id that does not exist in this user's
+        # collection, so make deletion the same harmless no-op as stop/extend
+        # instead of surfacing a permission error.
+        try:
+            doc = self.client.get(MONITORS, monitor_id)
+        except fs.FirestoreError as exc:
+            if self.uid is not None and exc.status in (401, 403):
+                return
+            raise
+        if doc is None or not self._owned(doc):
+            return
+        self.client.commit([(MONITORS, monitor_id, None), (STATES, monitor_id, None)])
+        _owner_of.pop(monitor_id, None)
+
+    # -- observed state ---------------------------------------------------
+    def load_state(self) -> dict[str, MonitorState]:
+        out: dict[str, MonitorState] = {}
+        for doc_id, doc in self.client.query(STATES, equals=self._mine()).items():
+            if self._owned(doc):
+                out[doc_id] = MonitorState.from_dict(doc)
+        return out
+
+    def save_state(self, state: dict[str, MonitorState], *, mirror: bool = True) -> None:
+        writes = []
+        for monitor_id, ms in state.items():
+            owner = self.uid or _owner_of.get(monitor_id, "")
+            if not owner:
+                existing = self.client.get(STATES, monitor_id) or self.client.get(MONITORS, monitor_id) or {}
+                owner = str(existing.get(fs.OWNER, ""))
+            writes.append((STATES, monitor_id, {**ms.to_dict(), fs.OWNER: owner}))
+        self.client.commit(writes)
+
+    def clear_monitor_state(self, monitor_id: str, *, mirror: bool = True) -> None:
+        doc = self.client.get(STATES, monitor_id)
+        if doc is not None and self._owned(doc):
+            self.client.delete(STATES, monitor_id)
+
+    # -- history ----------------------------------------------------------
+    def _history_docs(self, owner: str | None) -> list[dict[str, Any]]:
+        equals = {fs.OWNER: owner} if owner else None
+        docs = [d for d in self.client.query(HISTORY, equals=equals).values() if self._owned(d)]
+        docs.sort(key=lambda d: str(d.get("at", "")), reverse=True)
+        return docs
+
+    def load_history(self) -> list[dict[str, Any]]:
+        return self._history_docs(self.uid)[:HISTORY_LIMIT]
+
+    def recent_history_for(self, monitor: Monitor) -> list[dict[str, Any]]:
+        return self._history_docs(self.uid or monitor.owner_uid or None)[:8]
+
+    def append_history(self, monitor: Monitor, item: dict[str, Any], *, mirror: bool = True) -> None:
+        owner = self.uid or monitor.owner_uid
+        if not owner:
+            print(f"[state] history for {monitor.id} has no owner; not written", flush=True)
+            return
+        stamp = str(item.get("at", "")).replace(":", "").replace("-", "")[:15] or "0"
+        self.client.set(HISTORY, f"{stamp}-{monitor.id[:8]}-{secrets.token_hex(3)}",
+                        {**item, fs.OWNER: owner})
+
+    # -- settings (users/{uid}) -------------------------------------------
+    def load_settings(self) -> dict[str, Any]:
+        if not self.uid:
+            return dict(DEFAULTS["settings.json"])
+        doc = self.client.get(USERS, self.uid) or {}
+        return {**DEFAULTS["settings.json"], **{k: v for k, v in doc.items() if k != fs.OWNER}}
+
+    def save_settings(self, settings: dict[str, Any], *, mirror: bool = True) -> None:
+        if not self.uid:
+            return
+        self.client.set(USERS, self.uid, {**settings, fs.OWNER: self.uid})
+
+
+_Store = _JsonStore  # the protocol both stores follow
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Monitors — the functions the UI, the checker and the worker call
 # ──────────────────────────────────────────────────────────────────────────
 def load_monitors() -> list[Monitor]:
-    raw = read_json(MONITORS_FILE)
-    if not isinstance(raw, list):
-        return []
-    monitors: list[Monitor] = []
-    for item in raw:
-        try:
-            monitors.append(Monitor.from_dict(item))
-        except (KeyError, TypeError, ValueError) as exc:
-            print(f"[state] skipping unreadable monitor: {exc}")
-    return monitors
+    return _backend().load_monitors()
 
 
 def save_monitors(monitors: list[Monitor], *, mirror: bool = True) -> None:
-    write_json(
-        MONITORS_FILE,
-        [m.to_dict() for m in monitors],
-        mirror=mirror,
-        message="chore: update monitors",
-    )
+    _backend().save_monitors(monitors, mirror=mirror)
 
 
 def upsert_monitor(monitor: Monitor, *, mirror: bool = True) -> list[Monitor]:
@@ -101,9 +362,9 @@ def expire_due_monitors(monitors: list[Monitor] | None = None, *, at: datetime |
 
 
 def stop_monitor(monitor_id: str, *, at: datetime | None = None, mirror: bool = True) -> Monitor | None:
-    """Mark a monitor stopped *in the persisted file*.
+    """Mark a monitor stopped *in the store*.
 
-    Hiding it in the UI would not be enough — the worker reads this file, so
+    Hiding it in the UI would not be enough — the worker reads the store, so
     stopping has to change what the worker sees.
     """
     monitors = load_monitors()
@@ -127,9 +388,18 @@ def extend_monitor(monitor_id: str, hours: int = 24, *, mirror: bool = True) -> 
 
 
 def delete_monitor(monitor_id: str, *, mirror: bool = True) -> None:
-    monitors = [m for m in load_monitors() if m.id != monitor_id]
-    save_monitors(monitors, mirror=mirror)
-    clear_monitor_state(monitor_id, mirror=mirror)
+    _backend().delete_monitor(monitor_id, mirror=mirror)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Settings — per person in Firestore, the one file in JSON
+# ──────────────────────────────────────────────────────────────────────────
+def load_settings() -> dict[str, Any]:
+    return _backend().load_settings()
+
+
+def save_settings(settings: dict[str, Any], *, mirror: bool = True) -> None:
+    _backend().save_settings(settings, mirror=mirror)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -289,19 +559,11 @@ class MonitorState:
 
 
 def load_state() -> dict[str, MonitorState]:
-    raw = read_json(STATE_FILE)
-    if not isinstance(raw, dict):
-        return {}
-    return {k: MonitorState.from_dict(v) for k, v in raw.items()}
+    return _backend().load_state()
 
 
 def save_state(state: dict[str, MonitorState], *, mirror: bool = True) -> None:
-    write_json(
-        STATE_FILE,
-        {k: v.to_dict() for k, v in state.items()},
-        mirror=mirror,
-        message="chore: update monitoring state",
-    )
+    _backend().save_state(state, mirror=mirror)
 
 
 def get_monitor_state(monitor_id: str) -> MonitorState:
@@ -309,24 +571,27 @@ def get_monitor_state(monitor_id: str) -> MonitorState:
 
 
 def clear_monitor_state(monitor_id: str, *, mirror: bool = True) -> None:
-    state = load_state()
-    if state.pop(monitor_id, None) is not None:
-        save_state(state, mirror=mirror)
+    _backend().clear_monitor_state(monitor_id, mirror=mirror)
 
 
 # ──────────────────────────────────────────────────────────────────────────
 # History (the right-rail "Recent history" list)
 # ──────────────────────────────────────────────────────────────────────────
+def load_history() -> list[dict[str, Any]]:
+    """The signed-in person's history (Firestore), or the one global list (JSON)."""
+    return _backend().load_history()
+
+
 def record_history(monitor: Monitor, kind: str, message: str, *, mirror: bool = True,
                    at: datetime | None = None, extra: dict[str, Any] | None = None) -> None:
-    """Append one line to the activity log.
+    """Append one line to the activity log — the monitor's owner's log.
 
     De-duplicated on (monitor, kind, message) within the last hour so a
     flapping check cannot flood the rail.
-        """
+    """
     at = at or now_ist()
-    history = load_history()
-    for item in history[:8]:
+    store = _backend()
+    for item in store.recent_history_for(monitor):
         if (
             item.get("monitor_id") == monitor.id
             and item.get("kind") == kind
@@ -335,39 +600,42 @@ def record_history(monitor: Monitor, kind: str, message: str, *, mirror: bool = 
             seen = parse_iso(item.get("at"))
             if seen and (at - seen) < timedelta(hours=1):
                 return
-    history.insert(
-        0,
-        {
-            "monitor_id": monitor.id,
-            "kind": kind,
-            "message": message,
-            "movie": monitor.movie.title,
-            "language": monitor.movie.language,
-            "poster_url": monitor.movie.poster_url,
-            "targets": [t.label for t in monitor.targets],
-            "at": to_iso(at),
-            **(extra or {}),
-        },
-    )
-    save_history(history, mirror=mirror)
+    store.append_history(monitor, {
+        "monitor_id": monitor.id,
+        "kind": kind,
+        "message": message,
+        "movie": monitor.movie.title,
+        "language": monitor.movie.language,
+        "poster_url": monitor.movie.poster_url,
+        "targets": [t.label for t in monitor.targets],
+        "at": to_iso(at),
+        **(extra or {}),
+    }, mirror=mirror)
 
 
 __all__ = [
     "DUE_TOLERANCE_SECONDS",
+    "HISTORY_LIMIT",
     "MonitorState",
     "NEW_SHOWTIME_COOLDOWN",
+    "Scope",
     "TargetState",
+    "backend_name",
     "clear_monitor_state",
     "delete_monitor",
     "expire_due_monitors",
     "extend_monitor",
     "get_monitor",
     "get_monitor_state",
+    "load_history",
     "load_monitors",
+    "load_settings",
     "load_state",
     "record_history",
     "save_monitors",
+    "save_settings",
     "save_state",
+    "set_scope_provider",
     "stop_monitor",
     "upsert_monitor",
 ]
