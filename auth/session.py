@@ -26,10 +26,20 @@ from auth import firebase
 from auth.firebase import AuthError, Credentials
 
 USER_KEY = "auth_user"
+#: An account that exists but whose email is not yet verified: enough to
+#: resend the verification email, never enough to be ``current_user()``.
+PENDING_KEY = "auth_pending"
 COOKIE = "tr_session"
 COOKIE_DAYS = 30
 #: Refresh the ID token this many seconds before Firebase says it expires.
 REFRESH_MARGIN = 120
+#: What survives a session reset: the account that *caused* it (a sign-in
+#: keeps its new user; a sign-out has already dropped the old one), the
+#: once-per-session restore guard, and the cookie intent the next paint acts
+#: on. Nothing that belongs to the previous person.
+RESET_KEEPS = frozenset({USER_KEY, "auth_just_signed_in", "auth_restore_tried",
+                         "auth_cookie_set", "auth_cookie_clear"})
+RESET_FLAG = "auth_reset_pending"
 
 
 @dataclass
@@ -86,9 +96,47 @@ def _from_credentials(creds: Credentials, *, email: str = "", display_name: str 
     )
 
 
+def request_reset() -> None:
+    """Ask for everything this Streamlit session knows to be forgotten at
+    the start of the next run.
+
+    A session is one browser tab, and a tab can sign out and sign in as
+    somebody else — so every key the previous person accumulated (the
+    wizard's step and picks, the page, a pending flash, the read-through
+    marker, form contents) must go, not just the account. It is done at the
+    top of the next run rather than here because widget-backed keys can't
+    be touched while their widget is on screen; the gate calls
+    :func:`apply_pending_reset` before a single widget exists.
+    """
+    st.session_state[RESET_FLAG] = True
+
+
+def apply_pending_reset(*, keep: frozenset[str] = RESET_KEEPS) -> bool:
+    """Carry out a requested reset. Returns True when one happened."""
+    if not st.session_state.pop(RESET_FLAG, False):
+        return False
+    for key in list(st.session_state.keys()):
+        if key not in keep and key != "page":
+            del st.session_state[key]
+    # The nav is a widget: it is *set* to its default rather than deleted
+    # (allowed here, since it isn't drawn yet), so the next person starts on
+    # Home whatever page the last one was on.
+    st.session_state["page"] = "Home"
+    return True
+
+
 def sign_in_user(creds: Credentials) -> AuthUser:
     """Record a successful Firebase exchange as this session's user and
-    queue the cookie that lets a reload pick the session up again."""
+    queue the cookie that lets a reload pick the session up again.
+
+    Refuses an unverified account: ``creds.email_verified`` comes from
+    Firebase's own account record, and until it is true the person stays
+    on the verification screen, not in the app. Starts from a clean
+    session so nothing of a previous sign-in is carried over.
+    """
+    if not creds.email_verified:
+        raise AuthError(firebase.MESSAGES["EMAIL_NOT_VERIFIED"], "EMAIL_NOT_VERIFIED")
+    request_reset()
     user = _from_credentials(creds)
     st.session_state[USER_KEY] = user
     st.session_state["auth_restore_tried"] = True
@@ -99,15 +147,39 @@ def sign_in_user(creds: Credentials) -> AuthUser:
 
 
 def sign_out() -> None:
-    """Forget the user here and tell the browser to drop the cookie. The
+    """Forget everything here and tell the browser to drop the cookie. The
     Firebase tokens are simply discarded — there is nothing to keep."""
-    st.session_state.pop(USER_KEY, None)
-    st.session_state.pop("auth_cookie_set", None)
+    st.session_state.pop(USER_KEY, None)          # nothing else in this run sees a user
     st.session_state.pop("auth_just_signed_in", None)
+    request_reset()                                # …and the rest goes before the next run
+    st.session_state.pop("auth_cookie_set", None)
     st.session_state["auth_cookie_clear"] = True
     # A reload after signing out must not quietly sign back in from the
     # cookie this session was opened with.
     st.session_state["auth_restore_tried"] = True
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Waiting for a verified email
+# ──────────────────────────────────────────────────────────────────────────
+def set_pending(creds: Credentials) -> None:
+    """Park an unverified account: its email and a short-lived ID token, so
+    the verification email can be resent. Not a signed-in user."""
+    st.session_state[PENDING_KEY] = {
+        "email": creds.email,
+        "id_token": creds.id_token,
+        "sent_at": time.time(),
+        "sends": 1,
+    }
+
+
+def pending() -> dict | None:
+    value = st.session_state.get(PENDING_KEY)
+    return value if isinstance(value, dict) and value.get("email") else None
+
+
+def clear_pending() -> None:
+    st.session_state.pop(PENDING_KEY, None)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -137,6 +209,10 @@ def restore() -> AuthUser | None:
         info = client.lookup(creds.id_token)
     except AuthError as exc:
         print(f"[auth] stored session not restored: {exc.code}")
+        st.session_state["auth_cookie_clear"] = True
+        return None
+    if not info["email_verified"]:
+        print("[auth] stored session not restored: email not verified")
         st.session_state["auth_cookie_clear"] = True
         return None
     user = _from_credentials(creds, email=info["email"], display_name=info["display_name"])
@@ -210,12 +286,18 @@ def _cookie_script(value: str, max_age: int) -> str:
 
 __all__ = [
     "COOKIE",
+    "PENDING_KEY",
     "AuthUser",
+    "clear_pending",
     "current_uid",
     "current_user",
     "flush_cookie",
     "id_token",
+    "pending",
+    "apply_pending_reset",
+    "request_reset",
     "restore",
+    "set_pending",
     "sign_in_user",
     "sign_out",
 ]

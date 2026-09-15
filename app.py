@@ -77,7 +77,7 @@ from ui import flow  # noqa: E402
 from ui import login  # noqa: E402
 from ui.theme import inject  # noqa: E402
 
-APP_VERSION = "2.5.0"
+APP_VERSION = "2.5.1"
 
 inject()
 
@@ -164,7 +164,6 @@ def sidebar(active_count: int) -> str:
         labels = {"My Monitors": f"My Monitors `{active_count}`"} if active_count else {}
         choice = st.radio("Navigation", pages, format_func=lambda p: labels.get(p, p),
                           key="page", label_visibility="collapsed")
-        account()
         C.html(
             '<div class="tr-side-foot">'
             '<div class="tr-quote">“Good movies find their audience. '
@@ -173,25 +172,44 @@ def sidebar(active_count: int) -> str:
             f"<span>{C.e(get_location(st.session_state.get('location') or 'hyderabad').name.upper())}</span></div>"
             "</div>"
         )
+        account()
         return choice
 
 
+def open_account_settings() -> None:
+    """The account menu's "Account settings": the existing Settings page,
+    until a dedicated account page exists. Runs as an ``on_click``, before
+    the nav radio is drawn, so the radio can be moved."""
+    st.session_state["page"] = "Settings"
+
+
 def account() -> None:
-    """Who is signed in, and the way out. The user here is whoever Firebase
-    vouched for in ``require_user()`` — never a name the browser supplied."""
+    """The account row at the foot of the sidebar: who Firebase says you are
+    — never a name the browser supplied — and a compact menu with Account
+    settings and Sign out. The whole row is the menu's trigger."""
     user = auth_session.current_user()
     if user is None:
         return
     with st.container(key="tracct"):
         C.html(
             '<div class="tr-acct">'
-            f'<div class="av">{C.e(user.first_name[:1].upper() or "·")}</div>'
-            f'<div class="who"><div class="n">{C.e(user.label)}</div>'
-            f'<div class="m">{C.e(user.email)}</div></div></div>'
+            f'<div class="top"><div class="av">{C.e(user.first_name[:1].upper() or "·")}</div>'
+            f'<div class="a">Account</div><div class="chev">{C.icon("chevron", 14, "currentColor", "2")}</div></div>'
+            f'<div class="n">{C.e(user.label)}</div>'
+            f'<div class="m">{C.e(user.email)}</div></div>'
         )
-        if st.button("Sign out", key="auth_signout", use_container_width=True, icon=":material/logout:"):
-            auth_session.sign_out()
-            st.rerun()
+        with st.popover("Account", key="acct_menu", use_container_width=True):
+            C.html(
+                '<div class="tr-acct-menu">'
+                f'<div class="n">{C.e(user.label)}</div>'
+                f'<div class="m">{C.e(user.email)}</div>'
+                '<div class="k">SIGNED IN WITH FIREBASE</div></div>'
+            )
+            st.button("Account settings", key="acct_settings", use_container_width=True,
+                      icon=":material/manage_accounts:", on_click=open_account_settings)
+            if st.button("Sign out", key="auth_signout", use_container_width=True, icon=":material/logout:"):
+                auth_session.sign_out()
+                st.rerun()
 
 
 # ──────────────────────────────────────────────────────────────────────────

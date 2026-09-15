@@ -328,9 +328,13 @@ state.
 ### 4. Firebase Authentication (the app's sign-in)
 
 The app sits behind a login page: nobody reaches the dashboard without a
-Firebase account. Email + password is the provider; Google sign-in is drawn
-as designed but tells the user plainly that it isn't enabled until you turn
-it on in Firebase.
+Firebase account **whose email address is verified**. Creating an account
+sends Firebase's own verification email and parks the person on a
+"You're almost in" screen (with a rate-limited resend) until they have
+clicked the link; signing in with an unverified account lands there too.
+Email + password is the provider; Google sign-in is drawn as designed but
+tells the user plainly that it isn't enabled until you turn it on in
+Firebase.
 
 In the [Firebase console](https://console.firebase.google.com):
 
@@ -348,8 +352,9 @@ Then give them to the app as secrets (next section) or as
 the environment. Without a key the login page still renders, says sign-in
 isn't configured on this host, and lets nobody through.
 
-Password reset emails come from Firebase's own template (*Authentication →
-Templates*), which is where you brand them.
+Verification and password-reset emails come from Firebase's own templates
+(*Authentication → Templates*), which is where you brand them. TicketRadar's
+Gmail SMTP is only ever used for ticket alerts.
 
 ### 5. Streamlit secrets
 
@@ -435,7 +440,7 @@ itself broke.
 python -m pytest
 ```
 
-267 tests, no network, no SMTP and no Firebase — a fixture fails the run if
+287 tests, no network, no SMTP and no Firebase — a fixture fails the run if
 anything tries to open a real SMTP connection or to call Firebase. BookMyShow is replaced by a fake session
 replaying payloads **rebuilt from responses captured on a live runner**, so the
 suite is deterministic without being fictional.
@@ -449,8 +454,12 @@ still imports and runs with Streamlit blocked entirely, and the sign-in
 boundary: the login page for a visitor, no page reachable around it, sign-in
 and sign-up against an in-memory Identity Toolkit that answers with Firebase's
 real error codes, password mismatch and duplicate accounts, the reset flow,
-sign-out, and a reload restored from the cookie only because Google vouched
-for it.
+sign-out, a reload restored from the cookie only because Google vouched for
+it, email verification (a new or unverified account never gets a session),
+and account switching in one tab starting the second person from a clean
+session. One test pins, on purpose, that `data/monitors.json` and
+`data/history.json` are still global: per-user data arrives with the
+Firestore step.
 
 Two of these tests exist because they caught real bugs during this work: one
 where resolving theatre detail blanked every poster in the grid, and one where
@@ -501,6 +510,13 @@ six hours, and re-reads immediately when BookMyShow adds a new format event.
 - Wrong password and unknown email read the same, and a reset request for an
   unknown address looks like a successful one, so the login page never
   reveals which addresses have accounts.
+- Signing out, or signing in as somebody else in the same tab, wipes the
+  session before the next run draws anything — the wizard's picks, the page,
+  pending messages — so nothing of one person is shown to the next.
+- **Not yet per user:** monitors, history and settings still live in the
+  repository's global JSON files and are visible to every signed-in account.
+  That is the legacy architecture, not a leak of session state; the Firestore
+  migration (next step) keys them on the Firebase UID.
 - No credential is ever written to a file in this repo or printed to a log.
   Recipient addresses are masked in worker output (`m***@gmail.com`), and the
   SMTP auth-failure path deliberately discards the server's message body,

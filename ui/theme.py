@@ -207,20 +207,40 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 }
 .tr-page-foot { max-width:1600px; margin-top:28px; }
 
-/* the account block under the nav: who Firebase says you are, and Sign out */
-[class*="st-key-tracct"] { margin-top:6px; padding:12px 12px 10px; border-radius:14px; background:rgba(255,255,255,.03);
-  border:1px solid rgba(255,255,255,.07); gap:.55rem !important; }
-.tr-acct { display:flex; align-items:center; gap:11px; min-width:0; }
-.tr-acct .av { width:34px; height:34px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
-  font-family:var(--tr-mono); font-size:13px; font-weight:500; color:#fff;
+/* ── the account row at the foot of the sidebar ─────────────────────
+   Who Firebase says you are, as one compact row; the row *is* the menu's
+   trigger (the popover button is stretched over it, transparent — the same
+   "pick" pattern as the tiles), and the menu holds Account settings and
+   Sign out. Nothing here touches the nav above it.                       */
+[class*="st-key-tracct"] { position:relative; margin-top:14px; gap:0 !important; }
+.tr-acct { display:flex; flex-direction:column; gap:0; padding:10px 11px 11px; border-radius:14px; min-width:0;
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08);
+  transition:border-color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease); }
+[class*="st-key-tracct"]:hover .tr-acct { border-color:rgba(255,51,85,.45); background:rgba(255,51,85,.06); }
+.tr-acct .top { display:flex; align-items:center; gap:9px; margin-bottom:9px; }
+.tr-acct .av { width:30px; height:30px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+  font-family:var(--tr-mono); font-size:12.5px; font-weight:500; color:#fff;
   background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
-.tr-acct .who { min-width:0; }
-.tr-acct .n { font-size:13px; font-weight:700; color:var(--tr-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.tr-acct .m { font-size:11px; color:var(--tr-text-4); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
-[class*="st-key-auth_signout"] .stButton > button { min-height:36px; font-size:12.5px; color:var(--tr-text-3); border-radius:10px; box-shadow:none;
-  background:rgba(255,255,255,.03); }
-[class*="st-key-auth_signout"] .stButton > button:hover { color:#fff; border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); transform:none; }
-[class*="st-key-auth_signout"] .stButton > button p { font-size:12.5px; font-weight:600; }
+.tr-acct .a { font-family:var(--tr-mono); font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--tr-text-4); flex:1; }
+.tr-acct .chev { color:var(--tr-text-4); display:flex; flex:none; }
+.tr-acct .n { font-size:13px; font-weight:700; line-height:1.25; color:var(--tr-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tr-acct .m { font-size:10.5px; letter-spacing:-.01em; line-height:1.3; color:var(--tr-text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+[class*="st-key-tracct"] [data-testid="stPopover"] { position:absolute; inset:0; margin:0; }
+[class*="st-key-tracct"] [data-testid="stPopover"] > button, [class*="st-key-tracct"] [data-testid="stPopoverButton"] {
+  position:absolute; inset:0; width:100%; height:100%; min-height:0; margin:0; padding:0; opacity:0; cursor:pointer; }
+/* the menu itself (portaled to <body>) */
+[data-testid="stPopoverBody"] { background:var(--tr-surface) !important; border:1px solid var(--tr-border-strong) !important;
+  border-radius:14px !important; padding:8px !important; min-width:224px; box-shadow:0 24px 60px -20px rgba(0,0,0,.9), var(--tr-hi); }
+[data-testid="stPopoverBody"] [data-testid="stVerticalBlock"] { gap:.25rem; }
+.tr-acct-menu { padding:8px 10px 10px; border-bottom:1px solid var(--tr-border); margin-bottom:6px; min-width:0; }
+.tr-acct-menu .n { font-size:13.5px; font-weight:700; color:var(--tr-text); overflow-wrap:anywhere; }
+.tr-acct-menu .m { font-size:11.5px; color:var(--tr-text-3); overflow-wrap:anywhere; margin-top:2px; }
+.tr-acct-menu .k { font-family:var(--tr-mono); font-size:9px; letter-spacing:.18em; color:var(--tr-text-4); margin-top:8px; }
+[data-testid="stPopoverBody"] .stButton > button { min-height:38px; font-size:13px; font-weight:600; justify-content:flex-start; gap:10px;
+  padding:.4rem .7rem; border-radius:10px; box-shadow:none; background:transparent; border-color:transparent; color:var(--tr-text-2); }
+[data-testid="stPopoverBody"] .stButton > button p { font-size:13px; font-weight:600; }
+[data-testid="stPopoverBody"] .stButton > button:hover { transform:none; color:#fff; background:rgba(255,255,255,.06); border-color:var(--tr-border); }
+[data-testid="stPopoverBody"] [class*="st-key-auth_signout"] .stButton > button:hover { color:#fff; border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); }
 
 [data-testid="stSidebar"] [role="radiogroup"] { gap:4px; margin-top:2px; }
 [data-testid="stSidebar"] [role="radiogroup"] label {

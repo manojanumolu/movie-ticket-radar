@@ -32,13 +32,24 @@ class FakeFirebase:
     """Accounts in a dict; responses shaped like Google's."""
 
     def __init__(self):
-        self.accounts: dict[str, dict] = {}     # email -> {password, uid, name}
+        self.accounts: dict[str, dict] = {}     # email -> {password, uid, name, verified}
         self.calls: list[tuple[str, dict]] = []
         self.reset_requests: list[str] = []
+        self.verification_sent: list[str] = []   # emails a VERIFY_EMAIL went to
         self.fail_with: str | None = None        # force one Firebase error code
 
-    def add(self, email: str, password: str, *, uid: str = "uid-1", name: str = "") -> None:
-        self.accounts[email] = {"password": password, "uid": uid, "name": name}
+    def add(self, email: str, password: str, *, uid: str = "uid-1", name: str = "", verified: bool = True) -> None:
+        self.accounts[email] = {"password": password, "uid": uid, "name": name, "verified": verified}
+
+    def verify(self, email: str) -> None:
+        """What clicking Firebase's link does."""
+        self.accounts[email]["verified"] = True
+
+    def _by_token(self, id_token: str):
+        for email, acct in self.accounts.items():
+            if f"id.{acct['uid']}" == id_token:
+                return email, acct
+        return None, None
 
     @staticmethod
     def _error(code: str, status: int = 400):
@@ -67,7 +78,7 @@ class FakeFirebase:
                 return self._error("EMAIL_EXISTS")
             if len(payload.get("password", "")) < 6:
                 return self._error("WEAK_PASSWORD : Password should be at least 6 characters")
-            self.add(email, payload["password"], uid=f"uid-{len(self.accounts) + 1}")
+            self.add(email, payload["password"], uid=f"uid-{len(self.accounts) + 1}", verified=False)
             return 200, self._creds(email)
         if action == "update":
             for acct in self.accounts.values():
@@ -76,17 +87,25 @@ class FakeFirebase:
                     return 200, {"localId": acct["uid"], "displayName": acct["name"]}
             return self._error("INVALID_ID_TOKEN")
         if action == "sendOobCode":
-            assert payload.get("requestType") == "PASSWORD_RESET"
+            kind = payload.get("requestType")
+            if kind == "VERIFY_EMAIL":
+                email, acct = self._by_token(payload.get("idToken", ""))
+                if acct is None:
+                    return self._error("INVALID_ID_TOKEN")
+                self.verification_sent.append(email)
+                return 200, {"kind": "identitytoolkit#GetOobConfirmationCodeResponse", "email": email}
+            assert kind == "PASSWORD_RESET"
             email = payload.get("email", "")
             if email not in self.accounts:
                 return self._error("EMAIL_NOT_FOUND")
             self.reset_requests.append(email)
             return 200, {"kind": "identitytoolkit#GetOobConfirmationCodeResponse", "email": email}
         if action == "lookup":
-            for email, acct in self.accounts.items():
-                if f"id.{acct['uid']}" == payload.get("idToken"):
-                    return 200, {"users": [{"localId": acct["uid"], "email": email, "displayName": acct["name"]}]}
-            return self._error("INVALID_ID_TOKEN")
+            email, acct = self._by_token(payload.get("idToken", ""))
+            if acct is None:
+                return self._error("INVALID_ID_TOKEN")
+            return 200, {"users": [{"localId": acct["uid"], "email": email, "displayName": acct["name"],
+                                    "emailVerified": acct["verified"]}]}
         if action == "token":
             for acct in self.accounts.values():
                 if f"refresh.{acct['uid']}" == payload.get("refresh_token"):
@@ -101,6 +120,8 @@ def fake(monkeypatch):
     """Firebase configured, and answered by the fake."""
     fb = FakeFirebase()
     fb.add("ravi@example.com", "Popcorn2026", uid="uid-ravi", name="Ravi Teja")
+    fb.add("sita@example.com", "Interval99", uid="uid-sita", name="Sita Devi")
+    fb.add("newbie@example.com", "Trailer2026", uid="uid-newbie", name="New Person", verified=False)
     monkeypatch.setenv("FIREBASE_WEB_API_KEY", "test-web-api-key")
     monkeypatch.setattr(firebase, "_post", fb)
     return fb
@@ -166,6 +187,9 @@ def test_sign_in_returns_the_account_google_vouched_for(fake):
     assert creds.email == "ravi@example.com"
     assert creds.display_name == "Ravi Teja"
     assert creds.id_token and creds.refresh_token
+    assert creds.email_verified is True                       # from accounts:lookup
+    assert [a for a, _ in fake.calls] == ["signInWithPassword", "lookup"]
+    assert firebase.FirebaseAuth().sign_in("newbie@example.com", "Trailer2026").email_verified is False
 
 
 def test_a_wrong_password_is_a_clean_error(fake):
@@ -175,11 +199,26 @@ def test_a_wrong_password_is_a_clean_error(fake):
     assert str(exc.value) == firebase.MESSAGES["INVALID_LOGIN_CREDENTIALS"]
 
 
-def test_sign_up_creates_the_account_and_stores_the_name(fake):
-    creds = firebase.FirebaseAuth().sign_up("Sita Devi", "sita@example.com", "Interval99")
-    assert creds.display_name == "Sita Devi"
-    assert fake.accounts["sita@example.com"]["name"] == "Sita Devi"
-    assert [a for a, _ in fake.calls] == ["signUp", "update"]
+def test_sign_up_creates_the_account_sends_verification_and_is_unverified(fake):
+    creds = firebase.FirebaseAuth().sign_up("Arjun Rao", "arjun@example.com", "Interval99")
+    assert creds.display_name == "Arjun Rao"
+    assert fake.accounts["arjun@example.com"]["name"] == "Arjun Rao"
+    assert creds.email_verified is False
+    assert fake.verification_sent == ["arjun@example.com"]      # Firebase's email, not Gmail SMTP
+    assert [a for a, _ in fake.calls] == ["signUp", "update", "sendOobCode"]
+    assert fake.calls[-1][1]["requestType"] == "VERIFY_EMAIL"
+    assert "password" not in fake.calls[-1][1]
+
+
+def test_sign_in_user_refuses_an_unverified_account(fake, monkeypatch):
+    import streamlit as st
+
+    monkeypatch.setattr(st, "session_state", {})
+    creds = firebase.FirebaseAuth().sign_in("newbie@example.com", "Trailer2026")
+    with pytest.raises(AuthError) as exc:
+        session.sign_in_user(creds)
+    assert exc.value.code == "EMAIL_NOT_VERIFIED"
+    assert session.current_user() is None
 
 
 def test_a_duplicate_account_is_named_as_such(fake):
@@ -200,7 +239,8 @@ def test_refresh_and_lookup_restore_an_account(fake):
     client = firebase.FirebaseAuth()
     creds = client.refresh("refresh.uid-ravi")
     assert creds.uid == "uid-ravi" and creds.id_token == "id.uid-ravi"
-    assert client.lookup(creds.id_token) == {"uid": "uid-ravi", "email": "ravi@example.com", "display_name": "Ravi Teja"}
+    assert client.lookup(creds.id_token) == {"uid": "uid-ravi", "email": "ravi@example.com",
+                                             "display_name": "Ravi Teja", "email_verified": True}
     with pytest.raises(AuthError) as exc:
         client.refresh("refresh.stale")
     assert "sign in again" in str(exc.value)
@@ -403,22 +443,30 @@ def test_signup_creates_an_account_and_signs_in(visitor, fake):
     app.button(key="auth_to_signup").click().run()
     assert "Create your account." in body(app)
     assert {t.key for t in app.text_input} == {"auth_su_name", "auth_su_email", "auth_su_password", "auth_su_confirm"}
-    app.text_input(key="auth_su_name").set_value("  Sita   Devi ")
-    app.text_input(key="auth_su_email").set_value("sita@example.com")
+    app.text_input(key="auth_su_name").set_value("  Arjun   Rao ")
+    app.text_input(key="auth_su_email").set_value("arjun@example.com")
     app.text_input(key="auth_su_password").set_value("Interval99")
     app.text_input(key="auth_su_confirm").set_value("Interval99")
     app.button(key="auth_signup").click().run()
     assert not app.exception, [str(e) for e in app.exception]
-    assert in_the_app(app)
-    user = app.session_state["auth_user"]
-    assert user.uid == "uid-2" and user.display_name == "Sita Devi"
-    assert fake.accounts["sita@example.com"]["name"] == "Sita Devi"
+    app = settle(app)
+    # The account exists, Firebase emailed the link — and nobody is signed in.
+    assert fake.accounts["arjun@example.com"]["name"] == "Arjun Rao"
+    assert fake.verification_sent == ["arjun@example.com"]
+    assert not in_the_app(app)
+    assert "auth_user" not in app.session_state
+    text = body(app)
+    assert "You're almost in." in text and "Verify your email address to activate" in text
+    assert "arjun@example.com" in text
+    assert {b.key for b in app.button} >= {"auth_resend", "auth_verify_back"}
+    assert app.session_state["auth_pending"]["email"] == "arjun@example.com"
+    assert "Interval99" not in repr(app.session_state)
 
 
 def test_password_mismatch_is_caught_before_firebase(visitor, fake):
     app = run(auth_mode="signup")
-    app.text_input(key="auth_su_name").set_value("Sita")
-    app.text_input(key="auth_su_email").set_value("sita@example.com")
+    app.text_input(key="auth_su_name").set_value("Arjun")
+    app.text_input(key="auth_su_email").set_value("arjun@example.com")
     app.text_input(key="auth_su_password").set_value("Interval99")
     app.text_input(key="auth_su_confirm").set_value("Interval98")
     app.button(key="auth_signup").click().run()
@@ -430,8 +478,8 @@ def test_weak_password_and_missing_fields_are_explained(visitor, fake):
     app = run(auth_mode="signup")
     app.button(key="auth_signup").click().run()
     assert "Enter your full name." in body(app)
-    app.text_input(key="auth_su_name").set_value("Sita")
-    app.text_input(key="auth_su_email").set_value("sita@example.com")
+    app.text_input(key="auth_su_name").set_value("Arjun")
+    app.text_input(key="auth_su_email").set_value("arjun@example.com")
     app.text_input(key="auth_su_password").set_value("short")
     app.text_input(key="auth_su_confirm").set_value("short")
     app.button(key="auth_signup").click().run()
@@ -526,6 +574,257 @@ def test_the_uid_is_available_to_the_application():
     assert session.AuthUser(uid="u", email="a@b.co", display_name="Ravi Teja").first_name == "Ravi"
     assert session.AuthUser(uid="u", email="a@b.co").first_name == "a"
     assert session.AuthUser(uid="u", email="a@b.co").label == "a@b.co"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Step 6B — email verification, account switching, the sidebar
+# ──────────────────────────────────────────────────────────────────────────
+def sign_in_as(app, email: str, password: str):
+    app.text_input(key="auth_email").set_value(email)
+    app.text_input(key="auth_password").set_value(password)
+    app.button(key="auth_signin").click().run()
+    assert not app.exception, [str(e) for e in app.exception]
+    return settle(app)
+
+
+def test_an_unverified_account_cannot_sign_in_and_lands_on_verify(visitor, fake):
+    app = run()
+    app.text_input(key="auth_email").set_value("newbie@example.com")
+    app.text_input(key="auth_password").set_value("Trailer2026")
+    app.button(key="auth_signin").click().run()
+    assert not app.exception
+    assert "isn't verified yet" in body(app)          # the one-shot notice on that rerun
+    app = settle(app)
+    assert not in_the_app(app)
+    assert "auth_user" not in app.session_state
+    assert "You're almost in." in body(app)
+    assert app.session_state["auth_pending"]["email"] == "newbie@example.com"
+    # Nothing else in session state carries the password or a signed-in user.
+    assert "Trailer2026" not in repr(app.session_state)
+
+
+def test_resend_verification_is_rate_limited_and_uses_firebase(visitor, fake):
+    app = run()
+    app = sign_in_as(app, "newbie@example.com", "Trailer2026")
+    # Sign-in of an unverified account did not itself send an email…
+    assert fake.verification_sent == []
+    resend = next(b for b in app.button if b.key == "auth_resend")
+    # …and the first resend is inside the cooldown of the sign-up/sign-in moment.
+    assert resend.disabled is True
+    assert "You can ask for another" in body(app)
+    # Once the cooldown has passed the button works, exactly once per cooldown.
+    app.session_state["auth_pending"] = {**app.session_state["auth_pending"], "sent_at": 0}
+    app = app.run()
+    resend = next(b for b in app.button if b.key == "auth_resend")
+    assert resend.disabled is False
+    resend.click().run()
+    assert fake.verification_sent == ["newbie@example.com"]
+    assert fake.calls[-1][0] == "sendOobCode" and fake.calls[-1][1]["requestType"] == "VERIFY_EMAIL"
+    assert "sent again" in body(app)
+    assert next(b for b in app.button if b.key == "auth_resend").disabled is True
+    # And never more than the limit, however long you wait.
+    app.session_state["auth_pending"] = {**app.session_state["auth_pending"], "sent_at": 0, "sends": 3}
+    app = app.run()
+    assert next(b for b in app.button if b.key == "auth_resend").disabled is True
+    assert "limit" in body(app)
+
+
+def test_once_verified_the_same_account_signs_in_normally(visitor, fake):
+    app = run()
+    app = sign_in_as(app, "newbie@example.com", "Trailer2026")
+    assert not in_the_app(app)
+    app.button(key="auth_verify_back").click().run()
+    assert "Welcome back." in body(app)
+    fake.verify("newbie@example.com")                # the person clicked Firebase's link
+    app = sign_in_as(app, "newbie@example.com", "Trailer2026")
+    assert in_the_app(app)
+    assert app.session_state["auth_user"].uid == "uid-newbie"
+    assert "auth_pending" not in app.session_state    # the reset cleared it
+
+
+def test_a_cookie_for_an_unverified_account_does_not_restore(monkeypatch, fake):
+    monkeypatch.setattr(session, "restore", REAL_RESTORE)
+    monkeypatch.setattr(session, "_cookie", lambda: "refresh.uid-newbie")
+    app = run()
+    assert on_login_page(app) and "auth_user" not in app.session_state
+    assert [a for a, _ in fake.calls] == ["token", "lookup"]
+
+
+def test_switching_accounts_starts_the_second_person_from_a_clean_session(visitor, fake):
+    """Bug 1: Account A signs out, Account B signs in, in the same tab.
+    Nothing of A — identity, wizard progress, page, flash — survives."""
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    assert app.session_state["auth_user"].uid == "uid-ravi"
+    # Ravi gets some way into the wizard and leaves a flash behind.
+    app.button(key="loc_hyderabad").click().run()
+    assert app.session_state["step"] == 2 and app.session_state["location"] == "hyderabad"
+    app.session_state["flash"] = ("success", "Ravi's own message")
+    app.session_state["furthest"] = 4
+    app.session_state["_synced_once"] = True
+    app.session_state["page"] = "Settings"
+    app = app.run()
+
+    app.button(key="auth_signout").click().run()
+    app = settle(app)
+    assert on_login_page(app)
+    for key in ("auth_user", "location", "movie_id", "theatres", "flash", "_synced_once", "furthest"):
+        assert key not in app.session_state, key
+
+    app = sign_in_as(app, "sita@example.com", "Interval99")
+    assert in_the_app(app)
+    user = app.session_state["auth_user"]
+    assert user.uid == "uid-sita" and user.email == "sita@example.com"
+    assert app.session_state["step"] == 1 and app.session_state["location"] == ""
+    assert app.session_state["page"] == "Home"
+    assert "Ravi's own message" not in body(app)
+    assert "Ravi Teja" not in body(app) and "Sita Devi" in body(app)
+
+
+def test_signing_in_twice_replaces_the_identity_completely(visitor, fake):
+    """No sign-out in between: a second sign-in still starts clean."""
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    app.button(key="loc_hyderabad").click().run()
+    app.session_state["auth_restore_tried"] = True
+    # Force the login page without signing out (the way a forged or stale
+    # session would look) and sign in as somebody else.
+    del app.session_state["auth_user"]
+    app = app.run()
+    assert on_login_page(app)
+    app = sign_in_as(app, "sita@example.com", "Interval99")
+    assert app.session_state["auth_user"].uid == "uid-sita"
+    assert app.session_state["step"] == 1 and app.session_state["location"] == ""
+
+
+def test_legacy_json_monitors_are_global_until_firestore(visitor, fake, make_monitor):
+    """Bug 2, documented honestly. Two different things are asserted here:
+
+    A. authentication/session leakage — fixed: Account B's session carries
+       B's identity only, and nothing of A's UI state;
+    B. the legacy store — *not* per user: ``data/monitors.json`` and
+       ``data/history.json`` are one global file each, read by every
+       signed-in person. Permanent per-user data isolation requires the
+       upcoming Firestore migration (step 7). This test pins that so nobody
+       mistakes today's behaviour for isolation.
+    """
+    from monitor.state import record_history, upsert_monitor
+
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    monitor = make_monitor(email="ravi@example.com")
+    upsert_monitor(monitor, mirror=False)
+    record_history(monitor, "CREATED", "Monitor created.", mirror=False)
+
+    app.button(key="auth_signout").click().run()
+    app = settle(app)
+    app = sign_in_as(app, "sita@example.com", "Interval99")
+
+    # A — the session is Sita's and only Sita's.
+    assert app.session_state["auth_user"].uid == "uid-sita"
+    assert "ravi@example.com" not in body(app).replace("watcher@example.com", "")  # identity, not monitor data
+    # B — the legacy global store is still what My Monitors and History read.
+    app.session_state["page"] = "My Monitors"
+    app = app.run()
+    assert "Avengers: Endgame Encore" in body(app)                 # Ravi's monitor, visible to Sita
+    app.session_state["page"] = "History"
+    app = app.run()
+    assert "Avengers: Endgame Encore" in body(app)                 # …and so is his history
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The sidebar and the pages behind the gate
+# ──────────────────────────────────────────────────────────────────────────
+def test_the_sidebar_is_the_original_with_the_account_row_at_the_foot():
+    app = run()
+    side = " ".join(m.value for m in app.sidebar.markdown)
+    assert '<div class="tr-logo">' in side and "Ticket<em>Radar</em>" in side
+    [nav] = app.sidebar.radio
+    assert nav.key == "page" and list(nav.options) == ["Home", "My Monitors", "History", "Settings"]
+    assert nav.value == "Home"
+    assert "tr-quote" in side and "tr-version" in side
+    # The account row: initial, name, address — then the menu.
+    assert '<div class="tr-acct">' in side
+    assert '<div class="av">T</div>' in side and "Test Person" in side and "tester@example.com" in side
+    assert "Account" in side
+    # Order: brand, nav, foot, account — the account row is last.
+    assert side.index("tr-logo") < side.index("tr-quote") < side.index("tr-acct")
+    # No standalone Sign out in the nav: it lives in the menu, with Account settings.
+    assert {b.key for b in app.sidebar.button} == {"acct_settings", "auth_signout"}
+
+
+def test_account_settings_opens_the_existing_settings_page():
+    app = run()
+    app.button(key="acct_settings").click().run()
+    assert not app.exception
+    assert app.session_state["page"] == "Settings"
+    assert "Where alerts go" in body(app)
+
+
+def test_the_entrance_never_touches_the_sidebar():
+    """The broken sidebar after sign-in: an animated ``transform`` on the
+    sidebar overrode the translateX Streamlit uses to slide it away."""
+    from ui import login
+
+    assert "stSidebar" not in login.ENTRANCE_CSS
+    assert "transform" not in login.ENTRANCE_CSS
+
+
+@pytest.mark.parametrize("page, marker", [
+    ("Home", "Where are you watching?"),
+    ("My Monitors", "Everything you've asked us to watch."),
+    ("History", "What the radar has picked up."),
+    ("Settings", "Where alerts go, and what's wired up."),
+])
+def test_every_page_is_reachable_once_signed_in(visitor, fake, page, marker):
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    app.session_state["page"] = page
+    app = app.run()
+    assert not app.exception, [str(e) for e in app.exception]
+    assert marker in body(app)
+    assert app.session_state["auth_user"].uid == "uid-ravi"
+
+
+def test_the_identity_is_never_read_from_a_form_url_or_monitor(visitor, fake, make_monitor):
+    """Bug 7: nothing but Firebase's answer decides who is signed in."""
+    from monitor.state import upsert_monitor
+
+    upsert_monitor(make_monitor(email="someone-else@example.com"), mirror=False)
+    app = run(auth_email="forged@example.com", notify_email="forged@example.com",
+              settings_email="forged@example.com")
+    assert on_login_page(app)
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    user = app.session_state["auth_user"]
+    assert (user.uid, user.email) == ("uid-ravi", "ravi@example.com")
+    assert session.current_uid.__module__ == "auth.session"
+    # The sidebar shows Firebase's account, not any of the addresses above.
+    side = " ".join(m.value for m in app.sidebar.markdown)
+    assert "ravi@example.com" in side
+    assert "forged@example.com" not in side and "someone-else@example.com" not in side
+
+
+def test_refresh_tokens_never_reach_the_page(visitor, fake):
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    page_text = " ".join(m.value for m in app.markdown)
+    assert "refresh.uid-ravi" not in page_text and "id.uid-ravi" not in page_text
+    assert app.session_state["auth_user"].refresh_token == "refresh.uid-ravi"   # server side only
+    assert "refresh.uid-ravi" not in repr(app.session_state["auth_user"])       # …and out of logs
+
+
+def test_no_secret_lives_in_a_tracked_file():
+    import subprocess
+
+    tracked = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=True).stdout.split()
+    assert ".streamlit/secrets.toml" not in tracked and ".env" not in tracked
+    import re
+
+    for path in tracked:
+        if path.endswith((".py", ".toml", ".md", ".yml", ".example")):
+            text = open(path, encoding="utf-8", errors="ignore").read()
+            assert not re.search(r"AIza[0-9A-Za-z_\-]{30,}", text), path       # a real Web API key
+            assert not re.search(r"github_pat_[0-9A-Za-z_]{20,}", text), path   # a real PAT
 
 
 # ──────────────────────────────────────────────────────────────────────────
