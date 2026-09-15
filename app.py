@@ -417,7 +417,8 @@ def page_home(monitors, states, history, settings) -> None:
                 movie_id = st.session_state.get("movie_id", "")
                 codes = st.session_state.get("theatres", [])
                 flow.step_formats(cv.selected_venues(movie_id, slug, codes),
-                                  coming=cv.coming_soon_codes(movie_id, slug, codes))
+                                  coming=cv.coming_soon_codes(movie_id, slug, codes),
+                                  listed=cv.listed_formats(movie_id, slug, codes))
             else:
                 interval, until, email, start_now, dates = flow.step_monitoring(settings.get("notify_email", ""))
                 cta, helper = st.columns([2.2, 1], gap="medium")

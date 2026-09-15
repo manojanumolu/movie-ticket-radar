@@ -25,7 +25,7 @@ import streamlit as st
 
 from config import store
 from monitor import catalogue
-from monitor.models import MovieRef, Venue
+from monitor.models import MovieRef, Venue, normalise_format
 
 
 @dataclass(frozen=True)
@@ -157,18 +157,55 @@ def venues(movie_id: str, slug: str = "") -> list[Venue]:
     return _build(_signature(), "").venues_by_id.get(movie_id, [])
 
 
+def merge_formats(listed: tuple[str, ...] | list[str], known: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    """Formats listed for this movie first, then every other format the
+    theatre is known to run — one entry per format, first spelling kept.
+
+    Equality is on :func:`normalise_format`, the key the checker matches
+    showtimes with, so "Dolby Cinema" and "DOLBY CINEMA" are one option and
+    "Laser" and "Laser 3D" stay two.
+    """
+    out: dict[str, str] = {}
+    for fmt in (*listed, *known):
+        fmt = (fmt or "").strip()
+        if fmt:
+            out.setdefault(normalise_format(fmt), fmt)
+    return tuple(out.values())
+
+
 def selected_venues(movie_id: str, slug: str, codes: list[str]) -> list[Venue]:
-    """The Venue for each chosen code: the movie's own listing when it has
-    one, otherwise the city directory (a theatre being watched for release,
-    carrying the formats it is known to run)."""
+    """The Venue for each chosen code, carrying *every* format the theatre is
+    known to run — not only the ones this movie lists there right now.
+
+    A theatre's row in the movie's own listing names the formats its current
+    showtimes carry; the city directory names every format the catalogue has
+    ever seen that theatre run, for any film. Both matter on the Formats
+    step: a premium screen the movie hasn't opened yet at that theatre is
+    exactly what a release monitor is for, and it must not vanish the day
+    the theatre lists the film in one of its other formats. Listed formats
+    come first; name and area are the movie's own when it lists the theatre.
+    """
     listed = {v.code: v for v in venues(movie_id, slug)}
     directory = view(slug).directory
     out: list[Venue] = []
     for code in codes:
-        venue = listed.get(code) or directory.get(code)
-        if venue is not None:
-            out.append(venue)
+        own, known = listed.get(code), directory.get(code)
+        venue = own or known
+        if venue is None:
+            continue
+        formats = merge_formats(own.formats if own else (), known.formats if known else ())
+        out.append(Venue(code=venue.code, name=venue.name, area=venue.area, formats=formats))
     return out
+
+
+def listed_formats(movie_id: str, slug: str, codes: list[str]) -> dict[str, tuple[str, ...]]:
+    """code -> the formats this movie currently lists at that theatre.
+
+    The complement of what :func:`selected_venues` adds from the directory:
+    the Formats step uses it to say which options are not listed yet.
+    """
+    listed = {v.code: v.formats for v in venues(movie_id, slug)}
+    return {code: listed.get(code, ()) for code in codes}
 
 
 def coming_soon_codes(movie_id: str, slug: str, codes: list[str]) -> set[str]:
@@ -311,6 +348,8 @@ __all__ = [
     "MovieCard",
     "card",
     "coming_soon_codes",
+    "listed_formats",
+    "merge_formats",
     "entry",
     "featured",
     "movie",
