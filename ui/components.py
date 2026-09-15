@@ -423,12 +423,20 @@ def featured_tile(name: str, area: str, venue, selected: bool, *, released: bool
     )
 
 
-def format_panel_head(name: str, area: str, badge: str = "", coming: bool = False) -> None:
+def format_panel_head(name: str, area: str, badge: str = "", coming: bool = False,
+                      expected: tuple[str, ...] | list[str] = ()) -> None:
+    """``expected`` names formats the theatre is known to run that this movie
+    has not listed there yet — selectable, and said so, never hidden."""
     badges = ('<span class="tr-badge soon">Coming soon</span>' if coming else "") + (
         f'<span class="tr-badge">{e(badge)}</span>' if badge else "")
     badge_html = f'<div class="b">{badges}</div>' if badges else ""
-    note = ('<div class="w">Not listed for this movie yet — pick the format to wait for.</div>'
-            if coming else "")
+    if coming:
+        note = '<div class="w">Not listed for this movie yet — pick the format to wait for.</div>'
+    elif expected:
+        note = (f'<div class="w">{e(" · ".join(expected))}: not listed for this movie here yet — '
+                'pick it to wait for it.</div>')
+    else:
+        note = ""
     html(
         f'<div class="tr-fmt-head"><div class="n">{e(name)}</div>'
         f'<div class="a">{e(area or "Hyderabad")}</div>{badge_html}{note}</div>'

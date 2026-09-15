@@ -145,6 +145,14 @@ blocked listing changes nothing and is retried after five minutes. A manual
 **Refresh catalogue** still works and counts as a listing — it is just no
 longer the only way a running monitor learns of a new event.
 
+On the Formats step a theatre offers every format the catalogue has ever
+seen it run — for any film — with the ones this film currently lists there
+first. A premium screen the film hasn't opened yet at that theatre is exactly
+what a release monitor waits for, so it stays selectable (marked "not listed
+for this movie here yet") whether the theatre is Coming soon or already listed
+in another format. Nothing is hard-coded: the list is whatever BookMyShow's
+showtimes have carried for that venue (`ui/catalogue_view.selected_venues`).
+
 Note that a film is one row *per language*, and each row's family is that
 language's events only. A monitor on the Telugu row will not see a theatre
 BookMyShow lists under the English row; when that happens the worker log says

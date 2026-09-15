@@ -36,7 +36,7 @@ import streamlit as st
 
 from config.locations import LOCATIONS, enabled_locations, get_location
 from config.timezone import IST, now_ist
-from monitor.models import ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes
+from monitor.models import ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes, normalise_format
 from ui import catalogue_view as cv
 from ui import components as C
 
@@ -459,11 +459,15 @@ def step_theatres() -> list[Venue]:
 # ──────────────────────────────────────────────────────────────────────────
 # 4 · Formats
 # ──────────────────────────────────────────────────────────────────────────
-def step_formats(venues: list[Venue], coming: set[str] | None = None) -> dict[str, list[str]]:
-    """``coming`` names the theatres being watched for release: their format
-    options are the ones the theatre is known to run (from other films), not
-    ones it has listed for this movie — because it hasn't listed it yet."""
+def step_formats(venues: list[Venue], coming: set[str] | None = None,
+                 listed: dict[str, tuple[str, ...]] | None = None) -> dict[str, list[str]]:
+    """``venues`` carry every format each theatre is known to run (see
+    ``catalogue_view.selected_venues``). ``coming`` names the theatres not
+    listed for this movie at all; ``listed`` maps a theatre to the formats
+    the movie *does* list there, so the rest can be marked as not yet
+    released — still selectable, because waiting for them is the point."""
     coming = coming or set()
+    listed = listed or {}
     C.step_header(4, "Formats, per theatre",
                   "Only formats that theatre actually runs. For a theatre that hasn't released "
                   "this movie yet, the formats it is known to run.")
@@ -475,11 +479,13 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None) -> dict[st
     formats: dict[str, list[str]] = dict(st.session_state.get("formats", {}))
     for venue in venues:
         options = dedupe(venue.formats)
+        here = {normalise_format(f) for f in listed.get(venue.code, ())}
+        expected = [f for f in options if here and normalise_format(f) not in here]
         with st.container(key=f"trpanel_{venue.code}"):
             left, right = st.columns([1, 1.6], gap="medium")
             with left:
                 C.format_panel_head(venue.name, venue.area, options[0] if options else "",
-                                    coming=venue.code in coming)
+                                    coming=venue.code in coming, expected=expected)
             with right:
                 if not options:
                     st.caption("No format published for this theatre yet — watching every show.")
