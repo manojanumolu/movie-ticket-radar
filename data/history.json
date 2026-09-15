@@ -1,5 +1,17 @@
 [
   {
+    "monitor_id": "614e142dee33",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Irumudi",
+    "language": "Telugu",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/irumudi-et00487933-1787303118.jpg",
+    "targets": [
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-16T04:36:34.273613+05:30"
+  },
+  {
     "monitor_id": "c43f08f7b408",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
