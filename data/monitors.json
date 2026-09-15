@@ -28,10 +28,10 @@
     "date_codes": [
       "20260916"
     ],
-    "status": "ACTIVE",
+    "status": "STOPPED",
     "created_at": "2026-09-16T04:36:32.418024+05:30",
-    "stopped_at": null,
-    "stopped_reason": "",
+    "stopped_at": "2026-09-16T04:37:25.879104+05:30",
+    "stopped_reason": "Stopped manually.",
     "first_check_requested_at": "2026-09-16T04:36:32.418030+05:30",
     "problem": null,
     "owner_uid": "NGgGH69OmKWUCfIIhwltHUZr42b2"
