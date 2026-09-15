@@ -640,8 +640,11 @@ def test_A_firebase_accepts_the_request_then_success_and_cooldown(visitor, fake)
     assert fake.calls[-1] == ("sendOobCode", {"requestType": "VERIFY_EMAIL", "idToken": "id.uid-newbie"})
     assert fake.verification_sent == ["newbie@example.com"]
     text = body(app)
-    assert "Verification email sent to newbie@example.com" in text
+    assert "Firebase accepted the verification email request." in text
+    assert "not the same as delivered" in text                 # accepted ≠ delivered, said on screen
     assert re.search(r"RESEND AVAILABLE IN (59|60)s", text)
+    assert "LAST REQUEST HTTP 200 OK" in text                  # the diagnostic line
+    assert app.session_state["auth_pending"]["last_answer"]["status"] == 200
     pend = app.session_state["auth_pending"]
     assert pend["sends"] == 1 and 55 < pend["cooldown_until"] - time.time() <= 60
     assert resend_button(app).disabled is True
@@ -664,8 +667,9 @@ def test_B_firebase_refuses_the_request_then_error_and_no_cooldown(visitor, fake
     fake.fail_verify_with = "OPERATION_NOT_ALLOWED"       # only VERIFY_EMAIL is refused
     app.button(key="auth_signup").click().run()
     text = body(app)                                                # the rerun that shows the error
-    assert "Firebase didn't accept the verification email request (HTTP 400, OPERATION_NOT_ALLOWED)" in text
+    assert "Firebase rejected the verification email request: OPERATION_NOT_ALLOWED (HTTP 400)" in text
     assert "Your account was created, but" in text
+    assert "accepted" not in text.lower()
     app = settle(app)
     text = body(app)
     assert "You're almost in." in text                              # the account does exist
@@ -677,8 +681,10 @@ def test_B_firebase_refuses_the_request_then_error_and_no_cooldown(visitor, fake
     # Resend refused too: same honesty.
     resend_button(app).click().run()
     text = body(app)
-    assert "(HTTP 400, OPERATION_NOT_ALLOWED)" in text and "Verification email sent" not in text
+    assert "rejected the verification email request: OPERATION_NOT_ALLOWED (HTTP 400)" in text
+    assert "accepted" not in text.lower()
     assert app.session_state["auth_pending"]["sends"] == 0
+    assert "LAST REQUEST HTTP 400 OPERATION_NOT_ALLOWED" in body(app)
     assert resend_button(app).disabled is False
 
 
@@ -719,7 +725,8 @@ def test_D_when_the_deadline_passes_resend_is_available(visitor, fake):
     assert app.session_state["auth_pending"]["sends"] == 2
 
 
-def test_E_no_key_token_or_password_reaches_the_page_or_the_log(visitor, fake, capsys):
+def test_E_no_key_token_or_password_reaches_the_page_or_the_log(visitor, fake, capsys, monkeypatch):
+    monkeypatch.setattr(firebase, "_config_logged", False)      # the once-per-process line, again
     app = run()
     app = sign_in_as(app, "newbie@example.com", "Trailer2026")
     resend_button(app).click().run()                                      # a 200
@@ -734,9 +741,12 @@ def test_E_no_key_token_or_password_reaches_the_page_or_the_log(visitor, fake, c
         assert secret not in log, secret
         assert secret not in page_text, secret
     # …while the safe diagnostic is in both.
-    assert "[auth] sendOobCode VERIFY_EMAIL: HTTP 200 ok" in log
+    assert "[auth] sendOobCode VERIFY_EMAIL: HTTP 200 OK" in log
     assert "[auth] sendOobCode VERIFY_EMAIL: HTTP 400 TOO_MANY_ATTEMPTS_TRY_LATER" in log
-    assert "(HTTP 400, TOO_MANY_ATTEMPTS_TRY_LATER)" in page_text
+    assert "TOO_MANY_ATTEMPTS_TRY_LATER (HTTP 400)" in page_text
+    # The config line names the project and only the *presence* of the key.
+    assert "[auth] Firebase config: project_id=" in log and "api_key_present=True" in log
+    assert "newbie@example.com" not in log                          # no address in the log either
 
 
 def test_once_verified_the_same_account_signs_in_normally(visitor, fake):

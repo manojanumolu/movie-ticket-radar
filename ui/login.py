@@ -271,6 +271,7 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 .tr-auth-foot-text { font-size:14px; color:var(--tr-text-2); font-weight:500; text-align:right; white-space:nowrap; line-height:34px; }
 .tr-auth-hint { font-size:12.5px; color:var(--tr-text-3); margin:-2px 0 0 2px; line-height:1.45; }
 .tr-auth-count { font-family:var(--tr-mono); font-size:11px; letter-spacing:.2em; color:var(--tr-text-3); margin-top:2px; font-variant-numeric:tabular-nums; }
+.tr-auth-diag { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.14em; color:var(--tr-text-4); text-align:center; margin-top:10px; line-height:1.6; overflow-wrap:anywhere; }
 
 /* feedback */
 .tr-auth-alert { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:12px; font-size:13.5px; line-height:1.45; font-weight:500; margin:4px 0 2px;
@@ -699,11 +700,12 @@ def _signup() -> None:
             try:
                 client.send_email_verification(creds.id_token)
             except AuthError as exc:
+                session.record_verification_answer(exc.status, exc.code)
                 st.session_state[ERROR_KEY] = _send_failure(exc, created=True)
             else:
+                session.record_verification_answer(client.last_status, client.last_code)
                 session.mark_verification_sent(RESEND_COOLDOWN)
-                st.session_state[NOTICE_KEY] = ("success", f"Verification email sent to {creds.email}. "
-                                                           "Not there in a minute? Check spam.")
+                st.session_state[NOTICE_KEY] = ("success", _accepted(creds.email))
             st.rerun()
 
         _attempt(status, "CREATING YOUR ACCOUNT…", go)
@@ -711,11 +713,18 @@ def _signup() -> None:
 
 def _send_failure(exc: AuthError, *, created: bool = False) -> str:
     """What to say when Firebase did not accept a VERIFY_EMAIL request.
-    Names the status and code, because that is what fixes the project
+    Names the code and status, because that is what fixes the project
     configuration; never a key, a token or an address."""
     lead = "Your account was created, but " if created else ""
-    return (f"{lead}Firebase didn't accept the verification email request ({exc.diagnostic}). "
-            f"{exc}")
+    return (f"{lead}Firebase rejected the verification email request: {exc.code} "
+            f"(HTTP {exc.status}). {exc}")
+
+
+def _accepted(email: str) -> str:
+    """Accepted is not delivered — say exactly that."""
+    return (f"Firebase accepted the verification email request. Its email to {email} is on its way "
+            "— check spam too. Accepted by Firebase is not the same as delivered by your mail "
+            "provider; if nothing arrives, the Firebase project's email settings need a look.")
 
 
 def _cooldown_remaining(pend: dict | None, now: float | None = None) -> int:
@@ -748,19 +757,21 @@ def _resend() -> None:
     pend = session.pending()
     if not allowed or pend is None:
         return
+    client = firebase.FirebaseAuth()
     try:
-        firebase.FirebaseAuth().send_email_verification(pend["id_token"])
+        client.send_email_verification(pend["id_token"])
     except AuthError as exc:
+        session.record_verification_answer(exc.status, exc.code)
         if exc.code in ("INVALID_ID_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND", "CREDENTIAL_TOO_OLD_LOGIN_AGAIN"):
             session.clear_pending()
-            st.session_state[ERROR_KEY] = ("That request has expired — sign in again and we'll send a fresh link "
-                                           f"({exc.diagnostic}).")
+            st.session_state[ERROR_KEY] = ("Firebase rejected the verification email request: "
+                                           f"{exc.code} (HTTP {exc.status}). Sign in again and we'll send a fresh link.")
         else:
             st.session_state[ERROR_KEY] = _send_failure(exc)
         return
+    session.record_verification_answer(client.last_status, client.last_code)
     session.mark_verification_sent(RESEND_COOLDOWN)
-    st.session_state[NOTICE_KEY] = ("success", f"Verification email sent to {pend['email']}. "
-                                               "Not there in a minute? Check spam.")
+    st.session_state[NOTICE_KEY] = ("success", _accepted(pend["email"]))
 
 
 def _verify() -> None:
@@ -802,8 +813,26 @@ def _countdown() -> None:
         if why:
             klass = "tr-auth-count" if why.startswith("RESEND") else "tr-auth-hint"
             C.html(f'<div class="{klass}" style="text-align:center;">{C.e(why)}</div>')
+        C.html(f'<div class="tr-auth-diag">{_diagnostic(pend)}</div>')
 
     block()
+
+
+def _diagnostic(pend: dict | None) -> str:
+    """The safe record of what Firebase last answered, so the screen itself
+    settles "was the request accepted?": the project the app is talking to
+    (its id is public — it is in every Firebase web config), the HTTP status
+    and Firebase's code, and when. Never a key, a token or an address."""
+    project = firebase.config().project_id or "not configured"
+    answer = (pend or {}).get("last_answer")
+    if not answer:
+        return f"FIREBASE PROJECT {C.e(project.upper())} · NO VERIFICATION REQUEST YET"
+    from config.timezone import fmt_time, now_ist
+    from datetime import datetime, timezone
+
+    when = datetime.fromtimestamp(answer["at"], tz=timezone.utc).astimezone(now_ist().tzinfo)
+    return (f"FIREBASE PROJECT {C.e(project.upper())} · LAST REQUEST HTTP {int(answer['status'])} "
+            f"{C.e(str(answer['code']).upper())} · {C.e(fmt_time(when))} IST")
 
 
 def _reset() -> None:

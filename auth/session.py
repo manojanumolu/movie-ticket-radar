@@ -187,6 +187,16 @@ def mark_verification_sent(cooldown: float) -> None:
     st.session_state[PENDING_KEY] = pend
 
 
+def record_verification_answer(status: int, code: str) -> None:
+    """What Firebase last said to a VERIFY_EMAIL request — status and code
+    only — kept with the pending account so the screen can show it."""
+    pend = pending()
+    if pend is None:
+        return
+    pend["last_answer"] = {"status": int(status), "code": code, "at": time.time()}
+    st.session_state[PENDING_KEY] = pend
+
+
 def pending() -> dict | None:
     value = st.session_state.get(PENDING_KEY)
     return value if isinstance(value, dict) and value.get("email") else None
@@ -222,11 +232,11 @@ def restore() -> AuthUser | None:
         creds = client.refresh(token)
         info = client.lookup(creds.id_token)
     except AuthError as exc:
-        print(f"[auth] stored session not restored: {exc.code}")
+        print(f"[auth] stored session not restored: {exc.code}", flush=True)
         st.session_state["auth_cookie_clear"] = True
         return None
     if not info["email_verified"]:
-        print("[auth] stored session not restored: email not verified")
+        print("[auth] stored session not restored: email not verified", flush=True)
         st.session_state["auth_cookie_clear"] = True
         return None
     user = _from_credentials(creds, email=info["email"], display_name=info["display_name"])
@@ -253,7 +263,7 @@ def id_token() -> str:
     try:
         creds = firebase.FirebaseAuth().refresh(user.refresh_token)
     except AuthError as exc:
-        print(f"[auth] token refresh failed: {exc.code}")
+        print(f"[auth] token refresh failed: {exc.code}", flush=True)
         return user.id_token
     fresh = replace(user, id_token=creds.id_token, refresh_token=creds.refresh_token,
                     expires_at=time.time() + max(60, creds.expires_in))
@@ -309,6 +319,7 @@ __all__ = [
     "id_token",
     "mark_verification_sent",
     "pending",
+    "record_verification_answer",
     "apply_pending_reset",
     "request_reset",
     "restore",

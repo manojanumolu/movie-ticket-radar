@@ -1252,7 +1252,7 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 .stApp :is(.tr-eyebrow, .tr-summary-strip .k, .tr-metric .k, .tr-metric .v.mono, .tr-version, .tr-version *, .tr-badge, .tr-step-num,
   .tr-interval .unit, .tr-throw .ab, .tr-summary .k, .tr-field-label, .tr-hero-mark,
   .tr-hero-mark *, .tr-step-pip .n, .tr-live .foot, .tr-live .foot *, .tr-platform .soon, .tr-step-mobile,
-  .tr-rule .tr-eyebrow, .tr-pill:not(.connected), .tr-feat .k, .tr-count, .tr-row .r, .tr-history .when, .tr-auth-count, code, kbd, pre, .tr-mono) {
+  .tr-rule .tr-eyebrow, .tr-pill:not(.connected), .tr-feat .k, .tr-count, .tr-row .r, .tr-history .when, .tr-auth-count, .tr-auth-diag, code, kbd, pre, .tr-mono) {
   font-family: var(--tr-mono) !important;
 }
 .stApp :is([data-testid="stIconMaterial"], .material-symbols-rounded, span[data-testid="stIconMaterial"]) {
