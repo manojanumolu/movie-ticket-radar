@@ -263,8 +263,17 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   content:''; position:absolute; left:-1px; top:11px; bottom:11px; width:3px; border-radius:3px;
   background:var(--tr-accent); box-shadow:0 0 10px rgba(255,51,85,.8);
 }
+[data-testid="stSidebar"] [role="radiogroup"] label input[type="radio"] {
+  /* Streamlit's BaseWeb radio control must remain in the DOM for keyboard
+     navigation, but never occupy visual space: our ::before icon is the
+     visible control.  Some Streamlit releases add an extra wrapper here;
+     styling every child made that wrapper grow into the grey/red ovals. */
+  position:absolute !important; width:1px !important; height:1px !important;
+  margin:-1px !important; padding:0 !important; opacity:0 !important;
+  clip:rect(0,0,0,0) !important; clip-path:inset(50%) !important;
+}
 [data-testid="stSidebar"] [role="radiogroup"] label > div > div > div:first-child:not([data-testid]) { display:none; }
-[data-testid="stSidebar"] [role="radiogroup"] label > div, [data-testid="stSidebar"] [role="radiogroup"] label > div > div { width:100%; }
+[data-testid="stSidebar"] [role="radiogroup"] label [data-testid="stMarkdownContainer"] { width:100%; min-width:0; }
 [data-testid="stSidebar"] [role="radiogroup"] label [data-testid="stMarkdownContainer"] p {
   font-size:14.5px; font-weight:600; letter-spacing:-.01em; color:inherit; display:flex; align-items:center; gap:10px; width:100%; line-height:1; white-space:nowrap;
 }
