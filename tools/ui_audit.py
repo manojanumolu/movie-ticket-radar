@@ -15,6 +15,12 @@ and at every stop checks:
 * no leaf text box narrower than ~2 characters yet several lines tall —
   the one-letter-per-line wrap that a squeezed column produces.
 
+The app sits behind Firebase sign-in, so the login page is audited first at
+every width — its sign-in, create-account and reset states — and the walk
+through the app needs a real account: set ``TR_AUDIT_EMAIL`` and
+``TR_AUDIT_PASSWORD`` (never on the command line; in the environment). Without
+them only the login page is audited, and the run says so.
+
 Screenshots land in ``tools/ui_audit_shots/``. Exit status is non-zero when
 any stop fails, so this can gate a release. Needs ``playwright`` and its
 Chromium (``pip install playwright && playwright install chromium``); it is
@@ -25,6 +31,7 @@ browser-free.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -102,6 +109,23 @@ def main(widths: list[int]) -> int:
                         pass
 
             page.goto(URL, wait_until="networkidle")
+            page.wait_for_selector('[class*="st-key-trauth_panel"]', timeout=30000)
+            time.sleep(1.2)
+            audit("login")
+            click("auth_to_signup")
+            audit("login_signup")
+            click("auth_to_signin")
+            click("auth_forgot")
+            audit("login_reset")
+            click("auth_to_signin")
+            email, password = os.environ.get("TR_AUDIT_EMAIL", ""), os.environ.get("TR_AUDIT_PASSWORD", "")
+            if not (email and password):
+                print(f"      {width}px: no TR_AUDIT_EMAIL / TR_AUDIT_PASSWORD — only the login page was audited")
+                ctx.close()
+                continue
+            page.locator('[class*="st-key-auth_email"] input').fill(email)
+            page.locator('[class*="st-key-auth_password"] input').fill(password)
+            click("auth_signin", wait=0)
             page.wait_for_selector(".tr-hero", timeout=30000)
             time.sleep(1.2)
             audit("home")
