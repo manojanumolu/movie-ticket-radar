@@ -134,6 +134,22 @@ film, not one format of it. (Avengers Endgame: Encore was 3 theatres before
 this and 9 after.) Detail is re-read every six hours, because theatres are
 added as a release approaches and drop off as the day's shows run out.
 
+A theatre often *releases* a film as a brand-new sibling event — a "Barco
+Laser" or "Dolby Cinema" event that did not exist when the monitor was saved.
+A running monitor cannot wait for the next catalogue sync to hear about it, so
+the worker re-lists the city itself (`monitor/discovery.py`): one QUICKBOOK
+request per city, shared by every monitor there, at most once every 15 minutes
+and only while a due monitor still has a theatre or format it hasn't found.
+New siblings are added to the monitor and swept in that same check; a failed or
+blocked listing changes nothing and is retried after five minutes. A manual
+**Refresh catalogue** still works and counts as a listing — it is just no
+longer the only way a running monitor learns of a new event.
+
+Note that a film is one row *per language*, and each row's family is that
+language's events only. A monitor on the Telugu row will not see a theatre
+BookMyShow lists under the English row; when that happens the worker log says
+so (`[hint] … is listed for '… · English'`).
+
 The UI **never calls BookMyShow to build its movie grid.** It reads what the
 sync job committed. That is the whole point: a Streamlit Cloud container is
 exactly the kind of host the bot check refuses, and the user should not have to
@@ -195,6 +211,7 @@ platforms/
 monitor/
   models.py                 normalised domain types (no platform knowledge)
   catalogue.py              city listing cache + sync, with SyncStatus
+  discovery.py              a running monitor learns of new sibling events itself
   state.py                  persistence + monitor lifecycle
   changes.py                when something is actually worth an email
   checker.py                the engine (one pass)

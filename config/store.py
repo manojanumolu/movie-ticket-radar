@@ -27,6 +27,9 @@ STATE_FILE = DATA_DIR / "state.json"
 CATALOGUE_FILE = DATA_DIR / "catalogue.json"
 HISTORY_FILE = DATA_DIR / "history.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
+#: When the worker last re-listed a city on its own (see ``monitor.discovery``).
+#: Worker-owned, like ``state.json``; the catalogue sync never touches it.
+DISCOVERY_FILE = DATA_DIR / "discovery.json"
 
 GITHUB_REPO = os.environ.get("TICKETRADAR_REPO", "manojanumolu/movie-ticket-radar")
 
@@ -36,6 +39,7 @@ DEFAULTS: dict[str, Any] = {
     "catalogue.json": {"movies": [], "updated_at": None},
     "history.json": [],
     "settings.json": {"notify_email": "", "default_interval": 10},
+    "discovery.json": {},
 }
 
 
@@ -298,6 +302,15 @@ def save_catalogue(catalogue: dict[str, Any], *, mirror: bool = True) -> None:
     write_json(CATALOGUE_FILE, catalogue, mirror=mirror, message="chore: update movie catalogue")
 
 
+def load_discovery() -> dict[str, Any]:
+    data = read_json(DISCOVERY_FILE)
+    return data if isinstance(data, dict) else {}
+
+
+def save_discovery(discovery: dict[str, Any], *, mirror: bool = True) -> None:
+    write_json(DISCOVERY_FILE, discovery, mirror=mirror, message="chore: update discovery clock")
+
+
 def load_history() -> list[dict[str, Any]]:
     data = read_json(HISTORY_FILE)
     return data if isinstance(data, list) else []
@@ -310,6 +323,7 @@ def save_history(history: list[dict[str, Any]], *, mirror: bool = True) -> None:
 __all__ = [
     "CATALOGUE_FILE",
     "DATA_DIR",
+    "DISCOVERY_FILE",
     "GITHUB_REPO",
     "HISTORY_FILE",
     "MONITORS_FILE",
@@ -323,12 +337,14 @@ __all__ = [
     "last_mirror",
     "github_token",
     "load_catalogue",
+    "load_discovery",
     "load_history",
     "load_settings",
     "read_json",
     "request_check_now",
     "running_in_actions",
     "save_catalogue",
+    "save_discovery",
     "save_history",
     "save_settings",
     "sync_from_github",

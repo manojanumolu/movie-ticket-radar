@@ -11,10 +11,14 @@ Order of operations, and why:
    monitor never gets one last check it shouldn't have had.
 2. Skip monitors that aren't due yet (the workflow ticks faster than the
    slowest interval).
-3. Fetch. A failure here becomes an ERROR record, never an availability.
-4. Evaluate each theatre+format target independently.
-5. Detect changes, send mail, and only then mark as notified.
-6. Persist.
+3. Re-list the city for any due monitor that still hasn't found its theatre
+   or format (``monitor.discovery``) — rate-limited, one request per city —
+   so a sibling event BookMyShow created *after* the monitor was saved is
+   swept in this very tick, not after the next catalogue sync.
+4. Fetch. A failure here becomes an ERROR record, never an availability.
+5. Evaluate each theatre+format target independently.
+6. Detect changes, send mail, and only then mark as notified.
+7. Persist.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from datetime import datetime
 
 from config.timezone import now_ist
 from monitor.changes import Change, apply_outcome, detect_changes, mark_notified
+from monitor.discovery import DiscoveryReport, discover_siblings
 from monitor.models import (
     Availability,
     CheckOutcome,
@@ -40,6 +45,7 @@ from monitor.state import (
     load_monitors,
     load_state,
     record_history,
+    save_monitors,
     save_state,
 )
 from platforms import get_provider
@@ -58,13 +64,18 @@ class RunReport:
     changes: list[Change] = field(default_factory=list)
     emails_sent: int = 0
     email_errors: list[str] = field(default_factory=list)
+    #: What sibling-event discovery did before the checks (see ``monitor.discovery``).
+    discovery: DiscoveryReport = field(default_factory=DiscoveryReport)
 
     def summary(self) -> str:
-        return (
+        text = (
             f"checked={len(self.checked)} skipped={len(self.skipped)} "
             f"expired={len(self.expired)} failed={len(self.failed)} "
             f"changes={len(self.changes)} emails={self.emails_sent}"
         )
+        if self.discovery.ran:
+            text += f" discovery[{self.discovery.summary()}]"
+        return text
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -186,6 +197,36 @@ def with_current_variants(movie: MovieRef) -> MovieRef:
     return movie if merged == movie.variants else replace(movie, variants=merged)
 
 
+def _hint_other_rows(monitor: Monitor, target: TheatreTarget | None) -> None:
+    """Say so when the theatre *is* listed for this film — under another language.
+
+    A film is one row per language, and each row sweeps only its own
+    language's events. A Telugu monitor can therefore watch a theatre for
+    hours that BookMyShow is already selling under the English row. That is
+    the correct answer for the row, but it is the first thing to check when
+    a "not listed yet" looks wrong, so the log says it outright.
+    """
+    if target is None:
+        return
+    from monitor import catalogue
+
+    movie = monitor.movie
+    mine = catalogue.find_entry(movie.id)
+    title = (catalogue.movie_from_entry(mine).title if mine else movie.title).strip().lower()
+    for entry in catalogue.list_entries(movie.region_slug):
+        other = catalogue.movie_from_entry(entry)
+        if other.id == movie.id or other.title.strip().lower() != title:
+            continue
+        venue = next((v for v in catalogue.venues_from_entry(entry)
+                      if _same_venue_code(v.code, v.name, target)), None)
+        if venue is None:
+            continue
+        print(f"    [hint] {target.venue_name} is listed for '{other.title} · {other.language}' "
+              f"({other.event_code}; formats: {', '.join(venue.formats) or 'unknown'}) — this "
+              f"monitor watches the {movie.language or 'other'} row ({movie.event_code}) and "
+              f"only sweeps that language's events")
+
+
 def _same_venue(show: Showtime, target: TheatreTarget) -> bool:
     return _same_venue_code(show.venue_code, show.venue_name, target)
 
@@ -273,18 +314,28 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     state = load_state()
     dirty = bool(newly_expired)
 
+    due: list[Monitor] = []
     for monitor in monitors:
         if monitor_id and monitor.id != monitor_id:
             continue
         if not monitor.is_running(at):
             report.skipped.append(f"{monitor.id} ({monitor.status.value.lower()})")
             continue
-
         ms: MonitorState = state.setdefault(monitor.id, MonitorState())
         if not force and not ms.is_due(monitor.interval_minutes, at):
             report.skipped.append(f"{monitor.id} (not due)")
             continue
+        due.append(monitor)
 
+    # A theatre that is "not listed yet" may be listed under a sibling event
+    # BookMyShow created after the monitor was saved. Learn of such events
+    # *before* fetching, so this tick's sweep is the film as it is now.
+    report.discovery = discover_siblings(monitors, due, state, at=at, mirror=mirror)
+    if report.discovery.updated:
+        save_monitors(monitors, mirror=mirror)
+
+    for monitor in due:
+        ms = state[monitor.id]
         print(f"[checker] {monitor.id} — {monitor.movie.title} ({len(monitor.targets)} target(s))")
         outcome = check_monitor(monitor, at=at)
         changes = detect_changes(monitor, outcome, ms)
@@ -296,6 +347,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
             for result in outcome.results:
                 print(f"    {result.venue_name} · {result.fmt} -> {result.availability.value}"
                       f"{' — ' + result.detail if result.detail else ''}")
+                if result.availability is Availability.THEATRE_NOT_AVAILABLE:
+                    _hint_other_rows(monitor, monitor.target(result.target_key))
         else:
             report.failed.append(monitor.id)
             print(f"    check failed: {outcome.error}")
