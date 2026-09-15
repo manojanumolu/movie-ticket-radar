@@ -34,3 +34,6 @@ Thumbs.db
 .idea/
 .vscode/
 scratch/
+
+# Local scratch (browser audit output)
+tools/ui_audit_shots/

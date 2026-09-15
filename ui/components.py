@@ -708,6 +708,7 @@ def active_monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime |
             {thumb(monitor.movie.poster_url)}
             <div style="min-width:0;">
               <div class="title">{e(monitor.movie.title)}</div>
+              {language_line(monitor.movie.language)}
               <div class="where">BookMyShow · {e(monitor.movie.city)}</div>
               <div style="margin-top:10px;"><span class="tr-pill {phase.css}">{e(phase.label)}</span></div>
             </div>
@@ -833,8 +834,8 @@ def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None =
                 <span class="tr-pill neutral">EVERY {monitor.interval_minutes} MIN</span>
                 <span class="tr-pill neutral">{len(monitor.targets)} TARGET{'S' if len(monitor.targets) != 1 else ''}</span></div>
               <div class="title">{e(monitor.movie.title)}</div>
+              {language_line(monitor.movie.language)}
               <div class="where">BookMyShow · {e(monitor.movie.city)}
-                {(' · ' + e(monitor.movie.language)) if monitor.movie.language else ''}
                 · created {e(fmt_datetime(monitor.created_at))}</div>
             </div>
           </div>
@@ -858,6 +859,19 @@ def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None =
           {note}
         </div>"""
     )
+
+
+def language_line(language: str) -> str:
+    """The language row of the film a monitor watches — "English", "Telugu".
+
+    BookMyShow lists a film once per language, each with its own events and
+    theatres, so which row is being watched is part of the monitor's
+    identity. Shown under the title, from the stored ``MovieRef.language``;
+    an empty language renders nothing rather than a guess.
+    """
+    if not language:
+        return ""
+    return f'<div class="lang">{icon("movie", 12)}<span>{e(language)}</span></div>'
 
 
 def dedupe_names(values: list[str]) -> list[str]:
@@ -1003,7 +1017,10 @@ def empty_card(message: str = "Set an alert and we'll watch BookMyShow for you �
     )
 
 
-def history_rows(history: list[dict], limit: int = 3) -> None:
+def history_rows(history: list[dict], limit: int = 3,
+                 languages: dict[str, str] | None = None) -> None:
+    """``languages`` maps monitor id -> language, for records written before
+    history stored one. A record with neither shows the title alone."""
     kind_style = {
         "TICKETS_LIVE": ("ok", "Tickets found"),
         "NEW_SHOWTIME": ("ok", "New showtime"),
@@ -1021,11 +1038,13 @@ def history_rows(history: list[dict], limit: int = 3) -> None:
         except ValueError:
             stamp = ""
         targets = " · ".join(item.get("targets", [])[:2]) or item.get("message", "")
+        language = item.get("language") or (languages or {}).get(item.get("monitor_id", ""), "")
+        title = e(item.get("movie", "Monitor")) + (f' <span class="lang">· {e(language)}</span>' if language else "")
         html(
             f"""<div class="tr-history {css}">
               {thumb(item.get('poster_url', ''), small=True)}
               <div class="body">
-                <div class="t">{e(item.get('movie', 'Monitor'))}</div>
+                <div class="t">{title}</div>
                 <div class="s">{e(targets)}</div>
                 <div class="k"><span class="tr-pill {css}">{e(label)}</span><span class="when">{e(stamp)}</span></div>
               </div>
@@ -1055,6 +1074,7 @@ __all__ = [
     "html",
     "icon",
     "interval_tile",
+    "language_line",
     "live_card",
     "location_tile",
     "logo",

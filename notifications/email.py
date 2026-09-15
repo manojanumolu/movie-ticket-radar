@@ -164,13 +164,16 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
     for label in times:
         links.setdefault(label, booking_url)
 
+    # The film's language row is part of what was watched (English and Telugu
+    # are separate BookMyShow events); it rides on the existing city line.
+    city = " · ".join(x for x in (monitor.movie.language, monitor.movie.city) if x)
     html = _html(
         eyebrow=eyebrow,
         title=title,
         lede=lede,
         venue=change.venue_name,
         fmt=change.fmt,
-        city=monitor.movie.city,
+        city=city,
         date_label=date_label,
         times=times,
         links=links,
@@ -184,7 +187,7 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
         lede=lede,
         venue=change.venue_name,
         fmt=change.fmt,
-        city=monitor.movie.city,
+        city=city,
         date_label=date_label,
         times=times,
         links=links,

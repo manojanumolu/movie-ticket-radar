@@ -150,6 +150,13 @@ language's events only. A monitor on the Telugu row will not see a theatre
 BookMyShow lists under the English row; when that happens the worker log says
 so (`[hint] … is listed for '… · English'`).
 
+The page is one column on a phone (≤768px, Streamlit's own sidebar
+breakpoint): every `st.columns` row stacks, except grids the flow wraps in a
+`trgrid_*` container (posters two-up, tile pickers three-up), `trpair_*` inputs
+and the compact step rail. `python tools/ui_audit.py` walks every page at
+375–1600px in a real browser and fails on any horizontal overflow or
+one-letter-per-line wrap.
+
 The UI **never calls BookMyShow to build its movie grid.** It reads what the
 sync job committed. That is the whole point: a Streamlit Cloud container is
 exactly the kind of host the bot check refuses, and the user should not have to
@@ -229,7 +236,8 @@ ui/
   catalogue_view.py         the catalogue parsed once per file, for the UI
 tools/
   bms_diagnose.py           reachability diagnostics (run it on a runner)
-tests/                      195 tests, no network, no SMTP
+  ui_audit.py               drives the app in Chromium at phone + desktop widths, fails on overflow
+tests/                      228 tests, no network, no SMTP, no browser
 ticketradar-ui-design-system-2/   the design (visual source of truth)
 .github/workflows/
   bookmyshow-monitor.yml    ticket checks: dispatched on start, then segments; cron as fallback
