@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "id": "b32160593496",
+    "movie": {
+      "platform": "bookmyshow",
+      "event_code": "ET00514535",
+      "title": "Avengers Endgame: Encore",
+      "region_code": "HYD",
+      "region_slug": "hyderabad",
+      "city": "Hyderabad",
+      "language": "Telugu",
+      "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00514535-1787913136.jpg",
+      "source_url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore-telugu/buytickets/ET00514535",
+      "variants": []
+    },
+    "targets": [
+      {
+        "venue_code": "ALUC",
+        "venue_name": "ALLU Cinemas",
+        "area": "Kokapet",
+        "fmt": "Barco Laser 4K Atmos"
+      }
+    ],
+    "interval_minutes": 10,
+    "monitor_until": "2026-09-16T23:59:00+05:30",
+    "start_immediately": true,
+    "notify_email": "manoj.anumolu01@gmail.com",
+    "date_codes": [
+      "20260925"
+    ],
+    "status": "ACTIVE",
+    "created_at": "2026-09-15T16:19:20.608977+05:30",
+    "stopped_at": null,
+    "stopped_reason": "",
+    "first_check_requested_at": "2026-09-15T16:19:20.608982+05:30",
+    "problem": null
+  }
+]
