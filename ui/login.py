@@ -12,7 +12,13 @@ Three states share the panel and the visual:
 
     signin  →  "Welcome back."           email · password · SIGN IN
     signup  →  "Create your account."    name · email · password ×2 · CREATE ACCOUNT
+    verify  →  "You're almost in."       resend the verification email · back to sign in
     reset   →  "Reset your password."    email · SEND RESET LINK  →  sent
+
+A new account lands on *verify*, not in the app: Firebase has emailed its
+verification link, and until the account record says ``emailVerified`` the
+session never gets an ``AuthUser``. Signing in with an unverified account
+lands there too.
 
 Firebase is only ever spoken to from ``auth.firebase``; this module renders,
 validates what can be validated before a network call, and shows the one
@@ -38,6 +44,10 @@ from ui import components as C
 MODE_KEY = "auth_mode"
 ERROR_KEY = "auth_error"
 NOTICE_KEY = "auth_notice"
+#: Resending the verification email: at most this many per pending account,
+#: and never two inside the cooldown.
+RESEND_LIMIT = 3
+RESEND_COOLDOWN = 60
 
 #: The four promises under the headline, in the design's order.
 PROMISES = [
@@ -280,6 +290,21 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 .tr-auth-sent p b { color:#fff; font-weight:700; }
 .tr-auth-sent .small { font-size:12.5px; color:var(--tr-text-3); margin-top:14px; }
 .tr-auth-config { font-size:12.5px; color:var(--tr-text-3); text-align:center; margin-top:6px; }
+.tr-auth-sent .steps { display:flex; flex-direction:column; gap:8px; margin:18px auto 4px; max-width:340px; text-align:left; }
+.tr-auth-sent .step { display:flex; gap:10px; align-items:flex-start; font-size:13px; color:var(--tr-text-2); line-height:1.45; }
+.tr-auth-sent .step strong { color:#fff; font-weight:700; }
+.tr-auth-sent .step b { flex:none; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+  font-family:var(--tr-mono); font-size:10.5px; color:#FF6B85; border:1px solid rgba(255,51,85,.45); background:rgba(255,51,85,.08); }
+[class*="st-key-auth_resend"] .stButton > button {
+  background: linear-gradient(180deg,#FF6A85 0%,#FF3355 48%,#D4123F 100%); color:#fff; border:1px solid rgba(255,140,160,.45);
+  font-size:13.5px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; min-height:54px; border-radius:16px; margin-top:6px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.4), inset 0 -1px 0 rgba(0,0,0,.25), 0 22px 46px -16px rgba(255,51,85,.95); }
+[class*="st-key-auth_resend"] .stButton > button:hover { background: linear-gradient(180deg,#FF7A93 0%,#FF3F5F 48%,#DC1746 100%); color:#fff; }
+[class*="st-key-auth_resend"] .stButton > button:disabled { opacity:.55; transform:none; box-shadow:none; cursor:default; }
+[class*="st-key-auth_resend"] .stButton > button p { font-size:13.5px; font-weight:800; letter-spacing:.12em; }
+[class*="st-key-auth_verify_back"] .stButton > button { min-height:50px; border-radius:16px; font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.14); color:var(--tr-text); }
+[class*="st-key-auth_verify_back"] .stButton > button p { font-size:13px; font-weight:700; letter-spacing:.1em; }
 
 /* ── the phone header, hidden on a desktop ─────────────────────────── */
 .tr-auth-mhead { display:none; }
@@ -603,6 +628,14 @@ def _signin() -> None:
 
         def go() -> None:
             creds = firebase.FirebaseAuth().sign_in(email, password)
+            if not creds.email_verified:
+                # The account is real; the address isn't proven yet. Park
+                # it for resending — never as a signed-in user.
+                session.set_pending(creds)
+                st.session_state[MODE_KEY] = "verify"
+                st.session_state[NOTICE_KEY] = ("info", "Your email address isn't verified yet. "
+                                                        "Open the link we sent you, then sign in.")
+                st.rerun()
             user = session.sign_in_user(creds)
             _welcome(status, user)
 
@@ -655,10 +688,71 @@ def _signup() -> None:
 
         def go() -> None:
             creds = firebase.FirebaseAuth().sign_up(name, email, password)
-            user = session.sign_in_user(creds)
-            _welcome(status, user)
+            # Firebase has the account and has emailed the verification
+            # link; the person is not signed in until they use it.
+            session.set_pending(creds)
+            st.session_state[MODE_KEY] = "verify"
+            st.rerun()
 
         _attempt(status, "CREATING YOUR ACCOUNT…", go)
+
+
+def _resend_state() -> tuple[bool, str]:
+    """(allowed, why not) for another verification email."""
+    pend = session.pending()
+    if pend is None:
+        return False, "Sign in again to request a new link."
+    if pend.get("sends", 0) >= RESEND_LIMIT:
+        return False, "That's the limit for now — check spam, or try again later."
+    remaining = int(RESEND_COOLDOWN - (time.time() - pend.get("sent_at", 0)))
+    if remaining > 0:
+        return False, f"Sent. You can ask for another in {remaining}s."
+    return True, ""
+
+
+def _resend() -> None:
+    """An ``on_click``: one more verification email, within the limits."""
+    allowed, _ = _resend_state()
+    pend = session.pending()
+    if not allowed or pend is None:
+        return
+    try:
+        firebase.FirebaseAuth().send_email_verification(pend["id_token"])
+    except AuthError as exc:
+        if exc.code in ("INVALID_ID_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND"):
+            session.clear_pending()
+            st.session_state[ERROR_KEY] = "That link request has expired — sign in again and we'll send a fresh one."
+        else:
+            st.session_state[ERROR_KEY] = str(exc)
+        return
+    pend["sent_at"] = time.time()
+    pend["sends"] = pend.get("sends", 0) + 1
+    st.session_state[session.PENDING_KEY] = pend
+    st.session_state[NOTICE_KEY] = ("success", f"Verification email sent again to {pend['email']}.")
+
+
+def _verify() -> None:
+    """You're almost in: the account exists, the address isn't proven yet."""
+    pend = session.pending()
+    email = pend["email"] if pend else ""
+    C.html(f"""<div class="tr-auth-sent">
+      <div class="ic">{_icon("mail", 32, "currentColor", "1.6")}</div>
+      <h3>You're almost in.</h3>
+      <p>Verify your email address to activate your TicketRadar account.</p>
+      <div class="steps">
+        <div class="step"><b>1</b><span>Open the email we sent to <strong>{C.e(email) or "your inbox"}</strong>.</span></div>
+        <div class="step"><b>2</b><span>Click <strong>Verify email</strong>. It only takes a moment.</span></div>
+        <div class="step"><b>3</b><span>Come back here and sign in.</span></div>
+      </div>
+    </div>""")
+    _feedback()
+    allowed, why = _resend_state()
+    st.button("RESEND VERIFICATION EMAIL", key="auth_resend", use_container_width=True,
+              disabled=not allowed, help=why or None, on_click=_resend)
+    if why:
+        C.html(f'<div class="tr-auth-hint" style="text-align:center;">{C.e(why)}</div>')
+    st.button("BACK TO SIGN IN", key="auth_verify_back", use_container_width=True,
+              on_click=_switch, args=("signin",))
 
 
 def _reset() -> None:
@@ -729,6 +823,8 @@ def render() -> None:
                 mode = _mode()
                 if mode == "signup":
                     _signup()
+                elif mode == "verify":
+                    _verify()
                 elif mode == "reset":
                     _reset()
                 elif mode == "reset_sent":
@@ -738,10 +834,14 @@ def render() -> None:
         C.html(_bottom())
 
 
+#: Opacity only, and only the main pane. A ``transform`` here (or anything
+#: on the sidebar) overrides the ``translateX`` Streamlit itself uses to
+#: slide the sidebar away — the collapsed sidebar then sits over the page
+#: and swallows every click. That was the broken sidebar after sign-in.
 ENTRANCE_CSS = """<style>
-[data-testid="stMain"], [data-testid="stSidebar"] { animation: tr-app-enter .7s var(--tr-ease) both; }
-@keyframes tr-app-enter { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-@media (prefers-reduced-motion: reduce) { [data-testid="stMain"], [data-testid="stSidebar"] { animation:none; } }
+[data-testid="stMainBlockContainer"] { animation: tr-app-enter .6s var(--tr-ease) both; }
+@keyframes tr-app-enter { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion: reduce) { [data-testid="stMainBlockContainer"] { animation:none; } }
 </style>"""
 
 

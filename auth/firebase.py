@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import requests
@@ -72,6 +72,7 @@ MESSAGES: dict[str, str] = {
     "RESET_PASSWORD_EXCEED_LIMIT": "Too many reset requests. Wait a little, then try again.",
     "API_KEY_INVALID": "TicketRadar's sign-in isn't configured correctly on this host.",
     "CONFIGURATION_NOT_FOUND": "TicketRadar's sign-in isn't configured correctly on this host.",
+    "EMAIL_NOT_VERIFIED": "Verify your email address first — the link is in your inbox.",
     "network": "Couldn't reach the sign-in service. Check your connection and try again.",
     "not_configured": "Sign-in isn't configured on this host yet — the Firebase Web API key is missing.",
 }
@@ -161,6 +162,9 @@ class Credentials:
     id_token: str
     refresh_token: str
     expires_in: int  # seconds the id_token is good for (Firebase: 3600)
+    #: Only ``accounts:lookup`` says this; sign-in and sign-up fill it from
+    #: there. False until the person has clicked Firebase's verification link.
+    email_verified: bool = False
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -194,11 +198,20 @@ class FirebaseAuth:
 
     # -- the calls --------------------------------------------------------
     def sign_in(self, email: str, password: str) -> Credentials:
+        """Password exchange, then the account record — the only place
+        Firebase reports whether the email address has been verified."""
         body = self._call("signInWithPassword",
                           {"email": email, "password": password, "returnSecureToken": True})
-        return _credentials(body)
+        creds = _credentials(body)
+        info = self.lookup(creds.id_token)
+        return replace(creds, email=info["email"] or creds.email,
+                       display_name=info["display_name"] or creds.display_name,
+                       email_verified=info["email_verified"])
 
     def sign_up(self, name: str, email: str, password: str) -> Credentials:
+        """Create the account and ask Firebase to email its verification
+        link. The credentials come back *unverified*: they are enough to
+        resend that email, never enough to enter the app."""
         body = self._call("signUp", {"email": email, "password": password, "returnSecureToken": True})
         creds = _credentials(body)
         if name:
@@ -207,11 +220,22 @@ class FirebaseAuth:
             try:
                 updated = self._call("update", {"idToken": creds.id_token, "displayName": name,
                                                 "returnSecureToken": False})
-                creds = Credentials(**{**creds.__dict__, "display_name": str(updated.get("displayName") or name)})
+                creds = replace(creds, display_name=str(updated.get("displayName") or name))
             except AuthError as exc:
                 print(f"[auth] display name not saved for new account: {exc.code}")
-                creds = Credentials(**{**creds.__dict__, "display_name": name})
-        return creds
+                creds = replace(creds, display_name=name)
+        try:
+            self.send_email_verification(creds.id_token)
+        except AuthError as exc:
+            # The account exists; the person can ask for the email again
+            # from the verification screen.
+            print(f"[auth] verification email not sent at sign-up: {exc.code}")
+        return replace(creds, email_verified=False)
+
+    def send_email_verification(self, id_token: str) -> None:
+        """Firebase sends its own verification email (Authentication →
+        Templates) to the account behind ``id_token``."""
+        self._call("sendOobCode", {"requestType": "VERIFY_EMAIL", "idToken": id_token})
 
     def send_password_reset(self, email: str) -> None:
         """Ask Firebase to email a reset link. Says nothing about whether the
@@ -239,8 +263,9 @@ class FirebaseAuth:
             expires_in=int(body.get("expires_in") or 3600),
         )
 
-    def lookup(self, id_token: str) -> dict[str, str]:
-        """The account behind an ID token: ``{uid, email, display_name}``."""
+    def lookup(self, id_token: str) -> dict[str, Any]:
+        """The account behind an ID token:
+        ``{uid, email, display_name, email_verified}``."""
         body = self._call("lookup", {"idToken": id_token})
         users = body.get("users") or []
         if not users:
@@ -250,6 +275,7 @@ class FirebaseAuth:
             "uid": str(user.get("localId", "")),
             "email": str(user.get("email", "")),
             "display_name": str(user.get("displayName", "") or ""),
+            "email_verified": bool(user.get("emailVerified", False)),
         }
 
 

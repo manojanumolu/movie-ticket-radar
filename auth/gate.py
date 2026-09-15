@@ -16,6 +16,9 @@ from auth.session import AuthUser
 
 
 def require_user() -> AuthUser:
+    # A sign-out or a sign-in on the previous run asked for the session to
+    # be wiped; this is the first thing that runs, before any widget.
+    session.apply_pending_reset()
     user = session.current_user() or session.restore()
     if user is None:
         from ui import login

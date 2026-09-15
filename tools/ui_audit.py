@@ -48,6 +48,8 @@ AUDIT_JS = """
     if (r.width === 0 || r.height === 0) continue;
     const cs = getComputedStyle(el);
     if (cs.position === 'fixed') continue;
+    // a collapsed sidebar is slid off-canvas at 1px wide: nothing in it is on screen
+    if (el.closest('[data-testid="stSidebar"][aria-expanded="false"]')) continue;
     if (r.right > vw + 1 && !el.closest('[data-testid="stSidebar"]') && !el.closest('[role="listbox"]')) {
       const key = el.tagName + '.' + String(el.className).slice(0, 60);
       if (!seen.has(key)) { seen.add(key); wide.push({tag: el.tagName, cls: String(el.className).slice(0, 80), right: Math.round(r.right)}); }
