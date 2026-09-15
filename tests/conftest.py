@@ -36,6 +36,7 @@ def isolated_data(tmp_path, monkeypatch):
         "CATALOGUE_FILE": "catalogue.json",
         "HISTORY_FILE": "history.json",
         "SETTINGS_FILE": "settings.json",
+        "DISCOVERY_FILE": "discovery.json",
     }
     for attr, name in files.items():
         monkeypatch.setattr(store, attr, data / name)
@@ -53,6 +54,25 @@ def isolated_data(tmp_path, monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     return data
+
+
+@pytest.fixture(autouse=True)
+def no_live_discovery(monkeypatch):
+    """The worker re-lists a city on its own while a monitor is unresolved
+    (``monitor.discovery``). By default that listing is unreachable here —
+    exactly what BookMyShow's bot check does to a blocked host — so every
+    scenario in the suite also proves a failed discovery changes nothing.
+    Tests of discovery itself replace ``discovery.get_provider``."""
+    from monitor import discovery
+    from platforms.base import PlatformError
+
+    class Unreachable:
+        slug = "bookmyshow"
+
+        def list_movies(self, region_slug):
+            raise PlatformError("no city listing in tests")
+
+    monkeypatch.setattr(discovery, "get_provider", lambda slug: Unreachable())
 
 
 @pytest.fixture(autouse=True)
