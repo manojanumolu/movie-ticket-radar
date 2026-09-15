@@ -102,6 +102,24 @@ def reset_from(step: int) -> None:
         }
 
 
+def grid(items, per_row: int, key: str, *, gap: str = "small"):
+    """Yield ``(column, item)`` row by row: one ``st.columns`` per row of
+    ``per_row``, each row inside ``st.container(key=f"trgrid_{key}_{row}")``.
+
+    Row-major on purpose. One tall ``st.columns`` with items dealt into it
+    by ``index % n`` reads the same on a desktop — but a phone folds every
+    column set to two per row, and then column-major order puts item 6 next
+    to item 0. Separate rows fold in reading order, and the ``trgrid_`` key
+    is what the theme's mobile rules size (``--tr-cols``).
+    """
+    items = list(items)
+    for row in range(0, len(items), per_row):
+        with st.container(key=f"trgrid_{key}_{row // per_row}"):
+            columns = st.columns(per_row, gap=gap)
+            for column, item in zip(columns, items[row:row + per_row]):
+                yield column, item
+
+
 def pick(key: str, label: str, render, *, disabled: bool = False) -> bool:
     """Render a tile and return True when it was clicked.
 
@@ -127,16 +145,17 @@ def step_rail(step: int, furthest: int) -> None:
     still selected. Steps not yet reached are inert — there is nothing there
     to go to.
     """
-    columns = st.columns(len(STEPS), gap="small")
-    for index, (column, label) in enumerate(zip(columns, STEPS), start=1):
-        state = "now" if index == step else ("done" if index <= furthest else "todo")
-        with column:
-            reachable = state == "done"
-            if pick(f"step_{index}", f"Go to step {index}: {label}",
-                    lambda i=index, lb=label, s=state: C.step_pip(i, lb, s),
-                    disabled=not reachable):
-                goto(index)
-    C.html(f'<div class="tr-step-mobile">Step {step} of {len(STEPS)} — {C.e(STEPS[step - 1])}</div>')
+    with st.container(key="trsteps"):
+        columns = st.columns(len(STEPS), gap="small")
+        for index, (column, label) in enumerate(zip(columns, STEPS), start=1):
+            state = "now" if index == step else ("done" if index <= furthest else "todo")
+            with column:
+                reachable = state == "done"
+                if pick(f"step_{index}", f"Go to step {index}: {label}",
+                        lambda i=index, lb=label, s=state: C.step_pip(i, lb, s),
+                        disabled=not reachable):
+                    goto(index)
+        C.html(f'<div class="tr-step-mobile">Step {step} of {len(STEPS)} · {C.e(STEPS[step - 1])}</div>')
 
 
 def back_button(step: int) -> None:
@@ -158,9 +177,12 @@ def step_location() -> None:
     coming = [loc for loc in LOCATIONS if not loc.enabled][:2]
     current = st.session_state.get("location", "")
 
-    columns = st.columns(max(3, len(locations) + len(coming)))
-    for index, loc in enumerate(locations):
-        with columns[index]:
+    tiles = [(loc, True) for loc in locations] + [(loc, False) for loc in coming]
+    for column, (loc, enabled) in grid(tiles, max(3, len(tiles)), "loc"):
+        with column:
+            if not enabled:
+                C.location_tile(loc.name, loc.state, selected=False, enabled=False)
+                continue
             selected = loc.slug == current
             if pick(f"loc_{loc.slug}", "Selected" if selected else f"Choose {loc.name}",
                     lambda loc=loc, selected=selected: C.location_tile(loc.name, loc.state, selected)):
@@ -168,9 +190,6 @@ def step_location() -> None:
                     st.session_state["location"] = loc.slug
                     reset_from(1)
                 goto(2)
-    for offset, loc in enumerate(coming):
-        with columns[len(locations) + offset]:
-            C.location_tile(loc.name, loc.state, selected=False, enabled=False)
 
     if current:
         if st.button("Continue to movies", type="primary", use_container_width=True,
@@ -192,9 +211,8 @@ def _poster_grid(cards: list[cv.MovieCard], selected: str, *, compact: bool = Fa
                  prefix: str = "movie_") -> None:
     """``prefix`` keeps the shelf's buttons distinct from the full grid's —
     the same movie can legitimately appear in both."""
-    columns = st.columns(GRID_COLUMNS, gap="small")
-    for index, card in enumerate(cards):
-        with columns[index % GRID_COLUMNS]:
+    for column, card in grid(cards, GRID_COLUMNS, prefix.rstrip("_")):
+        with column:
             is_sel = card.id == selected
             if pick(f"{prefix}{card.id}", "Selected" if is_sel else f"Select {card.title}",
                     lambda c=card, is_sel=is_sel: C.poster_tile(
@@ -367,9 +385,8 @@ def step_theatres() -> list[Venue]:
     # ── featured quick-picks: released, coming soon, or unknown ──────────
     shelf = cv.featured(venues, directory)
     C.rule("Featured theatres")
-    columns = st.columns(3, gap="small")
-    for index, match in enumerate(shelf):
-        with columns[index % 3]:
+    for column, match in grid(shelf, 3, "feat"):
+        with column:
             if match.venue is None:
                 C.featured_tile(match.pick.name, match.pick.area, None, False, released=False)
                 continue
@@ -407,9 +424,8 @@ def step_theatres() -> list[Venue]:
                     icon=":material/expand_less:"):
                 st.session_state["show_all_theatres"] = False
                 st.rerun()
-        columns = st.columns(2, gap="small")
-        for index, venue in enumerate(venues):
-            with columns[index % 2]:
+        for column, venue in grid(venues, 2, "th"):
+            with column:
                 is_sel = venue.code in chosen
                 label = "Selected ✓" if is_sel else f"Select {venue.name}"
                 if pick(f"th_{venue.code}", label,
@@ -422,9 +438,8 @@ def step_theatres() -> list[Venue]:
     watching = [by_code[c] for c in chosen if c not in listed_codes and c in by_code]
     if watching:
         C.rule(f"Watching for release · {len(watching)}")
-        columns = st.columns(2, gap="small")
-        for index, venue in enumerate(watching):
-            with columns[index % 2]:
+        for column, venue in grid(watching, 2, "watch"):
+            with column:
                 if pick(f"th_{venue.code}", "Selected ✓",
                         lambda v=venue: C.theatre_row(v.name, v.area, list(v.formats), True, v.abbr,
                                                       featured=v.code in featured_codes, coming=True)):
@@ -516,8 +531,7 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
         current = st.session_state.get("interval", 10)
         if current not in INTERVALS:
             current = 10
-        cols = st.columns(3, gap="small")
-        for column, minutes in zip(cols, INTERVALS):
+        for column, minutes in grid(INTERVALS, 3, "interval"):
             with column:
                 if pick(f"interval_{minutes}", f"Every {minutes} minutes",
                         lambda m=minutes, sel=(minutes == current): C.interval_tile(m, sel)):
@@ -529,7 +543,8 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
 
     with right:
         C.step_header("clock", "Monitor until", "The monitor stops itself after this time.")
-        date_col, time_col = st.columns([1.5, 1], gap="small")
+        with st.container(key="trpair_until"):
+            date_col, time_col = st.columns([1.5, 1], gap="small")
         end_date = date_col.date_input("End date", value=(now_ist() + timedelta(days=1)).date(),
                                        min_value=now_ist().date(), format="DD/MM/YYYY",
                                        key="until_date", label_visibility="collapsed")
@@ -549,8 +564,7 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
     mode = st.session_state.get("date_mode", "any")
     if mode not in {m for m, _, _ in DATE_MODES}:
         mode = "any"
-    cols = st.columns(3, gap="small")
-    for column, (value, label, sub) in zip(cols, DATE_MODES):
+    for column, (value, label, sub) in grid(DATE_MODES, 3, "datemode"):
         with column:
             if pick(f"datemode_{value}", label,
                     lambda label=label, sub=sub, sel=(value == mode): C.choice_tile(label, sub, sel)):
@@ -632,6 +646,7 @@ __all__ = [
     "back_button",
     "boot",
     "goto",
+    "grid",
     "pick",
     "reset_from",
     "step_formats",

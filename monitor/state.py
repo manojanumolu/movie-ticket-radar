@@ -342,6 +342,7 @@ def record_history(monitor: Monitor, kind: str, message: str, *, mirror: bool = 
             "kind": kind,
             "message": message,
             "movie": monitor.movie.title,
+            "language": monitor.movie.language,
             "poster_url": monitor.movie.poster_url,
             "targets": [t.label for t in monitor.targets],
             "at": to_iso(at),

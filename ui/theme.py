@@ -130,15 +130,31 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 [data-testid="stCaptionContainer"] p, [data-testid="stWidgetLabel"] p { font-weight:500; }
 .stButton > button p { font-weight:700; }
 [data-testid="stHeader"] { background: transparent !important; }
-[data-testid="stDecoration"], [data-testid="stToolbar"], #MainMenu, footer { display:none !important; }
+/* The toolbar itself stays: in Streamlit 1.59 it holds the "open sidebar"
+   control, which is the only navigation a phone has (and the only way back
+   after collapsing the sidebar on a desktop). Its actions and menu go. */
+[data-testid="stDecoration"], [data-testid="stToolbarActions"], [data-testid="stAppDeployButton"],
+[data-testid="stMainMenu"], #MainMenu, footer { display:none !important; }
+[data-testid="stToolbar"] { background: transparent !important; }
+button[data-testid="stExpandSidebarButton"] {
+  width: 40px; height: 40px; min-height: 0; padding: 0; border-radius: 11px; display:flex; align-items:center; justify-content:center;
+  background: linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05));
+  border: 1px solid rgba(255,255,255,.18); box-shadow: var(--tr-hi), 0 10px 24px -14px rgba(0,0,0,.9);
+}
+button[data-testid="stExpandSidebarButton"]:hover { border-color: rgba(255,51,85,.5); background: rgba(255,51,85,.10); }
+button[data-testid="stExpandSidebarButton"] span, button[data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"] { color: var(--tr-text) !important; font-size: 24px; }
 [data-testid="stSidebarHeader"] { padding:.55rem .6rem 0 !important; height:auto !important; min-height:0 !important; }
 .block-container { padding: 1.3rem 2.2rem 3.5rem !important; max-width: 1600px !important; }
 [data-testid="stMainBlockContainer"] { padding-top: 1rem !important; }
 @media (max-width: 1400px) { .block-container { padding: 1.2rem 1.6rem 3rem !important; } }
 @media (max-width: 1100px) { .block-container { padding: 1.1rem 1.1rem 3rem !important; } }
-@media (max-width: 640px)  { .block-container { padding: .9rem .9rem 6rem !important; } }
 [data-testid="stAppViewContainer"] { overflow-x: hidden; }
-[data-testid="stMainBlockContainer"], [data-testid="stVerticalBlock"], [data-testid="stColumn"] { min-width: 0; }
+[data-testid="stMainBlockContainer"], [data-testid="stVerticalBlock"] { min-width: 0; }
+/* Desktop only. Streamlit stacks columns on phones with a per-column
+   `min-width: calc(100% - …)` media rule; a global `min-width: 0` here sat
+   later in the document and cancelled it, which is how the right rail ended
+   up a 60px column with "No active monitors" wrapping letter by letter. */
+@media (min-width: 769px) { [data-testid="stColumn"] { min-width: 0; } }
 
 h1, h2, h3, h4 { font-family: var(--tr-sans); letter-spacing:-.03em; color: var(--tr-text); }
 p, span, div, label, li, input, button { font-family: var(--tr-sans); }
@@ -437,7 +453,6 @@ __NAV_ICONS__
 [class*="st-key-pick_step_"]:hover .tr-step-pip.done .l { color:#fff; }
 .tr-step-mobile { display:none; font-family:var(--tr-mono); font-size:10px; letter-spacing:.16em;
   color:var(--tr-text-4); text-transform:uppercase; margin:2px 0 4px; }
-@media (max-width:760px) { .tr-step-pip .l { display:none; } .tr-step-mobile { display:block; } }
 
 .tr-selected { display:flex; align-items:center; gap:9px; font-size:13px; color:var(--tr-text-2); margin:2px 0; min-width:0; }
 .tr-selected .n { width:18px; height:18px; flex:none; border-radius:5px; display:flex; align-items:center;
@@ -959,6 +974,13 @@ hr { border-color: var(--tr-border) !important; margin:1.2rem 0 !important; }
 .tr-mcard .info { min-width:0; flex:1; }
 .tr-mcard .title { font-size:20px; font-weight:800; letter-spacing:-.03em; line-height:1.2; overflow-wrap:anywhere; margin-top:8px; }
 .tr-mcard .where { font-size:12px; color:var(--tr-text-3); margin-top:4px; overflow-wrap:anywhere; }
+/* The language row being watched: under the title, clearly secondary. */
+.tr-mcard .lang, .tr-monitor .lang { display:inline-flex; align-items:center; gap:6px; margin-top:6px; padding:3px 9px 3px 7px;
+  border-radius:7px; font-size:12px; font-weight:700; letter-spacing:.01em; color:var(--tr-text-2);
+  background:rgba(255,255,255,.05); border:1px solid var(--tr-border-strong); }
+.tr-mcard .lang svg, .tr-monitor .lang svg { color:var(--tr-accent-soft); }
+.tr-monitor .lang { margin-top:5px; font-size:11.5px; }
+.tr-history .t .lang { color:var(--tr-text-3); font-weight:600; }
 .tr-mcard .pills { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
 .tr-mcard .grid {
   margin-top:14px; padding-top:14px; border-top:1px solid var(--tr-border);
@@ -1070,6 +1092,123 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 
 .tr-cta-help { display:flex; gap:9px; align-items:flex-start; font-size:12.5px; line-height:1.5; color:var(--tr-text-3); padding-top:12px; }
 .tr-cta-help svg { margin-top:2px; }
+
+/* ── mobile (≤768px): one column, on purpose ───────────────────────────
+   Streamlit's own breakpoint for stacking columns is 640px; 768px is its
+   `md` breakpoint and the width below which the sidebar becomes an overlay,
+   so that is where the page becomes a phone layout. Every st.columns row
+   stacks, except the groups named below, which are *meant* to sit side by
+   side on a phone and are wrapped in a keyed container by the flow:
+     trgrid_*   poster / theatre / tile grids — N per row via --tr-cols
+     trpair_*   two short inputs or buttons that belong together
+     trsteps    the 1–5 step rail, compact
+   Nothing here is a desktop rule: at 769px and up this block is inert.  */
+@media (max-width: 768px) {
+  .block-container { padding: .75rem 1rem 5rem !important; }
+  [data-testid="stMainBlockContainer"] { padding-top: .5rem !important; }
+  [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: .6rem !important; }
+  [data-testid="stColumn"] { flex: 1 1 100% !important; width: 100% !important; min-width: 100% !important; }
+  [data-testid="stColumn"] > div > [data-testid="stVerticalBlock"] { gap: .6rem; }
+
+  /* grids: --tr-cols per row, an empty trailing column takes no room */
+  [class*="st-key-trgrid_"] [data-testid="stHorizontalBlock"] { gap: .55rem !important; }
+  [class*="st-key-trgrid_"] [data-testid="stColumn"] {
+    --tr-cols: 2;
+    flex: 0 0 calc((100% - (var(--tr-cols) - 1) * .55rem) / var(--tr-cols)) !important;
+    width: calc((100% - (var(--tr-cols) - 1) * .55rem) / var(--tr-cols)) !important;
+    min-width: 0 !important;
+  }
+  [class*="st-key-trgrid_"] [data-testid="stColumn"]:not(:has([data-testid="stElementContainer"])) { display: none; }
+  [class*="st-key-trgrid_loc"] [data-testid="stColumn"],
+  [class*="st-key-trgrid_interval"] [data-testid="stColumn"],
+  [class*="st-key-trgrid_datemode"] [data-testid="stColumn"] { --tr-cols: 3; }
+  [class*="st-key-trgrid_feat"] [data-testid="stColumn"],
+  [class*="st-key-trgrid_th"] [data-testid="stColumn"] { --tr-cols: 1; }
+  [class*="st-key-trpair"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
+  [class*="st-key-trpair"] [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+
+  /* the sidebar is an overlay here; the toolbar's "open" control is the nav */
+  [data-testid="stSidebar"] { width: min(300px, 86vw) !important; min-width: 0 !important; }
+  .block-container { padding-top: 3.2rem !important; }
+
+  /* hero: responsive type, the mark becomes one quiet line under the copy */
+  .tr-hero { padding: 24px 20px 20px; border-radius: 18px; margin-bottom: 16px; }
+  .tr-hero-inner { flex-wrap: wrap; gap: 0; align-items: flex-start; }
+  .tr-hero h1 { font-size: clamp(27px, 7.6vw, 36px); letter-spacing: -.035em; line-height: 1.04; }
+  .tr-hero-lede { font-size: 15.5px; margin-top: 10px; }
+  .tr-hero-sub { font-size: 13px; }
+  .tr-hero-mark { display: flex; flex-direction: row; flex-wrap: wrap; gap: 0 7px; width: 100%; align-items: center;
+    margin-top: 16px; padding: 12px 0 0; border-top: 1px solid rgba(255,255,255,.08); font-size: 9.5px; letter-spacing: .2em; line-height: 1.6; white-space: normal; }
+
+  /* platforms: BookMyShow full width, District and PVR as a tidy pair */
+  .tr-platforms { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tr-platform.live { grid-column: span 2; }
+  .tr-platform { padding: 14px 14px 13px; min-height: 0; border-radius: 14px; }
+  .tr-platform .lockup { gap: 9px; min-width: 0; }
+  .tr-platform .lockup img { width: 30px !important; height: 30px !important; }
+  .tr-platform .lockup img[alt="PVR Cinemas"] { width: auto !important; height: 28px !important; }
+  .tr-platform .lockup .name { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .tr-platform .soon { margin-top: 9px; white-space: nowrap; }
+  .tr-platform .row img { height: 30px; }
+  .tr-platform .meta { font-size: 13px; }
+
+  /* step rail: five compact pips and a readable "STEP n OF 5 · NAME" */
+  [class*="st-key-trsteps"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 5px !important; }
+  [class*="st-key-trsteps"] [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+  .tr-step-pip { padding: 0; height: 38px; justify-content: center; gap: 0; border-radius: 11px; }
+  .tr-step-pip .l { display: none; }
+  .tr-step-pip .n { width: 24px; height: 24px; font-size: 11.5px; }
+  .tr-step-mobile { display: block; font-size: 11px; letter-spacing: .18em; color: var(--tr-text-2); margin: 8px 0 2px; }
+
+  /* cards and tiles */
+  [class*="st-key-trcard"] { padding: 16px 14px !important; border-radius: 16px !important; }
+  [class*="st-key-trpanel"] { padding: 14px 14px 12px !important; }
+  .tr-step-title { font-size: 19px; }
+  .tr-step-help { font-size: 13px; }
+  .tr-loc { padding: 18px 10px 16px; min-height: 0; }
+  .tr-loc .n { font-size: 16px; }
+  .tr-loc .s { font-size: 11px; }
+  .tr-loc.disabled .s { white-space: nowrap; letter-spacing: .1em; }
+  .tr-interval { padding: 14px 6px; }
+  .tr-interval .num { font-size: 26px; }
+  .tr-interval.choice { padding: 11px 6px; }
+  .tr-interval.choice .lbl { font-size: 13px; }
+  .tr-interval.choice .unit { font-size: 11px; }
+  .tr-feat { min-height: 0; padding: 14px 15px 13px; }
+  .tr-poster .body { height: 84px; }
+  .tr-summary-strip .v { max-width: 100%; }
+  .tr-mcard .grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 12px; }
+  .tr-mcard .title { font-size: 18px; }
+  [class*="st-key-trcard_mon_"] { padding: 16px 14px 14px !important; }
+  .tr-state.empty { padding: 26px 18px; }
+  .tr-state .h { font-size: 20px; }
+  .tr-live .detected { text-align: left; }
+  .tr-cta-help { padding-top: 4px; }
+  [class*="st-key-start"] .stButton > button[kind="primary"] { min-height: 60px; font-size: 15px; }
+  /* 16px in the field itself stops iOS zooming the page on focus; the
+     placeholder alone is a touch smaller so the whole sentence fits. */
+  .stSelectbox .react-aria-ComboBox > [role="group"] { min-height: 54px; padding-left: 42px !important; }
+  .stSelectbox .react-aria-ComboBox::before { left: 14px; }
+  .stSelectbox .react-aria-ComboBox input { font-size: 16px !important; height: 52px; }
+  .stSelectbox .react-aria-ComboBox input::placeholder { font-size: 14.5px !important; }
+  .stTextInput [data-baseweb="input"] input { font-size: 16px !important; }
+  .tr-page-foot { flex-wrap: wrap; gap: 6px; }
+}
+@media (max-width: 600px) {
+  [class*="st-key-trgrid_movie"] [data-testid="stColumn"], [class*="st-key-trgrid_pop"] [data-testid="stColumn"] { --tr-cols: 2; }
+}
+@media (max-width: 480px) {
+  /* two full-width buttons read better than two cramped ones */
+  [class*="st-key-trpair_settings"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+  [class*="st-key-trpair_settings"] [data-testid="stColumn"] { flex: 1 1 100% !important; width: 100% !important; }
+  /* a search field: tapping it opens the list, so the chevron is only width */
+  .stSelectbox .react-aria-ComboBox > [role="group"] { padding-right: 4px !important; }
+  .stSelectbox .react-aria-ComboBox > [role="group"] > button { display: none; }
+}
+@media (min-width: 601px) and (max-width: 768px) {
+  [class*="st-key-trgrid_movie"] [data-testid="stColumn"], [class*="st-key-trgrid_pop"] [data-testid="stColumn"] { --tr-cols: 3; }
+  [class*="st-key-trgrid_feat"] [data-testid="stColumn"], [class*="st-key-trgrid_th"] [data-testid="stColumn"] { --tr-cols: 2; }
+}
 
 /* ── typography, last so it wins ───────────────────────────────────── */
 .stApp :is(p, h1, h2, h3, h4, h5, h6, li, label, input, textarea, button, a, div, span, td, th, small, strong, b, em, summary) {

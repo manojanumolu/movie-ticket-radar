@@ -35,7 +35,9 @@ st.set_page_config(
     page_title="TicketRadar — Movie Ticket Monitor",
     page_icon="🎟️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    # "auto": open on a desktop, an overlay a phone opens from the top-left —
+    # "expanded" would pin a 244px sidebar over a 390px page.
+    initial_sidebar_state="auto",
 )
 
 from config.locations import get_location  # noqa: E402
@@ -72,7 +74,7 @@ from ui import components as C  # noqa: E402
 from ui import flow  # noqa: E402
 from ui.theme import inject  # noqa: E402
 
-APP_VERSION = "2.3.0"
+APP_VERSION = "2.4.0"
 
 inject()
 
@@ -326,6 +328,12 @@ def status_card(monitor_id: str) -> None:
     C.active_monitor_card(monitor, load_state().get(monitor_id, MonitorState()))
 
 
+def languages_of(monitors: list[Monitor]) -> dict[str, str]:
+    """monitor id -> the language of the row it watches, for history lines
+    written before history recorded it. Real stored data, never a guess."""
+    return {m.id: m.movie.language for m in monitors if m.movie.language}
+
+
 def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list[dict]) -> None:
     active = [m for m in monitors if m.is_running()]
     if not active:
@@ -333,7 +341,7 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
         C.empty_card()
         if history:
             C.html('<div class="tr-rail-head" style="margin-top:18px;"><span class="tr-eyebrow">Recent history</span></div>')
-            C.history_rows(history)
+            C.history_rows(history, languages=languages_of(monitors))
         return
 
     monitor = active[0]
@@ -358,7 +366,7 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
         st.caption(f"+{len(active) - 1} more active — see **My Monitors**.")
     if history:
         C.html('<div class="tr-rail-head" style="margin-top:14px;"><span class="tr-eyebrow">Recent history</span></div>')
-        C.history_rows(history)
+        C.history_rows(history, languages=languages_of(monitors))
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -496,14 +504,14 @@ def page_monitors(monitors, states) -> None:
                 monitor_actions(monitor, state)
 
 
-def page_history(history) -> None:
+def page_history(history, monitors) -> None:
     C.hero("History", "What the radar has picked up.",
            "Every release, stop and expiry, newest first.")
     drain_flash()
     if not history:
         C.empty_card("Nothing yet — history fills up once a monitor runs.")
         return
-    C.history_rows(history, limit=50)
+    C.history_rows(history, limit=50, languages=languages_of(monitors))
 
 
 def page_settings(settings) -> None:
@@ -519,7 +527,8 @@ def page_settings(settings) -> None:
         email = st.text_input("Notification email", value=settings.get("notify_email", ""),
                               placeholder="you@gmail.com", key="settings_email",
                               label_visibility="collapsed")
-        a, b = st.columns(2, gap="small")
+        with st.container(key="trpair_settings"):
+            a, b = st.columns(2, gap="small")
         if a.button("Save", use_container_width=True, key="save_settings", type="primary", icon=":material/save:"):
             save_settings({**settings, "notify_email": email.strip()}, mirror=mirrored())
             flash("success", "Settings saved.")
@@ -593,7 +602,7 @@ def main() -> None:
     elif page == "My Monitors":
         page_monitors(monitors, states)
     elif page == "History":
-        page_history(history)
+        page_history(history, monitors)
     else:
         page_settings(settings)
 
