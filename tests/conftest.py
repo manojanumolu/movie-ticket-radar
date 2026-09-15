@@ -57,6 +57,40 @@ def isolated_data(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def signed_in(monkeypatch):
+    """Every ``AppTest`` run starts behind the authentication gate. Here the
+    session is *restored* the way a returning browser's would be — except the
+    exchange with Google is replaced by a fixed account — so the wizard and
+    page tests exercise the app exactly as a signed-in person sees it.
+    ``tests/test_auth.py`` switches this off to test the gate itself."""
+    from auth import firebase, session
+
+    user = session.AuthUser(uid="uid-test-1", email="tester@example.com",
+                            display_name="Test Person", id_token="id.token",
+                            refresh_token="refresh.token", expires_at=4102444800.0)
+
+    def restore():
+        import streamlit as st
+
+        # Once per session, like the real one — so signing out stays signed out.
+        if st.session_state.get("auth_restore_tried"):
+            return None
+        st.session_state["auth_restore_tried"] = True
+        st.session_state[session.USER_KEY] = user
+        return user
+
+    monkeypatch.setattr(session, "restore", restore)
+    # Never let a test reach Firebase: no key, and no transport.
+    monkeypatch.delenv("FIREBASE_WEB_API_KEY", raising=False)
+
+    def no_network(*args, **kwargs):
+        raise AssertionError("a test tried to call Firebase over the network")
+
+    monkeypatch.setattr(firebase, "_post", no_network)
+    return user
+
+
+@pytest.fixture(autouse=True)
 def no_live_discovery(monkeypatch):
     """The worker re-lists a city on its own while a monitor is unresolved
     (``monitor.discovery``). By default that listing is unreachable here —

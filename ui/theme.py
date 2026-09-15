@@ -207,6 +207,21 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 }
 .tr-page-foot { max-width:1600px; margin-top:28px; }
 
+/* the account block under the nav: who Firebase says you are, and Sign out */
+[class*="st-key-tracct"] { margin-top:6px; padding:12px 12px 10px; border-radius:14px; background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.07); gap:.55rem !important; }
+.tr-acct { display:flex; align-items:center; gap:11px; min-width:0; }
+.tr-acct .av { width:34px; height:34px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+  font-family:var(--tr-mono); font-size:13px; font-weight:500; color:#fff;
+  background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
+.tr-acct .who { min-width:0; }
+.tr-acct .n { font-size:13px; font-weight:700; color:var(--tr-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tr-acct .m { font-size:11px; color:var(--tr-text-4); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+[class*="st-key-auth_signout"] .stButton > button { min-height:36px; font-size:12.5px; color:var(--tr-text-3); border-radius:10px; box-shadow:none;
+  background:rgba(255,255,255,.03); }
+[class*="st-key-auth_signout"] .stButton > button:hover { color:#fff; border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); transform:none; }
+[class*="st-key-auth_signout"] .stButton > button p { font-size:12.5px; font-weight:600; }
+
 [data-testid="stSidebar"] [role="radiogroup"] { gap:4px; margin-top:2px; }
 [data-testid="stSidebar"] [role="radiogroup"] label {
   position:relative; display:flex; align-items:center; gap:12px; min-height:44px; padding:0 14px; border-radius:11px;

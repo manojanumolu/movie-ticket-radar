@@ -239,13 +239,18 @@ config/
   timezone.py               everything is IST
 ui/
   theme.py                  the design system, as CSS (Manrope + DM Mono)
+  login.py                  the entrance: sign in · create account · reset password
   flow.py                   the five-step wizard: rail, search, featured picks
   components.py             cards, rows, pills
   catalogue_view.py         the catalogue parsed once per file, for the UI
+auth/
+  firebase.py               Firebase Identity Toolkit over REST (Web API key only)
+  session.py                who is signed in; survives reruns and a reload
+  gate.py                   require_user(): the one call app.py makes
 tools/
   bms_diagnose.py           reachability diagnostics (run it on a runner)
   ui_audit.py               drives the app in Chromium at phone + desktop widths, fails on overflow
-tests/                      228 tests, no network, no SMTP, no browser
+tests/                      267 tests, no network, no SMTP, no browser, no Firebase
 ticketradar-ui-design-system-2/   the design (visual source of truth)
 .github/workflows/
   bookmyshow-monitor.yml    ticket checks: dispatched on start, then segments; cron as fallback
@@ -320,25 +325,56 @@ In the repo: **Settings → Secrets and variables → Actions → New repository
 That is all the worker needs — it uses the built-in `GITHUB_TOKEN` to commit
 state.
 
-### 4. Streamlit secrets (optional)
+### 4. Firebase Authentication (the app's sign-in)
 
-Only needed if you want the app itself to write to GitHub (recommended on
-Streamlit Cloud, where the local filesystem is wiped on restart) or to use the
-**Send test email** button.
+The app sits behind a login page: nobody reaches the dashboard without a
+Firebase account. Email + password is the provider; Google sign-in is drawn
+as designed but tells the user plainly that it isn't enabled until you turn
+it on in Firebase.
+
+In the [Firebase console](https://console.firebase.google.com):
+
+1. **Authentication → Sign-in method** → enable *Email/Password*.
+2. **Authentication → Settings → Authorized domains** → add the host the app
+   runs on (`<name>.streamlit.app`, and `localhost` for local runs).
+3. **Project settings → General → Your apps → Web app** → copy the
+   `apiKey`, `projectId` and `authDomain`. Those are the only values the app
+   needs — the Web API key is designed to ship inside public web apps; it
+   identifies the project and grants nothing on its own. **No service
+   account, no private key**: the app never uses the Admin SDK.
+
+Then give them to the app as secrets (next section) or as
+`FIREBASE_WEB_API_KEY` / `FIREBASE_PROJECT_ID` / `FIREBASE_AUTH_DOMAIN` in
+the environment. Without a key the login page still renders, says sign-in
+isn't configured on this host, and lets nobody through.
+
+Password reset emails come from Firebase's own template (*Authentication →
+Templates*), which is where you brand them.
+
+### 5. Streamlit secrets
 
 `.streamlit/secrets.toml` locally, or the *Secrets* box in Streamlit Cloud:
 
 ```toml
-GH_TOKEN = "github_pat_..."          # fine-grained PAT: Contents read & write.
+[firebase]                           # required: the app's sign-in
+api_key = "AIza..."                  # Web API key (public by design, still not in source)
+project_id = "ticketradar-xxxxx"
+auth_domain = "ticketradar-xxxxx.firebaseapp.com"
+
+GH_TOKEN = "github_pat_..."          # optional: fine-grained PAT, Contents read & write.
                                      # Add Actions read & write for the
                                      # Retry now / Run a ticket check now buttons.
 GMAIL_ADDRESS = "you@gmail.com"      # optional, test button only
 GMAIL_APP_PASSWORD = "abcd efgh ijkl mnop"
 ```
 
+`GH_TOKEN` is only needed if you want the app itself to write to GitHub
+(recommended on Streamlit Cloud, where the local filesystem is wiped on
+restart); the Gmail pair only for the **Send test email** button.
+
 This file is gitignored. **Never commit it.**
 
-### 5. Deploy to Streamlit Cloud
+### 6. Deploy to Streamlit Cloud
 
 1. <https://share.streamlit.io> → New app → this repo.
 2. Main file: `app.py`.
@@ -399,8 +435,8 @@ itself broke.
 python -m pytest
 ```
 
-122 tests, no network and no SMTP — a fixture fails the run if anything tries
-to open a real SMTP connection. BookMyShow is replaced by a fake session
+267 tests, no network, no SMTP and no Firebase — a fixture fails the run if
+anything tries to open a real SMTP connection or to call Firebase. BookMyShow is replaced by a fake session
 replaying payloads **rebuilt from responses captured on a live runner**, so the
 suite is deterministic without being fictional.
 
@@ -408,8 +444,13 @@ Covered: the city listing and its strategy chain, availability mapping, every
 failure mode (403 / 429 / 5xx / timeout / malformed JSON / restructured
 payload), the five catalogue sync states, per-theatre format isolation, the
 full duplicate-suppression matrix, failed-email retry, expiry, manual stop, the
-whole five-step wizard driven through `AppTest`, and a check that the worker
-still imports and runs with Streamlit blocked entirely.
+whole five-step wizard driven through `AppTest`, a check that the worker
+still imports and runs with Streamlit blocked entirely, and the sign-in
+boundary: the login page for a visitor, no page reachable around it, sign-in
+and sign-up against an in-memory Identity Toolkit that answers with Firebase's
+real error codes, password mismatch and duplicate accounts, the reset flow,
+sign-out, and a reload restored from the cookie only because Google vouched
+for it.
 
 Two of these tests exist because they caught real bugs during this work: one
 where resolving theatre detail blanked every poster in the grid, and one where
@@ -450,6 +491,16 @@ six hours, and re-reads immediately when BookMyShow adds a new format event.
 
 ## Security
 
+- Sign-in is Firebase's: the app exchanges the email and password with
+  Google's Identity Toolkit server-side and keeps only the UID and tokens
+  Google returned, in server-side session state the browser cannot write to.
+  Passwords are never stored anywhere. A reload is restored from a
+  refresh-token cookie *only* after Google re-validates it. Only the Web API
+  key is configured — no service account or private key exists anywhere in
+  this deployment.
+- Wrong password and unknown email read the same, and a reset request for an
+  unknown address looks like a successful one, so the login page never
+  reveals which addresses have accounts.
 - No credential is ever written to a file in this repo or printed to a log.
   Recipient addresses are masked in worker output (`m***@gmail.com`), and the
   SMTP auth-failure path deliberately discards the server's message body,

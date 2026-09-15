@@ -1,0 +1,298 @@
+"""Firebase Identity Toolkit, over REST.
+
+Email/password sign-in for a Python app is four HTTPS calls to Google's
+Identity Toolkit — the same endpoints the Firebase JS SDK uses underneath.
+Going straight to them keeps the dependency list as it is (``requests`` is
+already here) and keeps every credential exchange server-side: the browser
+only ever sees the form. Because the answers come from Google to *this*
+process, the UID in them is trusted; nothing the browser sends is.
+
+Configuration: the project's **Web API key** (``FIREBASE_WEB_API_KEY`` in
+the environment, or ``[firebase] api_key`` in Streamlit secrets). Firebase
+designs that key to ship inside public web apps — it identifies the project,
+it does not grant access — but it still lives in secrets, never in source.
+No service account, no private key, nothing an Admin SDK would want.
+
+Every failure surfaces as :class:`AuthError` carrying one human sentence.
+Firebase's own codes (``INVALID_LOGIN_CREDENTIALS``, ``EMAIL_EXISTS`` …) are
+translated here and never shown to a user.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from dataclasses import dataclass
+from typing import Any
+
+import requests
+
+IDENTITY = "https://identitytoolkit.googleapis.com/v1/accounts:{action}"
+SECURE_TOKEN = "https://securetoken.googleapis.com/v1/token"
+TIMEOUT = 12.0
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+PASSWORD_MIN = 8
+
+
+class AuthError(Exception):
+    """A failure the user can be told about, in plain words.
+
+    ``code`` is Firebase's identifier (or one of ours, in lower case) so the
+    UI and the tests can branch on it; ``str(error)`` is the sentence shown.
+    """
+
+    def __init__(self, message: str, code: str = "error"):
+        super().__init__(message)
+        self.code = code
+
+
+#: Firebase code → what to tell the person. Wrong-password and no-such-user
+#: read the same on purpose: naming which one it was tells an attacker which
+#: addresses have accounts.
+MESSAGES: dict[str, str] = {
+    "INVALID_LOGIN_CREDENTIALS": "That email and password don't match. Check both and try again.",
+    "INVALID_PASSWORD": "That email and password don't match. Check both and try again.",
+    "EMAIL_NOT_FOUND": "That email and password don't match. Check both and try again.",
+    "USER_NOT_FOUND": "That email and password don't match. Check both and try again.",
+    "INVALID_EMAIL": "That doesn't look like an email address.",
+    "MISSING_EMAIL": "Enter your email address.",
+    "MISSING_PASSWORD": "Enter your password.",
+    "EMAIL_EXISTS": "There's already a TicketRadar account for that email. Sign in instead.",
+    "WEAK_PASSWORD": f"Choose a stronger password — at least {PASSWORD_MIN} characters, with a letter and a number.",
+    "USER_DISABLED": "This account has been disabled. Get in touch if you think that's a mistake.",
+    "TOO_MANY_ATTEMPTS_TRY_LATER": "Too many attempts. Wait a few minutes, then try again.",
+    "OPERATION_NOT_ALLOWED": "Email sign-in isn't switched on for this TicketRadar yet.",
+    "PASSWORD_LOGIN_DISABLED": "Email sign-in isn't switched on for this TicketRadar yet.",
+    "TOKEN_EXPIRED": "Your session has expired. Please sign in again.",
+    "INVALID_REFRESH_TOKEN": "Your session has expired. Please sign in again.",
+    "INVALID_ID_TOKEN": "Your session has expired. Please sign in again.",
+    "INVALID_GRANT_TYPE": "Your session has expired. Please sign in again.",
+    "MISSING_REFRESH_TOKEN": "Your session has expired. Please sign in again.",
+    "RESET_PASSWORD_EXCEED_LIMIT": "Too many reset requests. Wait a little, then try again.",
+    "API_KEY_INVALID": "TicketRadar's sign-in isn't configured correctly on this host.",
+    "CONFIGURATION_NOT_FOUND": "TicketRadar's sign-in isn't configured correctly on this host.",
+    "network": "Couldn't reach the sign-in service. Check your connection and try again.",
+    "not_configured": "Sign-in isn't configured on this host yet — the Firebase Web API key is missing.",
+}
+FALLBACK = "Something went wrong signing you in. Please try again."
+
+
+def explain(code: str) -> str:
+    """The sentence for a Firebase code such as ``WEAK_PASSWORD : Password should …``."""
+    head = (code or "").split(":")[0].strip().upper()
+    if head in MESSAGES:
+        return MESSAGES[head]
+    if code in MESSAGES:
+        return MESSAGES[code]
+    # A few codes arrive with a suffix ("TOO_MANY_ATTEMPTS_TRY_LATER : …").
+    for known, message in MESSAGES.items():
+        if head.startswith(known):
+            return message
+    if "API KEY" in head:
+        return MESSAGES["API_KEY_INVALID"]
+    return FALLBACK
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Configuration
+# ──────────────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class FirebaseConfig:
+    api_key: str
+    project_id: str = ""
+    auth_domain: str = ""
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_key)
+
+
+def _secret(table: str, key: str) -> str:
+    """One value from ``st.secrets[table][key]``, or "" outside Streamlit."""
+    try:
+        import streamlit as st
+
+        section = st.secrets.get(table, {})
+        value = section.get(key, "") if hasattr(section, "get") else ""
+        return str(value or "").strip()
+    except Exception:  # noqa: BLE001 - no secrets file, or not in Streamlit
+        return ""
+
+
+def config() -> FirebaseConfig:
+    """Environment first (the way every other credential here works), then
+    the ``[firebase]`` table of Streamlit secrets."""
+    return FirebaseConfig(
+        api_key=(os.environ.get("FIREBASE_WEB_API_KEY") or _secret("firebase", "api_key")).strip(),
+        project_id=(os.environ.get("FIREBASE_PROJECT_ID") or _secret("firebase", "project_id")).strip(),
+        auth_domain=(os.environ.get("FIREBASE_AUTH_DOMAIN") or _secret("firebase", "auth_domain")).strip(),
+    )
+
+
+def is_configured() -> bool:
+    return config().configured
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Transport — one function, so the tests can replace the network
+# ──────────────────────────────────────────────────────────────────────────
+def _post(url: str, params: dict[str, str], payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """POST JSON, return (status, body). Never raises for an HTTP error —
+    the body carries Firebase's code — but does for no network at all."""
+    response = requests.post(url, params=params, json=payload, timeout=TIMEOUT)
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    return response.status_code, body if isinstance(body, dict) else {}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Results
+# ──────────────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class Credentials:
+    """What Firebase hands back for a signed-in account."""
+
+    uid: str
+    email: str
+    display_name: str
+    id_token: str
+    refresh_token: str
+    expires_in: int  # seconds the id_token is good for (Firebase: 3600)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Client
+# ──────────────────────────────────────────────────────────────────────────
+class FirebaseAuth:
+    """The four calls the app makes. Construct with the Web API key."""
+
+    def __init__(self, api_key: str = ""):
+        self.api_key = api_key or config().api_key
+
+    # -- plumbing ---------------------------------------------------------
+    def _call(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if not self.api_key:
+            raise AuthError(MESSAGES["not_configured"], "not_configured")
+        url = IDENTITY.format(action=action)
+        return self._exchange(url, payload)
+
+    def _exchange(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            status, body = _post(url, {"key": self.api_key}, payload)
+        except (requests.RequestException, OSError) as exc:  # DNS, TLS, timeout …
+            # Log the class, never the payload: it holds a password.
+            print(f"[auth] Firebase unreachable: {type(exc).__name__}")
+            raise AuthError(MESSAGES["network"], "network") from None
+        if status >= 400 or "error" in body:
+            error = body.get("error") or {}
+            code = str(error.get("message") or error.get("status") or f"HTTP_{status}")
+            raise AuthError(explain(code), code.split(":")[0].strip())
+        return body
+
+    # -- the calls --------------------------------------------------------
+    def sign_in(self, email: str, password: str) -> Credentials:
+        body = self._call("signInWithPassword",
+                          {"email": email, "password": password, "returnSecureToken": True})
+        return _credentials(body)
+
+    def sign_up(self, name: str, email: str, password: str) -> Credentials:
+        body = self._call("signUp", {"email": email, "password": password, "returnSecureToken": True})
+        creds = _credentials(body)
+        if name:
+            # The display name is a second call; a failure there must not
+            # leave a freshly created account looking like a failed sign-up.
+            try:
+                updated = self._call("update", {"idToken": creds.id_token, "displayName": name,
+                                                "returnSecureToken": False})
+                creds = Credentials(**{**creds.__dict__, "display_name": str(updated.get("displayName") or name)})
+            except AuthError as exc:
+                print(f"[auth] display name not saved for new account: {exc.code}")
+                creds = Credentials(**{**creds.__dict__, "display_name": name})
+        return creds
+
+    def send_password_reset(self, email: str) -> None:
+        """Ask Firebase to email a reset link. Says nothing about whether the
+        address has an account — that is Firebase's own default behaviour
+        (email-enumeration protection) and we keep to it when it isn't."""
+        try:
+            self._call("sendOobCode", {"requestType": "PASSWORD_RESET", "email": email})
+        except AuthError as exc:
+            if exc.code == "EMAIL_NOT_FOUND":
+                return
+            raise
+
+    def refresh(self, refresh_token: str) -> Credentials:
+        """Exchange a refresh token for a fresh ID token. Google validates the
+        token; a revoked or expired one raises with a sign-in-again message."""
+        if not self.api_key:
+            raise AuthError(MESSAGES["not_configured"], "not_configured")
+        body = self._exchange(SECURE_TOKEN, {"grant_type": "refresh_token", "refresh_token": refresh_token})
+        return Credentials(
+            uid=str(body.get("user_id", "")),
+            email="",
+            display_name="",
+            id_token=str(body.get("id_token", "")),
+            refresh_token=str(body.get("refresh_token") or refresh_token),
+            expires_in=int(body.get("expires_in") or 3600),
+        )
+
+    def lookup(self, id_token: str) -> dict[str, str]:
+        """The account behind an ID token: ``{uid, email, display_name}``."""
+        body = self._call("lookup", {"idToken": id_token})
+        users = body.get("users") or []
+        if not users:
+            raise AuthError(MESSAGES["INVALID_ID_TOKEN"], "INVALID_ID_TOKEN")
+        user = users[0]
+        return {
+            "uid": str(user.get("localId", "")),
+            "email": str(user.get("email", "")),
+            "display_name": str(user.get("displayName", "") or ""),
+        }
+
+
+def _credentials(body: dict[str, Any]) -> Credentials:
+    uid = str(body.get("localId", ""))
+    if not uid or not body.get("idToken"):
+        raise AuthError(FALLBACK, "malformed")
+    return Credentials(
+        uid=uid,
+        email=str(body.get("email", "")),
+        display_name=str(body.get("displayName", "") or ""),
+        id_token=str(body["idToken"]),
+        refresh_token=str(body.get("refreshToken", "")),
+        expires_in=int(body.get("expiresIn") or 3600),
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Validation the form does before Firebase is asked
+# ──────────────────────────────────────────────────────────────────────────
+def valid_email(email: str) -> bool:
+    return bool(EMAIL_RE.match((email or "").strip()))
+
+
+def password_problem(password: str) -> str:
+    """"" when the password is acceptable, else the reason it isn't."""
+    if len(password or "") < PASSWORD_MIN:
+        return f"Use at least {PASSWORD_MIN} characters."
+    if not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
+        return "Mix letters and numbers."
+    return ""
+
+
+__all__ = [
+    "AuthError",
+    "Credentials",
+    "FirebaseAuth",
+    "FirebaseConfig",
+    "MESSAGES",
+    "PASSWORD_MIN",
+    "config",
+    "explain",
+    "is_configured",
+    "password_problem",
+    "valid_email",
+]

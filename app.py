@@ -40,6 +40,8 @@ st.set_page_config(
     initial_sidebar_state="auto",
 )
 
+from auth import session as auth_session  # noqa: E402
+from auth.gate import require_user  # noqa: E402
 from config.locations import get_location  # noqa: E402
 from config.store import (  # noqa: E402
     dispatch_workflow,
@@ -72,9 +74,10 @@ from platforms.http import HAS_CURL_CFFI  # noqa: E402
 from ui import catalogue_view as cv  # noqa: E402
 from ui import components as C  # noqa: E402
 from ui import flow  # noqa: E402
+from ui import login  # noqa: E402
 from ui.theme import inject  # noqa: E402
 
-APP_VERSION = "2.4.0"
+APP_VERSION = "2.5.0"
 
 inject()
 
@@ -161,6 +164,7 @@ def sidebar(active_count: int) -> str:
         labels = {"My Monitors": f"My Monitors `{active_count}`"} if active_count else {}
         choice = st.radio("Navigation", pages, format_func=lambda p: labels.get(p, p),
                           key="page", label_visibility="collapsed")
+        account()
         C.html(
             '<div class="tr-side-foot">'
             '<div class="tr-quote">“Good movies find their audience. '
@@ -170,6 +174,24 @@ def sidebar(active_count: int) -> str:
             "</div>"
         )
         return choice
+
+
+def account() -> None:
+    """Who is signed in, and the way out. The user here is whoever Firebase
+    vouched for in ``require_user()`` — never a name the browser supplied."""
+    user = auth_session.current_user()
+    if user is None:
+        return
+    with st.container(key="tracct"):
+        C.html(
+            '<div class="tr-acct">'
+            f'<div class="av">{C.e(user.first_name[:1].upper() or "·")}</div>'
+            f'<div class="who"><div class="n">{C.e(user.label)}</div>'
+            f'<div class="m">{C.e(user.email)}</div></div></div>'
+        )
+        if st.button("Sign out", key="auth_signout", use_container_width=True, icon=":material/logout:"):
+            auth_session.sign_out()
+            st.rerun()
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -584,6 +606,12 @@ def page_settings(settings) -> None:
 
 # ──────────────────────────────────────────────────────────────────────────
 def main() -> None:
+    # Nobody signed in → the login page, and nothing below this line runs.
+    # Firebase is the source of truth: ``user.uid`` is the account's UID, and
+    # ``auth.session.id_token()`` is a live token for the next step's Firestore.
+    user = require_user()  # noqa: F841 - kept here so the boundary is visible
+    login.entrance()
+    auth_session.flush_cookie()
     flow.boot()
     st.session_state.setdefault("page", "Home")
     st.session_state.setdefault("flash", None)
