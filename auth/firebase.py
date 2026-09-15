@@ -39,12 +39,21 @@ class AuthError(Exception):
     """A failure the user can be told about, in plain words.
 
     ``code`` is Firebase's identifier (or one of ours, in lower case) so the
-    UI and the tests can branch on it; ``str(error)`` is the sentence shown.
+    UI and the tests can branch on it; ``str(error)`` is the sentence shown;
+    ``status`` is the HTTP status Firebase answered with (0 when it never
+    answered). Together they are the safe diagnostic — no key, no token.
     """
 
-    def __init__(self, message: str, code: str = "error"):
+    def __init__(self, message: str, code: str = "error", status: int = 0):
         super().__init__(message)
         self.code = code
+        self.status = status
+
+    @property
+    def diagnostic(self) -> str:
+        """``HTTP 400, INVALID_ID_TOKEN`` — what to show next to a message
+        when the person needs to tell somebody what Firebase said."""
+        return f"HTTP {self.status}, {self.code}" if self.status else self.code
 
 
 #: Firebase code → what to tell the person. Wrong-password and no-such-user
@@ -181,19 +190,25 @@ class FirebaseAuth:
         if not self.api_key:
             raise AuthError(MESSAGES["not_configured"], "not_configured")
         url = IDENTITY.format(action=action)
-        return self._exchange(url, payload)
+        label = action + (f" {payload['requestType']}" if action == "sendOobCode" else "")
+        return self._exchange(url, payload, label)
 
-    def _exchange(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _exchange(self, url: str, payload: dict[str, Any], label: str = "token") -> dict[str, Any]:
+        """One request. The log line is the safe diagnostic — the endpoint,
+        the HTTP status and Firebase's code — never the payload, the key, a
+        token or an address."""
         try:
             status, body = _post(url, {"key": self.api_key}, payload)
         except (requests.RequestException, OSError) as exc:  # DNS, TLS, timeout …
-            # Log the class, never the payload: it holds a password.
-            print(f"[auth] Firebase unreachable: {type(exc).__name__}")
+            print(f"[auth] {label}: Firebase unreachable ({type(exc).__name__})")
             raise AuthError(MESSAGES["network"], "network") from None
         if status >= 400 or "error" in body:
             error = body.get("error") or {}
             code = str(error.get("message") or error.get("status") or f"HTTP_{status}")
-            raise AuthError(explain(code), code.split(":")[0].strip())
+            short = code.split(":")[0].strip()
+            print(f"[auth] {label}: HTTP {status} {short}")
+            raise AuthError(explain(code), short, status)
+        print(f"[auth] {label}: HTTP {status} ok")
         return body
 
     # -- the calls --------------------------------------------------------
@@ -209,9 +224,10 @@ class FirebaseAuth:
                        email_verified=info["email_verified"])
 
     def sign_up(self, name: str, email: str, password: str) -> Credentials:
-        """Create the account and ask Firebase to email its verification
-        link. The credentials come back *unverified*: they are enough to
-        resend that email, never enough to enter the app."""
+        """Create the account. The credentials come back *unverified*: they
+        are enough to request the verification email (the caller does that,
+        and shows exactly what Firebase answered), never enough to enter
+        the app."""
         body = self._call("signUp", {"email": email, "password": password, "returnSecureToken": True})
         creds = _credentials(body)
         if name:
@@ -224,17 +240,17 @@ class FirebaseAuth:
             except AuthError as exc:
                 print(f"[auth] display name not saved for new account: {exc.code}")
                 creds = replace(creds, display_name=name)
-        try:
-            self.send_email_verification(creds.id_token)
-        except AuthError as exc:
-            # The account exists; the person can ask for the email again
-            # from the verification screen.
-            print(f"[auth] verification email not sent at sign-up: {exc.code}")
         return replace(creds, email_verified=False)
 
     def send_email_verification(self, id_token: str) -> None:
-        """Firebase sends its own verification email (Authentication →
-        Templates) to the account behind ``id_token``."""
+        """``POST accounts:sendOobCode {requestType: VERIFY_EMAIL, idToken}``:
+        Firebase sends its own verification email (Authentication →
+        Templates) to the account behind ``id_token``. Returns only when
+        Firebase answered 2xx — "accepted the request", which is not the
+        same as "delivered"; anything else raises with the status and code.
+        """
+        if not id_token:
+            raise AuthError(MESSAGES["INVALID_ID_TOKEN"], "INVALID_ID_TOKEN")
         self._call("sendOobCode", {"requestType": "VERIFY_EMAIL", "idToken": id_token})
 
     def send_password_reset(self, email: str) -> None:
