@@ -1,5 +1,17 @@
 [
   {
+    "monitor_id": "c43f08f7b408",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Hanuman Ansh",
+    "language": "Hindi",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+    "targets": [
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-16T01:53:24.976919+05:30"
+  },
+  {
     "monitor_id": "fc75fccb2e2b",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
