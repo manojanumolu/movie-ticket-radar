@@ -47,10 +47,15 @@ service cloud.firestore {
     }
 
     // history/{id}: append-only for the owner; the worker appends the rest.
+    // Delete is allowed — and only — so that deleting an account can take its
+    // own history with it. It is gated on the *existing* document's owner, so
+    // one person can never remove another's record, and `update` stays closed
+    // so a record cannot be rewritten after the fact.
     match /history/{id} {
       allow read: if ownsExisting();
       allow create: if ownsIncoming();
-      allow update, delete: if false;
+      allow delete: if ownsExisting();
+      allow update: if false;
     }
 
     // Everything else (the catalogue stays in the repository) is closed.

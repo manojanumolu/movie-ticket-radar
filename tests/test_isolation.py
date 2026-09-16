@@ -50,7 +50,10 @@ class MemoryFirestore:
     """``transport(method, url, token, body) -> (status, payload)``."""
 
     RULES_WRITE_DENIED = {"monitor_state"}          # users never create/update these
-    RULES_UPDATE_DENIED = {"history"}               # append-only for users
+    RULES_UPDATE_DENIED = {"history"}               # append-only: never rewritten
+    # Nothing is delete-denied outright: every collection gates delete on the
+    # existing document's owner, so an account can take its own records with
+    # it. ``history`` is deletable but still not *updatable*.
 
     def __init__(self):
         self.docs: dict[str, dict[str, dict]] = {}   # collection -> id -> fields
@@ -133,7 +136,7 @@ class MemoryFirestore:
                     if collection == "users":
                         if doc != who:
                             raise Denied("not your user document")
-                    elif collection in self.RULES_UPDATE_DENIED or existing.get(fs.OWNER) != who:
+                    elif existing.get(fs.OWNER) != who:
                         raise Denied("delete of a document you don't own")
                 staged.append((collection, doc, None))
             else:
@@ -356,7 +359,11 @@ def test_the_rules_file_says_what_the_fake_enforces():
     assert "request.resource.data.owner_uid == request.auth.uid" in rules
     assert re.search(r"match /users/\{uid\} \{\s*allow read, write: if signedIn\(\) && request.auth.uid == uid;", rules)
     assert re.search(r"match /monitor_state/\{id\} \{[^}]*allow create, update: if false;", rules, re.S)
-    assert re.search(r"match /history/\{id\} \{[^}]*allow update, delete: if false;", rules, re.S)
+    # history: readable and creatable by its owner, deletable by its owner so
+    # account deletion can take it, and never updatable.
+    assert re.search(r"match /history/\{id\} \{[^}]*allow delete: if ownsExisting\(\);", rules, re.S)
+    assert re.search(r"match /history/\{id\} \{[^}]*allow update: if false;", rules, re.S)
+    assert not re.search(r"match /history/\{id\} \{[^}]*allow update, delete: if false;", rules, re.S)
     assert re.search(r"match /\{document=\*\*\} \{\s*allow read, write: if false;", rules)
 
 
@@ -515,3 +522,127 @@ def test_the_app_scope_is_the_verified_uid_and_nothing_else(monkeypatch):
     scope = app._scope()
     assert (scope.project_id, scope.uid) == (PROJECT, "uid-x")
     assert firebase.config().project_id == PROJECT
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Deleting an account, against Firestore and its rules
+#
+# The rules used to close `history` to deletion outright, so `purge_user_data`
+# — which deletes the owner's history as part of Delete Account — was refused,
+# and because a commit is atomic *nothing* was removed. These pin the fix: the
+# owner may delete their own history and nobody else's.
+# ──────────────────────────────────────────────────────────────────────────
+def _seed(cloud, make_monitor, uid: str, email: str):
+    """One monitor, its state, a history entry and a settings document."""
+    cloud.as_user(uid)
+    monitor = monitor_for(make_monitor, uid, email)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    state_mod.record_history(monitor, "CREATED", f"{uid} monitor created.", mirror=False)
+    state_mod.save_settings({"notify_email": email, "default_interval": 15}, mirror=False)
+    # State belongs to the worker, as the rules require.
+    cloud.as_worker()
+    state_mod.save_state({monitor.id: MonitorState(check_count=3)}, mirror=False)
+    cloud.as_user(uid)
+    return monitor
+
+
+def test_delete_account_removes_the_owners_monitors_history_and_user_document(cloud, make_monitor):
+    """The whole purge, atomically, against the rules."""
+    a = _seed(cloud, make_monitor, "uid-a", "a@example.com")
+
+    cloud.as_user("uid-a")
+    removed = state_mod.purge_user_data(mirror=False)
+    assert removed["monitors"] == 1 and removed["history"] == 1 and removed["settings"] == 1
+
+    # Nothing of A's is left in any collection.
+    assert a.id not in cloud.docs.get("monitors", {})
+    assert a.id not in cloud.docs.get("monitor_state", {})
+    assert [d for d in cloud.docs.get("history", {}).values() if d.get(fs.OWNER) == "uid-a"] == []
+    assert "uid-a" not in cloud.docs.get("users", {})
+
+    # …and the account's own view agrees.
+    assert state_mod.load_monitors() == []
+    assert state_mod.load_state() == {}
+    assert state_mod.load_history() == []
+
+
+def test_an_owner_may_delete_their_own_history_document(cloud, make_monitor):
+    """The single permission the fix adds, on its own."""
+    _seed(cloud, make_monitor, "uid-a", "a@example.com")
+    cloud.as_user("uid-a")
+    [(doc_id, doc)] = list(cloud.docs["history"].items())
+    assert doc[fs.OWNER] == "uid-a"
+
+    client = fs.FirestoreClient(PROJECT, lambda: "id.uid-a", transport=state_mod._transport)
+    client.delete("history", doc_id)                       # allowed: it is theirs
+    assert doc_id not in cloud.docs["history"]
+
+
+def test_an_owner_may_not_delete_another_accounts_history(cloud, make_monitor):
+    """B holds a valid token and still cannot remove A's record."""
+    _seed(cloud, make_monitor, "uid-a", "a@example.com")
+    [(a_doc, _)] = list(cloud.docs["history"].items())
+
+    client = fs.FirestoreClient(PROJECT, lambda: "id.uid-b", transport=state_mod._transport)
+    with pytest.raises(fs.FirestoreError) as caught:
+        client.delete("history", a_doc)
+    assert caught.value.status == 403
+    assert a_doc in cloud.docs["history"]                  # untouched
+
+
+def test_an_unauthenticated_caller_may_not_delete_a_history_document(cloud, make_monitor):
+    """No token at all: refused before ownership is even considered."""
+    _seed(cloud, make_monitor, "uid-a", "a@example.com")
+    [(a_doc, _)] = list(cloud.docs["history"].items())
+
+    client = fs.FirestoreClient(PROJECT, lambda: "", transport=state_mod._transport)
+    with pytest.raises(fs.FirestoreError):
+        client.delete("history", a_doc)
+    assert a_doc in cloud.docs["history"]
+
+
+def test_history_may_still_never_be_rewritten(cloud, make_monitor):
+    """Delete is now allowed; update is still not, so a record cannot be
+    edited after the fact — only removed with the account."""
+    _seed(cloud, make_monitor, "uid-a", "a@example.com")
+    [(a_doc, fields)] = list(cloud.docs["history"].items())
+
+    client = fs.FirestoreClient(PROJECT, lambda: "id.uid-a", transport=state_mod._transport)
+    with pytest.raises(fs.FirestoreError):
+        client.set("history", a_doc, {**fields, "message": "rewritten"})
+    assert cloud.docs["history"][a_doc]["message"] != "rewritten"
+
+
+def test_deleting_one_account_leaves_the_other_account_whole(cloud, make_monitor):
+    """A's deletion must not reach B's monitors, state, history or settings."""
+    a = _seed(cloud, make_monitor, "uid-a", "a@example.com")
+    b = _seed(cloud, make_monitor, "uid-b", "b@example.com")
+
+    cloud.as_user("uid-a")
+    state_mod.purge_user_data(mirror=False)
+
+    cloud.as_user("uid-b")
+    assert [m.id for m in state_mod.load_monitors()] == [b.id]
+    assert state_mod.load_state()[b.id].check_count == 3
+    assert [h["message"] for h in state_mod.load_history()] == ["uid-b monitor created."]
+    assert state_mod.load_settings()["notify_email"] == "b@example.com"
+    assert a.id != b.id
+
+
+def test_a_refused_purge_leaves_every_account_untouched(cloud, make_monitor):
+    """Atomicity: if any write in the purge is refused, nothing is applied —
+    which is exactly what used to happen to the whole Delete Account."""
+    _seed(cloud, make_monitor, "uid-a", "a@example.com")
+    b = _seed(cloud, make_monitor, "uid-b", "b@example.com")
+    before = {c: dict(d) for c, d in cloud.docs.items()}
+
+    # A commit that mixes A's own document with one of B's: the rules refuse
+    # the second, and the first must not be applied either.
+    [a_doc] = [k for k, v in cloud.docs["history"].items() if v[fs.OWNER] == "uid-a"]
+    [b_doc] = [k for k, v in cloud.docs["history"].items() if v[fs.OWNER] == "uid-b"]
+    client = fs.FirestoreClient(PROJECT, lambda: "id.uid-a", transport=state_mod._transport)
+    with pytest.raises(fs.FirestoreError):
+        client.commit([("history", a_doc, None), ("history", b_doc, None)])
+
+    assert cloud.docs["history"] == before["history"]      # nothing removed at all
+    assert b.id in cloud.docs["monitors"]
