@@ -30,10 +30,12 @@ USER_KEY = "auth_user"
 #: resend the verification email, never enough to be ``current_user()``.
 PENDING_KEY = "auth_pending"
 COOKIE = "tr_session"
-# A deliberate one-week remembered sign-in. It is renewed whenever Firebase
-# accepts the refresh token, so normal use does not surprise someone with a
-# login prompt; signing out clears it immediately.
+SESSION_STARTED_COOKIE = "tr_session_started"
+SESSION_STARTED_KEY = "auth_session_started"
+SESSION_EXPIRES_KEY = "auth_session_expires"
+# This is an absolute deadline, not a sliding refresh-token lifetime.
 COOKIE_DAYS = 7
+SESSION_SECONDS = COOKIE_DAYS * 86400
 #: Refresh the ID token this many seconds before Firebase says it expires.
 REFRESH_MARGIN = 120
 #: What survives a session reset: the account that *caused* it (a sign-in
@@ -41,7 +43,8 @@ REFRESH_MARGIN = 120
 #: once-per-session restore guard, and the cookie intent the next paint acts
 #: on. Nothing that belongs to the previous person.
 RESET_KEEPS = frozenset({USER_KEY, "auth_just_signed_in", "auth_restore_tried",
-                         "auth_cookie_set", "auth_cookie_clear"})
+                         "auth_cookie_set", "auth_cookie_clear", "auth_session_cookie_set",
+                         SESSION_STARTED_KEY, SESSION_EXPIRES_KEY})
 RESET_FLAG = "auth_reset_pending"
 
 
@@ -76,6 +79,10 @@ def current_user() -> AuthUser | None:
     stored counts — anything else in the slot is treated as nobody."""
     user = st.session_state.get(USER_KEY)
     if isinstance(user, AuthUser) and user.uid:
+        expires = float(st.session_state.get(SESSION_EXPIRES_KEY, 0) or 0)
+        if expires and time.time() >= expires:
+            sign_out()
+            return None
         return user
     return None
 
@@ -141,7 +148,11 @@ def sign_in_user(creds: Credentials) -> AuthUser:
         raise AuthError(firebase.MESSAGES["EMAIL_NOT_VERIFIED"], "EMAIL_NOT_VERIFIED")
     request_reset()
     user = _from_credentials(creds)
+    started = time.time()
     st.session_state[USER_KEY] = user
+    st.session_state[SESSION_STARTED_KEY] = started
+    st.session_state[SESSION_EXPIRES_KEY] = started + SESSION_SECONDS
+    st.session_state["auth_session_cookie_set"] = str(started)
     st.session_state["auth_restore_tried"] = True
     st.session_state["auth_cookie_set"] = user.refresh_token
     st.session_state.pop("auth_cookie_clear", None)
@@ -156,6 +167,9 @@ def sign_out() -> None:
     st.session_state.pop("auth_just_signed_in", None)
     request_reset()                                # …and the rest goes before the next run
     st.session_state.pop("auth_cookie_set", None)
+    st.session_state.pop("auth_session_cookie_set", None)
+    st.session_state.pop(SESSION_STARTED_KEY, None)
+    st.session_state.pop(SESSION_EXPIRES_KEY, None)
     st.session_state["auth_cookie_clear"] = True
     # A reload after signing out must not quietly sign back in from the
     # cookie this session was opened with.
@@ -247,6 +261,31 @@ def _cookie() -> str:
         return ""
 
 
+def _cookie_started() -> float:
+    """The companion timestamp has no authentication power; Firebase's
+    refresh-token exchange and account lookup remain the authentication.
+    It solely enforces TicketRadar's absolute local seven-day policy."""
+    try:
+        raw = st.context.cookies.get(SESSION_STARTED_COOKIE)
+    except Exception:  # noqa: BLE001 - no browser (tests), or an old runtime
+        return 0.0
+    # Only a real cookie string counts: without a browser the lookup may hand
+    # back a stand-in object whose float() is not zero.
+    if not isinstance(raw, str) or not raw.strip():
+        return 0.0
+    try:
+        return float(raw)
+    except ValueError:
+        return 0.0
+
+
+def _session_window(started: float | None = None) -> tuple[float, float]:
+    start = float(started or 0)
+    if start <= 0 or start > time.time():
+        start = time.time()
+    return start, start + SESSION_SECONDS
+
+
 def restore() -> AuthUser | None:
     """Once per session: turn the cookie's refresh token into a signed-in
     user by asking Google. Returns None when there is nothing to restore or
@@ -256,6 +295,10 @@ def restore() -> AuthUser | None:
     st.session_state["auth_restore_tried"] = True
     token = _cookie()
     if not token or not firebase.is_configured():
+        return None
+    started, expires = _session_window(_cookie_started())
+    if time.time() >= expires:
+        st.session_state["auth_cookie_clear"] = True
         return None
     client = firebase.FirebaseAuth()
     try:
@@ -276,9 +319,12 @@ def restore() -> AuthUser | None:
         st.session_state["auth_cookie_clear"] = True
         return None
     st.session_state[USER_KEY] = user
-    # A successful restore is also a successful Google re-validation. Renew
-    # the browser cookie here, giving an active person another full week.
+    st.session_state[SESSION_STARTED_KEY] = started
+    st.session_state[SESSION_EXPIRES_KEY] = expires
+    # Firebase revalidation can renew its refresh credential, but never the
+    # TicketRadar deadline.
     st.session_state["auth_cookie_set"] = user.refresh_token
+    st.session_state["auth_session_cookie_set"] = str(started)
     return user
 
 
@@ -290,6 +336,10 @@ def id_token() -> str:
     Refreshed through Google when it is about to expire."""
     user = current_user()
     if user is None:
+        return ""
+    expires = float(st.session_state.get(SESSION_EXPIRES_KEY, 0) or 0)
+    if expires and time.time() >= expires:
+        sign_out()
         return ""
     if user.expires_at - time.time() > REFRESH_MARGIN or not user.refresh_token:
         return user.id_token
@@ -319,14 +369,22 @@ def flush_cookie() -> None:
     """
     import streamlit.components.v1 as components
 
+    scripts: list[str] = []
     if st.session_state.pop("auth_cookie_clear", False):
-        components.html(_cookie_script("", 0), height=0)
+        scripts.extend((_cookie_script("", 0), _cookie_script("", 0, SESSION_STARTED_COOKIE)))
     token = st.session_state.pop("auth_cookie_set", "")
     if token:
-        components.html(_cookie_script(token, COOKIE_DAYS * 86400), height=0)
+        expires = float(st.session_state.get(SESSION_EXPIRES_KEY, 0) or 0)
+        max_age = max(0, int(expires - time.time()))
+        scripts.append(_cookie_script(token, max_age))
+        started = st.session_state.pop("auth_session_cookie_set", "")
+        if started:
+            scripts.append(_cookie_script(str(started), max_age, SESSION_STARTED_COOKIE))
+    if scripts:
+        components.html("".join(scripts), height=0)
 
 
-def _cookie_script(value: str, max_age: int) -> str:
+def _cookie_script(value: str, max_age: int, name: str = COOKIE) -> str:
     # json.dumps makes the value a JS string literal, and "</" is escaped so
     # the literal can never close the script element; the value is only ever
     # a token Google issued, but the rule costs nothing.
@@ -337,7 +395,7 @@ def _cookie_script(value: str, max_age: int) -> str:
         f"var max_age={int(max_age)};"
         "var s=(window.parent.location.protocol==='https:')?'; Secure':'';"
         "var e=max_age?'; Expires='+new Date(Date.now()+max_age*1000).toUTCString():'; Expires=Thu, 01 Jan 1970 00:00:00 GMT';"
-        f"d.cookie={json.dumps(COOKIE)}+'='+encodeURIComponent({literal})"
+        f"d.cookie={json.dumps(name)}+'='+encodeURIComponent({literal})"
         f"+'; Max-Age={int(max_age)}; Path=/; SameSite=Lax'+e+s;"
         "}catch(e){}})();</script>"
     )

@@ -483,7 +483,7 @@ def catalogue_banner(status, message: str, when: str, count: int) -> None:
     """
     kinds = {
         "OK": ("ok", "✓", "Catalogue loaded",
-               f"{count} movie(s) from BookMyShow · updated {when}"),
+               f"{count} movie(s) from BookMyShow · catalogue last synced {when}"),
         "EMPTY": ("warn", "◎", "No movies listed right now",
                   f"BookMyShow answered, and had nothing on for this city · checked {when}"),
         "BLOCKED": ("bad", "!", "Couldn&rsquo;t reach BookMyShow",
