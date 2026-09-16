@@ -64,6 +64,9 @@ def require_user() -> AuthUser:
     # token. Filling the reserved ``tr_chrome`` slot afterwards writes that new
     # token in this same run — waiting for the next rerun would leave the
     # browser holding a token Google had already replaced.
+    # One safe line per run: counts and booleans, never a value.
+    session.log_cookie_report()
+
     from_memory = session.current_user()
     user = from_memory or session.restore()
     # Closes the loop on the two cases a restore log alone cannot show: a user
@@ -83,8 +86,25 @@ def require_user() -> AuthUser:
     if user is None:
         with _page_container:
             login.render()
+            _diag_panel()
         st.stop()
     return user
+
+
+def _diag_panel() -> None:
+    """``?diag=1``: the same value-free facts the log carries, on screen.
+
+    For diagnosing a deployment whose logs are not to hand. It shows counts and
+    booleans only — no cookie value, token, key, UID or address — and nothing
+    at all unless the parameter is present.
+    """
+    try:
+        if str(st.query_params.get("diag") or "") != "1":
+            return
+    except Exception:  # noqa: BLE001
+        return
+    report = session.cookie_report()
+    st.caption("cookie diagnostics — " + " · ".join(f"{k}={v}" for k, v in report.items()))
 
 
 __all__ = ["app_container", "require_user"]
