@@ -172,18 +172,42 @@ def service_account_token_getter(info: dict[str, Any]) -> TokenGetter:
     return token
 
 
-def service_account_from_env() -> dict[str, Any] | None:
-    """The worker's credential: ``FIREBASE_SERVICE_ACCOUNT`` holds the JSON
-    (a GitHub Actions secret). Never a file in the repository."""
+def service_account_status() -> tuple[dict[str, Any] | None, str]:
+    """``(info, problem)`` for ``FIREBASE_SERVICE_ACCOUNT``.
+
+    ``problem`` is ``""`` when the value is structurally usable and otherwise
+    says *what* is wrong with it — never any part of what it contains. It
+    exists because a worker that cannot use its credential falls back to the
+    legacy JSON files, and that fallback is indistinguishable from a healthy
+    idle run unless somebody says out loud why it happened.
+
+    The acceptance test is unchanged: a JSON object with a ``client_email``.
+    """
     raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip()
     if not raw:
-        return None
+        return None, "FIREBASE_SERVICE_ACCOUNT is not set"
     try:
         info = json.loads(raw)
     except ValueError:
-        print("[firestore] FIREBASE_SERVICE_ACCOUNT is not valid JSON", flush=True)
-        return None
-    return info if isinstance(info, dict) and info.get("client_email") else None
+        return None, "FIREBASE_SERVICE_ACCOUNT is not valid JSON"
+    if not isinstance(info, dict):
+        return None, "FIREBASE_SERVICE_ACCOUNT is not a JSON object"
+    if not info.get("client_email"):
+        # By far the easiest one to do by accident: the Firebase *web app*
+        # config is also JSON, also comes from the Firebase console, and has
+        # no signing identity in it at all.
+        return None, ("FIREBASE_SERVICE_ACCOUNT has no client_email — this looks like a "
+                      "Firebase web app config rather than a service-account key")
+    return info, ""
+
+
+def service_account_from_env() -> dict[str, Any] | None:
+    """The worker's credential: ``FIREBASE_SERVICE_ACCOUNT`` holds the JSON
+    (a GitHub Actions secret). Never a file in the repository."""
+    info, problem = service_account_status()
+    if problem == "FIREBASE_SERVICE_ACCOUNT is not valid JSON":
+        print(f"[firestore] {problem}", flush=True)
+    return info
 
 
 def project_from_env() -> str:
@@ -335,5 +359,6 @@ __all__ = [
     "encode",
     "project_from_env",
     "service_account_from_env",
+    "service_account_status",
     "service_account_token_getter",
 ]

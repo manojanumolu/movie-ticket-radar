@@ -46,11 +46,80 @@ from typing import Callable
 from config.store import MONITOR_WORKFLOW, REPO_ROOT, dispatch_workflow, running_in_actions
 from config.timezone import fmt_datetime, now_ist
 from monitor.checker import RunReport, run_once
-from monitor.state import DUE_TOLERANCE_SECONDS, load_monitors, load_state
+from monitor.state import DUE_TOLERANCE_SECONDS, backend_report, load_monitors, load_state
 
 DEFAULT_MAX_MINUTES = 50
 DEFAULT_POLL_SECONDS = 30
 GIT_TIMEOUT = 90
+
+#: Set to "1" to let a run inside GitHub Actions use the legacy JSON store on
+#: purpose. Without it, Actions refuses to monitor production against JSON —
+#: see :func:`preflight`. This exists so the legacy worker is still reachable
+#: if it is ever needed, not as a routine setting.
+ALLOW_JSON_WORKER = "TICKETRADAR_ALLOW_JSON_WORKER"
+
+
+class WorkerConfigError(RuntimeError):
+    """The worker is running in production but cannot reach the store that
+    production's monitors actually live in."""
+
+
+def _yn(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def preflight(*, in_actions: bool, monitor_id: str = "",
+              at: datetime | None = None) -> tuple[str, list]:
+    """Say which store this segment will use, and what it can see in it.
+
+    Once the monitors moved to Firestore, a worker whose credentials do not
+    work fell back to the legacy ``data/*.json`` files, found every monitor
+    there long since stopped, reported "nothing running" and exited — in
+    about half a minute, green, having checked nothing. That is the worst
+    kind of failure: it looks exactly like an idle repository. So the
+    selection is stated out loud before any work happens, and inside Actions
+    a fallback to JSON is fatal rather than quiet.
+
+    Nothing printed here is secret. The project id and the service account's
+    contents never appear — only whether each one was usable.
+
+    Returns ``(backend_name, monitors)`` so the caller need not read twice.
+    """
+    report = backend_report()
+    print(f"[worker] backend={report.name}")
+    print(f"[worker] firebase_project_configured={_yn(report.project_configured)}")
+    print(f"[worker] service_account_configured={_yn(report.service_account_configured)}")
+
+    if report.name != "firestore" and in_actions and os.environ.get(ALLOW_JSON_WORKER) != "1":
+        if report.problem:
+            print(f"[worker] reason: {report.problem}")
+        print("[worker] FATAL: Firestore worker credentials are not configured "
+              "correctly; refusing to fall back to JSON.")
+        raise WorkerConfigError(
+            f"the worker selected the {report.name} store inside GitHub Actions"
+            + (f": {report.problem}" if report.problem else "")
+        )
+
+    # One read, so the segment's first decision is visible rather than
+    # inferred from the fact that it exited. Deliberately not cached: the
+    # worker has no Streamlit session and must see every tick's writes.
+    monitors = load_monitors()
+    at = at or now_ist()
+    running = [m for m in monitors if m.is_running(at)]
+    print(f"[worker] monitor_count={len(monitors)}")
+    print(f"[worker] running_monitor_count={len(running)}")
+    print(f"[worker] requested_monitor_id={monitor_id or ''}")
+
+    requested = next((m for m in monitors if m.id == monitor_id), None) if monitor_id else None
+    print(f"[worker] requested_monitor_found={_yn(requested is not None)}")
+    print(f"[worker] requested_monitor_status="
+          f"{requested.status.value if requested is not None else 'N/A'}")
+    if monitor_id and requested is None:
+        # Distinguishable from "nothing running": the UI asked for a specific
+        # monitor and this store does not have it.
+        print(f"::warning::the dispatched monitor was not found in the "
+              f"{report.name} store — it may belong to a different project")
+    return report.name, monitors
 
 
 @dataclass
@@ -64,6 +133,10 @@ class LoopReport:
     push_failures: int = 0
     handed_over: bool = False
     stopped_reason: str = ""
+    #: Which store this segment actually used. In the summary so that a run
+    #: which checked nothing can be told apart from one that was looking in
+    #: the wrong place.
+    backend: str = ""
 
     @property
     def emails_sent(self) -> int:
@@ -75,6 +148,7 @@ class LoopReport:
 
     def summary(self) -> str:
         return (
+            f"backend={self.backend or 'unknown'} "
             f"ticks={self.ticks} checks={self.checks} emails={self.emails_sent} "
             f"commits={self.commits} push_failures={self.push_failures} "
             f"handed_over={self.handed_over} stopped={self.stopped_reason or 'time'}"
@@ -205,6 +279,10 @@ def run_loop(
     loop = LoopReport(started_at=started)
     print(f"[worker] segment start {fmt_datetime(started)} IST · up to {max_minutes} min · "
           f"poll {poll_seconds}s · git={'on' if use_git else 'off'} · chain={'on' if chain else 'off'}")
+
+    # Before any work: which store, and what is in it. Raises inside Actions
+    # rather than monitoring production against the legacy JSON files.
+    loop.backend = preflight(in_actions=in_actions, monitor_id=monitor_id, at=started)[0]
 
     if use_git:
         git_configure()
