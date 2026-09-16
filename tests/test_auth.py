@@ -157,6 +157,25 @@ def visitor(monkeypatch):
     monkeypatch.setattr(session, "restore", lambda: None)
 
 
+@pytest.fixture
+def bare_session(monkeypatch):
+    """Drive ``auth.session`` outside a Streamlit script run.
+
+    Its module-level ``st`` is replaced by a stand-in whose ``session_state``
+    is a plain dict and whose ``context`` carries no cookies, so the cookie
+    readers and the restore guard can be exercised directly.
+    """
+    import types
+
+    state: dict = {}
+    stub = types.SimpleNamespace(
+        session_state=state,
+        context=types.SimpleNamespace(cookies={}, headers={}),
+    )
+    monkeypatch.setattr(session, "st", stub)
+    return state
+
+
 def run(**state):
     app = AppTest.from_file("app.py", default_timeout=60)
     for key, value in state.items():
@@ -1372,3 +1391,143 @@ def test_isolation_holds_in_both_directions_across_a_switch(visitor, fake, make_
     app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
     assert app.session_state["auth_user"].uid == "uid-ravi"
     assert sees(app) == (True, False)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Persistent session across a browser refresh
+# ──────────────────────────────────────────────────────────────────────────
+def test_a_blind_run_does_not_spend_the_restore_attempt(monkeypatch, bare_session):
+    """The refresh-logout bug, pinned.
+
+    ``st.context.cookies`` answers with an *empty mapping and no error* for a
+    run whose client context Streamlit has not resolved. Spending the
+    once-per-session restore attempt on such a run is what made one blind run
+    a permanent sign-out: the cookie was still in the browser, still being
+    sent, and nothing ever looked again.
+    """
+    blind = {"on": True}
+    jar = {session.COOKIE: "refresh.uid-ravi", session.SESSION_STARTED_COOKIE: "1789561923.5"}
+    monkeypatch.setattr(session, "_cookie_jar", lambda: ({} if blind["on"] else dict(jar)))
+
+    assert REAL_RESTORE() is None
+    # Nothing was attempted, so nothing was spent.
+    assert not bare_session.get("auth_restore_tried")
+
+    blind["on"] = False
+    assert session._cookie() == "refresh.uid-ravi"
+    assert not bare_session.get("auth_restore_tried")   # a later run still may
+
+
+def test_the_cookie_jar_falls_back_to_the_request_header(monkeypatch):
+    """When ``st.context.cookies`` is empty or missing (Streamlit < 1.42, or an
+    unresolved client context) the same Cookie header is read from further
+    down rather than reporting "no session"."""
+    import streamlit as st
+
+    class Ctx:
+        cookies: dict = {}                       # empty, exactly as Streamlit answers
+
+        class headers:                           # noqa: N801 - a stand-in
+            @staticmethod
+            def get(name, default=None):
+                return "tr_session=abc%2Fdef; other=1" if name == "Cookie" else default
+
+    monkeypatch.setattr(st, "context", Ctx())
+    assert session._cookie_jar()["tr_session"] == "abc%2Fdef"
+    assert session._cookie() == "abc/def"        # …and decoded on the way out
+
+
+def test_parse_cookie_header_is_tolerant():
+    assert session._parse_cookie_header("a=1; b=2") == {"a": "1", "b": "2"}
+    assert session._parse_cookie_header("") == {}
+    assert session._parse_cookie_header("junk; a=1") == {"a": "1"}
+    assert session._parse_cookie_header("a=1; a=2")["a"] == "1"     # first wins
+
+
+def test_signing_in_queues_the_persistent_session_cookie(visitor, fake):
+    """A successful sign-in leaves the refresh token and the session start
+    queued for the browser, which is what a later reload restores from."""
+    app = run()
+    app.text_input(key="auth_email").set_value("ravi@example.com")
+    app.text_input(key="auth_password").set_value("Popcorn2026")
+    app.button(key="auth_signin").click().run()
+    # The gate flushes the queue as it paints, so the values are consumed —
+    # what must be true afterwards is that the deadline was recorded.
+    started = app.session_state[session.SESSION_STARTED_KEY]
+    assert app.session_state[session.SESSION_EXPIRES_KEY] == started + session.SESSION_SECONDS
+    assert app.session_state["auth_user"].refresh_token == fake.refresh_token_for("uid-ravi")
+
+
+def test_an_expired_id_token_refreshes_instead_of_signing_out(fake, bare_session):
+    """An ID token is short-lived. Its expiry must refresh the token, never end
+    the session, while the refresh token is still good."""
+    bare_session[session.USER_KEY] = session.AuthUser(
+        uid="uid-ravi", email="ravi@example.com", display_name="Ravi Teja",
+        id_token="id.stale", refresh_token=fake.refresh_token_for("uid-ravi"),
+        expires_at=time.time() - 1,                      # already past
+    )
+    bare_session[session.SESSION_EXPIRES_KEY] = time.time() + session.SESSION_SECONDS
+    fake.calls.clear()
+
+    token = session.id_token()
+    assert token == "id.uid-ravi"                        # a fresh one
+    assert [a for a, _ in fake.calls] == ["token"]       # via the refresh flow
+    assert session.current_user() is not None            # still signed in
+    assert bare_session[session.USER_KEY].expires_at > time.time()
+
+
+def test_a_refused_refresh_token_signs_out_and_drops_the_cookie(monkeypatch, fake):
+    """Firebase actually rejecting the stored credential is one of the three
+    reasons to end a session — and the dead cookie is cleared."""
+    monkeypatch.setattr(session, "restore", REAL_RESTORE)
+    monkeypatch.setattr(session, "_cookie", lambda: "refresh.not-a-real-token")
+    monkeypatch.setattr(session, "_cookie_started", lambda: time.time())
+    app = run()
+    assert on_login_page(app) and "auth_user" not in app.session_state
+    # The dead credential was thrown away rather than retried for ever.
+    assert "auth_restore_tried" in app.session_state
+
+
+def test_flush_cookie_never_writes_a_cookie_that_deletes_itself(monkeypatch):
+    """``Max-Age=0`` deletes a cookie. A missing or passed deadline must skip
+    the write rather than silently throw the session away."""
+    import streamlit as st
+
+    written: list[str] = []
+    monkeypatch.setattr("streamlit.components.v1.html",
+                        lambda markup, **k: written.append(markup))
+    state = {"auth_cookie_set": "refresh.uid-ravi",
+             session.SESSION_EXPIRES_KEY: time.time() - 10}     # already past
+    monkeypatch.setattr(st, "session_state", state, raising=False)
+    session.flush_cookie()
+    assert written == []                                        # nothing written at all
+
+    written.clear()
+    state = {"auth_cookie_set": "refresh.uid-ravi",
+             "auth_session_cookie_set": "123.0",
+             session.SESSION_EXPIRES_KEY: time.time() + session.SESSION_SECONDS}
+    monkeypatch.setattr(st, "session_state", state, raising=False)
+    session.flush_cookie()
+    assert written and "Max-Age=0" not in written[0]
+    assert "tr_session" in written[0] and "tr_session_started" in written[0]
+
+
+def test_both_accounts_restore_as_themselves_after_a_refresh(visitor, fake, monkeypatch):
+    """A refresh restores whoever the cookie belongs to — A as A, B as B."""
+    for email, password, uid in (("ravi@example.com", "Popcorn2026", "uid-ravi"),
+                                 ("sita@example.com", "Interval99", "uid-sita")):
+        app = run()
+        app = sign_in_as(app, email, password)
+        started = app.session_state[session.SESSION_STARTED_KEY]
+
+        # A brand-new Streamlit session, as a browser refresh makes.
+        monkeypatch.setattr(session, "restore", REAL_RESTORE)
+        monkeypatch.setattr(session, "_cookie", lambda uid=uid: fake.refresh_token_for(uid))
+        monkeypatch.setattr(session, "_cookie_started", lambda started=started: started)
+        fresh = run()
+        assert in_the_app(fresh), email
+        assert fresh.session_state["auth_user"].uid == uid
+        assert fresh.session_state["auth_user"].email == email
+        # …and the deadline is the original one, not a new seven days.
+        assert fresh.session_state[session.SESSION_EXPIRES_KEY] == started + session.SESSION_SECONDS
+        monkeypatch.setattr(session, "restore", lambda: None)

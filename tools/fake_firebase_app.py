@@ -77,5 +77,45 @@ def _install_fake() -> None:
     print(f"[fake-firebase] accounts ready; data in {data}", flush=True)
 
 
+def _simulate_blind_first_run() -> None:
+    """``TR_SIMULATE_BLIND_COOKIE=1``: reproduce the deployment symptom.
+
+    Streamlit answers ``st.context.cookies`` with an empty mapping — and no
+    error — for a run whose client context it has not resolved. This makes the
+    *first* run of every session look like that, which is what signed people
+    out on a browser refresh.
+    """
+    if os.environ.get("TR_SIMULATE_BLIND_COOKIE") != "1":
+        return
+    from auth import session as auth_session
+
+    # Streamlit re-executes this whole file on every rerun; patch only once so
+    # the fault is not re-armed each time.
+    if getattr(auth_session, "_blind_patched", False):
+        return
+    auth_session._blind_patched = True
+    real = auth_session._cookie_jar
+    # One whole session reads blind — every call in it, the way an unresolved
+    # client context behaves — and only the session that would otherwise have
+    # restored. Everything after it reads normally, so this is the intermittent
+    # blind run, not a permanently broken deployment.
+    # One run's worth of reads comes back empty — the gate reads the cookie
+    # twice in a run (restore, then the reload hint) — and everything after it
+    # reads normally. That is the intermittent blind run, not a permanently
+    # broken deployment, so it also proves the recovery actually recovers.
+    fault = {"left": 2}
+
+    def blind_one_run():
+        jar = real()
+        if fault["left"] <= 0 or auth_session.COOKIE not in jar:
+            return jar
+        fault["left"] -= 1
+        print("[harness] unresolved client context: empty cookie jar for this run", flush=True)
+        return {}
+
+    auth_session._cookie_jar = blind_one_run
+
+
 _install_fake()
+_simulate_blind_first_run()
 runpy.run_path(str(ROOT / "app.py"), run_name="__main__")
