@@ -353,5 +353,58 @@
         "new_showtime_notice_at": null
       }
     }
+  },
+  "3b402da0cd84": {
+    "last_check_at": "2026-09-16T13:53:08.927851+05:30",
+    "last_success_at": "2026-09-16T13:53:08.927851+05:30",
+    "check_count": 1,
+    "success_count": 1,
+    "consecutive_errors": 0,
+    "last_error": "",
+    "last_error_kind": "",
+    "last_email_error": "",
+    "targets": {
+      "ALUC::Barco Laser 4K Atmos": {
+        "availability": "AVAILABLE",
+        "since": "2026-09-16T13:53:08.927851+05:30",
+        "showtime_keys": [
+          "ALUC|20260925|4976",
+          "ALUC|20260925|4977",
+          "ALUC|20260925|4979"
+        ],
+        "time_labels": [
+          "03:40 PM",
+          "07:20 PM",
+          "11:00 PM"
+        ],
+        "time_links": [
+          [
+            "03:40 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/buytickets/ET00516728/20260925"
+          ],
+          [
+            "07:20 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/buytickets/ET00516728/20260925"
+          ],
+          [
+            "11:00 PM",
+            "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/buytickets/ET00516728/20260925"
+          ]
+        ],
+        "date_code": "20260925",
+        "date_codes": [
+          "20260925"
+        ],
+        "booking_url": "https://in.bookmyshow.com/buytickets/avengers-endgame-encore-hyderabad/cinema-hyde-ALUC-MT/20260925",
+        "notified_availability": "AVAILABLE",
+        "notified_at": "2026-09-16T13:53:08.927851+05:30",
+        "notified_showtime_keys": [
+          "ALUC|20260925|4976",
+          "ALUC|20260925|4977",
+          "ALUC|20260925|4979"
+        ],
+        "new_showtime_notice_at": null
+      }
+    }
   }
 }
