@@ -1,6 +1,19 @@
 [
   {
     "monitor_id": "b9f871a85ebd",
+    "kind": "STOPPED",
+    "message": "Monitoring stopped — you stopped this alert.",
+    "movie": "Hanuman Ansh",
+    "language": "Hindi",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+    "targets": [
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-16T15:30:35.998441+05:30",
+    "owner_uid": "UDTGiCeizkY3RAZpy9Zg53pKHE22"
+  },
+  {
+    "monitor_id": "b9f871a85ebd",
     "kind": "TICKETS_LIVE",
     "message": "ALLU Cinemas · Barco Laser 4K Atmos — Tickets Live",
     "movie": "Hanuman Ansh",
@@ -563,16 +576,5 @@
       "AMB Cinemas · IMAX 70MM"
     ],
     "at": "2026-09-14T19:31:09.613913+05:30"
-  },
-  {
-    "monitor_id": "12463fd2c5a0",
-    "kind": "CREATED",
-    "message": "Monitor created.",
-    "movie": "Hanuman Ansh",
-    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
-    "targets": [
-      "ALLU Cinemas · Dolby Cinema"
-    ],
-    "at": "2026-09-14T19:08:22.725986+05:30"
   }
 ]
