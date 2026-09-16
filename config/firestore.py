@@ -35,6 +35,18 @@ TIMEOUT = 15.0
 #: both key ownership on it.
 OWNER = "owner_uid"
 
+#: Firestore forbids an array directly inside an array, and two of our fields
+#: are naturally lists of pairs — ``variants`` is ``[[code, label], …]`` and
+#: ``time_links`` is ``[[label, url], …]``. Writing them as they stand is
+#: rejected with INVALID_ARGUMENT, so on the wire each pair becomes a small
+#: map with these keys, and comes back as a pair on the way out. The
+#: application's own representation never changes, and neither does the JSON
+#: store: this is purely how the two fields are spelled inside Firestore.
+PAIR_FIELDS: dict[str, tuple[str, str]] = {
+    "variants": ("code", "label"),
+    "time_links": ("label", "url"),
+}
+
 
 class FirestoreError(Exception):
     def __init__(self, message: str, status: int = 0):
@@ -45,8 +57,20 @@ class FirestoreError(Exception):
 # ──────────────────────────────────────────────────────────────────────────
 # Values
 # ──────────────────────────────────────────────────────────────────────────
-def encode(value: Any) -> dict[str, Any]:
-    """A Python value → Firestore's typed ``Value``."""
+def _is_pair_list(value: Any) -> bool:
+    """A non-empty list whose every item is a two-item sequence."""
+    if not isinstance(value, (list, tuple)) or not value:
+        return False
+    return all(isinstance(item, (list, tuple)) and len(item) == 2 for item in value)
+
+
+def encode(value: Any, *, field: str = "") -> dict[str, Any]:
+    """A Python value → Firestore's typed ``Value``.
+
+    ``field`` is the name the value is stored under. It matters only for
+    :data:`PAIR_FIELDS`, whose list-of-pairs shape has to become a list of
+    maps — Firestore will not take an array inside an array.
+    """
     if value is None:
         return {"nullValue": None}
     if isinstance(value, bool):
@@ -58,14 +82,27 @@ def encode(value: Any) -> dict[str, Any]:
     if isinstance(value, str):
         return {"stringValue": value}
     if isinstance(value, (list, tuple)):
+        if field in PAIR_FIELDS and _is_pair_list(value):
+            first, second = PAIR_FIELDS[field]
+            return {"arrayValue": {"values": [
+                {"mapValue": {"fields": {first: encode(pair[0]), second: encode(pair[1])}}}
+                for pair in value
+            ]}}
         return {"arrayValue": {"values": [encode(v) for v in value]}}
     if isinstance(value, dict):
-        return {"mapValue": {"fields": {str(k): encode(v) for k, v in value.items()}}}
+        # The key travels with the value so a pair field is recognised however
+        # deeply it sits — ``movie.variants``, ``targets.<key>.time_links``.
+        return {"mapValue": {"fields": {str(k): encode(v, field=str(k)) for k, v in value.items()}}}
     return {"stringValue": str(value)}
 
 
-def decode(value: dict[str, Any]) -> Any:
-    """Firestore's typed ``Value`` → a Python value."""
+def decode(value: dict[str, Any], *, field: str = "") -> Any:
+    """Firestore's typed ``Value`` → a Python value.
+
+    A :data:`PAIR_FIELDS` field comes back as the list of pairs the
+    application has always seen, whichever way it was written — a document
+    stored before this encoding still reads correctly.
+    """
     if "nullValue" in value:
         return None
     if "booleanValue" in value:
@@ -79,14 +116,26 @@ def decode(value: dict[str, Any]) -> Any:
     if "timestampValue" in value:
         return value["timestampValue"]
     if "arrayValue" in value:
-        return [decode(v) for v in (value["arrayValue"].get("values") or [])]
+        items = value["arrayValue"].get("values") or []
+        if field in PAIR_FIELDS:
+            first, second = PAIR_FIELDS[field]
+            pairs = []
+            for item in items:
+                if isinstance(item, dict) and "mapValue" in item:
+                    inner = item["mapValue"].get("fields") or {}
+                    pairs.append([decode(inner.get(first, {"stringValue": ""})),
+                                  decode(inner.get(second, {"stringValue": ""}))])
+                else:                      # an older document, or a plain value
+                    pairs.append(decode(item))
+            return pairs
+        return [decode(v) for v in items]
     if "mapValue" in value:
-        return {k: decode(v) for k, v in (value["mapValue"].get("fields") or {}).items()}
+        return {k: decode(v, field=k) for k, v in (value["mapValue"].get("fields") or {}).items()}
     return None
 
 
 def fields_of(document: dict[str, Any]) -> dict[str, Any]:
-    return {k: decode(v) for k, v in (document.get("fields") or {}).items()}
+    return {k: decode(v, field=k) for k, v in (document.get("fields") or {}).items()}
 
 
 def doc_id(document: dict[str, Any]) -> str:
@@ -218,7 +267,7 @@ class FirestoreClient:
         body = {"writes": [
             {"delete": f"{self.root}/{collection}/{doc}"} if fields is None else
             {"update": {"name": f"{self.root}/{collection}/{doc}",
-                        "fields": {k: encode(v) for k, v in fields.items()}}}
+                        "fields": {k: encode(v, field=k) for k, v in fields.items()}}}
             for collection, doc, fields in writes
         ]}
         # Firestore accepts up to 500 writes per commit; ours are a handful.
@@ -233,6 +282,7 @@ class FirestoreClient:
 
 __all__ = [
     "OWNER",
+    "PAIR_FIELDS",
     "FirestoreClient",
     "FirestoreError",
     "decode",
