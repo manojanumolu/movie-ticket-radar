@@ -64,10 +64,8 @@ from monitor.state import (  # noqa: E402
     delete_monitor,
     expire_due_monitors,
     extend_monitor,
-    load_history,
     load_monitors,
     load_settings,
-    load_state,
     record_history,
     save_settings,
     stop_monitor,
@@ -169,14 +167,19 @@ def refresh_from_github() -> None:
 
 
 def load_view():
-    """Persisted config + state, expiring anything past its end time.
+    """Persisted config + state + settings, expiring anything past its end time.
 
     Expiry runs here as well as in the worker, so a monitor can never look
     alive in the UI merely because no run has happened yet.
+
+    The four reads go out together (``load_many``). They have no order between
+    them, and on Firestore each one is a network round trip — fetched one
+    after another they were the largest part of what every click cost.
     """
     refresh_from_github()
-    monitors, _ = expire_due_monitors(mirror=mirrored())
-    return monitors, load_state(), load_history()
+    data = state_store.load_many("monitors", "state", "history", "settings")
+    monitors, _ = expire_due_monitors(data["monitors"], mirror=mirrored())
+    return monitors, data["state"], data["history"], data["settings"]
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -309,7 +312,15 @@ def account_bar() -> None:
 # Starting a monitor
 # ──────────────────────────────────────────────────────────────────────────
 def start_monitor(interval: int, until, email: str, start_now: bool,
-                  date_codes: list[str] | None = None) -> None:
+                  date_codes: list[str] | None = None,
+                  settings: dict | None = None) -> None:
+    """Save a monitor and get its first check moving.
+
+    ``settings`` is the page's already-loaded settings. It is passed in rather
+    than read again: this runs in the middle of the same script run that
+    loaded them, and on Firestore reading them a second time is another
+    network round trip for data already in hand.
+    """
     slug = st.session_state.get("location", "")
     movie_id = st.session_state.get("movie_id", "")
     entry = cv.entry(movie_id, slug)
@@ -371,7 +382,7 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     mirror = {"committed": False, "error": ""} if firestore else last_mirror()
     record_history(monitor, "CREATED", "Monitor created.", mirror=mirrored())
 
-    settings = load_settings()
+    settings = load_settings() if settings is None else settings
     if settings.get("notify_email") != email:
         save_settings({**settings, "notify_email": email}, mirror=mirrored())
 
@@ -563,7 +574,8 @@ def page_home(monitors, states, history, settings) -> None:
                 with cta:
                     if st.button("Start monitoring", type="primary",
                                  use_container_width=True, key="start", icon=":material/play_arrow:"):
-                        start_monitor(interval, until, email, start_now, dates)
+                        start_monitor(interval, until, email, start_now, dates,
+                                      settings=settings)
                 with helper:
                     C.html(
                         f'<div class="tr-cta-help">{C.icon("bolt", 15, "#E8B25C")}<span>You\'ll get an email the second '
@@ -741,8 +753,7 @@ def main() -> None:
         st.session_state.setdefault("page", "Home")
         st.session_state.setdefault("flash", None)
 
-        monitors, states, history = load_view()
-        settings = load_settings()
+        monitors, states, history, settings = load_view()
         page = sidebar(sum(1 for m in monitors if m.is_running()))
         account_bar()
         delete_account_panel()
