@@ -498,10 +498,10 @@
     "date_codes": [
       "20260917"
     ],
-    "status": "ACTIVE",
+    "status": "STOPPED",
     "created_at": "2026-09-16T14:57:34.273890+05:30",
-    "stopped_at": null,
-    "stopped_reason": "",
+    "stopped_at": "2026-09-16T15:30:34.121144+05:30",
+    "stopped_reason": "Stopped manually.",
     "first_check_requested_at": "2026-09-16T14:57:34.273897+05:30",
     "problem": null,
     "owner_uid": "UDTGiCeizkY3RAZpy9Zg53pKHE22"
