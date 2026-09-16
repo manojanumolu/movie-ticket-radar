@@ -42,6 +42,33 @@ ROOT = f"{fs.BASE}/projects/{PROJECT}/databases/(default)/documents"
 # ──────────────────────────────────────────────────────────────────────────
 # The fake service
 # ──────────────────────────────────────────────────────────────────────────
+class Invalid(Exception):
+    """What Firestore answers when a document's shape is not storable."""
+
+
+def reject_nested_arrays(fields: dict, path: str = "") -> None:
+    """Firestore will not store an array directly inside an array, at any
+    depth. The service refuses the whole write with INVALID_ARGUMENT, so the
+    fake does too — otherwise a shape the real service rejects would sail
+    through the suite, which is exactly how this went unnoticed."""
+
+    def walk(value, where: str, in_array: bool) -> None:
+        if isinstance(value, dict):
+            if "arrayValue" in value:
+                if in_array:
+                    raise Invalid(f"array inside array at {where}")
+                for i, item in enumerate(value["arrayValue"].get("values") or []):
+                    walk(item, f"{where}[{i}]", True)
+                return
+            if "mapValue" in value:
+                for k, v in (value["mapValue"].get("fields") or {}).items():
+                    walk(v, f"{where}.{k}", False)
+                return
+
+    for key, value in (fields or {}).items():
+        walk(value, f"{path}{key}", False)
+
+
 class Denied(Exception):
     pass
 
@@ -94,6 +121,8 @@ class MemoryFirestore:
                 return self._commit(who, body)
         except Denied as exc:
             return 403, {"error": {"message": f"PERMISSION_DENIED: {exc}"}}
+        except Invalid as exc:
+            return 400, {"error": {"message": f"INVALID_ARGUMENT: {exc}"}}
         raise AssertionError(f"unexpected {method} {path}")
 
     def _get(self, who, path):
@@ -106,7 +135,7 @@ class MemoryFirestore:
         if not self._may_read(who, collection, fields):
             raise Denied("not the owner")
         return 200, {"name": f"{ROOT}/{collection}/{doc}",
-                     "fields": {k: fs.encode(v) for k, v in fields.items()}}
+                     "fields": {k: fs.encode(v, field=k) for k, v in fields.items()}}
 
     def _query(self, who, body):
         q = body["structuredQuery"]
@@ -122,7 +151,7 @@ class MemoryFirestore:
         for doc, fields in self.docs.get(collection, {}).items():
             if all(fields.get(k) == v for k, v in equals.items()):
                 rows.append({"document": {"name": f"{ROOT}/{collection}/{doc}",
-                                          "fields": {k: fs.encode(v) for k, v in fields.items()}}})
+                                          "fields": {k: fs.encode(v, field=k) for k, v in fields.items()}}})
         limit = q.get("limit")
         return 200, rows[:limit] if limit else rows
 
@@ -141,7 +170,8 @@ class MemoryFirestore:
                 staged.append((collection, doc, None))
             else:
                 collection, doc = write["update"]["name"].split("/")[-2:]
-                fields = {k: fs.decode(v) for k, v in write["update"]["fields"].items()}
+                reject_nested_arrays(write["update"]["fields"])
+                fields = {k: fs.decode(v, field=k) for k, v in write["update"]["fields"].items()}
                 existing = self.docs.get(collection, {}).get(doc)
                 if who is not None:
                     if collection == "users":
@@ -646,3 +676,150 @@ def test_a_refused_purge_leaves_every_account_untouched(cloud, make_monitor):
 
     assert cloud.docs["history"] == before["history"]      # nothing removed at all
     assert b.id in cloud.docs["monitors"]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Firestore forbids an array inside an array
+#
+# `movie.variants` is [[code, label], …] and `targets.*.time_links` is
+# [[label, url], …]. Written as they stand, Firestore answers INVALID_ARGUMENT
+# and the whole commit fails — so on the wire each pair becomes a small map,
+# and comes back a pair. The application and the JSON store never see the
+# difference; only Firestore's spelling changes.
+# ──────────────────────────────────────────────────────────────────────────
+VARIANTS = [["ET00517001", "Barco Laser 4K Atmos"], ["ET00517002", "Dolby Cinema"]]
+TIME_LINKS = [["03:40 PM", "https://in.bookmyshow.com/a"],
+              ["11:00 PM", "https://in.bookmyshow.com/b"]]
+
+
+def _arrays_inside_arrays(value, where="") -> list[str]:
+    """Every place an encoded document puts an array directly inside one."""
+    found: list[str] = []
+
+    def walk(node, path, in_array):
+        if not isinstance(node, dict):
+            return
+        if "arrayValue" in node:
+            if in_array:
+                found.append(path)
+            for i, item in enumerate(node["arrayValue"].get("values") or []):
+                walk(item, f"{path}[{i}]", True)
+        elif "mapValue" in node:
+            for k, v in (node["mapValue"].get("fields") or {}).items():
+                walk(v, f"{path}.{k}", False)
+
+    for k, v in (value or {}).items():
+        walk(v, f"{where}{k}", False)
+    return found
+
+
+def test_a_pair_field_is_written_as_maps_not_as_a_nested_array():
+    encoded = fs.encode(VARIANTS, field="variants")
+    values = encoded["arrayValue"]["values"]
+    assert all("mapValue" in v for v in values)                  # maps, not arrays
+    assert [set(v["mapValue"]["fields"]) for v in values] == [{"code", "label"}] * 2
+    assert fs.decode(encoded, field="variants") == VARIANTS      # and back again
+
+    encoded = fs.encode(TIME_LINKS, field="time_links")
+    values = encoded["arrayValue"]["values"]
+    assert all("mapValue" in v for v in values)
+    assert [set(v["mapValue"]["fields"]) for v in values] == [{"label", "url"}] * 2
+    assert fs.decode(encoded, field="time_links") == TIME_LINKS
+
+
+def test_an_ordinary_array_is_untouched():
+    """Only the two pair fields change shape; every other list is as it was."""
+    for field in ("", "time_labels", "date_codes", "showtime_keys", "targets"):
+        encoded = fs.encode(["a", "b"], field=field)
+        assert [v["stringValue"] for v in encoded["arrayValue"]["values"]] == ["a", "b"]
+        assert fs.decode(encoded, field=field) == ["a", "b"]
+    # …and a pair field that is empty, or not actually pairs, is left alone.
+    assert fs.decode(fs.encode([], field="variants"), field="variants") == []
+    assert fs.decode(fs.encode(["solo"], field="variants"), field="variants") == ["solo"]
+
+
+def test_a_document_stored_before_this_encoding_still_reads_back():
+    """Backward compatible: a pair field written the old way still decodes."""
+    legacy = {"arrayValue": {"values": [fs.encode(["ET1", "IMAX"])]}}
+    assert fs.decode(legacy, field="variants") == [["ET1", "IMAX"]]
+
+
+def test_a_monitor_with_variants_round_trips_through_firestore(cloud, make_monitor):
+    """Python → encode → fake Firestore → decode → Python, unchanged."""
+    from monitor.models import MovieRef
+
+    cloud.as_user("uid-a")
+    monitor = monitor_for(make_monitor, "uid-a", "a@example.com")
+    monitor.movie = replace(monitor.movie, variants=tuple(tuple(p) for p in VARIANTS))
+    state_mod.upsert_monitor(monitor, mirror=False)
+
+    # Nothing stored is an array inside an array.
+    stored = cloud.docs["monitors"][monitor.id]
+    assert _arrays_inside_arrays({k: fs.encode(v, field=k) for k, v in stored.items()}) == []
+
+    [back] = state_mod.load_monitors()
+    assert back.movie.variants == tuple(tuple(p) for p in VARIANTS)
+    assert [list(p) for p in back.movie.variants] == VARIANTS     # the app's own shape
+    assert back.movie.variant_codes == ("ET00517001", "ET00517002")
+    assert isinstance(back.movie, MovieRef)
+
+
+def test_state_with_time_links_round_trips_through_firestore(cloud, make_monitor):
+    cloud.as_user("uid-a")
+    monitor = monitor_for(make_monitor, "uid-a", "a@example.com")
+    state_mod.upsert_monitor(monitor, mirror=False)
+
+    ms = MonitorState(check_count=2)
+    target = ms.target("ALLU::Dolby Cinema")
+    target.time_links = [list(p) for p in TIME_LINKS]
+    target.time_labels = ["03:40 PM", "11:00 PM"]
+    cloud.as_worker()                                   # only the worker writes state
+    state_mod.save_state({monitor.id: ms}, mirror=False)
+
+    stored = cloud.docs["monitor_state"][monitor.id]
+    assert _arrays_inside_arrays({k: fs.encode(v, field=k) for k, v in stored.items()}) == []
+
+    cloud.as_user("uid-a")
+    back = state_mod.load_state()[monitor.id].targets["ALLU::Dolby Cinema"]
+    assert back.time_links == TIME_LINKS                # exactly the app's shape
+    assert back.time_labels == ["03:40 PM", "11:00 PM"]
+
+
+def test_the_fake_refuses_a_nested_array_anywhere_in_a_document(cloud):
+    """The guard itself: a shape the real service rejects must not pass here.
+
+    Built by hand, bypassing ``encode``'s pair handling, so it is the raw
+    nested array Firestore refuses.
+    """
+    client = fs.FirestoreClient(PROJECT, lambda: "id.uid-a", transport=state_mod._transport)
+    nested = {"arrayValue": {"values": [fs.encode(["x", "y"])]}}      # array in array
+
+    at_top = {"owner_uid": fs.encode("uid-a"), "bad": nested}
+    buried = {"owner_uid": fs.encode("uid-a"),
+              "movie": {"mapValue": {"fields": {"deep": {"mapValue": {"fields": {"bad": nested}}}}}}}
+
+    for raw in (at_top, buried):
+        with pytest.raises(fs.FirestoreError) as caught:
+            client._call("POST", ":commit", {"writes": [
+                {"update": {"name": f"{client.root}/monitors/x", "fields": raw}}]})
+        assert caught.value.status == 400
+        assert "INVALID_ARGUMENT" in str(caught.value)
+    assert "x" not in cloud.docs.get("monitors", {})                 # nothing applied
+
+
+def test_the_json_store_representation_is_unchanged(make_monitor, tmp_path, monkeypatch):
+    """The JSON files keep the list-of-pairs spelling they always had — the
+    map form exists only inside Firestore."""
+    import json
+
+    monkeypatch.setattr(state_mod, "MONITORS_FILE", tmp_path / "monitors.json")
+    state_mod.set_scope_provider(None)
+    monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT", raising=False)
+
+    monitor = make_monitor(owner_uid="uid-a")
+    monitor.movie = replace(monitor.movie, variants=tuple(tuple(p) for p in VARIANTS))
+    state_mod.save_monitors([monitor], mirror=False)
+
+    raw = json.loads((tmp_path / "monitors.json").read_text(encoding="utf-8"))
+    assert raw[0]["movie"]["variants"] == VARIANTS      # lists of pairs, as before
+    assert all(isinstance(p, list) for p in raw[0]["movie"]["variants"])
