@@ -33,6 +33,7 @@ from config.timezone import now_ist
 from monitor import state as state_mod
 from monitor.models import ANY_FORMAT, TheatreTarget
 from monitor.state import MonitorState, Scope
+from tests.conftest import APP_SCRIPT
 
 PROJECT = "ticketradar-test"
 ROOT = f"{fs.BASE}/projects/{PROJECT}/databases/(default)/documents"
@@ -479,7 +480,7 @@ def test_my_monitors_and_history_show_only_the_signed_in_persons_records(cloud, 
         app.session_state["page"] = name
         return app.run()
 
-    app = AppTest.from_file("app.py", default_timeout=60).run()      # registers the app's own scope
+    app = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()      # registers the app's own scope
     app = sign_in(app, "sita@example.com", "Interval99")
     assert app.session_state["auth_user"].uid == "uid-sita"
     assert "Ravi's Film" not in body(page(app, "My Monitors"))

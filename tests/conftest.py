@@ -19,6 +19,12 @@ import pytest
 
 from config.timezone import IST
 
+#: Streamlit 1.64 resolves a relative ``AppTest.from_file`` path against the
+#: *calling* file rather than the working directory, which put every test in
+#: this package looking for ``tests/app.py``. The absolute path is version
+#: independent.
+APP_SCRIPT = str(Path(__file__).resolve().parent.parent / "app.py")
+
 
 # ──────────────────────────────────────────────────────────────────────────
 # Isolated data directory

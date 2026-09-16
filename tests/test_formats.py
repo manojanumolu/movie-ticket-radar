@@ -26,6 +26,7 @@ from monitor.models import ANY_FORMAT, Availability, MovieRef, TheatreTarget
 from monitor.state import load_monitors, load_state, upsert_monitor
 from ui import catalogue_view as cv
 from tests.conftest import build_payload
+from tests.conftest import APP_SCRIPT
 from tests.test_discovery import (
     ALLU, ALLU_DOLBY, ALLU_BARCO_LIVE, ALLU_DOLBY_LIVE, AMB_2D, BARCO, DOLBY, ENGLISH_2D, ENGLISH_3D, PVR_3D,
     SHOW_DATE, Wire, english_movie, listing, show,
@@ -61,7 +62,7 @@ def seed(provider_factory, *, avengers_at_allu: list[dict] | None):
 
 
 def run(**session):
-    app = AppTest.from_file("app.py", default_timeout=60)
+    app = AppTest.from_file(APP_SCRIPT, default_timeout=60)
     app.session_state["page"] = "Home"
     for k, v in session.items():
         app.session_state[k] = v

@@ -49,6 +49,29 @@ RESET_KEEPS = frozenset({USER_KEY, "auth_just_signed_in", "auth_restore_tried",
 RESET_FLAG = "auth_reset_pending"
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Diagnostics
+# ──────────────────────────────────────────────────────────────────────────
+#: Every line is safe to ship to a log: booleans, counts, HTTP statuses and
+#: Firebase's own error codes. Never a cookie value, a token, a key, a UID or
+#: an email address.
+def log_restore(message: str) -> None:
+    print(f"[auth] restore: {message}", flush=True)
+
+
+def log_cleared(reason: str) -> None:
+    print(f"[auth] session cleared reason={reason}", flush=True)
+
+
+def _embedded() -> bool:
+    """Whether Streamlit thinks the app is running inside a frame. On
+    Community Cloud it is: the wrapper page holds the app in an iframe."""
+    try:
+        return bool(st.context.is_embedded)
+    except Exception:  # noqa: BLE001 - older runtimes have no such property
+        return False
+
+
 @dataclass
 class AuthUser:
     """The Firebase account behind this session. ``uid`` is what the next
@@ -82,7 +105,7 @@ def current_user() -> AuthUser | None:
     if isinstance(user, AuthUser) and user.uid:
         expires = float(st.session_state.get(SESSION_EXPIRES_KEY, 0) or 0)
         if expires and time.time() >= expires:
-            sign_out()
+            sign_out("seven_day_deadline_passed")
             return None
         return user
     return None
@@ -161,9 +184,10 @@ def sign_in_user(creds: Credentials) -> AuthUser:
     return user
 
 
-def sign_out() -> None:
+def sign_out(reason: str = "sign_out") -> None:
     """Forget everything here and tell the browser to drop the cookie. The
     Firebase tokens are simply discarded — there is nothing to keep."""
+    log_cleared(reason)
     st.session_state.pop(USER_KEY, None)          # nothing else in this run sees a user
     st.session_state.pop("auth_just_signed_in", None)
     request_reset()                                # …and the rest goes before the next run
@@ -201,7 +225,7 @@ def delete_account() -> dict[str, int]:
     removed = state_store.purge_user_data(mirror=False)
     print(f"[auth] account deletion: purged {removed} for the signed-in account", flush=True)
     firebase.FirebaseAuth().delete_account(token)
-    sign_out()                              # clears the session and the cookie
+    sign_out("account_deleted")             # clears the session and the cookie
     return removed
 
 
@@ -409,35 +433,54 @@ def restore() -> AuthUser | None:
     """
     if st.session_state.get("auth_restore_tried"):
         return None
+
+    # The token goes through ``_cookie()`` so there is one reader; the jar is
+    # only read again to report how much Streamlit could see this run.
     token = _cookie()
+    jar = _cookie_jar()
+    # CASE 1 vs the rest. ``cookies_seen`` is the telling number: zero means
+    # Streamlit was handed no cookies at all for this run (an unresolved client
+    # context, or a proxy that did not forward them), while a non-zero count
+    # without ours means the cookie was never written to the browser.
+    log_restore(f"cookie_present={bool(token)} cookies_seen={len(jar)} "
+                f"session_cookie={COOKIE in jar} started_cookie={SESSION_STARTED_COOKIE in jar} "
+                f"embedded={_embedded()}")
     if not token:
+        # Nothing to spend: a later run of this session may still restore.
         return None
     st.session_state["auth_restore_tried"] = True
+    log_restore("cookie_parse=OK")
     if not firebase.is_configured():
-        print("[auth] stored session not restored: Firebase is not configured here", flush=True)
+        log_restore("FAILED reason=firebase_not_configured")
         return None
     started, expires = _session_window(_cookie_started())
     if time.time() >= expires:
+        log_restore("FAILED reason=session_deadline_passed")
         st.session_state["auth_cookie_clear"] = True
         return None
+    log_restore("session_deadline_valid=True")
     client = firebase.FirebaseAuth()
     try:
         creds = client.refresh(token)
+        log_restore(f"refresh_exchange=HTTP {client.last_status} {client.last_code}")
         info = client.lookup(creds.id_token)
+        log_restore(f"lookup=HTTP {client.last_status} {client.last_code}")
     except AuthError as exc:
-        print(f"[auth] stored session not restored: {exc.code}", flush=True)
+        log_restore(f"FAILED reason={exc.code} http={exc.status}")
         st.session_state["auth_cookie_clear"] = True
         return None
     if not info["email_verified"]:
-        print("[auth] stored session not restored: email not verified", flush=True)
+        log_restore("FAILED reason=email_not_verified")
         st.session_state["auth_cookie_clear"] = True
         return None
     user = _from_credentials(creds, email=info["email"], display_name=info["display_name"])
     if info["uid"]:
         user.uid = info["uid"]
     if not user.uid:
+        log_restore("FAILED reason=no_uid")
         st.session_state["auth_cookie_clear"] = True
         return None
+    log_restore("uid_present=True SUCCESS")
     st.session_state[USER_KEY] = user
     st.session_state[SESSION_STARTED_KEY] = started
     st.session_state[SESSION_EXPIRES_KEY] = expires
@@ -459,7 +502,7 @@ def id_token() -> str:
         return ""
     expires = float(st.session_state.get(SESSION_EXPIRES_KEY, 0) or 0)
     if expires and time.time() >= expires:
-        sign_out()
+        sign_out("seven_day_deadline_passed")
         return ""
     if user.expires_at - time.time() > REFRESH_MARGIN or not user.refresh_token:
         return user.id_token
@@ -554,32 +597,35 @@ def _cookie_script(value: str, max_age: int, name: str = COOKIE) -> str:
     # guard is released and stays available for a future blind run.
     release = (f"try{{window.parent.sessionStorage.removeItem({json.dumps(_RETRY_FLAG)});}}catch(e){{}}"
                if max_age > 0 else "")
+    # Streamlit Community Cloud does not serve the app as the top-level page:
+    # the wrapper at <app>.streamlit.app holds the real app in an iframe at
+    # ``/~/+/``, so this component sits two frames deep. Writing only to
+    # ``window.parent`` reaches one document of that chain. Every reachable
+    # document in the chain is written to instead — each guarded on its own, so
+    # a cross-origin frame that throws cannot stop the others — and since they
+    # share an origin and Path=/, the repeats are the same cookie, not extras.
+    #
+    # SameSite: an embedded app is a nested browsing context, so the cookie is
+    # written as ``None`` (which browsers only honour with ``Secure``, over
+    # https) when the page really is framed, and as ``Lax`` when it is not.
     return (
         "<script>(function(){try{"
-        "var d=window.parent.document;"
         f"var max_age={int(max_age)};"
-        "var s=(window.parent.location.protocol==='https:')?'; Secure':'';"
+        f"var name={json.dumps(name)};"
+        f"var value=encodeURIComponent({literal});"
+        "var docs=[];"
+        "try{docs.push(window.parent.document);}catch(e){}"
+        "try{if(window.parent.parent!==window.parent)docs.push(window.parent.parent.document);}catch(e){}"
+        "try{if(window.top.document&&docs.indexOf(window.top.document)<0)docs.push(window.top.document);}catch(e){}"
+        "var https=true;try{https=(window.parent.location.protocol==='https:');}catch(e){}"
+        "var framed=false;try{framed=(window.top!==window.parent);}catch(e){framed=true;}"
+        "var ss=(framed&&https)?'; SameSite=None':'; SameSite=Lax';"
+        "var s=https?'; Secure':'';"
         "var e=max_age?'; Expires='+new Date(Date.now()+max_age*1000).toUTCString():'; Expires=Thu, 01 Jan 1970 00:00:00 GMT';"
-        f"d.cookie={json.dumps(name)}+'='+encodeURIComponent({literal})"
-        f"+'; Max-Age={int(max_age)}; Path=/; SameSite=Lax'+e+s;"
+        "for(var i=0;i<docs.length;i++){try{"
+        "docs[i].cookie=name+'='+value+'; Max-Age='+max_age+'; Path=/'+ss+e+s;"
+        "}catch(err){}}"
         f"{release}"
-        "}catch(e){}})();</script>"
-    )
-
-
-def _cookie_script(value: str, max_age: int, name: str = COOKIE) -> str:
-    # json.dumps makes the value a JS string literal, and "</" is escaped so
-    # the literal can never close the script element; the value is only ever
-    # a token Google issued, but the rule costs nothing.
-    literal = json.dumps(value).replace("</", r"<\/")
-    return (
-        "<script>(function(){try{"
-        "var d=window.parent.document;"
-        f"var max_age={int(max_age)};"
-        "var s=(window.parent.location.protocol==='https:')?'; Secure':'';"
-        "var e=max_age?'; Expires='+new Date(Date.now()+max_age*1000).toUTCString():'; Expires=Thu, 01 Jan 1970 00:00:00 GMT';"
-        f"d.cookie={json.dumps(name)}+'='+encodeURIComponent({literal})"
-        f"+'; Max-Age={int(max_age)}; Path=/; SameSite=Lax'+e+s;"
         "}catch(e){}})();</script>"
     )
 
@@ -592,6 +638,8 @@ __all__ = [
     "continue_if_verified",
     "current_uid",
     "current_user",
+    "log_cleared",
+    "log_restore",
     "delete_account",
     "flush_cookie",
     "id_token",

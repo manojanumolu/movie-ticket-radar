@@ -20,12 +20,13 @@ from monitor.checker import run_once
 from monitor.models import Availability, Monitor
 from monitor.state import MonitorState, get_monitor, load_monitors, load_state, save_state, upsert_monitor
 from tests.conftest import ALLU_LIVE, NOT_ON_SALE, SOLD_OUT, FakeResponse, build_payload
+from tests.conftest import APP_SCRIPT
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
 
 
 def run_app(**session):
-    app = AppTest.from_file("app.py", default_timeout=60)
+    app = AppTest.from_file(APP_SCRIPT, default_timeout=60)
     app.session_state["page"] = "Home"
     for key, value in session.items():
         app.session_state[key] = value

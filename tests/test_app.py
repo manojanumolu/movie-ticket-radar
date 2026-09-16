@@ -15,9 +15,10 @@ from config.timezone import now_ist
 from monitor import catalogue
 from monitor.models import ANY_FORMAT, Availability, MonitorStatus, TheatreTarget
 from monitor.state import MonitorState, get_monitor, load_monitors, save_state, upsert_monitor
+from tests.conftest import APP_SCRIPT
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
-APP = "app.py"
+APP = APP_SCRIPT
 TIMEOUT = 60
 
 
