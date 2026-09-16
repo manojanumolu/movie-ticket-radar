@@ -68,6 +68,12 @@ def require_user() -> AuthUser:
     with chrome:
         login.entrance()
         session.flush_cookie()
+        if user is None:
+            # Nobody signed in, and no cookie was visible. If the browser
+            # actually holds one, Streamlit missed it on this run's handshake —
+            # reload once so it is read again, rather than showing a login page
+            # to somebody who is already signed in.
+            session.restore_hint()
     if user is None:
         with _page_container:
             login.render()

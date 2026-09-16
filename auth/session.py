@@ -282,20 +282,85 @@ def clear_pending() -> None:
 # ──────────────────────────────────────────────────────────────────────────
 # Restoring after a reload
 # ──────────────────────────────────────────────────────────────────────────
+def _parse_cookie_header(raw: str) -> dict[str, str]:
+    """``"a=1; b=2"`` → ``{"a": "1", "b": "2"}``. First value of a name wins."""
+    jar: dict[str, str] = {}
+    for part in raw.split(";"):
+        name, sep, value = part.partition("=")
+        if sep and name.strip():
+            jar.setdefault(name.strip(), value.strip())
+    return jar
+
+
+def _cookie_header_from_runtime() -> str:
+    """The raw ``Cookie`` header off this session's own websocket request.
+
+    The last resort, used only when the documented readers answer with
+    nothing. Reaching into the runtime is unpleasant, but it is read-only and
+    it is the difference between a reload restoring the session and signing
+    the person out.
+    """
+    try:
+        from streamlit.runtime import get_instance
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        ctx = get_script_run_ctx()
+        if ctx is None:
+            return ""
+        client = get_instance().get_client(ctx.session_id)
+        for holder in (getattr(client, "request", None), client):
+            headers = getattr(holder, "headers", None)
+            if headers is not None:
+                value = headers.get("Cookie") or headers.get("cookie")
+                if value:
+                    return str(value)
+    except Exception:  # noqa: BLE001 - never let a private API break the gate
+        return ""
+    return ""
+
+
+def _cookie_jar() -> dict[str, str]:
+    """Every cookie the browser sent when this session opened.
+
+    ``st.context.cookies`` is the documented source, but it is not dependable
+    on its own:
+
+    * it answers with an **empty mapping and no error** whenever Streamlit
+      cannot resolve the client context for that run
+      (``ContextProxy.cookies`` → ``_get_client_context()`` → ``None``), and
+    * it only exists from Streamlit 1.42.
+
+    Either one makes the session cookie look absent, and an absent cookie is
+    indistinguishable from "never signed in" — which is what signed people out
+    on a browser refresh. So two fallbacks read the very same Cookie header
+    from further down before we conclude there is nothing to restore.
+    """
+    try:
+        jar = dict(st.context.cookies)
+    except Exception:  # noqa: BLE001 - no browser (tests), or Streamlit < 1.42
+        jar = {}
+    if jar:
+        return {k: v for k, v in jar.items() if isinstance(v, str)}
+
+    raw = ""
+    try:  # st.context.headers predates st.context.cookies
+        raw = str(st.context.headers.get("Cookie") or "")
+    except Exception:  # noqa: BLE001
+        raw = ""
+    return _parse_cookie_header(raw or _cookie_header_from_runtime())
+
+
 def _read_cookie(name: str) -> str:
     """One cookie the browser sent when this session opened, decoded.
 
-    The writer is ``encodeURIComponent``; the reader is Streamlit, which hands
-    back the *raw* header value without percent-decoding it. A Firebase refresh
-    token contains ``/``, ``+`` and ``=`` often enough that skipping the decode
+    The writer is ``encodeURIComponent``; the reader hands back the *raw*
+    header value without percent-decoding it. A Firebase refresh token
+    contains ``/``, ``+`` and ``=`` often enough that skipping the decode
     returned ``AMf-vBx%2F…`` to Google, which answered INVALID_REFRESH_TOKEN —
     and every browser refresh signed the person out. Decoding here is what
     makes a reload restore the session.
     """
-    try:
-        raw = st.context.cookies.get(name)
-    except Exception:  # noqa: BLE001 - no browser (tests), or an old runtime
-        return ""
+    raw = _cookie_jar().get(name, "")
     # Only a real cookie string counts: without a browser the lookup may hand
     # back a stand-in object (a Mock) that is not a string at all.
     if not isinstance(raw, str) or not raw:
@@ -329,14 +394,27 @@ def _session_window(started: float | None = None) -> tuple[float, float]:
 
 
 def restore() -> AuthUser | None:
-    """Once per session: turn the cookie's refresh token into a signed-in
-    user by asking Google. Returns None when there is nothing to restore or
-    Google refuses; either way the login page is what comes next."""
+    """Turn the cookie's refresh token into a signed-in user by asking Google.
+
+    Returns None when there is nothing to restore or Google refuses; either
+    way the login page is what comes next.
+
+    The "only once per session" guard is spent when an exchange is actually
+    *attempted*, not merely when this is called. Streamlit can hand back an
+    empty cookie jar on a run whose client context it has not resolved, and
+    marking the attempt used up on such a run is what turned one blind run
+    into a permanent sign-out: the cookie was there, the browser kept sending
+    it, and nothing ever looked again. With no cookie in sight there is
+    nothing to spend, so a later run of the same session can still restore.
+    """
     if st.session_state.get("auth_restore_tried"):
         return None
-    st.session_state["auth_restore_tried"] = True
     token = _cookie()
-    if not token or not firebase.is_configured():
+    if not token:
+        return None
+    st.session_state["auth_restore_tried"] = True
+    if not firebase.is_configured():
+        print("[auth] stored session not restored: Firebase is not configured here", flush=True)
         return None
     started, expires = _session_window(_cookie_started())
     if time.time() >= expires:
@@ -417,13 +495,76 @@ def flush_cookie() -> None:
     token = st.session_state.pop("auth_cookie_set", "")
     if token:
         expires = float(st.session_state.get(SESSION_EXPIRES_KEY, 0) or 0)
-        max_age = max(0, int(expires - time.time()))
-        scripts.append(_cookie_script(token, max_age))
+        max_age = int(expires - time.time()) if expires else 0
         started = st.session_state.pop("auth_session_cookie_set", "")
-        if started:
-            scripts.append(_cookie_script(str(started), max_age, SESSION_STARTED_COOKIE))
+        # ``Max-Age=0`` *deletes* a cookie. Writing one here — which is what a
+        # missing or already-passed deadline would produce — would silently
+        # throw away the session we are trying to persist, so nothing is
+        # written instead and the deadline is left to expire the session.
+        if max_age > 0:
+            scripts.append(_cookie_script(token, max_age))
+            if started:
+                scripts.append(_cookie_script(str(started), max_age, SESSION_STARTED_COOKIE))
+        else:
+            print("[auth] session cookie not written: no time left on the deadline", flush=True)
     if scripts:
         components.html("".join(scripts), height=0)
+
+
+#: Guards the one reload below, per browser tab.
+_RETRY_FLAG = "tr_restore_retry"
+
+
+def restore_hint() -> None:
+    """Reload once when the browser holds a session cookie the server missed.
+
+    ``st.context.cookies`` can answer empty for a run whose client context
+    Streamlit has not resolved, and there is no way to ask it again from the
+    server — the Cookie header is read at the websocket handshake. A reload
+    gives the session a fresh handshake, which is exactly what it needs.
+
+    Only ever reached when nobody is signed in *and* the server found no
+    cookie, so it cannot interfere with a working session. ``sessionStorage``
+    holds the guard, so this happens at most once per tab and can never loop:
+    if the reload does not help, the login page simply stays.
+    """
+    if st.session_state.get("auth_restore_tried") or _cookie():
+        return
+    import streamlit.components.v1 as components
+
+    components.html(
+        "<script>(function(){try{"
+        "var w=window.parent,d=w.document;"
+        f"var n={json.dumps(COOKIE)};"
+        "if(!d.cookie.split('; ').some(function(c){return c.indexOf(n+'=')===0;}))return;"
+        f"if(w.sessionStorage.getItem({json.dumps(_RETRY_FLAG)}))return;"
+        f"w.sessionStorage.setItem({json.dumps(_RETRY_FLAG)},'1');"
+        "w.location.reload();"
+        "}catch(e){}})();</script>",
+        height=0,
+    )
+
+
+def _cookie_script(value: str, max_age: int, name: str = COOKIE) -> str:
+    # json.dumps makes the value a JS string literal, and "</" is escaped so
+    # the literal can never close the script element; the value is only ever
+    # a token Google issued, but the rule costs nothing.
+    literal = json.dumps(value).replace("</", r"<\/")
+    # Writing a session cookie means the handshake works, so the one-reload
+    # guard is released and stays available for a future blind run.
+    release = (f"try{{window.parent.sessionStorage.removeItem({json.dumps(_RETRY_FLAG)});}}catch(e){{}}"
+               if max_age > 0 else "")
+    return (
+        "<script>(function(){try{"
+        "var d=window.parent.document;"
+        f"var max_age={int(max_age)};"
+        "var s=(window.parent.location.protocol==='https:')?'; Secure':'';"
+        "var e=max_age?'; Expires='+new Date(Date.now()+max_age*1000).toUTCString():'; Expires=Thu, 01 Jan 1970 00:00:00 GMT';"
+        f"d.cookie={json.dumps(name)}+'='+encodeURIComponent({literal})"
+        f"+'; Max-Age={int(max_age)}; Path=/; SameSite=Lax'+e+s;"
+        f"{release}"
+        "}catch(e){}})();</script>"
+    )
 
 
 def _cookie_script(value: str, max_age: int, name: str = COOKIE) -> str:
@@ -460,6 +601,7 @@ __all__ = [
     "apply_pending_reset",
     "request_reset",
     "restore",
+    "restore_hint",
     "set_pending",
     "sign_in_user",
     "sign_out",

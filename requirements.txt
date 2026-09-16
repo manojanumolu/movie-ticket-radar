@@ -1,4 +1,6 @@
-streamlit>=1.40
+# 1.42 is where st.context.cookies exists. Below it the session cookie is
+# unreadable, so every browser refresh would sign the user out.
+streamlit>=1.42
 requests>=2.32
 # BookMyShow's bot check refuses urllib3's TLS fingerprint outright; curl_cffi
 # replays a real browser's handshake. See platforms/http.py for the evidence.
