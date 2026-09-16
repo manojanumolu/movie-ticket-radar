@@ -1,6 +1,19 @@
 [
   {
     "monitor_id": "ebbbc457ab48",
+    "kind": "STOPPED",
+    "message": "Monitoring stopped — you stopped this alert.",
+    "movie": "Hanuman Ansh",
+    "language": "Hindi",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+    "targets": [
+      "ALLU Cinemas · Dolby Cinema"
+    ],
+    "at": "2026-09-16T14:57:13.061570+05:30",
+    "owner_uid": "UDTGiCeizkY3RAZpy9Zg53pKHE22"
+  },
+  {
+    "monitor_id": "ebbbc457ab48",
     "kind": "CREATED",
     "message": "Monitor created.",
     "movie": "Hanuman Ansh",
@@ -559,16 +572,5 @@
       "AMB Cinemas · HDR By Barco"
     ],
     "at": "2026-09-14T18:54:16.095783+05:30"
-  },
-  {
-    "monitor_id": "8a6a36e44881",
-    "kind": "EXPIRED",
-    "message": "Monitoring expired — reached the end time you set.",
-    "movie": "Hanuman Ansh",
-    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
-    "targets": [
-      "AMB Cinemas · Barco Flagship Laser Dolby Atmos"
-    ],
-    "at": "2026-09-14T18:35:33.431619+05:30"
   }
 ]
