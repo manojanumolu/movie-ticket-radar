@@ -84,6 +84,7 @@ MESSAGES: dict[str, str] = {
     "API_KEY_INVALID": "TicketRadar's sign-in isn't configured correctly on this host.",
     "CONFIGURATION_NOT_FOUND": "TicketRadar's sign-in isn't configured correctly on this host.",
     "EMAIL_NOT_VERIFIED": "Verify your email address first — the link is in your inbox.",
+    "CREDENTIAL_TOO_OLD_LOGIN_AGAIN": "Please sign in again to confirm account deletion.",
     "network": "Couldn't reach the sign-in service. Check your connection and try again.",
     "not_configured": "Sign-in isn't configured on this host yet — the Firebase Web API key is missing.",
 }
@@ -345,6 +346,17 @@ class FirebaseAuth:
             "display_name": str(user.get("displayName", "") or ""),
             "email_verified": bool(user.get("emailVerified", False)),
         }
+
+    def delete_account(self, id_token: str) -> None:
+        """``POST accounts:delete {idToken}`` — permanently remove the account
+        the token belongs to.
+
+        The ID token is the authority: Firebase decides *which* account this
+        deletes, never a UID the page supplied. Firebase refuses a token that
+        is too old with ``CREDENTIAL_TOO_OLD_LOGIN_AGAIN``, which is surfaced
+        as "sign in again to confirm" rather than worked around.
+        """
+        self._call("delete", {"idToken": id_token})
 
 
 def _credentials(body: dict[str, Any]) -> Credentials:

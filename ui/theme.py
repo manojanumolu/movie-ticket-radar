@@ -240,6 +240,16 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 .tr-acct-menu .n { font-size:13.5px; font-weight:700; color:var(--tr-text); overflow-wrap:anywhere; }
 .tr-acct-menu .m { font-size:11.5px; color:var(--tr-text-3); overflow-wrap:anywhere; margin-top:2px; }
 .tr-acct-menu .k { font-family:var(--tr-mono); font-size:9px; letter-spacing:.18em; color:var(--tr-text-4); margin-top:8px; }
+/* the destructive action is set apart from the ordinary ones */
+.tr-acct-sep { height:1px; background:var(--tr-border); margin:8px 0 6px; }
+[class*="st-key-acct_delete"] button { color:#FF8A8A !important; border-color:rgba(255,80,80,.28) !important; }
+[class*="st-key-acct_delete"] button:hover { background:rgba(255,51,85,.10) !important; border-color:rgba(255,80,80,.55) !important; }
+/* the confirmation panel */
+[class*="st-key-trcard_delacct"] { border-color:rgba(255,80,80,.45) !important; background:linear-gradient(180deg,rgba(255,51,85,.07),rgba(255,51,85,.02)) !important; }
+.tr-danger .t { font-size:16px; font-weight:800; color:#FF8A8A; letter-spacing:-.01em; }
+.tr-danger .s { font-size:13px; color:var(--tr-text-2); margin-top:6px; line-height:1.55; }
+[class*="st-key-acct_delete_confirm"] button { background:#E02742 !important; border-color:#E02742 !important; }
+[class*="st-key-acct_delete_confirm"] button:disabled { opacity:.45 !important; }
 [data-testid="stPopoverBody"] .stButton > button { min-height:38px; font-size:13px; font-weight:600; justify-content:flex-start; gap:10px;
   padding:.4rem .7rem; border-radius:10px; box-shadow:none; background:transparent; border-color:transparent; color:var(--tr-text-2); }
 [data-testid="stPopoverBody"] .stButton > button p { font-size:13px; font-weight:600; }
