@@ -374,6 +374,52 @@ def _cookie_jar() -> dict[str, str]:
     return _parse_cookie_header(raw or _cookie_header_from_runtime())
 
 
+
+def cookie_report() -> dict[str, object]:
+    """Safe, value-free facts about what this run could see.
+
+    Counts and booleans only — never a cookie value, a token or an address —
+    so it is safe both in a log and on screen behind ``?diag=1``.
+    """
+    report: dict[str, object] = {"embedded": _embedded()}
+    try:
+        import streamlit as _st
+
+        report["streamlit"] = _st.__version__
+    except Exception:  # noqa: BLE001
+        report["streamlit"] = "?"
+
+    ctx_names: list[str] = []
+    try:
+        ctx_names = sorted(dict(st.context.cookies).keys())
+    except Exception as exc:  # noqa: BLE001
+        report["context_cookies_error"] = type(exc).__name__
+    report["context_cookies"] = len(ctx_names)
+
+    header_raw = ""
+    try:
+        header_raw = str(st.context.headers.get("Cookie") or "")
+    except Exception as exc:  # noqa: BLE001
+        report["headers_error"] = type(exc).__name__
+    report["header_cookies"] = len(_parse_cookie_header(header_raw))
+
+    runtime_raw = _cookie_header_from_runtime()
+    report["runtime_cookies"] = len(_parse_cookie_header(runtime_raw))
+
+    jar = _cookie_jar()
+    report["jar"] = len(jar)
+    report["session_cookie"] = COOKIE in jar
+    report["started_cookie"] = SESSION_STARTED_COOKIE in jar
+    # Names are not secrets and say whether cookies reach the app at all.
+    report["names"] = ",".join(sorted(jar)[:8])
+    return report
+
+
+def log_cookie_report() -> None:
+    bits = " ".join(f"{k}={v}" for k, v in cookie_report().items())
+    print(f"[auth] cookies: {bits}", flush=True)
+
+
 def _read_cookie(name: str) -> str:
     """One cookie the browser sent when this session opened, decoded.
 
@@ -637,6 +683,7 @@ __all__ = [
     "clear_pending",
     "continue_if_verified",
     "current_uid",
+    "cookie_report",
     "current_user",
     "log_cleared",
     "log_restore",
