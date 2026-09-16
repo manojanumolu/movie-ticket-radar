@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from urllib.parse import unquote
 
 import streamlit as st
@@ -359,6 +360,12 @@ def _cookie_jar() -> dict[str, str]:
     on a browser refresh. So two fallbacks read the very same Cookie header
     from further down before we conclude there is nothing to restore.
     """
+    # The browser's own answer first. On Streamlit Community Cloud it is the
+    # only one that ever arrives: every server-side reader there reports zero.
+    reported = bridge_jar()
+    if reported:
+        return reported
+
     try:
         jar = dict(st.context.cookies)
     except Exception:  # noqa: BLE001 - no browser (tests), or Streamlit < 1.42
@@ -373,6 +380,85 @@ def _cookie_jar() -> dict[str, str]:
         raw = ""
     return _parse_cookie_header(raw or _cookie_header_from_runtime())
 
+
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The browser bridge
+# ──────────────────────────────────────────────────────────────────────────
+#: What the browser last told us it holds, and how many runs we have waited.
+BRIDGE_JAR_KEY = "auth_bridge_jar"
+BRIDGE_RUNS_KEY = "auth_bridge_runs"
+BRIDGE_OPS_KEY = "auth_cookie_ops"
+#: How many runs the gate will wait for the browser to answer before giving up
+#: and showing the login page. The component answers on its first render, so
+#: this is a safety net against a browser that never replies — never a loop.
+BRIDGE_MAX_RUNS = 3
+#: A browser bridge needs a browser. ``AppTest`` has none, so the suite turns
+#: this off and the gate decides from the server-side readers alone; the tests
+#: that exercise the bridge itself turn it back on.
+BRIDGE_ENABLED = True
+
+
+def _bridge_component():
+    """The component, declared once per process."""
+    global _BRIDGE
+    if _BRIDGE is None:
+        import streamlit.components.v1 as components
+
+        _BRIDGE = components.declare_component(
+            "tr_auth_bridge", path=str(Path(__file__).parent / "bridge"))
+    return _BRIDGE
+
+
+_BRIDGE = None
+
+
+def queue_cookie(name: str, value: str, max_age: int) -> None:
+    """Ask the browser to write one cookie on the next bridge render."""
+    ops = list(st.session_state.get(BRIDGE_OPS_KEY, []))
+    ops.append({"name": name, "value": value, "max_age": int(max_age)})
+    st.session_state[BRIDGE_OPS_KEY] = ops
+
+
+def run_bridge() -> dict | None:
+    """Render the bridge: carry out any queued cookie writes and bring back
+    what the browser holds. ``None`` until the browser has answered.
+
+    The value travels on Streamlit's own component channel — the same private
+    websocket every widget value uses — and is never logged or put on screen.
+    """
+    ops = st.session_state.pop(BRIDGE_OPS_KEY, [])
+    try:
+        value = _bridge_component()(
+            ops=ops,
+            names=[COOKIE, SESSION_STARTED_COOKIE],
+            # Changes whenever there is work to do, so a repeat write is still
+            # a new render rather than a no-op.
+            nonce=len(ops) and time.time() or 0,
+            key="tr_auth_bridge",
+            default=None,
+        )
+    except Exception as exc:  # noqa: BLE001 - the gate must survive anything here
+        print(f"[auth] bridge unavailable: {type(exc).__name__}", flush=True)
+        return None
+    if isinstance(value, dict):
+        st.session_state[BRIDGE_JAR_KEY] = value
+        return value
+    return None
+
+
+def bridge_jar() -> dict[str, str]:
+    """The cookies the browser reported, or {} before it has answered."""
+    value = st.session_state.get(BRIDGE_JAR_KEY)
+    if not isinstance(value, dict):
+        return {}
+    return {k: v for k, v in value.items()
+            if k in (COOKIE, SESSION_STARTED_COOKIE) and isinstance(v, str) and v}
+
+
+def bridge_answered() -> bool:
+    return isinstance(st.session_state.get(BRIDGE_JAR_KEY), dict)
 
 
 def cookie_report() -> dict[str, object]:
@@ -569,111 +655,29 @@ def id_token() -> str:
 # The cookie itself — written by the browser, from a zero-height component
 # ──────────────────────────────────────────────────────────────────────────
 def flush_cookie() -> None:
-    """Emit the pending cookie write or clear, if there is one.
+    """Hand any pending cookie write or clear to the browser bridge.
 
-    Called from a page that is actually being painted (the app after a
-    sign-in, the login page after a sign-out): a script queued right before
-    ``st.rerun()`` might never reach the browser, so the intent is kept in
-    session state and acted on during the next full render.
+    The intent is kept in session state and acted on during a full render,
+    because a script queued right before ``st.rerun()`` might never reach the
+    browser. The bridge performs the write; nothing here renders HTML.
     """
-    import streamlit.components.v1 as components
-
-    scripts: list[str] = []
     if st.session_state.pop("auth_cookie_clear", False):
-        scripts.extend((_cookie_script("", 0), _cookie_script("", 0, SESSION_STARTED_COOKIE)))
+        queue_cookie(COOKIE, "", 0)
+        queue_cookie(SESSION_STARTED_COOKIE, "", 0)
     token = st.session_state.pop("auth_cookie_set", "")
-    if token:
-        expires = float(st.session_state.get(SESSION_EXPIRES_KEY, 0) or 0)
-        max_age = int(expires - time.time()) if expires else 0
-        started = st.session_state.pop("auth_session_cookie_set", "")
-        # ``Max-Age=0`` *deletes* a cookie. Writing one here — which is what a
-        # missing or already-passed deadline would produce — would silently
-        # throw away the session we are trying to persist, so nothing is
-        # written instead and the deadline is left to expire the session.
-        if max_age > 0:
-            scripts.append(_cookie_script(token, max_age))
-            if started:
-                scripts.append(_cookie_script(str(started), max_age, SESSION_STARTED_COOKIE))
-        else:
-            print("[auth] session cookie not written: no time left on the deadline", flush=True)
-    if scripts:
-        components.html("".join(scripts), height=0)
-
-
-#: Guards the one reload below, per browser tab.
-_RETRY_FLAG = "tr_restore_retry"
-
-
-def restore_hint() -> None:
-    """Reload once when the browser holds a session cookie the server missed.
-
-    ``st.context.cookies`` can answer empty for a run whose client context
-    Streamlit has not resolved, and there is no way to ask it again from the
-    server — the Cookie header is read at the websocket handshake. A reload
-    gives the session a fresh handshake, which is exactly what it needs.
-
-    Only ever reached when nobody is signed in *and* the server found no
-    cookie, so it cannot interfere with a working session. ``sessionStorage``
-    holds the guard, so this happens at most once per tab and can never loop:
-    if the reload does not help, the login page simply stays.
-    """
-    if st.session_state.get("auth_restore_tried") or _cookie():
+    if not token:
         return
-    import streamlit.components.v1 as components
-
-    components.html(
-        "<script>(function(){try{"
-        "var w=window.parent,d=w.document;"
-        f"var n={json.dumps(COOKIE)};"
-        "if(!d.cookie.split('; ').some(function(c){return c.indexOf(n+'=')===0;}))return;"
-        f"if(w.sessionStorage.getItem({json.dumps(_RETRY_FLAG)}))return;"
-        f"w.sessionStorage.setItem({json.dumps(_RETRY_FLAG)},'1');"
-        "w.location.reload();"
-        "}catch(e){}})();</script>",
-        height=0,
-    )
-
-
-def _cookie_script(value: str, max_age: int, name: str = COOKIE) -> str:
-    # json.dumps makes the value a JS string literal, and "</" is escaped so
-    # the literal can never close the script element; the value is only ever
-    # a token Google issued, but the rule costs nothing.
-    literal = json.dumps(value).replace("</", r"<\/")
-    # Writing a session cookie means the handshake works, so the one-reload
-    # guard is released and stays available for a future blind run.
-    release = (f"try{{window.parent.sessionStorage.removeItem({json.dumps(_RETRY_FLAG)});}}catch(e){{}}"
-               if max_age > 0 else "")
-    # Streamlit Community Cloud does not serve the app as the top-level page:
-    # the wrapper at <app>.streamlit.app holds the real app in an iframe at
-    # ``/~/+/``, so this component sits two frames deep. Writing only to
-    # ``window.parent`` reaches one document of that chain. Every reachable
-    # document in the chain is written to instead — each guarded on its own, so
-    # a cross-origin frame that throws cannot stop the others — and since they
-    # share an origin and Path=/, the repeats are the same cookie, not extras.
-    #
-    # SameSite: an embedded app is a nested browsing context, so the cookie is
-    # written as ``None`` (which browsers only honour with ``Secure``, over
-    # https) when the page really is framed, and as ``Lax`` when it is not.
-    return (
-        "<script>(function(){try{"
-        f"var max_age={int(max_age)};"
-        f"var name={json.dumps(name)};"
-        f"var value=encodeURIComponent({literal});"
-        "var docs=[];"
-        "try{docs.push(window.parent.document);}catch(e){}"
-        "try{if(window.parent.parent!==window.parent)docs.push(window.parent.parent.document);}catch(e){}"
-        "try{if(window.top.document&&docs.indexOf(window.top.document)<0)docs.push(window.top.document);}catch(e){}"
-        "var https=true;try{https=(window.parent.location.protocol==='https:');}catch(e){}"
-        "var framed=false;try{framed=(window.top!==window.parent);}catch(e){framed=true;}"
-        "var ss=(framed&&https)?'; SameSite=None':'; SameSite=Lax';"
-        "var s=https?'; Secure':'';"
-        "var e=max_age?'; Expires='+new Date(Date.now()+max_age*1000).toUTCString():'; Expires=Thu, 01 Jan 1970 00:00:00 GMT';"
-        "for(var i=0;i<docs.length;i++){try{"
-        "docs[i].cookie=name+'='+value+'; Max-Age='+max_age+'; Path=/'+ss+e+s;"
-        "}catch(err){}}"
-        f"{release}"
-        "}catch(e){}})();</script>"
-    )
+    expires = float(st.session_state.get(SESSION_EXPIRES_KEY, 0) or 0)
+    max_age = int(expires - time.time()) if expires else 0
+    started = st.session_state.pop("auth_session_cookie_set", "")
+    # ``Max-Age=0`` *deletes* a cookie. A missing or already-passed deadline
+    # would otherwise throw away the session we are trying to persist.
+    if max_age <= 0:
+        print("[auth] session cookie not written: no time left on the deadline", flush=True)
+        return
+    queue_cookie(COOKIE, token, max_age)
+    if started:
+        queue_cookie(SESSION_STARTED_COOKIE, str(started), max_age)
 
 
 __all__ = [
@@ -696,7 +700,6 @@ __all__ = [
     "apply_pending_reset",
     "request_reset",
     "restore",
-    "restore_hint",
     "set_pending",
     "sign_in_user",
     "sign_out",

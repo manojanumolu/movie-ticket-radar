@@ -77,6 +77,35 @@ def _install_fake() -> None:
     print(f"[fake-firebase] accounts ready; data in {data}", flush=True)
 
 
+def _simulate_streamlit_cloud() -> None:
+    """``TR_SIMULATE_CLOUD=1``: reproduce Streamlit Community Cloud exactly.
+
+    The deployed logs show every server-side reader returning zero on every
+    run — ``context_cookies=0 header_cookies=0 runtime_cookies=0``. Blinding
+    all three here means only the browser bridge can carry the session, which
+    is the condition the fix has to survive.
+    """
+    if os.environ.get("TR_SIMULATE_CLOUD") != "1":
+        return
+    from auth import session as auth_session
+
+    if getattr(auth_session, "_cloud_patched", False):
+        return
+    auth_session._cloud_patched = True
+    real_jar = auth_session._cookie_jar
+
+    def server_blind_jar():
+        # The bridge's answer still counts; the server readers never do.
+        reported = auth_session.bridge_jar()
+        if reported:
+            return reported
+        return {}
+
+    auth_session._cookie_jar = server_blind_jar
+    auth_session._cookie_header_from_runtime = lambda: ""
+    print("[harness] simulating Streamlit Cloud: no server-side cookies at all", flush=True)
+
+
 def _simulate_blind_first_run() -> None:
     """``TR_SIMULATE_BLIND_COOKIE=1``: reproduce the deployment symptom.
 
@@ -117,5 +146,6 @@ def _simulate_blind_first_run() -> None:
 
 
 _install_fake()
+_simulate_streamlit_cloud()
 _simulate_blind_first_run()
 runpy.run_path(str(ROOT / "app.py"), run_name="__main__")
