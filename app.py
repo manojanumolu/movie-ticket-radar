@@ -450,19 +450,20 @@ def problem_panel(monitor: Monitor, state: MonitorState) -> None:
 # Right rail
 # ──────────────────────────────────────────────────────────────────────────
 @st.fragment(run_every=30)
-def status_card(monitor_id: str) -> None:
+def status_card(monitor: Monitor, state: MonitorState) -> None:
     """Re-rendered on its own every 30s (DESIGN-SPEC §10).
 
     Keeps the countdown and "last checked" honest while the tab is open
-    without resetting the wizard above it, and picks up a check the worker
-    committed while you were looking at the page.
+    without resetting the wizard above it.
+
+    The monitor and its state are handed in, already loaded by the page. They
+    used to be fetched here, which meant every paint of Home read monitors and
+    state a second time — and, on Firestore, paid two more network round trips
+    for data the page was already holding. A fragment replays with the same
+    arguments, so the countdown still ticks every thirty seconds; what it no
+    longer does is re-read the store to do it.
     """
-    if state_store.backend_name() != "firestore":
-        sync_from_github()
-    monitor = next((m for m in load_monitors() if m.id == monitor_id), None)
-    if monitor is None:
-        return
-    C.active_monitor_card(monitor, load_state().get(monitor_id, MonitorState()))
+    C.active_monitor_card(monitor, state)
 
 
 def languages_of(monitors: list[Monitor]) -> dict[str, str]:
@@ -489,7 +490,7 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
         '<span>Active monitor</span>'
         f'<span class="tr-count">{len(active)}</span></div>'
     )
-    status_card(monitor.id)
+    status_card(monitor, state)
     problem_panel(monitor, state)
 
     if st.button("Stop monitoring", key=f"stop_{monitor.id}", use_container_width=True, icon=":material/stop:"):

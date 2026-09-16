@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -191,9 +192,32 @@ def project_from_env() -> str:
 # ──────────────────────────────────────────────────────────────────────────
 # Transport — one function, so the tests can replace the service
 # ──────────────────────────────────────────────────────────────────────────
+#: One HTTP session per thread, kept open.
+#:
+#: ``requests.request`` opens a Session, uses it once and closes it, so every
+#: Firestore call paid for a fresh TCP connection and TLS handshake. Measured
+#: against the live project that was ~200 ms on top of a ~300 ms round trip —
+#: on every request, and a page makes several. Keeping the connection alive
+#: removes the handshake entirely.
+#:
+#: It is thread-*local* rather than a single shared session because Streamlit
+#: reruns and fragments execute on different threads and ``requests.Session``
+#: is not guaranteed thread-safe. One session per thread is the smallest safe
+#: thing that still reuses connections: no pool to manage, and no sharing.
+_sessions = threading.local()
+
+
+def _session() -> requests.Session:
+    session = getattr(_sessions, "session", None)
+    if session is None:
+        session = requests.Session()
+        _sessions.session = session
+    return session
+
+
 def _http(method: str, url: str, token: str, body: dict[str, Any] | None) -> tuple[int, Any]:
-    response = requests.request(method, url, json=body, timeout=TIMEOUT,
-                                headers={"Authorization": f"Bearer {token}"})
+    response = _session().request(method, url, json=body, timeout=TIMEOUT,
+                                  headers={"Authorization": f"Bearer {token}"})
     try:
         payload = response.json()
     except ValueError:
