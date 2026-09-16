@@ -100,14 +100,12 @@ def _scope() -> Scope | None:
             enabled = str(st.secrets.get("firestore", {}).get("enabled", "")).strip().lower()
         except Exception:  # noqa: BLE001 - no secrets file in tests/local runs
             enabled = ""
-    if enabled not in {"1", "true", "yes", "on"}:
-        return None
-
     user = auth_session.current_user()
     project = firebase.config().project_id
-    if user is None or not project:
+    if user is None:
         return None
-    return Scope(project, user.uid, auth_session.id_token)
+    return Scope(project, user.uid, auth_session.id_token,
+                 firestore_enabled=enabled in {"1", "true", "yes", "on"})
 
 
 state_store.set_scope_provider(_scope)

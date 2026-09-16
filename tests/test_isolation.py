@@ -231,6 +231,57 @@ def test_the_legacy_json_files_are_not_read_once_firestore_is_the_store(cloud, m
 # ──────────────────────────────────────────────────────────────────────────
 # 3–5, 7. Ownership is the UID, and nothing crosses it
 # ──────────────────────────────────────────────────────────────────────────
+def test_json_compatibility_store_is_private_per_signed_in_account(tmp_path, monkeypatch, make_monitor):
+    """Before Firestore is enabled, the JSON compatibility path is UID-scoped."""
+    monkeypatch.setattr(state_mod, "MONITORS_FILE", tmp_path / "monitors.json")
+    monkeypatch.setattr(state_mod, "STATE_FILE", tmp_path / "state.json")
+    monkeypatch.setattr(state_mod, "SETTINGS_FILE", tmp_path / "settings.json")
+    history: list[dict] = [{"message": "old shared event"}]
+    monkeypatch.setattr(state_mod, "_json_load_history", lambda: list(history))
+    monkeypatch.setattr(state_mod, "_json_save_history", lambda value, **_: history.__setitem__(slice(None), value))
+    monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT", raising=False)
+
+    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False))
+    a = make_monitor(email="a@example.com")
+    state_mod.upsert_monitor(a, mirror=False)
+    state_mod.record_history(a, "CREATED", "A's monitor", mirror=False)
+    state_mod.save_settings({"notify_email": "a@example.com", "default_interval": 15}, mirror=False)
+    state_mod.save_state({a.id: MonitorState(check_count=2)}, mirror=False)
+
+    state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False))
+    assert state_mod.load_monitors() == []
+    assert state_mod.load_history() == []
+    assert state_mod.load_state() == {}
+    assert state_mod.load_settings() == {"notify_email": "", "default_interval": 10}
+    state_mod.set_scope_provider(None)
+
+
+def test_json_compatibility_delete_removes_only_the_owners_state(tmp_path, monkeypatch, make_monitor):
+    monkeypatch.setattr(state_mod, "MONITORS_FILE", tmp_path / "monitors.json")
+    monkeypatch.setattr(state_mod, "STATE_FILE", tmp_path / "state.json")
+    monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT", raising=False)
+
+    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False))
+    a = make_monitor(email="a@example.com")
+    state_mod.upsert_monitor(a, mirror=False)
+    state_mod.save_state({a.id: MonitorState(check_count=2)}, mirror=False)
+
+    state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False))
+    b = make_monitor(email="b@example.com")
+    state_mod.upsert_monitor(b, mirror=False)
+    state_mod.save_state({b.id: MonitorState(check_count=3)}, mirror=False)
+
+    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False))
+    state_mod.delete_monitor(a.id, mirror=False)
+    assert state_mod.load_monitors() == []
+    assert state_mod.load_state() == {}
+
+    state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False))
+    assert [monitor.id for monitor in state_mod.load_monitors()] == [b.id]
+    assert state_mod.load_state()[b.id].check_count == 3
+    state_mod.set_scope_provider(None)
+
+
 def test_creating_a_monitor_stores_the_owner_uid(cloud, make_monitor):
     cloud.as_user("uid-a")
     m = make_monitor(email="a@example.com")                          # no owner set by the caller…

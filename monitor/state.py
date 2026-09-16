@@ -17,9 +17,10 @@ and the worker never know which:
   app reads and writes as the signed-in person (their ID token; the rules
   in ``firestore.rules`` allow only ``owner_uid == uid``), and the worker
   reads everything with a service account. This is what a deployment uses.
-* **``data/*.json``** in the repository — the original store, still what the
-  tests and a machine without Firebase use. It has no notion of owner and
-  is global; that is exactly why it is no longer the store for people.
+* **``data/*.json``** in the repository — the original compatibility store,
+  still what tests and a machine without Firebase use. Command-line use sees
+  the legacy global view; a signed-in browser is restricted to records stamped
+  with its UID.
 
 The app registers a *scope provider* (:func:`set_scope_provider`) that
 answers "who is this call for?" from Streamlit's own session, so nothing in
@@ -39,6 +40,7 @@ from config import firestore as fs
 from config.store import (
     DEFAULTS,
     MONITORS_FILE,
+    SETTINGS_FILE,
     STATE_FILE,
     load_history as _json_load_history,
     load_settings as _json_load_settings,
@@ -72,6 +74,10 @@ class Scope:
     project_id: str
     uid: str
     token: Callable[[], str]
+    #: Firestore is only used after the deployment opts in. Before then the
+    #: legacy JSON compatibility store is still scoped to this UID, never
+    #: shared with every signed-in person.
+    firestore_enabled: bool = True
 
 
 ScopeProvider = Callable[[], "Scope | None"]
@@ -100,9 +106,11 @@ def _backend() -> "_Store":
     global _admin
     if _scope_provider is not None:
         scope = _scope_provider()
-        if scope is not None and scope.project_id and scope.uid:
-            client = fs.FirestoreClient(scope.project_id, scope.token, transport=_transport or fs._http)
-            return _FirestoreStore(client, uid=scope.uid)
+        if scope is not None and scope.uid:
+            if scope.firestore_enabled and scope.project_id:
+                client = fs.FirestoreClient(scope.project_id, scope.token, transport=_transport or fs._http)
+                return _FirestoreStore(client, uid=scope.uid)
+            return _JsonStore(uid=scope.uid)
     info = fs.service_account_from_env()
     project = fs.project_from_env()
     if info and project:
@@ -120,6 +128,15 @@ def _backend() -> "_Store":
 class _JsonStore:
     name = "json"
 
+    def __init__(self, uid: str | None = None):
+        # ``None`` is the worker / legacy command-line view (all monitors).
+        # A UID is the browser fallback view: old ownerless records and every
+        # other account's records are deliberately invisible.
+        self.uid = uid
+
+    def _owns(self, item: dict[str, Any]) -> bool:
+        return self.uid is None or str(item.get("owner_uid", "")) == self.uid
+
     def load_monitors(self) -> list[Monitor]:
         raw = read_json(MONITORS_FILE)
         if not isinstance(raw, list):
@@ -127,27 +144,51 @@ class _JsonStore:
         monitors: list[Monitor] = []
         for item in raw:
             try:
-                monitors.append(Monitor.from_dict(item))
+                if self._owns(item):
+                    monitors.append(Monitor.from_dict(item))
             except (KeyError, TypeError, ValueError) as exc:
                 print(f"[state] skipping unreadable monitor: {exc}")
         return monitors
 
     def save_monitors(self, monitors: list[Monitor], *, mirror: bool = True) -> None:
-        write_json(MONITORS_FILE, [m.to_dict() for m in monitors], mirror=mirror,
+        if self.uid is None:
+            payload = [m.to_dict() for m in monitors]
+        else:
+            raw = read_json(MONITORS_FILE)
+            others = [item for item in raw if isinstance(item, dict) and not self._owns(item)] if isinstance(raw, list) else []
+            for monitor in monitors:
+                if monitor.owner_uid and monitor.owner_uid != self.uid:
+                    raise PermissionError("a monitor cannot be written under another account")
+                monitor.owner_uid = self.uid
+            payload = others + [m.to_dict() for m in monitors]
+        write_json(MONITORS_FILE, payload, mirror=mirror,
                    message="chore: update monitors")
 
     def delete_monitor(self, monitor_id: str, *, mirror: bool = True) -> None:
-        self.save_monitors([m for m in self.load_monitors() if m.id != monitor_id], mirror=mirror)
+        # Clear state while the monitor is still visible to this UID.  Once the
+        # monitor is removed, ``load_state`` quite properly cannot establish
+        # that the now-orphaned state document belonged to this browser.
         self.clear_monitor_state(monitor_id, mirror=mirror)
+        self.save_monitors([m for m in self.load_monitors() if m.id != monitor_id], mirror=mirror)
 
     def load_state(self) -> dict[str, MonitorState]:
         raw = read_json(STATE_FILE)
         if not isinstance(raw, dict):
             return {}
-        return {k: MonitorState.from_dict(v) for k, v in raw.items()}
+        owned_ids = {m.id for m in self.load_monitors()} if self.uid else None
+        return {k: MonitorState.from_dict(v) for k, v in raw.items()
+                if (owned_ids is None or k in owned_ids) and isinstance(v, dict)}
 
     def save_state(self, state: dict[str, MonitorState], *, mirror: bool = True) -> None:
-        write_json(STATE_FILE, {k: v.to_dict() for k, v in state.items()}, mirror=mirror,
+        if self.uid is None:
+            payload = {k: v.to_dict() for k, v in state.items()}
+        else:
+            raw = read_json(STATE_FILE)
+            payload = raw if isinstance(raw, dict) else {}
+            owned_ids = {m.id for m in self.load_monitors()}
+            payload = {k: v for k, v in payload.items() if k not in owned_ids}
+            payload.update({k: v.to_dict() for k, v in state.items() if k in owned_ids})
+        write_json(STATE_FILE, payload, mirror=mirror,
                    message="chore: update monitoring state")
 
     def clear_monitor_state(self, monitor_id: str, *, mirror: bool = True) -> None:
@@ -156,21 +197,38 @@ class _JsonStore:
             self.save_state(state, mirror=mirror)
 
     def load_history(self) -> list[dict[str, Any]]:
-        return _json_load_history()
+        history = _json_load_history()
+        return [item for item in history if isinstance(item, dict) and self._owns(item)]
 
     def append_history(self, monitor: Monitor, item: dict[str, Any], *, mirror: bool = True) -> None:
-        history = self.load_history()
-        history.insert(0, item)
+        if self.uid is None:
+            history = self.load_history()
+            history.insert(0, item)
+        else:
+            history = _json_load_history()
+            history.insert(0, {**item, "owner_uid": self.uid})
         _json_save_history(history, mirror=mirror)
 
     def recent_history_for(self, monitor: Monitor) -> list[dict[str, Any]]:
         return self.load_history()[:8]
 
     def load_settings(self) -> dict[str, Any]:
-        return _json_load_settings()
+        if self.uid is None:
+            return _json_load_settings()
+        raw = read_json(SETTINGS_FILE)
+        users = raw.get("users", {}) if isinstance(raw, dict) else {}
+        mine = users.get(self.uid, {}) if isinstance(users, dict) else {}
+        return {**DEFAULTS["settings.json"], **(mine if isinstance(mine, dict) else {})}
 
     def save_settings(self, settings: dict[str, Any], *, mirror: bool = True) -> None:
-        _json_save_settings(settings, mirror=mirror)
+        if self.uid is None:
+            _json_save_settings(settings, mirror=mirror)
+            return
+        raw = read_json(SETTINGS_FILE)
+        payload = raw if isinstance(raw, dict) else {}
+        users = payload.get("users") if isinstance(payload.get("users"), dict) else {}
+        payload = {"users": {**users, self.uid: dict(settings)}}
+        write_json(SETTINGS_FILE, payload, mirror=mirror, message="chore: update settings")
 
 
 _JSON = _JsonStore()

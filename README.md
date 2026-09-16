@@ -356,6 +356,12 @@ Verification and password-reset emails come from Firebase's own templates
 (*Authentication → Templates*), which is where you brand them. TicketRadar's
 Gmail SMTP is only ever used for ticket alerts.
 
+For a matching verification email, paste
+[`docs/firebase-verification-email.html`](docs/firebase-verification-email.html)
+into Firebase Console → **Authentication → Templates → Email address
+verification**. Keep Firebase's `%LINK%` placeholder unchanged so its secure
+verification button continues to work.
+
 ### 5. Firestore (private monitor data)
 
 Create a **Firestore Database** in the same Firebase project, then publish
