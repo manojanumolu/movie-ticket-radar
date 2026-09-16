@@ -1,6 +1,19 @@
 [
   {
     "monitor_id": "b9f871a85ebd",
+    "kind": "TICKETS_LIVE",
+    "message": "ALLU Cinemas · Barco Laser 4K Atmos — Tickets Live",
+    "movie": "Hanuman Ansh",
+    "language": "Hindi",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+    "targets": [
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-16T14:57:40.593772+05:30",
+    "booking_url": "https://in.bookmyshow.com/buytickets/hanuman-ansh-hyderabad/cinema-hyde-ALUC-MT/20260917"
+  },
+  {
+    "monitor_id": "b9f871a85ebd",
     "kind": "CREATED",
     "message": "Monitor created.",
     "movie": "Hanuman Ansh",
@@ -561,17 +574,5 @@
       "ALLU Cinemas · Dolby Cinema"
     ],
     "at": "2026-09-14T19:08:22.725986+05:30"
-  },
-  {
-    "monitor_id": "0368d3117bd3",
-    "kind": "STOPPED",
-    "message": "Monitoring stopped — you stopped this alert.",
-    "movie": "Hanuman Ansh",
-    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
-    "targets": [
-      "ALLU Cinemas · Dolby Cinema",
-      "AMB Cinemas · HDR By Barco"
-    ],
-    "at": "2026-09-14T19:07:44.412272+05:30"
   }
 ]
