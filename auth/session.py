@@ -30,7 +30,10 @@ USER_KEY = "auth_user"
 #: resend the verification email, never enough to be ``current_user()``.
 PENDING_KEY = "auth_pending"
 COOKIE = "tr_session"
-COOKIE_DAYS = 30
+# A deliberate one-week remembered sign-in. It is renewed whenever Firebase
+# accepts the refresh token, so normal use does not surprise someone with a
+# login prompt; signing out clears it immediately.
+COOKIE_DAYS = 7
 #: Refresh the ID token this many seconds before Firebase says it expires.
 REFRESH_MARGIN = 120
 #: What survives a session reset: the account that *caused* it (a sign-in
@@ -273,6 +276,9 @@ def restore() -> AuthUser | None:
         st.session_state["auth_cookie_clear"] = True
         return None
     st.session_state[USER_KEY] = user
+    # A successful restore is also a successful Google re-validation. Renew
+    # the browser cookie here, giving an active person another full week.
+    st.session_state["auth_cookie_set"] = user.refresh_token
     return user
 
 
@@ -328,9 +334,11 @@ def _cookie_script(value: str, max_age: int) -> str:
     return (
         "<script>(function(){try{"
         "var d=window.parent.document;"
+        f"var max_age={int(max_age)};"
         "var s=(window.parent.location.protocol==='https:')?'; Secure':'';"
+        "var e=max_age?'; Expires='+new Date(Date.now()+max_age*1000).toUTCString():'; Expires=Thu, 01 Jan 1970 00:00:00 GMT';"
         f"d.cookie={json.dumps(COOKIE)}+'='+encodeURIComponent({literal})"
-        f"+'; Max-Age={int(max_age)}; Path=/; SameSite=Lax'+s;"
+        f"+'; Max-Age={int(max_age)}; Path=/; SameSite=Lax'+e+s;"
         "}catch(e){}})();</script>"
     )
 
