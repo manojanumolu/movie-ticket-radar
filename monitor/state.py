@@ -241,6 +241,10 @@ class _JsonStore:
         if state.pop(monitor_id, None) is not None:
             self.save_state(state, mirror=mirror)
 
+    def states_for(self, monitor_ids: list[str]) -> dict[str, MonitorState]:
+        wanted = set(monitor_ids)
+        return {k: v for k, v in self.load_state().items() if k in wanted}
+
     def load_history(self) -> list[dict[str, Any]]:
         history = _json_load_history()
         return [item for item in history if isinstance(item, dict) and self._owns(item)]
@@ -411,6 +415,29 @@ class _FirestoreStore:
         doc = self.client.get(STATES, monitor_id)
         if doc is not None and self._owned(doc):
             self.client.delete(STATES, monitor_id)
+
+    def states_for(self, monitor_ids: list[str]) -> dict[str, MonitorState]:
+        """The observed state of named monitors, one document read each.
+
+        A direct read rather than the collection query :meth:`load_state`
+        makes, because the caller is the live status panel showing one
+        monitor: it wants that monitor's document and nothing else.
+        Ownership is re-checked here as everywhere, and a document belonging
+        to somebody else is refused by the rules before we ever see it —
+        which from here is indistinguishable from one that does not exist,
+        and is treated the same way.
+        """
+        out: dict[str, MonitorState] = {}
+        for monitor_id in monitor_ids:
+            try:
+                doc = self.client.get(STATES, monitor_id)
+            except fs.FirestoreError as exc:
+                if self.uid is not None and exc.status in (401, 403):
+                    continue
+                raise
+            if doc is not None and self._owned(doc):
+                out[monitor_id] = MonitorState.from_dict(doc)
+        return out
 
     # -- history ----------------------------------------------------------
     def _history_docs(self, owner: str | None) -> list[dict[str, Any]]:
@@ -921,6 +948,28 @@ def get_monitor_state(monitor_id: str) -> MonitorState:
     return load_state().get(monitor_id, MonitorState())
 
 
+def load_states_for(monitor_ids: list[str]) -> dict[str, MonitorState]:
+    """The freshest observed state of just these monitors.
+
+    This is the live status panel's read, and it is deliberately none of the
+    things a page load is. The worker writes a monitor's state minutes after
+    the page was drawn — the first check lands, a theatre goes AVAILABLE —
+    and an open browser has to show that without the person pressing refresh.
+    A Streamlit fragment replays with the arguments it was *first* given, so
+    re-rendering alone would show the same state forever; it has to ask.
+
+    It is therefore not cached, and it does not disturb the cache: nothing
+    here evicts monitors, history or settings, and the next full rerun reads
+    what it always did. On Firestore this is one document read per displayed
+    monitor — one request every thirty seconds for the rail's single active
+    monitor, against the same pooled connection as everything else.
+    """
+    ids = [i for i in dict.fromkeys(monitor_ids) if i]
+    if not ids:
+        return {}
+    return _backend().states_for(ids)
+
+
 def clear_monitor_state(monitor_id: str, *, mirror: bool = True) -> None:
     invalidate_cache("state")
     _backend().clear_monitor_state(monitor_id, mirror=mirror)
@@ -988,6 +1037,7 @@ __all__ = [
     "load_monitors",
     "load_settings",
     "load_state",
+    "load_states_for",
     "purge_user_data",
     "invalidate_cache",
     "record_history",

@@ -461,20 +461,36 @@ def problem_panel(monitor: Monitor, state: MonitorState) -> None:
 # Right rail
 # ──────────────────────────────────────────────────────────────────────────
 @st.fragment(run_every=30)
-def status_card(monitor: Monitor, state: MonitorState) -> None:
-    """Re-rendered on its own every 30s (DESIGN-SPEC §10).
+def live_monitor_panel(monitor: Monitor, state: MonitorState) -> None:
+    """The rail's live region, on its own 30s cycle (DESIGN-SPEC §10).
 
-    Keeps the countdown and "last checked" honest while the tab is open
-    without resetting the wizard above it.
+    Everything here changes underneath an open browser: the worker runs a
+    check, a theatre goes AVAILABLE, "last checked" moves. The person must
+    see that without pressing refresh — the whole point of watching a booking
+    page for them is that they do not have to sit on it.
 
-    The monitor and its state are handed in, already loaded by the page. They
-    used to be fetched here, which meant every paint of Home read monitors and
-    state a second time — and, on Firestore, paid two more network round trips
-    for data the page was already holding. A fragment replays with the same
-    arguments, so the countdown still ticks every thirty seconds; what it no
-    longer does is re-read the store to do it.
+    So the state is re-read here rather than taken from the argument. A
+    Streamlit fragment replays with the arguments it was *first* called with,
+    which means ``state`` is the snapshot the page loaded minutes ago and
+    re-rendering it would show the same thing for as long as the tab stayed
+    open. ``state`` is still the argument because it is what the first paint
+    draws and what a read failure falls back to.
+
+    This is one document read every thirty seconds — the displayed monitor's
+    state and nothing else — over the connection pool the rest of the app
+    already uses. Not a page load: no monitors, no history, no settings, no
+    catalogue, and nothing here disturbs the read cache those use.
     """
-    C.active_monitor_card(monitor, state)
+    fresh = state_store.load_states_for([monitor.id]).get(monitor.id, state)
+    C.active_monitor_card(monitor, fresh)
+    problem_panel(monitor, fresh)
+
+    if st.button("Stop monitoring", key=f"stop_{monitor.id}", use_container_width=True, icon=":material/stop:"):
+        stop_monitor(monitor.id, mirror=mirrored())
+        flash("success", "Monitoring stopped. The background worker will skip it from now on.")
+        st.rerun()   # scope="app" by default: the whole page, exactly as before
+
+    C.target_rows(monitor, fresh)
 
 
 def languages_of(monitors: list[Monitor]) -> dict[str, str]:
@@ -501,15 +517,7 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
         '<span>Active monitor</span>'
         f'<span class="tr-count">{len(active)}</span></div>'
     )
-    status_card(monitor, state)
-    problem_panel(monitor, state)
-
-    if st.button("Stop monitoring", key=f"stop_{monitor.id}", use_container_width=True, icon=":material/stop:"):
-        stop_monitor(monitor.id, mirror=mirrored())
-        flash("success", "Monitoring stopped. The background worker will skip it from now on.")
-        st.rerun()
-
-    C.target_rows(monitor, state)
+    live_monitor_panel(monitor, state)
 
     if len(active) > 1:
         st.caption(f"+{len(active) - 1} more active — see **My Monitors**.")
