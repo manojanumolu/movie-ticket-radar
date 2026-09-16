@@ -1,5 +1,18 @@
 [
   {
+    "monitor_id": "bad8740d43b3",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Irumudi",
+    "language": "Telugu",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/irumudi-et00487933-1787303118.jpg",
+    "targets": [
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-16T14:44:20.232253+05:30",
+    "owner_uid": "NGgGH69OmKWUCfIIhwltHUZr42b2"
+  },
+  {
     "monitor_id": "68c8b3eabb5f",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
@@ -554,16 +567,5 @@
       "AMB Cinemas · Barco Flagship Laser Dolby Atmos"
     ],
     "at": "2026-09-14T18:23:22.031417+05:30"
-  },
-  {
-    "monitor_id": "9a4365ef3ec9",
-    "kind": "STOPPED",
-    "message": "Monitoring stopped — you stopped this alert.",
-    "movie": "Hanuman Ansh",
-    "targets": [
-      "ALLU Cinemas · Dolby Cinema",
-      "AMB Cinemas · HDR By Barco"
-    ],
-    "at": "2026-09-14T04:00:47.000960+05:30"
   }
 ]
