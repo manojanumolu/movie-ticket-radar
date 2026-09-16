@@ -103,31 +103,24 @@ def require_user() -> AuthUser:
 
 
 def _restoring() -> None:
-    """The quiet beat while the browser is asked what it holds.
+    """The beat while the browser is asked what it holds: deliberately nothing.
 
-    Deliberately not the login page: showing a sign-in form to somebody who is
-    already signed in is the bug this whole path exists to avoid. It is the
-    app's own background with a small spinner, so a reload reads as a reload
-    rather than a flash of white or a flash of login.
+    Not the login page — showing a sign-in form to somebody who is already
+    signed in is the bug this whole path exists to avoid — and not a spinner
+    either. The restore is one component round trip, so anything drawn here
+    would be a flash and a layout shift on every reload.
+
+    Nothing is rendered at all, which also means nothing can be mis-rendered:
+    ``st.markdown`` runs a fragment through a Markdown parser first, and an
+    indented line after the opening one becomes a *code block*, which is how
+    this very screen printed its own ``<div class="tr-restoring">`` as text.
+    ``ui.components.clean_html`` exists for that trap; there is no markup left
+    here to need it.
+
+    The page is not blank white: ``app.py`` calls ``inject()`` at import, so
+    the theme's dark background is already painted by the time the gate runs.
     """
-    st.markdown(
-        """<style>
-        [data-testid="stHeader"] { display: none !important; }
-        html, body, [data-testid="stAppViewContainer"], .stApp {
-          background: radial-gradient(1400px 800px at 50% 50%, #101016, #07070A 75%) !important;
-        }
-        [data-testid="stSidebar"] { display: none !important; }
-        .tr-restoring { display:flex; align-items:center; justify-content:center; gap:12px;
-          min-height:72vh; color:#8E8E98; font-size:13px; letter-spacing:.14em;
-          font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-        .tr-restoring i { width:16px; height:16px; border-radius:50%; display:block;
-          border:2px solid rgba(255,51,85,.25); border-top-color:#FF3355;
-          animation: tr-spin .7s linear infinite; }
-        @keyframes tr-spin { to { transform: rotate(360deg); } }
-        </style>
-        <div class="tr-restoring"><i></i><span>RESTORING YOUR SESSION</span></div>""",
-        unsafe_allow_html=True,
-    )
+    return
 
 
 def _diag_panel() -> None:
