@@ -1610,3 +1610,31 @@ def test_both_accounts_restore_as_themselves_after_a_refresh(visitor, fake, monk
         # …and the deadline is the original one, not a new seven days.
         assert fresh.session_state[session.SESSION_EXPIRES_KEY] == started + session.SESSION_SECONDS
         monkeypatch.setattr(session, "restore", lambda: None)
+
+
+def test_the_restoring_beat_renders_no_markup_at_all():
+    """The restoring screen printed its own ``<div class="tr-restoring">`` as
+    text: ``st.markdown`` parses Markdown first, and the indented lines of the
+    triple-quoted fragment became a code block. It now renders nothing, so
+    there is no markup left to leak — and no layout shift on every reload."""
+    import inspect
+
+    from auth import gate
+
+    src = inspect.getsource(gate._restoring)
+    body = src.split('"""')[-1]                       # past the docstring
+    assert "st.markdown" not in body and "unsafe_allow_html" not in body
+    assert "<div" not in body and "<style" not in body
+    assert gate._restoring() is None                  # and it draws nothing
+
+
+def test_the_gate_never_hands_indented_markup_to_markdown():
+    """Any HTML the gate does render must go through ``clean_html`` (or carry
+    no indented lines), which is the guard against the same code-block trap."""
+    from pathlib import Path as _Path
+
+    src = _Path("auth/gate.py").read_text(encoding="utf-8")
+    for line in src.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("<div", "<style", "<span")) and line.startswith("    "):
+            raise AssertionError(f"indented raw markup would render as a code block: {stripped[:60]}")
