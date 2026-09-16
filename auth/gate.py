@@ -64,7 +64,13 @@ def require_user() -> AuthUser:
     # token. Filling the reserved ``tr_chrome`` slot afterwards writes that new
     # token in this same run — waiting for the next rerun would leave the
     # browser holding a token Google had already replaced.
-    user = session.current_user() or session.restore()
+    from_memory = session.current_user()
+    user = from_memory or session.restore()
+    # Closes the loop on the two cases a restore log alone cannot show: a user
+    # that was restored but is not rendered, and a user cleared after this
+    # point. Booleans only — never a UID, an email or a token.
+    print(f"[auth] gate: in_memory={from_memory is not None} user_present={user is not None} "
+          f"renders={'app' if user is not None else 'login'}", flush=True)
     with chrome:
         login.entrance()
         session.flush_cookie()

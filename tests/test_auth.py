@@ -20,6 +20,7 @@ import pytest
 
 from auth import firebase, session
 from auth.firebase import AuthError
+from tests.conftest import APP_SCRIPT
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
 #: Captured before any fixture swaps it out (module import precedes fixtures).
@@ -177,7 +178,7 @@ def bare_session(monkeypatch):
 
 
 def run(**state):
-    app = AppTest.from_file("app.py", default_timeout=60)
+    app = AppTest.from_file(APP_SCRIPT, default_timeout=60)
     for key, value in state.items():
         app.session_state[key] = value
     return app.run()
@@ -346,9 +347,15 @@ def test_only_an_authuser_this_module_stored_counts(visitor):
 
 def test_cookie_script_writes_a_safe_literal():
     script = session._cookie_script('tok"en</script>', 60)
+    # The value can never close the script element it lives in.
     assert "</script>" not in script.split("<script>", 1)[1].rsplit("</script>", 1)[0]
-    assert "Max-Age=60" in script and "SameSite=Lax" in script and "Path=/" in script
-    assert "Max-Age=0" in session._cookie_script("", 0)
+    assert "var max_age=60;" in script and "Path=/" in script
+    # Both SameSite branches are present: Lax normally, None when the app is
+    # framed (Community Cloud) — and None is only ever paired with Secure.
+    assert "'; SameSite=None'" in script and "'; SameSite=Lax'" in script
+    assert "'; Secure'" in script
+    # A clear still writes an expiring cookie.
+    assert "var max_age=0;" in session._cookie_script("", 0)
 
 
 def test_the_id_token_refreshes_itself_before_it_expires(fake, monkeypatch):
@@ -954,7 +961,7 @@ def test_a_verified_return_continues_into_the_app_automatically(visitor, fake):
     # An account that has just verified, whose tab still has the pending token.
     fake.add("back@example.com", "Popcorn2026", uid="uid-back", name="Back Person", verified=True)
 
-    app = AppTest.from_file("app.py", default_timeout=60)
+    app = AppTest.from_file(APP_SCRIPT, default_timeout=60)
     app.session_state[session.PENDING_KEY] = {
         "email": "back@example.com", "display_name": "Back Person",
         "id_token": "id.uid-back", "refresh_token": "refresh.uid-back",

@@ -19,6 +19,8 @@ import re
 
 import pytest
 
+from tests.conftest import APP_SCRIPT
+
 from monitor.models import ANY_FORMAT, MovieRef, TheatreTarget
 from monitor.state import record_history, upsert_monitor
 from ui import theme
@@ -162,7 +164,7 @@ def _monitor(language: str):
 
 
 def _run(page):
-    app = AppTest.from_file("app.py", default_timeout=60)
+    app = AppTest.from_file(APP_SCRIPT, default_timeout=60)
     app.session_state["page"] = page
     return app.run()
 
