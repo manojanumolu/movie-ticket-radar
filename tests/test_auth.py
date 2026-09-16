@@ -173,7 +173,7 @@ def in_the_app(app) -> bool:
 # The client
 # ──────────────────────────────────────────────────────────────────────────
 def test_every_firebase_code_becomes_one_plain_sentence():
-    assert "don't match" in firebase.explain("INVALID_LOGIN_CREDENTIALS")
+    assert "Unable to sign in with those credentials." in firebase.explain("INVALID_LOGIN_CREDENTIALS")
     assert firebase.explain("EMAIL_NOT_FOUND") == firebase.explain("INVALID_PASSWORD")   # no enumeration
     assert "stronger password" in firebase.explain("WEAK_PASSWORD : Password should be at least 6 characters")
     assert "Too many attempts" in firebase.explain("TOO_MANY_ATTEMPTS_TRY_LATER : Access to this account …")
@@ -344,7 +344,7 @@ def test_login_page_renders_while_unauthenticated(visitor):
                   "Secure & Private", "GOOD<br>MOVIES<br>FIND<br>YOU"):
         assert piece in text, piece
     labels = {b.label for b in app.button}
-    assert {"SIGN IN", "Continue with Google", "Forgot password?", "Create account"} <= labels
+    assert {"SIGN IN", "Continue with Google", "Forgot password?", "CREATE ACCOUNT"} <= labels
 
 
 def test_a_fresh_browser_lands_on_the_login_page_not_home(monkeypatch):
@@ -475,7 +475,7 @@ def test_signup_creates_an_account_and_signs_in(visitor, fake):
     assert not in_the_app(app)
     assert "auth_user" not in app.session_state
     text = body(app)
-    assert "Your TicketRadar account is almost ready." in text and "VERIFY YOUR EMAIL" in text
+    assert "You're almost in." in text and "VERIFY YOUR EMAIL" in text
     assert "arjun@example.com" in text
     assert {b.key for b in app.button} >= {"auth_resend", "auth_verify_back"}
     pend = app.session_state["auth_pending"]
@@ -523,6 +523,10 @@ def test_duplicate_account_is_handled(visitor, fake):
 def test_forgot_password_flow(visitor, fake):
     app = run()
     app.button(key="auth_forgot").click().run()
+    assert body(app).count("Enter your email address first.") == 1
+    assert {t.key for t in app.text_input} == {"auth_email", "auth_password"}
+    app.text_input(key="auth_email").set_value("ravi@example.com")
+    app.button(key="auth_forgot").click().run()
     text = body(app)
     assert "Reset your password." in text
     assert "Enter your email and we&#x27;ll send you a secure reset link." in text or \
@@ -531,13 +535,10 @@ def test_forgot_password_flow(visitor, fake):
     app.text_input(key="auth_reset_email").set_value("ravi@example.com")
     app.button(key="auth_send_reset").click().run()
     assert not app.exception
-    app = settle(app)
-    assert "Check your inbox." in body(app) and "ravi@example.com" in body(app)
+    assert "Check your inbox." in body(app)
+    assert "If an account exists for this email" in body(app)
     assert fake.reset_requests == ["ravi@example.com"]
     assert {t.key for t in app.text_input} == set()          # nothing left to type
-    # Back to sign in.
-    app.button(key="auth_to_signin").click().run()
-    assert "Welcome back." in body(app)
 
 
 def test_forgot_password_for_an_unknown_email_looks_the_same(visitor, fake):
@@ -618,7 +619,7 @@ def test_an_unverified_account_cannot_sign_in_and_lands_on_verify(visitor, fake)
     app = settle(app)
     assert not in_the_app(app)
     assert "auth_user" not in app.session_state
-    assert "Your TicketRadar account is almost ready." in body(app)
+    assert "You're almost in." in body(app)
     pend = app.session_state["auth_pending"]
     assert pend["email"] == "newbie@example.com"
     # No email was requested at sign-in, so nothing claims one was sent and
@@ -645,7 +646,7 @@ def test_A_firebase_accepts_the_request_then_success_and_cooldown(visitor, fake)
     assert "Verification email sent to newbie@example.com" in text
     assert "Inbox, Spam, or Promotions" in text                 # never a claim of Inbox delivery
     assert re.search(r"RESEND AVAILABLE IN (59|60)s", text)
-    assert "LAST REQUEST HTTP 200 OK" in text                  # the diagnostic line
+    assert "LAST REQUEST HTTP 200 OK" not in text              # diagnostics stay in logs
     assert app.session_state["auth_pending"]["last_answer"]["status"] == 200
     pend = app.session_state["auth_pending"]
     assert pend["sends"] == 1 and 55 < pend["cooldown_until"] - time.time() <= 60
@@ -674,7 +675,7 @@ def test_B_firebase_refuses_the_request_then_error_and_no_cooldown(visitor, fake
     assert "accepted" not in text.lower()
     app = settle(app)
     text = body(app)
-    assert "Your TicketRadar account is almost ready." in text                              # the account does exist
+    assert "You're almost in." in text                                           # the account does exist
     assert "Sent" not in text and "AVAILABLE IN" not in text
     pend = app.session_state["auth_pending"]
     assert pend["sends"] == 0 and pend["cooldown_until"] == 0
@@ -686,7 +687,7 @@ def test_B_firebase_refuses_the_request_then_error_and_no_cooldown(visitor, fake
     assert "rejected the verification email request: OPERATION_NOT_ALLOWED (HTTP 400)" in text
     assert "accepted" not in text.lower()
     assert app.session_state["auth_pending"]["sends"] == 0
-    assert "LAST REQUEST HTTP 400 OPERATION_NOT_ALLOWED" in body(app)
+    assert "LAST REQUEST HTTP 400 OPERATION_NOT_ALLOWED" not in body(app)
     assert resend_button(app).disabled is False
 
 

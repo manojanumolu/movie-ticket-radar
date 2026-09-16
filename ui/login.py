@@ -564,6 +564,16 @@ def _google_notice() -> None:
                                             "use your email and password for now.")
 
 
+def _forgot_from_signin() -> None:
+    """Switch to reset only after validating the already-entered email."""
+    email = str(st.session_state.get("auth_email", "")).strip()
+    if not email:
+        st.session_state[ERROR_KEY] = "Enter your email address first."
+        return
+    st.session_state["auth_reset_email"] = email
+    _switch("reset")
+
+
 def _fail(message: str) -> None:
     st.session_state[ERROR_KEY] = message
     st.rerun()
@@ -630,7 +640,7 @@ def _signin() -> None:
         _feedback()
         submitted = st.form_submit_button("SIGN IN", key="auth_signin", type="primary",
                                           use_container_width=True, icon=":material/arrow_forward:")
-    st.button("Forgot password?", key="auth_forgot", on_click=_switch, args=("reset",))
+    st.button("Forgot password?", key="auth_forgot", on_click=_forgot_from_signin)
     status = st.empty()
 
     C.html('<div class="tr-auth-or">OR</div>')
@@ -642,7 +652,7 @@ def _signin() -> None:
         with a:
             C.html('<div class="tr-auth-foot-text">Don\'t have an account?</div>')
         with b:
-            st.button("Create account", key="auth_to_signup", on_click=_switch, args=("signup",))
+            st.button("CREATE ACCOUNT", key="auth_to_signup", on_click=_switch, args=("signup",))
 
     if submitted:
         email = (email or "").strip()
@@ -774,6 +784,16 @@ def _returned_verified() -> None:
         return
     if not email:
         return
+    # ``verified`` is navigation state only, never proof. If this browser
+    # still has the Firebase refresh credential, ask Firebase again and enter
+    # automatically; otherwise use a normal sign-in with this email prefilled.
+    pend = session.pending()
+    if pend and pend.get("email") == email and session.continue_if_verified() is not None:
+        try:
+            st.query_params.clear()
+        except Exception:  # noqa: BLE001
+            pass
+        st.rerun()
     st.session_state[VERIFIED_KEY] = email
     st.session_state[MODE_KEY] = "signin"
     if firebase.valid_email(email):
@@ -837,18 +857,17 @@ def _verify() -> None:
     pend = session.pending()
     email = pend["email"] if pend else ""
     sent = bool(pend and pend.get("sends", 0) > 0)
-    lead = (f"We sent a verification link to <strong>{C.e(email)}</strong>." if sent else
-            f"Your address <strong>{C.e(email)}</strong> still needs verifying — open the link we "
-            "emailed when you created the account, or request a new one below.")
+    lead = (f"We've sent a verification link to <strong>{C.e(email)}</strong>." if sent else
+            f"We'll send a verification link to <strong>{C.e(email)}</strong> when you use the button below.")
     C.html(f"""<div class="tr-auth-sent">
-      <div class="eyebrow">VERIFY YOUR EMAIL</div>
       <div class="ic wait">{_icon("mail", 32, "currentColor", "1.6")}</div>
-      <h3>Your TicketRadar account is almost ready.</h3>
+      <div class="eyebrow">VERIFY YOUR EMAIL</div>
+      <h3>You're almost in.</h3>
       <p>{lead}</p>
       <div class="steps">
-        <div class="step"><b>1</b><span>Open the verification email.</span></div>
+        <div class="step"><b>1</b><span>Open the email from TicketRadar.</span></div>
         <div class="step"><b>2</b><span>Click <strong>Verify email</strong>.</span></div>
-        <div class="step"><b>3</b><span>Come back to TicketRadar — this page continues by itself.</span></div>
+        <div class="step"><b>3</b><span>Return here.</span></div>
       </div>
       <div class="folders">{_icon("search", 14)}<span>Check your Inbox, Spam, or Promotions folder.</span></div>
     </div>""")
@@ -857,15 +876,8 @@ def _verify() -> None:
               on_click=_switch, args=("signin",))
 
 
-def _check_verified() -> None:
-    """An ``on_click``: ask Firebase now, rather than waiting for the poll."""
-    if session.continue_if_verified() is None:
-        st.session_state[NOTICE_KEY] = ("info", "Not verified yet — open the link in the email first, "
-                                                "then try again.")
-
-
 def _countdown() -> None:
-    """The resend button, its countdown and the "I've verified" check, in a
+    """The resend button and its countdown live in a
     fragment that reruns itself once a second while an account is waiting —
     the rest of the page (and the app) stays put. Each tick reads the
     absolute deadline, so a tab that was asleep shows the right number the
@@ -891,11 +903,6 @@ def _countdown() -> None:
         if why:
             klass = "tr-auth-count" if why.startswith("RESEND") else "tr-auth-hint"
             C.html(f'<div class="{klass}" style="text-align:center;">{C.e(why)}</div>')
-        if pend and pend.get("refresh_token"):
-            st.button("I'VE VERIFIED MY EMAIL — CONTINUE", key="auth_continue", use_container_width=True,
-                      on_click=_check_verified)
-        C.html(f'<div class="tr-auth-diag">{_diagnostic(pend)}</div>')
-
     block()
 
 
@@ -948,7 +955,7 @@ def _reset_sent() -> None:
     C.html(f"""<div class="tr-auth-sent">
       <div class="ic">{_icon("mail", 32, "currentColor", "1.6")}</div>
       <h3>Check your inbox.</h3>
-      <p>If <b>{C.e(email)}</b> has a TicketRadar account, a secure link to choose a new password is on its way.</p>
+      <p>If an account exists for this email, a password-reset email has been requested. Check your Inbox or Spam.</p>
       <p class="small">Nothing there in a couple of minutes? Look in spam, or send it again.</p>
     </div>""")
     st.button("Send it again", key="auth_back", help="Request another reset link",

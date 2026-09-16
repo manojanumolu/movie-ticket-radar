@@ -60,10 +60,12 @@ class AuthError(Exception):
 #: read the same on purpose: naming which one it was tells an attacker which
 #: addresses have accounts.
 MESSAGES: dict[str, str] = {
-    "INVALID_LOGIN_CREDENTIALS": "That email and password don't match. Check both and try again.",
-    "INVALID_PASSWORD": "That email and password don't match. Check both and try again.",
-    "EMAIL_NOT_FOUND": "That email and password don't match. Check both and try again.",
-    "USER_NOT_FOUND": "That email and password don't match. Check both and try again.",
+    # Keep Firebase's enumeration protection, but don't imply the address is
+    # known to exist when Firebase intentionally returns a generic failure.
+    "INVALID_LOGIN_CREDENTIALS": "Unable to sign in with those credentials. Check your email and password, or create an account if you're new to TicketRadar.",
+    "INVALID_PASSWORD": "Unable to sign in with those credentials. Check your email and password, or create an account if you're new to TicketRadar.",
+    "EMAIL_NOT_FOUND": "Unable to sign in with those credentials. Check your email and password, or create an account if you're new to TicketRadar.",
+    "USER_NOT_FOUND": "Unable to sign in with those credentials. Check your email and password, or create an account if you're new to TicketRadar.",
     "INVALID_EMAIL": "That doesn't look like an email address.",
     "MISSING_EMAIL": "Enter your email address.",
     "MISSING_PASSWORD": "Enter your password.",
