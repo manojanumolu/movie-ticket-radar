@@ -773,7 +773,7 @@ def _continue_url(email: str) -> str:
     return f"{parts.scheme}://{parts.netloc}/?verified={quote(email)}"
 
 
-def _returned_verified() -> None:
+def handle_verified_return() -> None:
     """Back from Firebase's "email verified" page (its Continue button):
     show the verified banner on the sign-in form with the address ready.
     The flag proves nothing by itself — sign-in still needs the password
@@ -976,10 +976,13 @@ def _back_to_signin() -> None:
 # The page
 # ──────────────────────────────────────────────────────────────────────────
 def render() -> None:
-    """Draw the whole entrance. The caller stops the script afterwards."""
+    """Draw the whole entrance. The caller stops the script afterwards.
+
+    The cookie flush and the verified-email return are handled by the gate
+    (``auth.gate``) before this runs, inside the fixed ``tr_chrome`` slot, so
+    they never shift this page's position between runs.
+    """
     st.markdown(CSS, unsafe_allow_html=True)
-    session.flush_cookie()
-    _returned_verified()
     with st.container(key="trauth_shell"):
         C.html(_topbar())
         visual, panel = st.columns([1.16, 0.84], gap="large")
@@ -1020,4 +1023,5 @@ def entrance() -> None:
         st.markdown(ENTRANCE_CSS, unsafe_allow_html=True)
 
 
-__all__ = ["CSS", "ENTRANCE_CSS", "MODE_KEY", "ERROR_KEY", "NOTICE_KEY", "VERIFIED_KEY", "entrance", "render"]
+__all__ = ["CSS", "ENTRANCE_CSS", "MODE_KEY", "ERROR_KEY", "NOTICE_KEY", "VERIFIED_KEY",
+           "entrance", "handle_verified_return", "render"]

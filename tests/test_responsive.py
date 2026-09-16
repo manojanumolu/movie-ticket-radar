@@ -154,6 +154,10 @@ def _monitor(language: str):
                        region_code="HYD", region_slug="hyderabad", language=language),
         targets=[TheatreTarget("ALUC", "ALLU Cinemas", "Kokapet", "Dolby Cinema")],
         monitor_until=datetime.now(IST) + timedelta(days=2), notify_email="w@example.com",
+        # Owned by the signed-in test session (``signed_in`` fixture), so the
+        # rendered app — which shows only the signed-in person's own records —
+        # actually sees it.
+        owner_uid="uid-test-1",
     )
 
 
@@ -198,7 +202,8 @@ def test_history_shows_the_language_from_the_record_or_the_monitor():
     from config.store import load_history, save_history
     history = load_history()
     history.append({"monitor_id": "gone", "kind": "STOPPED", "message": "Stopped", "movie": "Old Film",
-                    "poster_url": "", "targets": ["Somewhere · Any format"], "at": "2026-09-01T10:00:00+05:30"})
+                    "poster_url": "", "targets": ["Somewhere · Any format"], "at": "2026-09-01T10:00:00+05:30",
+                    "owner_uid": "uid-test-1"})
     save_history(history, mirror=False)
 
     body = _markup(_run("History"))
@@ -212,7 +217,8 @@ def test_history_falls_back_to_the_monitor_s_stored_language():
     upsert_monitor(english, mirror=False)
     from config.store import save_history
     save_history([{"monitor_id": english.id, "kind": "CREATED", "message": "Monitor created.",
-                   "movie": english.movie.title, "poster_url": "", "targets": [], "at": "2026-09-15T16:19:00+05:30"}],
+                   "movie": english.movie.title, "poster_url": "", "targets": [], "at": "2026-09-15T16:19:00+05:30",
+                   "owner_uid": "uid-test-1"}],
                  mirror=False)
     body = _markup(_run("History"))
     assert re.search(r'Avengers Endgame: Encore <span class="lang">· English</span>', body)

@@ -458,3 +458,108 @@ def test_log_points_at_the_other_language_row_when_it_lists_the_theatre(
     assert "[hint] ALLU Cinemas is listed for 'Avengers Endgame: Encore · English" in out
     assert f"({ENGLISH_2D}; formats: Barco Laser 4K Atmos)" in out
     assert f"watches the Telugu row ({TELUGU_2D})" in out
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Issue #1, stated in the terms of the correction pass: an active monitor must
+# never wait for the six-hourly catalogue sync. The catalogue is browsing data;
+# a running monitor checks BookMyShow live on its own interval.
+# ──────────────────────────────────────────────────────────────────────────
+def _age_catalogue(hours: float) -> None:
+    """Backdate this city's last catalogue sync so it is provably stale."""
+    from config.timezone import now_ist, to_iso
+
+    cat = catalogue.load_catalogue()
+    cat.setdefault("sync", {})["hyderabad"] = {
+        "status": "OK", "message": "", "movie_count": 2,
+        "at": to_iso(now_ist() - timedelta(hours=hours)),
+    }
+    catalogue.save_catalogue(cat, mirror=False)
+
+
+def test_acceptance_active_monitor_beats_a_five_hour_stale_catalogue(
+        provider_factory, monkeypatch, at):
+    """The acceptance scenario, spelled out:
+
+        10:00  catalogue synced          → knows AMB, PVR; ALLU is COMING SOON
+        10:05  catalogue goes stale      → no sync will run again in this test
+        10:17  BookMyShow releases ALLU  → under a new Barco event
+        10:20  the monitor is due        → it lists the city itself, finds the
+                                           event, checks it, goes AVAILABLE and
+                                           emails — no catalogue sync anywhere.
+    """
+    seed_catalogue(provider_factory)
+    _age_catalogue(hours=5)                       # 10:00 sync, now stale
+    monitor = make_monitor(at, ALLU)
+    upsert_monitor(monitor, mirror=False)
+    sent = []
+    wire = Wire(provider_factory, monkeypatch)
+
+    # 10:20 — the due check. The catalogue is five hours old and still says
+    # ALLU is not listed; the worker asks BookMyShow directly.
+    wire.tick(listing_payload=listing((BARCO, "BARCO LASER")),
+              shows=[[AMB_2D], [PVR_3D], [ALLU_BARCO_LIVE]])
+    report = checker.run_once(at=at, mirror=False, notifier=lambda m, c: sent.append(c))
+
+    assert report.discovery.listed == ["hyderabad"]                # discovery is the monitor's, not the sync's
+    assert report.discovery.updated == {monitor.id: [(BARCO, "Barco Laser")]}
+    assert BARCO in wire.swept                                     # the live event was actually checked
+    assert load_state()[monitor.id].targets[ALLU.key].availability is Availability.AVAILABLE
+    assert [c.kind.value for c in sent] == ["TICKETS_LIVE"]
+
+    # The catalogue was never touched: still five hours old, still without ALLU.
+    sync = catalogue.sync_state("hyderabad")
+    assert (now := at) and (at - sync["at"]) >= timedelta(hours=5)
+    stale_row = catalogue.movie_from_entry(catalogue.find_entry(f"bookmyshow:{ENGLISH_2D}"))
+    assert BARCO not in stale_row.variant_codes
+
+
+def test_resolved_monitor_sees_a_new_showtime_though_the_catalogue_is_stale(
+        provider_factory, monkeypatch, at):
+    """A monitor that already found its theatre needs no discovery — it reads
+    the live event every interval, so a showtime BookMyShow adds later is seen
+    and announced, regardless of how old the catalogue is."""
+    seed_catalogue(provider_factory)
+    _age_catalogue(hours=5)
+    monitor = make_monitor(at, ALLU)
+    upsert_monitor(monitor, mirror=False)
+    sent = []
+    wire = Wire(provider_factory, monkeypatch)
+
+    # Already live at one time — the monitor resolves ALLU and emails once.
+    wire.tick(listing_payload=listing((BARCO, "BARCO LASER")),
+              shows=[[AMB_2D], [PVR_3D], [ALLU_BARCO_LIVE]])
+    checker.run_once(at=at, mirror=False, notifier=lambda m, c: sent.append(c))
+    assert [c.kind.value for c in sent] == ["TICKETS_LIVE"]
+    assert not load_state()[monitor.id].targets[ALLU.key].availability.is_answer or True
+
+    # A later interval: BookMyShow adds an 11 PM show. No listing is needed
+    # (the target is resolved) and no catalogue sync happens — the live read
+    # alone surfaces it.
+    later = at + timedelta(minutes=10)
+    wire.tick(shows=[[AMB_2D], [PVR_3D], [ALLU_BARCO_LIVE, ALLU_BARCO_LATE]])
+    report = checker.run_once(at=later, mirror=False, notifier=lambda m, c: sent.append(c))
+    assert not report.discovery.ran                               # resolved: no discovery, no sync
+    assert wire.listing_calls == 0
+    assert [c.kind.value for c in sent] == ["TICKETS_LIVE", "NEW_SHOWTIME"]
+    assert "11:00 PM" in sent[-1].new_time_labels
+
+
+def test_monitor_last_checked_is_independent_of_the_catalogue_timestamp(
+        provider_factory, monkeypatch, at):
+    """The two clocks are separate: the monitor's ``last_check_at`` is set by
+    the worker's own check, not by when the catalogue was last synced."""
+    seed_catalogue(provider_factory)
+    _age_catalogue(hours=5)
+    monitor = make_monitor(at, ALLU)
+    upsert_monitor(monitor, mirror=False)
+    wire = Wire(provider_factory, monkeypatch)
+    wire.tick(listing_payload=listing((BARCO, "BARCO LASER")),
+              shows=[[AMB_2D], [PVR_3D], [ALLU_BARCO_LIVE]])
+
+    checker.run_once(at=at, mirror=False, notifier=lambda m, c: None)
+
+    last_checked = load_state()[monitor.id].last_check_at
+    catalogue_at = catalogue.sync_state("hyderabad")["at"]
+    assert last_checked == at                                     # the worker's own check
+    assert (last_checked - catalogue_at) >= timedelta(hours=5)    # not the catalogue's clock

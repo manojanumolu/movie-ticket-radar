@@ -820,22 +820,142 @@ def test_signing_in_twice_replaces_the_identity_completely(visitor, fake):
     assert app.session_state["step"] == 1 and app.session_state["location"] == ""
 
 
-def test_legacy_json_monitors_are_global_until_firestore(visitor, fake, make_monitor):
-    """Bug 2, documented honestly. Two different things are asserted here:
+def test_a_refresh_does_not_sign_the_user_out_and_keeps_the_deadline(visitor, fake, monkeypatch):
+    """Issue #3: a browser refresh restores the session from the cookie and
+    never signs the user out, and it never *extends* the seven-day deadline."""
+    import time as _time
 
-    A. authentication/session leakage — fixed: Account B's session carries
-       B's identity only, and nothing of A's UI state;
-    B. the legacy store — *not* per user: ``data/monitors.json`` and
-       ``data/history.json`` are one global file each, read by every
-       signed-in person. Permanent per-user data isolation requires the
-       upcoming Firestore migration (step 7). This test pins that so nobody
-       mistakes today's behaviour for isolation.
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    assert in_the_app(app)
+    started = app.session_state[session.SESSION_STARTED_KEY]
+    expires = app.session_state[session.SESSION_EXPIRES_KEY]
+    assert expires == started + session.SESSION_SECONDS
+
+    # A refresh two days later restores from the cookie (Google re-validates
+    # the refresh token) and lands back in the app — not on the login page.
+    monkeypatch.setattr(session, "restore", REAL_RESTORE)
+    monkeypatch.setattr(session, "_cookie", lambda: "refresh.uid-ravi")
+    monkeypatch.setattr(session, "_cookie_started", lambda: started)
+    monkeypatch.setattr(_time, "time", lambda: started + 2 * 86400)
+    fresh = run()                                    # a brand-new browser session
+    assert in_the_app(fresh)
+    assert fresh.session_state["auth_user"].uid == "uid-ravi"
+    # The absolute deadline is unchanged: a refresh does not slide it forward.
+    assert fresh.session_state[session.SESSION_EXPIRES_KEY] == expires
+
+
+def test_the_seven_day_session_deadline_is_absolute(visitor, fake, monkeypatch):
+    """Issue #3: once the seven-day deadline passes, the next run signs out —
+    even though the Firebase refresh token would still be accepted."""
+    import time as _time
+
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    started = app.session_state[session.SESSION_STARTED_KEY]
+
+    # A cookie restore attempted after the deadline is refused before Google
+    # is ever asked.
+    monkeypatch.setattr(session, "restore", REAL_RESTORE)
+    monkeypatch.setattr(session, "_cookie", lambda: "refresh.uid-ravi")
+    monkeypatch.setattr(session, "_cookie_started", lambda: started)
+    monkeypatch.setattr(_time, "time", lambda: started + session.SESSION_SECONDS + 1)
+    expired = run()
+    assert on_login_page(expired)
+    assert "auth_user" not in expired.session_state
+    # The token exchange never happened: the deadline is enforced locally.
+    assert not any(action == "token" for action, _ in fake.calls)
+
+
+def test_the_verify_screen_has_no_i_have_verified_button(visitor, fake):
+    """Issue #5: the manual "I've verified" button is gone — the tab continues
+    on its own — and so is the BACK-only requirement to report verification."""
+    app = run()
+    app.button(key="auth_to_signup").click().run()               # switch to Create account
+    app.text_input(key="auth_su_name").set_value("New Person")
+    app.text_input(key="auth_su_email").set_value("fresh@example.com")
+    app.text_input(key="auth_su_password").set_value("Popcorn2026")
+    app.text_input(key="auth_su_confirm").set_value("Popcorn2026")
+    app.button(key="auth_signup").click().run()
+    app = settle(app)
+    assert "VERIFY YOUR EMAIL" in body(app)
+    keys = {b.key for b in app.button}
+    assert "auth_continue" not in keys                            # no "I'VE VERIFIED" button
+    assert {"auth_resend", "auth_verify_back"} <= keys            # resend + back only
+
+
+def test_a_verified_return_continues_into_the_app_automatically(visitor, fake):
+    """Issue #5: coming back from Firebase's verification link, with the
+    browser still holding the refresh credential, drops straight into the app
+    — no password re-entry, no "I've verified" click."""
+    # An account that has just verified, whose tab still has the pending token.
+    fake.add("back@example.com", "Popcorn2026", uid="uid-back", name="Back Person", verified=True)
+
+    app = AppTest.from_file("app.py", default_timeout=60)
+    app.session_state[session.PENDING_KEY] = {
+        "email": "back@example.com", "display_name": "Back Person",
+        "id_token": "id.uid-back", "refresh_token": "refresh.uid-back",
+        "cooldown_until": 0.0, "sends": 1, "checked_at": 0.0,
+    }
+    app.query_params["verified"] = "back@example.com"
+    app.run()
+    # handle_verified_return() → continue_if_verified() signed the account in
+    # from its refresh token, and the app is what renders.
+    assert "auth_user" in app.session_state
+    assert app.session_state["auth_user"].uid == "uid-back"
+    assert in_the_app(app)
+
+
+def test_login_and_app_are_never_rendered_together(visitor, fake):
+    """Issue #2: the login shell and the app never coexist in one render, and
+    the whole page lives in the gate's fixed ``tr_page`` slot so a keyed
+    container from the previous role can't linger."""
+    # Unauthenticated: the login shell, no app.
+    app = run()
+    assert on_login_page(app) and not in_the_app(app)
+    assert "tr-acct-chip" not in body(app)                       # no account chip on the login page
+
+    # Signed in: the app, no login shell, exactly one account chip.
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    text = body(app)
+    assert in_the_app(text_app := app) is not None               # keep the app handle
+    assert "Welcome back." not in text and "Create your account." not in text
+    assert text.count('<div class="tr-acct-chip">') == 1
+
+
+def test_the_gate_reserves_the_fixed_page_slot():
+    """Issue #2: both roles render inside the same fixed ``tr_page`` container,
+    which is what keeps a login⇄app transition a clean DOM swap."""
+    import ast
+    from pathlib import Path
+
+    src = Path("auth/gate.py").read_text(encoding="utf-8")
+    assert 'st.container(key="tr_chrome")' in src
+    assert 'st.container(key="tr_page")' in src
+    # app.py renders the app inside that reserved slot.
+    app_src = Path("app.py").read_text(encoding="utf-8")
+    assert "with app_container():" in app_src
+    ast.parse(src)
+
+
+def test_json_store_isolates_monitors_and_history_per_account(visitor, fake, make_monitor):
+    """Per-user isolation in the JSON compatibility store (issue #6).
+
+    Even without Firestore enabled, ``data/monitors.json`` and
+    ``data/history.json`` are scoped by the Firebase UID that owns each record.
+    Two things are asserted:
+
+    A. authentication/session leakage — Account B's session carries B's
+       identity only, and nothing of A's UI state;
+    B. data isolation — a monitor and its history created for Ravi are *not*
+       visible to Sita on My Monitors or History.
     """
     from monitor.state import record_history, upsert_monitor
 
     app = run()
     app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
-    monitor = make_monitor(email="ravi@example.com")
+    # Ravi's own monitor, stamped with his UID (as the app's own start flow does).
+    monitor = make_monitor(email="ravi@example.com", owner_uid="uid-ravi")
     upsert_monitor(monitor, mirror=False)
     record_history(monitor, "CREATED", "Monitor created.", mirror=False)
 
@@ -846,13 +966,13 @@ def test_legacy_json_monitors_are_global_until_firestore(visitor, fake, make_mon
     # A — the session is Sita's and only Sita's.
     assert app.session_state["auth_user"].uid == "uid-sita"
     assert "ravi@example.com" not in body(app).replace("watcher@example.com", "")  # identity, not monitor data
-    # B — the legacy global store is still what My Monitors and History read.
+    # B — Ravi's monitor and history are invisible to Sita.
     app.session_state["page"] = "My Monitors"
     app = app.run()
-    assert "Avengers: Endgame Encore" in body(app)                 # Ravi's monitor, visible to Sita
+    assert "Avengers: Endgame Encore" not in body(app)             # Ravi's monitor, hidden from Sita
     app.session_state["page"] = "History"
     app = app.run()
-    assert "Avengers: Endgame Encore" in body(app)                 # …and so is his history
+    assert "Avengers: Endgame Encore" not in body(app)             # …and so is his history
 
 
 # ──────────────────────────────────────────────────────────────────────────

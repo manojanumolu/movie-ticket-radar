@@ -242,7 +242,7 @@ def test_json_compatibility_store_is_private_per_signed_in_account(tmp_path, mon
     monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT", raising=False)
 
     state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False))
-    a = make_monitor(email="a@example.com")
+    a = make_monitor(email="a@example.com", owner_uid="")
     state_mod.upsert_monitor(a, mirror=False)
     state_mod.record_history(a, "CREATED", "A's monitor", mirror=False)
     state_mod.save_settings({"notify_email": "a@example.com", "default_interval": 15}, mirror=False)
@@ -262,12 +262,12 @@ def test_json_compatibility_delete_removes_only_the_owners_state(tmp_path, monke
     monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT", raising=False)
 
     state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False))
-    a = make_monitor(email="a@example.com")
+    a = make_monitor(email="a@example.com", owner_uid="")
     state_mod.upsert_monitor(a, mirror=False)
     state_mod.save_state({a.id: MonitorState(check_count=2)}, mirror=False)
 
     state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False))
-    b = make_monitor(email="b@example.com")
+    b = make_monitor(email="b@example.com", owner_uid="")
     state_mod.upsert_monitor(b, mirror=False)
     state_mod.save_state({b.id: MonitorState(check_count=3)}, mirror=False)
 
@@ -284,7 +284,7 @@ def test_json_compatibility_delete_removes_only_the_owners_state(tmp_path, monke
 
 def test_creating_a_monitor_stores_the_owner_uid(cloud, make_monitor):
     cloud.as_user("uid-a")
-    m = make_monitor(email="a@example.com")                          # no owner set by the caller…
+    m = make_monitor(email="a@example.com", owner_uid="")                          # no owner set by the caller…
     state_mod.upsert_monitor(m, mirror=False)
     assert cloud.docs["monitors"][m.id][fs.OWNER] == "uid-a"          # …the store stamps the caller's UID
     assert m.owner_uid == "uid-a"

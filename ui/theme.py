@@ -136,6 +136,12 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 [data-testid="stDecoration"], [data-testid="stToolbarActions"], [data-testid="stAppDeployButton"],
 [data-testid="stMainMenu"], #MainMenu, footer { display:none !important; }
 [data-testid="stToolbar"] { background: transparent !important; }
+/* The toolbar spans the top width but, with its actions hidden, only the
+   sidebar-expand control (top-left) is real. Let the rest of it pass clicks
+   through, so the account chip at the top-right is never swallowed. */
+[data-testid="stHeader"], [data-testid="stToolbar"] { pointer-events: none !important; }
+[data-testid="stHeader"] button, [data-testid="stToolbar"] button,
+button[data-testid="stExpandSidebarButton"] { pointer-events: auto !important; }
 button[data-testid="stExpandSidebarButton"] {
   width: 40px; height: 40px; min-height: 0; padding: 0; border-radius: 11px; display:flex; align-items:center; justify-content:center;
   background: linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05));
@@ -212,7 +218,7 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
    page; the chip *is* the menu's trigger (the popover button is stretched
    over it, transparent — the same "pick" pattern as the tiles), and the
    menu holds Account settings and Sign out. The sidebar carries nav only. */
-[class*="st-key-tracct_top"] { position:relative; width:max-content !important; max-width:100%; margin:0 0 6px auto; gap:0 !important; }
+[class*="st-key-tracct_top"] { position:relative; z-index:200; width:max-content !important; max-width:100%; margin:0 0 6px auto; gap:0 !important; }
 .tr-acct-chip { display:flex; align-items:center; gap:9px; padding:5px 10px 5px 5px; border-radius:999px; min-width:0;
   background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.035)); border:1px solid rgba(255,255,255,.12);
   box-shadow: var(--tr-hi), 0 10px 24px -16px rgba(0,0,0,.9);
@@ -1172,8 +1178,9 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   /* the sidebar is an overlay here; the toolbar's "open" control is the nav */
   [data-testid="stSidebar"] { width: min(300px, 86vw) !important; min-width: 0 !important; }
   .block-container { padding-top: 3.2rem !important; }
-  /* the account chip: same row as the toolbar's open-sidebar button, right edge */
-  [class*="st-key-tracct_top"] { margin: -2.6rem 0 10px auto; }
+  /* the account chip sits at the top-right, below Streamlit's header so the
+     transparent toolbar can never intercept a tap; a z-index keeps it on top. */
+  [class*="st-key-tracct_top"] { margin: 0 0 10px auto; position: relative; z-index: 200; }
   .tr-acct-chip .n { max-width: 110px; font-size: 12.5px; }
 
   /* hero: responsive type, the mark becomes one quiet line under the copy */
