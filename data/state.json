@@ -498,5 +498,31 @@
         "new_showtime_notice_at": null
       }
     }
+  },
+  "ebbbc457ab48": {
+    "last_check_at": "2026-09-16T14:56:07.885721+05:30",
+    "last_success_at": "2026-09-16T14:56:07.885721+05:30",
+    "check_count": 1,
+    "success_count": 1,
+    "consecutive_errors": 0,
+    "last_error": "",
+    "last_error_kind": "",
+    "last_email_error": "",
+    "targets": {
+      "ALUC::Dolby Cinema": {
+        "availability": "SHOW_NOT_AVAILABLE",
+        "since": "2026-09-16T14:56:07.885721+05:30",
+        "showtime_keys": [],
+        "time_labels": [],
+        "time_links": [],
+        "date_code": "20260917",
+        "date_codes": [],
+        "booking_url": "https://in.bookmyshow.com/buytickets/hanuman-ansh-hyderabad/cinema-hyde-ALUC-MT/20260917",
+        "notified_availability": "SHOW_NOT_AVAILABLE",
+        "notified_at": null,
+        "notified_showtime_keys": [],
+        "new_showtime_notice_at": null
+      }
+    }
   }
 }
