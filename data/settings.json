@@ -1,4 +1,8 @@
 {
-  "notify_email": "manoj.anumolu01@gmail.com",
-  "default_interval": 10
+  "users": {
+    "NGgGH69OmKWUCfIIhwltHUZr42b2": {
+      "notify_email": "manoj.anumolu01@gmail.com",
+      "default_interval": 10
+    }
+  }
 }
