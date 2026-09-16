@@ -43,7 +43,7 @@ st.set_page_config(
 
 from auth import firebase  # noqa: E402
 from auth import session as auth_session  # noqa: E402
-from auth.gate import require_user  # noqa: E402
+from auth.gate import app_container, require_user  # noqa: E402
 from config.locations import get_location  # noqa: E402
 from config.store import (  # noqa: E402
     dispatch_workflow,
@@ -78,7 +78,6 @@ from platforms.http import HAS_CURL_CFFI  # noqa: E402
 from ui import catalogue_view as cv  # noqa: E402
 from ui import components as C  # noqa: E402
 from ui import flow  # noqa: E402
-from ui import login  # noqa: E402
 from ui.theme import inject  # noqa: E402
 
 APP_VERSION = "2.6.0"
@@ -634,12 +633,18 @@ def page_settings(settings) -> None:
             "The app reads that file, so it works even when BookMyShow won't answer it "
             "directly."
         )
+        C.status_line("info", "Catalogue freshness is separate from live monitor checks. An "
+                      "active monitor checks its own targets on its own interval and, if a "
+                      "theatre isn't listed yet, discovers new BookMyShow events itself — it "
+                      "never waits for this sync. See each monitor's own “Last checked”.")
         if not HAS_CURL_CFFI:
             C.status_line("warn", "curl_cffi isn't installed here, so this app can't refresh the "
                           "catalogue itself — BookMyShow bot-checks plain requests. The "
                           "background job still can.")
         a, b = st.columns(2, gap="small")
-        if a.button("Refresh catalogue now", use_container_width=True, key="sync_now", icon=":material/sync:"):
+        if a.button("Refresh catalogue", use_container_width=True, key="sync_now", icon=":material/sync:",
+                    help="Re-sync the movie/theatre/format catalogue. This is browsing data, "
+                         "not a monitor check — active monitors check their targets on their own."):
             ok, msg = dispatch_workflow("catalogue-sync.yml", {"city": slug})
             flash("success" if ok else "error", msg)
             st.rerun()
@@ -662,37 +667,40 @@ def main() -> None:
     # Firebase is the source of truth: ``user.uid`` is the account's UID, and
     # ``auth.session.id_token()`` is a live token for the next step's Firestore.
     user = require_user()  # noqa: F841 - kept here so the boundary is visible
-    login.entrance()
-    auth_session.flush_cookie()
-    flow.boot()
-    st.session_state.setdefault("page", "Home")
-    st.session_state.setdefault("flash", None)
+    # The gate reserved a fixed ``tr_page`` slot and already painted the cookie
+    # writer and the sign-in animation into ``tr_chrome``. Rendering the whole
+    # app inside that same slot keeps a login⇄app transition a clean swap, so
+    # a previous session's account chip or the login shell can never linger.
+    with app_container():
+        flow.boot()
+        st.session_state.setdefault("page", "Home")
+        st.session_state.setdefault("flash", None)
 
-    monitors, states, history = load_view()
-    settings = load_settings()
-    page = sidebar(sum(1 for m in monitors if m.is_running()))
-    account_bar()
+        monitors, states, history = load_view()
+        settings = load_settings()
+        page = sidebar(sum(1 for m in monitors if m.is_running()))
+        account_bar()
 
-    # Navigation lands at the top of the new page — the hero, on Home.
-    if st.session_state.get("_page_seen") != page:
-        st.session_state["_page_seen"] = page
-        st.session_state["_nav_count"] = st.session_state.get("_nav_count", 0) + 1
-    C.scroll_to_top(f"{page}#{st.session_state.get('_nav_count', 0)}")
+        # Navigation lands at the top of the new page — the hero, on Home.
+        if st.session_state.get("_page_seen") != page:
+            st.session_state["_page_seen"] = page
+            st.session_state["_nav_count"] = st.session_state.get("_nav_count", 0) + 1
+        C.scroll_to_top(f"{page}#{st.session_state.get('_nav_count', 0)}")
 
-    if page == "Home":
-        page_home(monitors, states, history, settings)
-    elif page == "My Monitors":
-        page_monitors(monitors, states)
-    elif page == "History":
-        page_history(history, monitors)
-    else:
-        page_settings(settings)
+        if page == "Home":
+            page_home(monitors, states, history, settings)
+        elif page == "My Monitors":
+            page_monitors(monitors, states)
+        elif page == "History":
+            page_history(history, monitors)
+        else:
+            page_settings(settings)
 
-    C.html(
-        '<div class="tr-version tr-page-foot">'
-        f"<span>MOVIE TICKET RADAR V{APP_VERSION}</span>"
-        f"<span>{C.e(fmt_time(now_ist()))} IST</span></div>"
-    )
+        C.html(
+            '<div class="tr-version tr-page-foot">'
+            f"<span>MOVIE TICKET RADAR V{APP_VERSION}</span>"
+            f"<span>{C.e(fmt_time(now_ist()))} IST</span></div>"
+        )
 
 
 main()

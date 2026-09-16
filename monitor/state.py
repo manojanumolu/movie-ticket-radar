@@ -201,12 +201,13 @@ class _JsonStore:
         return [item for item in history if isinstance(item, dict) and self._owns(item)]
 
     def append_history(self, monitor: Monitor, item: dict[str, Any], *, mirror: bool = True) -> None:
-        if self.uid is None:
-            history = self.load_history()
-            history.insert(0, item)
-        else:
-            history = _json_load_history()
-            history.insert(0, {**item, "owner_uid": self.uid})
+        history = _json_load_history()
+        # Stamp the owner so the record is visible to exactly that account.
+        # The worker (``self.uid is None``) processes every owner's monitors,
+        # so it takes the owner from the monitor it is recording for — without
+        # this, worker-written history was invisible to the person who owns it.
+        owner = self.uid or monitor.owner_uid
+        history.insert(0, {**item, "owner_uid": owner} if owner else item)
         _json_save_history(history, mirror=mirror)
 
     def recent_history_for(self, monitor: Monitor) -> list[dict[str, Any]]:

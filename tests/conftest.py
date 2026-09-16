@@ -293,7 +293,12 @@ def listing_url():
 def make_monitor(listing_url):
     from monitor.models import ANY_FORMAT, Monitor, MovieRef, TheatreTarget
 
-    def make(*, interval=10, until=None, targets=None, email="watcher@example.com"):
+    def make(*, interval=10, until=None, targets=None, email="watcher@example.com",
+             owner_uid="uid-test-1"):
+        # ``owner_uid`` defaults to the ``signed_in`` fixture's UID so a monitor
+        # this factory creates is visible to that session — the JSON store, like
+        # Firestore, only shows a signed-in person their own records. A test of
+        # the ownerless/worker view passes ``owner_uid=""``.
         return Monitor(
             movie=MovieRef(
                 platform="bookmyshow",
@@ -312,6 +317,7 @@ def make_monitor(listing_url):
             interval_minutes=interval,
             monitor_until=until or datetime(2026, 9, 26, 23, 59, tzinfo=IST),
             notify_email=email,
+            owner_uid=owner_uid,
         )
 
     return make
