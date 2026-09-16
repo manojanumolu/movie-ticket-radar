@@ -63,6 +63,23 @@ def isolated_data(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def clean_read_cache():
+    """Every test starts with an empty store cache.
+
+    ``monitor.state`` caches reads for a few seconds inside
+    ``st.session_state``, which in a real deployment is one browser session
+    and therefore one account. Outside a script run Streamlit keeps a single
+    process-wide session_state, so without this a cached read would carry from
+    one test into the next — a boundary production has and bare mode does not.
+    """
+    from monitor import state as state_mod
+
+    state_mod.invalidate_cache()
+    yield
+    state_mod.invalidate_cache()
+
+
+@pytest.fixture(autouse=True)
 def signed_in(monkeypatch):
     """Every ``AppTest`` run starts behind the authentication gate. Here the
     session is *restored* the way a returning browser's would be — except the

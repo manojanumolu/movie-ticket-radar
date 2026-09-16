@@ -429,14 +429,85 @@ class _FirestoreStore:
 _Store = _JsonStore  # the protocol both stores follow
 
 
+
+# ──────────────────────────────────────────────────────────────────────────
+# A short-lived read cache, per signed-in account
+# ──────────────────────────────────────────────────────────────────────────
+#: Where the cache lives. ``st.session_state`` is per browser session, so one
+#: person's cache is not even in the same mapping as another's; the UID is
+#: part of every key as well, so switching accounts inside one session cannot
+#: reuse the previous person's entries either. ``auth.session`` wipes every
+#: key outside its keep-list on sign-in and sign-out, which takes this with
+#: it — there is no path by which a cached read outlives its owner.
+CACHE_KEY = "_tr_read_cache"
+
+#: How long a read may be reused. It exists to collapse the reads of a single
+#: interaction — a wizard click is two script runs milliseconds apart, because
+#: ``flow.goto`` has to rerun for the new step to render — not to hold data.
+#: Monitors and state are written by the worker every ten minutes at the
+#: fastest, and anything the person themselves changes invalidates the cache
+#: outright, so a few seconds cannot show a stale answer to the person who
+#: caused the change.
+CACHE_SECONDS = 5.0
+
+
+def _cache_scope_uid() -> str | None:
+    """The UID a cached read belongs to, or None when caching is not allowed.
+
+    The worker has no Streamlit session and must never cache: it runs for
+    fifty minutes and has to see each tick's writes.
+    """
+    if _scope_provider is None:
+        return None
+    scope = _scope_provider()
+    return scope.uid if scope is not None and scope.uid else None
+
+
+def _cache_store() -> dict[str, Any] | None:
+    try:
+        import streamlit as st
+
+        cache = st.session_state.get(CACHE_KEY)
+        if not isinstance(cache, dict):
+            cache = {}
+            st.session_state[CACHE_KEY] = cache
+        return cache
+    except Exception:  # noqa: BLE001 - no Streamlit session: the worker, or a test
+        return None
+
+
+def _cached(kind: str, load: Callable[[], Any]) -> Any:
+    """``load()``, reused for :data:`CACHE_SECONDS` within one account."""
+    uid = _cache_scope_uid()
+    cache = _cache_store() if uid else None
+    if cache is None or uid is None:
+        return load()
+    key = f"{uid}:{kind}"
+    entry = cache.get(key)
+    if entry is not None and (now_ist().timestamp() - entry[0]) < CACHE_SECONDS:
+        return entry[1]
+    value = load()
+    cache[key] = (now_ist().timestamp(), value)
+    return value
+
+
+def invalidate_cache() -> None:
+    """Forget every cached read. Called by every write, so a change the person
+    just made is never hidden behind the cache."""
+    cache = _cache_store()
+    if cache is not None:
+        cache.clear()
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Monitors — the functions the UI, the checker and the worker call
 # ──────────────────────────────────────────────────────────────────────────
 def load_monitors() -> list[Monitor]:
-    return _backend().load_monitors()
+    return _cached("monitors", lambda: _backend().load_monitors())
 
 
 def save_monitors(monitors: list[Monitor], *, mirror: bool = True) -> None:
+    invalidate_cache()
     _backend().save_monitors(monitors, mirror=mirror)
 
 
@@ -501,6 +572,7 @@ def extend_monitor(monitor_id: str, hours: int = 24, *, mirror: bool = True) -> 
 
 
 def delete_monitor(monitor_id: str, *, mirror: bool = True) -> None:
+    invalidate_cache()
     _backend().delete_monitor(monitor_id, mirror=mirror)
 
 
@@ -508,10 +580,11 @@ def delete_monitor(monitor_id: str, *, mirror: bool = True) -> None:
 # Settings — per person in Firestore, the one file in JSON
 # ──────────────────────────────────────────────────────────────────────────
 def load_settings() -> dict[str, Any]:
-    return _backend().load_settings()
+    return _cached("settings", lambda: _backend().load_settings())
 
 
 def save_settings(settings: dict[str, Any], *, mirror: bool = True) -> None:
+    invalidate_cache()
     _backend().save_settings(settings, mirror=mirror)
 
 
@@ -522,6 +595,7 @@ def purge_user_data(*, mirror: bool = True) -> dict[str, int]:
     UID — never from an argument, so no caller can point it at another
     account. Returns counts of what was removed.
     """
+    invalidate_cache()
     return _backend().purge_user_data(mirror=mirror)
 
 
@@ -682,10 +756,11 @@ class MonitorState:
 
 
 def load_state() -> dict[str, MonitorState]:
-    return _backend().load_state()
+    return _cached("state", lambda: _backend().load_state())
 
 
 def save_state(state: dict[str, MonitorState], *, mirror: bool = True) -> None:
+    invalidate_cache()
     _backend().save_state(state, mirror=mirror)
 
 
@@ -694,6 +769,7 @@ def get_monitor_state(monitor_id: str) -> MonitorState:
 
 
 def clear_monitor_state(monitor_id: str, *, mirror: bool = True) -> None:
+    invalidate_cache()
     _backend().clear_monitor_state(monitor_id, mirror=mirror)
 
 
@@ -702,7 +778,7 @@ def clear_monitor_state(monitor_id: str, *, mirror: bool = True) -> None:
 # ──────────────────────────────────────────────────────────────────────────
 def load_history() -> list[dict[str, Any]]:
     """The signed-in person's history (Firestore), or the one global list (JSON)."""
-    return _backend().load_history()
+    return _cached("history", lambda: _backend().load_history())
 
 
 def record_history(monitor: Monitor, kind: str, message: str, *, mirror: bool = True,
@@ -713,6 +789,7 @@ def record_history(monitor: Monitor, kind: str, message: str, *, mirror: bool = 
     flapping check cannot flood the rail.
     """
     at = at or now_ist()
+    invalidate_cache()
     store = _backend()
     for item in store.recent_history_for(monitor):
         if (
@@ -755,6 +832,7 @@ __all__ = [
     "load_settings",
     "load_state",
     "purge_user_data",
+    "invalidate_cache",
     "record_history",
     "save_monitors",
     "save_settings",
