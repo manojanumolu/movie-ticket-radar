@@ -906,23 +906,6 @@ def _countdown() -> None:
     block()
 
 
-def _diagnostic(pend: dict | None) -> str:
-    """The safe record of what Firebase last answered, so the screen itself
-    settles "was the request accepted?": the project the app is talking to
-    (its id is public — it is in every Firebase web config), the HTTP status
-    and Firebase's code, and when. Never a key, a token or an address."""
-    project = firebase.config().project_id or "not configured"
-    answer = (pend or {}).get("last_answer")
-    if not answer:
-        return f"FIREBASE PROJECT {C.e(project.upper())} · NO VERIFICATION REQUEST YET"
-    from config.timezone import fmt_time, now_ist
-    from datetime import datetime, timezone
-
-    when = datetime.fromtimestamp(answer["at"], tz=timezone.utc).astimezone(now_ist().tzinfo)
-    return (f"FIREBASE PROJECT {C.e(project.upper())} · LAST REQUEST HTTP {int(answer['status'])} "
-            f"{C.e(str(answer['code']).upper())} · {C.e(fmt_time(when))} IST")
-
-
 def _reset() -> None:
     C.html('<h2 class="tr-auth-h">Reset your password.</h2>'
            '<p class="tr-auth-p">Enter your email and we\'ll send you a secure reset link.</p>')

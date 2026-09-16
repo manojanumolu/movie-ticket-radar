@@ -42,6 +42,7 @@ st.set_page_config(
 )
 
 from auth import firebase  # noqa: E402
+from auth.firebase import AuthError  # noqa: E402
 from auth import session as auth_session  # noqa: E402
 from auth.gate import app_container, require_user  # noqa: E402
 from config.locations import get_location  # noqa: E402
@@ -212,11 +213,69 @@ def open_account_settings() -> None:
     st.session_state["page"] = "Settings"
 
 
+DELETE_KEY = "acct_delete_open"
+#: Typed into the confirmation box before the destructive button does anything.
+DELETE_WORD = "DELETE"
+
+
+def ask_delete_account() -> None:
+    """An ``on_click``: open the confirmation panel. Nothing is deleted here."""
+    st.session_state[DELETE_KEY] = True
+
+
+def cancel_delete_account() -> None:
+    st.session_state[DELETE_KEY] = False
+    st.session_state.pop("acct_delete_word", None)
+
+
+def delete_account_panel() -> None:
+    """The confirmation for a destructive, irreversible action.
+
+    Deliberately two gates: the word DELETE has to be typed, and only then does
+    the red button do anything. Whose account is deleted is decided by
+    ``auth.session`` from the signed-in Firebase user — nothing on this page
+    names an account.
+    """
+    user = auth_session.current_user()
+    if user is None or not st.session_state.get(DELETE_KEY):
+        return
+    with st.container(border=True, key="trcard_delacct"):
+        C.html(
+            '<div class="tr-danger">'
+            '<div class="t">Delete your account?</div>'
+            '<div class="s">This permanently deletes your TicketRadar account and its personal '
+            f'data — your monitors, their history and your settings — for <b>{C.e(user.email)}</b>. '
+            'Your alerts stop immediately. <b>This action cannot be undone.</b></div></div>'
+        )
+        C.html('<div class="tr-field-label">Type DELETE to confirm</div>')
+        typed = st.text_input("Type DELETE to confirm", key="acct_delete_word",
+                              placeholder=DELETE_WORD, label_visibility="collapsed")
+        armed = (typed or "").strip().upper() == DELETE_WORD
+        a, b = st.columns(2, gap="small")
+        a.button("Cancel", key="acct_delete_cancel", use_container_width=True,
+                 on_click=cancel_delete_account)
+        if b.button("Delete account", key="acct_delete_confirm", use_container_width=True,
+                    type="primary", disabled=not armed, icon=":material/delete_forever:"):
+            try:
+                removed = auth_session.delete_account()
+            except AuthError as exc:
+                # Firebase can require a recent sign-in for a destructive change.
+                # Say so; never work around it.
+                st.session_state[DELETE_KEY] = False
+                flash("error", str(exc))
+            else:
+                print(f"[app] account deleted; removed {removed}", flush=True)
+            st.rerun()
+        if not armed:
+            st.caption(f"Type {DELETE_WORD} above to enable the button.")
+
+
 def account_bar() -> None:
     """The account control, top-right of the main content: who Firebase
     says you are — never a name the browser supplied — as a compact chip
-    that opens a small menu with Account settings and Sign out. It is part
-    of the TicketRadar page, not the sidebar and not Streamlit's toolbar."""
+    that opens a small menu with Account settings, Delete account and Sign
+    out. It is part of the TicketRadar page, not the sidebar and not
+    Streamlit's toolbar."""
     user = auth_session.current_user()
     if user is None:
         return
@@ -239,6 +298,11 @@ def account_bar() -> None:
             if st.button("Sign out", key="auth_signout", use_container_width=True, icon=":material/logout:"):
                 auth_session.sign_out()
                 st.rerun()
+            # Destructive, so it is set apart from the two ordinary actions.
+            C.html('<div class="tr-acct-sep"></div>')
+            st.button("Delete account", key="acct_delete", use_container_width=True,
+                      icon=":material/delete_forever:", on_click=ask_delete_account,
+                      help="Permanently delete your TicketRadar account and its data")
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -680,6 +744,7 @@ def main() -> None:
         settings = load_settings()
         page = sidebar(sum(1 for m in monitors if m.is_running()))
         account_bar()
+        delete_account_panel()
 
         # Navigation lands at the top of the new page — the hero, on Home.
         if st.session_state.get("_page_seen") != page:

@@ -58,11 +58,16 @@ def require_user() -> AuthUser:
     # The two fixed slots, always here and always in this order.
     chrome = st.container(key="tr_chrome")
     _page_container = st.container(key="tr_page")
+
+    # Who is signed in is decided *before* the cookie is flushed, because
+    # restoring (and refreshing an ID token) can hand back a rotated refresh
+    # token. Filling the reserved ``tr_chrome`` slot afterwards writes that new
+    # token in this same run — waiting for the next rerun would leave the
+    # browser holding a token Google had already replaced.
+    user = session.current_user() or session.restore()
     with chrome:
         login.entrance()
         session.flush_cookie()
-
-    user = session.current_user() or session.restore()
     if user is None:
         with _page_container:
             login.render()

@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field, replace
+from urllib.parse import unquote
 
 import streamlit as st
 
@@ -176,6 +177,34 @@ def sign_out() -> None:
     st.session_state["auth_restore_tried"] = True
 
 
+def delete_account() -> dict[str, int]:
+    """Erase the signed-in account: their data first, then the Firebase user.
+
+    Whose account this is comes from the session's own :class:`AuthUser` and
+    the live ID token behind it — never a UID, email or anything else the page
+    could supply. The data goes first: if Firebase then refuses (it wants a
+    recent sign-in for a destructive change) the person is told to sign in
+    again rather than being left with an account whose records are gone.
+
+    Returns what was removed. Raises :class:`AuthError` if Firebase refuses,
+    leaving the session untouched so the message can be shown.
+    """
+    user = current_user()
+    if user is None:
+        raise AuthError(firebase.MESSAGES["INVALID_ID_TOKEN"], "INVALID_ID_TOKEN")
+    token = id_token()                      # live, refreshed if it was about to lapse
+    if not token:
+        raise AuthError(firebase.MESSAGES["INVALID_ID_TOKEN"], "INVALID_ID_TOKEN")
+
+    from monitor import state as state_store
+
+    removed = state_store.purge_user_data(mirror=False)
+    print(f"[auth] account deletion: purged {removed} for the signed-in account", flush=True)
+    firebase.FirebaseAuth().delete_account(token)
+    sign_out()                              # clears the session and the cookie
+    return removed
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Waiting for a verified email
 # ──────────────────────────────────────────────────────────────────────────
@@ -253,25 +282,38 @@ def clear_pending() -> None:
 # ──────────────────────────────────────────────────────────────────────────
 # Restoring after a reload
 # ──────────────────────────────────────────────────────────────────────────
-def _cookie() -> str:
-    """The session cookie the browser sent when this session opened."""
+def _read_cookie(name: str) -> str:
+    """One cookie the browser sent when this session opened, decoded.
+
+    The writer is ``encodeURIComponent``; the reader is Streamlit, which hands
+    back the *raw* header value without percent-decoding it. A Firebase refresh
+    token contains ``/``, ``+`` and ``=`` often enough that skipping the decode
+    returned ``AMf-vBx%2F…`` to Google, which answered INVALID_REFRESH_TOKEN —
+    and every browser refresh signed the person out. Decoding here is what
+    makes a reload restore the session.
+    """
     try:
-        return str(st.context.cookies.get(COOKIE) or "")
+        raw = st.context.cookies.get(name)
     except Exception:  # noqa: BLE001 - no browser (tests), or an old runtime
         return ""
+    # Only a real cookie string counts: without a browser the lookup may hand
+    # back a stand-in object (a Mock) that is not a string at all.
+    if not isinstance(raw, str) or not raw:
+        return ""
+    return unquote(raw)
+
+
+def _cookie() -> str:
+    """The session cookie the browser sent when this session opened."""
+    return _read_cookie(COOKIE)
 
 
 def _cookie_started() -> float:
     """The companion timestamp has no authentication power; Firebase's
     refresh-token exchange and account lookup remain the authentication.
     It solely enforces TicketRadar's absolute local seven-day policy."""
-    try:
-        raw = st.context.cookies.get(SESSION_STARTED_COOKIE)
-    except Exception:  # noqa: BLE001 - no browser (tests), or an old runtime
-        return 0.0
-    # Only a real cookie string counts: without a browser the lookup may hand
-    # back a stand-in object whose float() is not zero.
-    if not isinstance(raw, str) or not raw.strip():
+    raw = _read_cookie(SESSION_STARTED_COOKIE)
+    if not raw.strip():
         return 0.0
     try:
         return float(raw)
@@ -409,6 +451,7 @@ __all__ = [
     "continue_if_verified",
     "current_uid",
     "current_user",
+    "delete_account",
     "flush_cookie",
     "id_token",
     "mark_verification_sent",

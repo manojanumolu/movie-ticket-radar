@@ -49,9 +49,14 @@ def _install_fake() -> None:
     if isinstance(firebase._post, FakeFirebase):
         return
     fake = FakeFirebase()
+    # Real Firebase refresh tokens carry characters encodeURIComponent escapes.
+    # The harness uses them so a browser refresh exercises the cookie decode.
+    fake.token_suffix = "/aB+cD=eF"
     fake.add("ravi@example.com", "Popcorn2026", uid="uid-ravi", name="Ravi Teja")
     fake.add("sita@example.com", "Interval99", uid="uid-sita", name="Sita Devi")
     fake.add("newbie@example.com", "Trailer2026", uid="uid-newbie", name="New Person", verified=False)
+    # A throwaway account for exercising Delete account in a browser.
+    fake.add("disposable@example.com", "Popcorn2026", uid="uid-disposable", name="Disposable One")
     firebase._post = fake
 
     data = Path(tempfile.mkdtemp(prefix="tr-fake-data-"))

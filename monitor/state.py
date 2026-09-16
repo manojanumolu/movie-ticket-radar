@@ -231,6 +231,36 @@ class _JsonStore:
         payload = {"users": {**users, self.uid: dict(settings)}}
         write_json(SETTINGS_FILE, payload, mirror=mirror, message="chore: update settings")
 
+    def purge_user_data(self, *, mirror: bool = True) -> dict[str, int]:
+        """Remove everything this UID owns: monitors, their observed state,
+        history and settings. Other owners' records, and the shared catalogue,
+        are left exactly as they were."""
+        if not self.uid:
+            return {"monitors": 0, "history": 0, "settings": 0}
+        mine = {m.id for m in self.load_monitors()}
+
+        raw = read_json(MONITORS_FILE)
+        keep = [i for i in raw if isinstance(i, dict) and not self._owns(i)] if isinstance(raw, list) else []
+        write_json(MONITORS_FILE, keep, mirror=mirror, message="chore: update monitors")
+
+        raw_state = read_json(STATE_FILE)
+        if isinstance(raw_state, dict):
+            write_json(STATE_FILE, {k: v for k, v in raw_state.items() if k not in mine},
+                       mirror=mirror, message="chore: update monitoring state")
+
+        history = _json_load_history()
+        kept_history = [i for i in history if isinstance(i, dict) and not self._owns(i)]
+        removed_history = len(history) - len(kept_history)
+        _json_save_history(kept_history, mirror=mirror)
+
+        raw_settings = read_json(SETTINGS_FILE)
+        users = raw_settings.get("users") if isinstance(raw_settings, dict) else None
+        had_settings = isinstance(users, dict) and self.uid in users
+        if had_settings:
+            write_json(SETTINGS_FILE, {"users": {k: v for k, v in users.items() if k != self.uid}},
+                       mirror=mirror, message="chore: update settings")
+        return {"monitors": len(mine), "history": removed_history, "settings": int(had_settings)}
+
 
 _JSON = _JsonStore()
 
@@ -371,6 +401,30 @@ class _FirestoreStore:
             return
         self.client.set(USERS, self.uid, {**settings, fs.OWNER: self.uid})
 
+    def purge_user_data(self, *, mirror: bool = True) -> dict[str, int]:
+        """Delete every document this UID owns — monitors, their state, history
+        and the user record. Each is re-checked against the owner before it is
+        deleted, so nothing belonging to anybody else can be caught up in it.
+        The shared catalogue lives outside these collections and is untouched."""
+        if not self.uid:
+            return {"monitors": 0, "history": 0, "settings": 0}
+        writes: list[tuple[str, str, dict[str, Any] | None]] = []
+        monitors = 0
+        for collection in (MONITORS, STATES):
+            for doc_id, doc in self.client.query(collection, equals=self._mine()).items():
+                if self._owned(doc):
+                    writes.append((collection, doc_id, None))
+                    monitors += int(collection == MONITORS)
+                    _owner_of.pop(doc_id, None)
+        history = 0
+        for doc_id, doc in self.client.query(HISTORY, equals=self._mine()).items():
+            if self._owned(doc):
+                writes.append((HISTORY, doc_id, None))
+                history += 1
+        writes.append((USERS, self.uid, None))
+        self.client.commit(writes)
+        return {"monitors": monitors, "history": history, "settings": 1}
+
 
 _Store = _JsonStore  # the protocol both stores follow
 
@@ -459,6 +513,16 @@ def load_settings() -> dict[str, Any]:
 
 def save_settings(settings: dict[str, Any], *, mirror: bool = True) -> None:
     _backend().save_settings(settings, mirror=mirror)
+
+
+def purge_user_data(*, mirror: bool = True) -> dict[str, int]:
+    """Erase everything the *currently scoped* account owns.
+
+    Whose data this is comes from the scope provider — the signed-in Firebase
+    UID — never from an argument, so no caller can point it at another
+    account. Returns counts of what was removed.
+    """
+    return _backend().purge_user_data(mirror=mirror)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -690,6 +754,7 @@ __all__ = [
     "load_monitors",
     "load_settings",
     "load_state",
+    "purge_user_data",
     "record_history",
     "save_monitors",
     "save_settings",

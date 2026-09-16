@@ -32,6 +32,12 @@ REAL_RESTORE = session.restore
 class FakeFirebase:
     """Accounts in a dict; responses shaped like Google's."""
 
+    #: Appended to every refresh token. Real Firebase refresh tokens contain
+    #: characters ``encodeURIComponent`` escapes (``/``, ``+``, ``=``); the
+    #: browser harness sets this so a cookie round trip is exercised for real.
+    #: Left empty here so the suite's exact-token assertions stay readable.
+    token_suffix: str = ""
+
     def __init__(self):
         self.accounts: dict[str, dict] = {}     # email -> {password, uid, name, verified}
         self.calls: list[tuple[str, dict]] = []
@@ -39,6 +45,11 @@ class FakeFirebase:
         self.verification_sent: list[str] = []   # emails a VERIFY_EMAIL went to
         self.fail_with: str | None = None        # force one Firebase error code
         self.fail_verify_with: str | None = None  # …or only for VERIFY_EMAIL
+        self.fail_delete_with: str | None = None  # …or only for accounts:delete
+        self.deleted: list[str] = []             # emails whose account was deleted
+
+    def refresh_token_for(self, uid: str) -> str:
+        return f"refresh.{uid}{self.token_suffix}"
 
     def add(self, email: str, password: str, *, uid: str = "uid-1", name: str = "", verified: bool = True) -> None:
         self.accounts[email] = {"password": password, "uid": uid, "name": name, "verified": verified}
@@ -60,7 +71,7 @@ class FakeFirebase:
     def _creds(self, email: str) -> dict:
         acct = self.accounts[email]
         return {"localId": acct["uid"], "email": email, "displayName": acct["name"],
-                "idToken": f"id.{acct['uid']}", "refreshToken": f"refresh.{acct['uid']}",
+                "idToken": f"id.{acct['uid']}", "refreshToken": self.refresh_token_for(acct["uid"]),
                 "expiresIn": "3600", "registered": True}
 
     def __call__(self, url: str, params: dict, payload: dict):
@@ -104,6 +115,15 @@ class FakeFirebase:
                 return self._error("EMAIL_NOT_FOUND")
             self.reset_requests.append(email)
             return 200, {"kind": "identitytoolkit#GetOobConfirmationCodeResponse", "email": email}
+        if action == "delete":
+            email, acct = self._by_token(payload.get("idToken", ""))
+            if acct is None:
+                return self._error("INVALID_ID_TOKEN")
+            if self.fail_delete_with:
+                return self._error(self.fail_delete_with)
+            del self.accounts[email]
+            self.deleted.append(email)
+            return 200, {"kind": "identitytoolkit#DeleteAccountResponse"}
         if action == "lookup":
             email, acct = self._by_token(payload.get("idToken", ""))
             if acct is None:
@@ -112,9 +132,9 @@ class FakeFirebase:
                                     "emailVerified": acct["verified"]}]}
         if action == "token":
             for acct in self.accounts.values():
-                if f"refresh.{acct['uid']}" == payload.get("refresh_token"):
+                if self.refresh_token_for(acct["uid"]) == payload.get("refresh_token"):
                     return 200, {"user_id": acct["uid"], "id_token": f"id.{acct['uid']}",
-                                 "refresh_token": f"refresh.{acct['uid']}", "expires_in": "3600"}
+                                 "refresh_token": self.refresh_token_for(acct["uid"]), "expires_in": "3600"}
             return self._error("INVALID_REFRESH_TOKEN")
         raise AssertionError(f"unexpected endpoint {url}")
 
@@ -820,6 +840,30 @@ def test_signing_in_twice_replaces_the_identity_completely(visitor, fake):
     assert app.session_state["step"] == 1 and app.session_state["location"] == ""
 
 
+def test_a_cookie_survives_the_percent_encoding_round_trip(monkeypatch):
+    """The refresh-token cookie is written with ``encodeURIComponent`` and read
+    back by Streamlit *undecoded*. A real Firebase refresh token contains ``/``,
+    ``+`` and ``=``, so without a decode on the way in the token handed back to
+    Google was ``AMf-vBx%2F…`` — INVALID_REFRESH_TOKEN, and every browser
+    refresh signed the person out. This is that bug, pinned.
+    """
+    from urllib.parse import quote
+
+    import streamlit as st
+
+    raw = "AMf-vBx/abc+def=ghi_jkl-mno"
+    stored = {session.COOKIE: quote(raw, safe=""),
+              session.SESSION_STARTED_COOKIE: quote("1789561923.5", safe="")}
+
+    class Ctx:
+        cookies = stored
+
+    monkeypatch.setattr(st, "context", Ctx())
+    assert stored[session.COOKIE] != raw                      # the browser really did escape it
+    assert session._cookie() == raw                           # …and we hand Google the real token
+    assert session._cookie_started() == 1789561923.5
+
+
 def test_a_refresh_does_not_sign_the_user_out_and_keeps_the_deadline(visitor, fake, monkeypatch):
     """Issue #3: a browser refresh restores the session from the cookie and
     never signs the user out, and it never *extends* the seven-day deadline."""
@@ -1099,3 +1143,232 @@ def test_login_page_never_prints_a_secret(visitor, monkeypatch, fake):
     text = body(app)
     for secret in ("test-web-api-key", "github_pat_secret_value", "gmail-secret-value"):
         assert secret not in text
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Delete account
+# ──────────────────────────────────────────────────────────────────────────
+def _seed_for(uid: str, make_monitor, email: str):
+    """One monitor, its state, history and settings, all owned by ``uid``."""
+    from monitor import state as state_mod
+
+    monitor = make_monitor(email=email, owner_uid=uid)
+    _as(uid)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    state_mod.save_state({monitor.id: state_mod.MonitorState(check_count=3)}, mirror=False)
+    state_mod.record_history(monitor, "CREATED", "Monitor created.", mirror=False)
+    state_mod.save_settings({"notify_email": email, "default_interval": 15}, mirror=False)
+    return monitor
+
+
+def _as(uid: str):
+    from monitor import state as state_mod
+
+    state_mod.set_scope_provider(
+        lambda: state_mod.Scope("", uid, lambda: "", firestore_enabled=False))
+
+
+def test_delete_account_removes_only_that_owners_data(make_monitor):
+    """Monitors, state, history and settings for the signed-in UID go; another
+    account's records are untouched."""
+    from monitor import state as state_mod
+
+    try:
+        a = _seed_for("uid-a", make_monitor, "a@example.com")
+        b = _seed_for("uid-b", make_monitor, "b@example.com")
+
+        _as("uid-a")
+        removed = state_mod.purge_user_data(mirror=False)
+        assert removed["monitors"] == 1 and removed["history"] == 1 and removed["settings"] == 1
+        assert state_mod.load_monitors() == []
+        assert state_mod.load_state() == {}
+        assert state_mod.load_history() == []
+        assert state_mod.load_settings().get("notify_email") != "a@example.com"
+
+        # B is entirely unaffected.
+        _as("uid-b")
+        assert [m.id for m in state_mod.load_monitors()] == [b.id]
+        assert state_mod.load_state()[b.id].check_count == 3
+        assert [h["message"] for h in state_mod.load_history()] == ["Monitor created."]
+        assert state_mod.load_settings()["notify_email"] == "b@example.com"
+        assert a.id != b.id
+    finally:
+        state_mod.set_scope_provider(None)
+
+
+def test_delete_account_leaves_the_shared_catalogue_alone(make_monitor, provider_factory, listing_url):
+    """User-owned data goes; the catalogue every account browses does not."""
+    from monitor import catalogue, state as state_mod
+
+    try:
+        from tests.conftest import build_payload
+
+        catalogue.store_snapshot(provider_factory([build_payload([])]).resolve(listing_url),
+                                 mirror=False)
+        before = len(catalogue.load_catalogue().get("movies", []))
+        assert before >= 1
+
+        _seed_for("uid-a", make_monitor, "a@example.com")
+        _as("uid-a")
+        state_mod.purge_user_data(mirror=False)
+
+        assert len(catalogue.load_catalogue().get("movies", [])) == before
+    finally:
+        state_mod.set_scope_provider(None)
+
+
+def test_delete_account_uses_the_authenticated_uid_not_an_argument():
+    """``purge_user_data`` and ``delete_account`` take no account identifier:
+    who gets deleted comes from the scope/session only, never from the page."""
+    import inspect
+
+    from monitor import state as state_mod
+
+    for fn in (state_mod.purge_user_data, session.delete_account):
+        positional = [p for p in inspect.signature(fn).parameters.values()
+                      if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+        assert positional == [], f"{fn.__name__} must not accept an account identifier"
+    # The Firebase call is authorised by the ID token, never by a supplied UID.
+    src = inspect.getsource(firebase.FirebaseAuth.delete_account)
+    assert '"idToken": id_token' in src
+
+
+def test_delete_account_signs_out_and_clears_the_cookie(visitor, fake):
+    """The whole flow through the app: confirm, delete, land on the login page
+    with the session gone and the cookie told to clear."""
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    assert in_the_app(app)
+
+    app.button(key="acct_delete").click().run()                  # opens the panel
+    assert "Delete your account?" in body(app)
+    assert app.session_state["acct_delete_open"] is True
+    assert "auth_user" in app.session_state                      # nothing deleted yet
+
+    # The button is inert until DELETE is typed.
+    assert next(b for b in app.button if b.key == "acct_delete_confirm").disabled is True
+    app.text_input(key="acct_delete_word").set_value("DELETE").run()
+    assert next(b for b in app.button if b.key == "acct_delete_confirm").disabled is False
+
+    app.button(key="acct_delete_confirm").click().run()
+    assert fake.deleted == ["ravi@example.com"]                  # Firebase account gone
+    assert "ravi@example.com" not in fake.accounts
+    assert "auth_user" not in app.session_state                  # session cleared
+    # sign_out() queued the cookie clear and the gate has already emitted it,
+    # so the flag is consumed rather than left behind.
+    assert "auth_cookie_clear" not in app.session_state
+    assert "auth_restore_tried" in app.session_state             # no silent restore next paint
+    app = settle(app)
+    assert on_login_page(app) and not in_the_app(app)
+
+
+def test_cancelling_delete_keeps_the_account(visitor, fake):
+    """Cancel closes the panel and deletes nothing."""
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    app.button(key="acct_delete").click().run()
+    assert "Delete your account?" in body(app)
+    app.button(key="acct_delete_cancel").click().run()
+    assert app.session_state["acct_delete_open"] is False
+    assert "Delete your account?" not in body(app)
+    assert fake.deleted == [] and "ravi@example.com" in fake.accounts
+    assert in_the_app(app) and app.session_state["auth_user"].uid == "uid-ravi"
+
+
+def test_a_deleted_account_does_not_come_back_on_refresh(visitor, fake, monkeypatch):
+    """After deletion the cookie's refresh token is refused by Firebase, so a
+    reload lands on the login page rather than restoring the dead account."""
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    app.button(key="acct_delete").click().run()
+    app.text_input(key="acct_delete_word").set_value("DELETE").run()
+    app.button(key="acct_delete_confirm").click().run()
+    settle(app)
+    assert fake.deleted == ["ravi@example.com"]
+
+    # A fresh browser session still holding the old cookie.
+    monkeypatch.setattr(session, "restore", REAL_RESTORE)
+    monkeypatch.setattr(session, "_cookie", lambda: fake.refresh_token_for("uid-ravi"))
+    monkeypatch.setattr(session, "_cookie_started", lambda: time.time())
+    reloaded = run()
+    assert on_login_page(reloaded) and "auth_user" not in reloaded.session_state
+
+
+def test_firebase_asking_for_a_recent_sign_in_is_shown_not_bypassed(visitor, fake):
+    """Firebase can demand a fresh sign-in before a destructive change. That is
+    surfaced as a message; the flow never works around it."""
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    fake.fail_delete_with = "CREDENTIAL_TOO_OLD_LOGIN_AGAIN"
+    app.button(key="acct_delete").click().run()
+    app.text_input(key="acct_delete_word").set_value("DELETE").run()
+    app.button(key="acct_delete_confirm").click().run()
+    assert fake.deleted == []
+    assert "ravi@example.com" in fake.accounts                   # still there
+    # The reason is shown as an error banner (st.error), not swallowed. The
+    # click's own run already drained it, so it is read here.
+    shown = body(app) + " ".join(e.value for e in app.error)
+    assert "Please sign in again to confirm account deletion." in shown
+    assert app.session_state["acct_delete_open"] is False         # panel closed, nothing retried
+    assert in_the_app(app)                                        # still signed in
+
+
+def test_the_account_menu_holds_settings_delete_and_sign_out():
+    """Issue #10: the top-right menu — and nothing account-related in the sidebar."""
+    app = run()
+    assert {b.key for b in app.main.button} >= {"acct_settings", "acct_delete", "auth_signout"}
+    side = " ".join(m.value for m in app.sidebar.markdown)
+    assert "tr-acct" not in side and not app.sidebar.button
+
+
+def test_isolation_holds_in_both_directions_across_a_switch(visitor, fake, make_monitor):
+    """Issue #9, pinned in both directions and without a reload in between.
+
+        A signs in  → sees only A's monitor and history
+        A signs out → B signs in → sees only B's
+        B signs out → A signs in → sees only A's, and none of B's
+    """
+    from dataclasses import replace
+
+    from monitor.state import record_history, upsert_monitor
+
+    def seed(uid: str, email: str, title: str):
+        monitor = make_monitor(email=email, owner_uid=uid)
+        monitor.movie = replace(monitor.movie, title=title)
+        upsert_monitor(monitor, mirror=False)
+        record_history(monitor, "CREATED", f"{title} created.", mirror=False)
+        return monitor
+
+    seed("uid-ravi", "ravi@example.com", "Ravi's Film")
+    seed("uid-sita", "sita@example.com", "Sita's Film")
+
+    def sees(app) -> tuple[bool, bool]:
+        """(sees Ravi's, sees Sita's) across My Monitors and History."""
+        seen = ""
+        for page in ("My Monitors", "History"):
+            app.session_state["page"] = page
+            seen += body(app.run())
+        return "Ravi's Film" in seen, "Sita's Film" in seen
+
+    # A
+    app = run()
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    assert sees(app) == (True, False)
+
+    # A → B, in the same tab, no reload
+    app.session_state["page"] = "Home"
+    app = app.run()
+    app.button(key="auth_signout").click().run()
+    app = settle(app)
+    app = sign_in_as(app, "sita@example.com", "Interval99")
+    assert app.session_state["auth_user"].uid == "uid-sita"
+    assert sees(app) == (False, True)
+
+    # B → A again
+    app.session_state["page"] = "Home"
+    app = app.run()
+    app.button(key="auth_signout").click().run()
+    app = settle(app)
+    app = sign_in_as(app, "ravi@example.com", "Popcorn2026")
+    assert app.session_state["auth_user"].uid == "uid-ravi"
+    assert sees(app) == (True, False)
