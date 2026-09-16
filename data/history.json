@@ -1,5 +1,18 @@
 [
   {
+    "monitor_id": "ebbbc457ab48",
+    "kind": "CREATED",
+    "message": "Monitor created.",
+    "movie": "Hanuman Ansh",
+    "language": "Hindi",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+    "targets": [
+      "ALLU Cinemas · Dolby Cinema"
+    ],
+    "at": "2026-09-16T14:55:42.515994+05:30",
+    "owner_uid": "UDTGiCeizkY3RAZpy9Zg53pKHE22"
+  },
+  {
     "monitor_id": "bad8740d43b3",
     "kind": "STOPPED",
     "message": "Monitoring stopped — you stopped this alert.",
@@ -557,17 +570,5 @@
       "AMB Cinemas · Barco Flagship Laser Dolby Atmos"
     ],
     "at": "2026-09-14T18:35:33.431619+05:30"
-  },
-  {
-    "monitor_id": "8a6a36e44881",
-    "kind": "TICKETS_LIVE",
-    "message": "AMB Cinemas · Barco Flagship Laser Dolby Atmos — Tickets Live",
-    "movie": "Hanuman Ansh",
-    "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
-    "targets": [
-      "AMB Cinemas · Barco Flagship Laser Dolby Atmos"
-    ],
-    "at": "2026-09-14T18:24:00.151180+05:30",
-    "booking_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738/20260914"
   }
 ]
