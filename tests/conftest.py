@@ -86,6 +86,8 @@ def signed_in(monkeypatch):
         return user
 
     monkeypatch.setattr(session, "restore", restore)
+    # No browser here, so no browser bridge: the gate must not wait for one.
+    monkeypatch.setattr(session, "BRIDGE_ENABLED", False)
     # Never let a test reach Firebase: no key, and no transport.
     monkeypatch.delenv("FIREBASE_WEB_API_KEY", raising=False)
 

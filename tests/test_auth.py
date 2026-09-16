@@ -156,6 +156,7 @@ def fake(monkeypatch):
 def visitor(monkeypatch):
     """Nobody signed in, nothing to restore — a fresh browser."""
     monkeypatch.setattr(session, "restore", lambda: None)
+    monkeypatch.setattr(session, "BRIDGE_ENABLED", False)   # no browser in AppTest
 
 
 @pytest.fixture
@@ -345,17 +346,31 @@ def test_only_an_authuser_this_module_stored_counts(visitor):
     assert on_login_page(app) and not in_the_app(app)
 
 
-def test_cookie_script_writes_a_safe_literal():
-    script = session._cookie_script('tok"en</script>', 60)
-    # The value can never close the script element it lives in.
-    assert "</script>" not in script.split("<script>", 1)[1].rsplit("</script>", 1)[0]
-    assert "var max_age=60;" in script and "Path=/" in script
-    # Both SameSite branches are present: Lax normally, None when the app is
-    # framed (Community Cloud) — and None is only ever paired with Secure.
-    assert "'; SameSite=None'" in script and "'; SameSite=Lax'" in script
-    assert "'; Secure'" in script
-    # A clear still writes an expiring cookie.
-    assert "var max_age=0;" in session._cookie_script("", 0)
+def test_the_bridge_component_is_served_and_speaks_the_protocol():
+    """The bridge is a real Streamlit component, not injected HTML: it answers
+    the render message, posts its value back and keeps itself at zero height."""
+    from pathlib import Path as _Path
+
+    html = (_Path("auth") / "bridge" / "index.html").read_text(encoding="utf-8")
+    assert "streamlit:componentReady" in html
+    assert "streamlit:render" in html
+    assert "streamlit:setComponentValue" in html
+    assert "streamlit:setFrameHeight" in html and "height: 0" in html
+    # It must not re-post an unchanged value — that is how a loop starts.
+    assert "lastSent" in html and "encoded !== lastSent" in html
+    # Both SameSite branches, and Secure whenever https.
+    assert "SameSite=None" in html and "SameSite=Lax" in html and "Secure" in html
+
+
+def test_the_auth_path_no_longer_injects_raw_html():
+    """The deprecated ``st.components.v1.html`` is gone from the auth path —
+    the bridge is the only thing that touches the browser now."""
+    from pathlib import Path as _Path
+
+    for name in ("auth/session.py", "auth/gate.py"):
+        src = _Path(name).read_text(encoding="utf-8")
+        assert "components.v1.html" not in src, name
+        assert "components.html(" not in src, name
 
 
 def test_the_id_token_refreshes_itself_before_it_expires(fake, monkeypatch):
@@ -1495,28 +1510,85 @@ def test_a_refused_refresh_token_signs_out_and_drops_the_cookie(monkeypatch, fak
     assert "auth_restore_tried" in app.session_state
 
 
-def test_flush_cookie_never_writes_a_cookie_that_deletes_itself(monkeypatch):
-    """``Max-Age=0`` deletes a cookie. A missing or passed deadline must skip
-    the write rather than silently throw the session away."""
-    import streamlit as st
-
-    written: list[str] = []
-    monkeypatch.setattr("streamlit.components.v1.html",
-                        lambda markup, **k: written.append(markup))
-    state = {"auth_cookie_set": "refresh.uid-ravi",
-             session.SESSION_EXPIRES_KEY: time.time() - 10}     # already past
-    monkeypatch.setattr(st, "session_state", state, raising=False)
+def test_flush_cookie_never_queues_a_cookie_that_deletes_itself(monkeypatch, bare_session):
+    """``Max-Age=0`` deletes a cookie. A missing or passed deadline must queue
+    nothing rather than silently throw the session away."""
+    bare_session.update({"auth_cookie_set": "refresh.uid-ravi",
+                         session.SESSION_EXPIRES_KEY: time.time() - 10})   # already past
     session.flush_cookie()
-    assert written == []                                        # nothing written at all
+    assert bare_session.get(session.BRIDGE_OPS_KEY) is None                # nothing queued
 
-    written.clear()
-    state = {"auth_cookie_set": "refresh.uid-ravi",
-             "auth_session_cookie_set": "123.0",
-             session.SESSION_EXPIRES_KEY: time.time() + session.SESSION_SECONDS}
-    monkeypatch.setattr(st, "session_state", state, raising=False)
+    bare_session.clear()
+    started = time.time()
+    bare_session.update({"auth_cookie_set": "refresh.uid-ravi",
+                         "auth_session_cookie_set": str(started),
+                         session.SESSION_EXPIRES_KEY: started + session.SESSION_SECONDS})
     session.flush_cookie()
-    assert written and "Max-Age=0" not in written[0]
-    assert "tr_session" in written[0] and "tr_session_started" in written[0]
+    ops = bare_session[session.BRIDGE_OPS_KEY]
+    assert {op["name"] for op in ops} == {session.COOKIE, session.SESSION_STARTED_COOKIE}
+    assert all(op["max_age"] > 0 for op in ops)
+    # The deadline is what sets the lifetime — never a fresh seven days.
+    assert max(op["max_age"] for op in ops) <= session.SESSION_SECONDS
+
+
+def test_signing_out_queues_a_clear_for_the_bridge(bare_session):
+    bare_session["auth_cookie_clear"] = True
+    session.flush_cookie()
+    ops = bare_session[session.BRIDGE_OPS_KEY]
+    assert {op["name"] for op in ops} == {session.COOKIE, session.SESSION_STARTED_COOKIE}
+    assert all(op["max_age"] == 0 for op in ops)                           # a clear
+
+
+def test_restore_uses_the_token_the_bridge_reported(fake, bare_session, monkeypatch):
+    """The whole point: with no server-side cookie at all, the value the
+    browser reported is what restores the session."""
+    monkeypatch.setattr(session, "_cookie_header_from_runtime", lambda: "")
+    bare_session[session.BRIDGE_JAR_KEY] = {
+        session.COOKIE: fake.refresh_token_for("uid-ravi"),
+        session.SESSION_STARTED_COOKIE: str(time.time()),
+        "seen": 2,
+    }
+    assert session.bridge_answered() is True
+    assert session.bridge_jar()[session.COOKIE] == fake.refresh_token_for("uid-ravi")
+
+    user = REAL_RESTORE()
+    assert user is not None and user.uid == "uid-ravi"
+    assert [a for a, _ in fake.calls] == ["token", "lookup"]
+
+
+def test_a_bridge_without_a_token_shows_login(fake, bare_session):
+    """An answer with no session cookie is a real answer: show login, and do
+    not sit waiting for the browser again."""
+    bare_session[session.BRIDGE_JAR_KEY] = {session.COOKIE: "", "seen": 1}
+    assert session.bridge_answered() is True
+    assert session.bridge_jar() == {}
+    assert REAL_RESTORE() is None
+    assert fake.calls == []                                                # Firebase never asked
+
+
+def test_an_invalid_bridge_token_shows_login(fake, bare_session, monkeypatch):
+    monkeypatch.setattr(session, "_cookie_header_from_runtime", lambda: "")
+    bare_session[session.BRIDGE_JAR_KEY] = {
+        session.COOKIE: "refresh.not-a-real-token",
+        session.SESSION_STARTED_COOKIE: str(time.time()), "seen": 2,
+    }
+    assert REAL_RESTORE() is None
+    assert bare_session.get("auth_cookie_clear") is True                   # the dead cookie goes
+
+
+def test_the_bridge_value_never_reaches_a_log(fake, bare_session, monkeypatch, capsys):
+    """Diagnostics carry counts and booleans; the token never appears."""
+    monkeypatch.setattr(session, "_cookie_header_from_runtime", lambda: "")
+    token = fake.refresh_token_for("uid-ravi")
+    bare_session[session.BRIDGE_JAR_KEY] = {
+        session.COOKIE: token, session.SESSION_STARTED_COOKIE: str(time.time()), "seen": 2}
+    REAL_RESTORE()
+    session.log_cookie_report()
+    out = capsys.readouterr().out
+    assert "SUCCESS" in out                       # it did restore
+    assert token not in out
+    assert "uid-ravi" not in out
+    assert "ravi@example.com" not in out
 
 
 def test_both_accounts_restore_as_themselves_after_a_refresh(visitor, fake, monkeypatch):

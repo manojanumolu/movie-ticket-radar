@@ -1,0 +1,121 @@
+<!doctype html>
+<!--
+  TicketRadar auth bridge — a bidirectional Streamlit component.
+
+  Streamlit Community Cloud never hands the app's cookies to the Python
+  process: on the deployed app every server-side reader reports zero
+  (`context_cookies=0 header_cookies=0 runtime_cookies=0`), so a browser
+  refresh could not restore a session no matter how the server looked. The
+  browser can always see its own cookies, so the read happens here and the
+  value travels back over Streamlit's own component channel — the same
+  websocket every widget value uses, private to this session.
+
+  It also performs the cookie *writes*, so the whole session cookie lifecycle
+  lives in one invisible component instead of the deprecated
+  `st.components.v1.html`.
+
+  The frame is zero height and renders nothing, and a value is posted only
+  when it actually changes, so this can never loop or flicker.
+-->
+<html>
+  <head><meta charset="utf-8" /><title>auth bridge</title></head>
+  <body style="margin:0;padding:0;height:0;overflow:hidden;background:transparent;">
+    <script>
+      (function () {
+        var lastSent = null;
+
+        function post(type, extra) {
+          var msg = { isStreamlitMessage: true, type: type };
+          for (var k in extra) { if (extra.hasOwnProperty(k)) msg[k] = extra[k]; }
+          window.parent.postMessage(msg, "*");
+        }
+
+        function flat() {
+          // Keep the frame out of the layout entirely.
+          post("streamlit:setFrameHeight", { height: 0 });
+        }
+
+        function documents() {
+          // The component's own document first: it is served by the same
+          // Streamlit origin, so Path=/ cookies are visible to it. The frames
+          // above are tried too, because Community Cloud nests the app.
+          var docs = [];
+          try { docs.push(document); } catch (e) {}
+          try { if (window.parent && window.parent.document && docs.indexOf(window.parent.document) < 0) docs.push(window.parent.document); } catch (e) {}
+          try { if (window.top && window.top.document && docs.indexOf(window.top.document) < 0) docs.push(window.top.document); } catch (e) {}
+          return docs;
+        }
+
+        function readJar() {
+          var jar = {};
+          var docs = documents();
+          for (var d = 0; d < docs.length; d++) {
+            var raw = "";
+            try { raw = docs[d].cookie || ""; } catch (e) { raw = ""; }
+            var parts = raw.split("; ");
+            for (var i = 0; i < parts.length; i++) {
+              var eq = parts[i].indexOf("=");
+              if (eq > 0) {
+                var name = parts[i].slice(0, eq);
+                if (!(name in jar)) jar[name] = parts[i].slice(eq + 1);
+              }
+            }
+          }
+          return jar;
+        }
+
+        function writeCookie(name, value, maxAge) {
+          var framed = false;
+          try { framed = (window.top !== window.parent); } catch (e) { framed = true; }
+          var https = true;
+          try { https = (window.parent.location.protocol === "https:"); } catch (e) { https = (location.protocol === "https:"); }
+          // A nested browsing context needs SameSite=None, which browsers only
+          // honour together with Secure; a top-level app keeps Lax.
+          var sameSite = (framed && https) ? "; SameSite=None" : "; SameSite=Lax";
+          var expires = maxAge
+            ? "; Expires=" + new Date(Date.now() + maxAge * 1000).toUTCString()
+            : "; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          var attrs = "; Max-Age=" + maxAge + "; Path=/" + sameSite + expires + (https ? "; Secure" : "");
+          var docs = documents();
+          for (var i = 0; i < docs.length; i++) {
+            try { docs[i].cookie = name + "=" + encodeURIComponent(value) + attrs; } catch (e) {}
+          }
+        }
+
+        function onMessage(event) {
+          var data = event.data;
+          if (!data || data.type !== "streamlit:render") return;
+          var args = (data.args || {});
+
+          var ops = args.ops || [];
+          for (var i = 0; i < ops.length; i++) {
+            try { writeCookie(ops[i].name, String(ops[i].value), Number(ops[i].max_age) || 0); } catch (e) {}
+          }
+
+          var jar = readJar();
+          var names = args.names || [];
+          var value = { seen: 0, nonce: args.nonce || 0 };
+          var total = 0;
+          for (var k in jar) { if (jar.hasOwnProperty(k)) total++; }
+          value.seen = total;
+          for (var n = 0; n < names.length; n++) {
+            value[names[n]] = jar[names[n]] || "";
+          }
+
+          // Only speak when something actually changed: an unchanged value
+          // would be a rerun for nothing, and a loop waiting to happen.
+          var encoded = JSON.stringify(value);
+          if (encoded !== lastSent) {
+            lastSent = encoded;
+            post("streamlit:setComponentValue", { value: value, dataType: "json" });
+          }
+          flat();
+        }
+
+        window.addEventListener("message", onMessage);
+        post("streamlit:componentReady", { apiVersion: 1 });
+        flat();
+      })();
+    </script>
+  </body>
+</html>

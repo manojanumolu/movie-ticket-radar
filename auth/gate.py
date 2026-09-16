@@ -59,36 +59,75 @@ def require_user() -> AuthUser:
     chrome = st.container(key="tr_chrome")
     _page_container = st.container(key="tr_page")
 
-    # Who is signed in is decided *before* the cookie is flushed, because
-    # restoring (and refreshing an ID token) can hand back a rotated refresh
-    # token. Filling the reserved ``tr_chrome`` slot afterwards writes that new
-    # token in this same run — waiting for the next rerun would leave the
-    # browser holding a token Google had already replaced.
-    # One safe line per run: counts and booleans, never a value.
-    session.log_cookie_report()
-
+    # The in-memory session is the fast path: while this Streamlit session is
+    # authenticated nothing is read from the browser at all.
     from_memory = session.current_user()
-    user = from_memory or session.restore()
+
+    with chrome:
+        login.entrance()
+        # Queue any pending cookie write, then run the bridge once. The bridge
+        # performs the writes and brings back what the browser holds — on
+        # Community Cloud that is the only way the cookie ever reaches Python.
+        session.flush_cookie()
+        session.run_bridge()
+
+    user = from_memory
+    if user is None:
+        user = session.restore()
+        if user is None and session.BRIDGE_ENABLED and not session.bridge_answered():
+            # The browser has not answered yet. Rendering the login page now
+            # would be a guess, so wait for the component's reply instead —
+            # bounded, so a browser that never answers still reaches login.
+            runs = int(st.session_state.get(session.BRIDGE_RUNS_KEY, 0)) + 1
+            st.session_state[session.BRIDGE_RUNS_KEY] = runs
+            if runs <= session.BRIDGE_MAX_RUNS:
+                print(f"[auth] gate: waiting for the browser bridge (run {runs})", flush=True)
+                with _page_container:
+                    _restoring()
+                st.stop()
+            print("[auth] gate: bridge never answered; showing login", flush=True)
+
+    session.log_cookie_report()
     # Closes the loop on the two cases a restore log alone cannot show: a user
     # that was restored but is not rendered, and a user cleared after this
     # point. Booleans only — never a UID, an email or a token.
     print(f"[auth] gate: in_memory={from_memory is not None} user_present={user is not None} "
           f"renders={'app' if user is not None else 'login'}", flush=True)
-    with chrome:
-        login.entrance()
-        session.flush_cookie()
-        if user is None:
-            # Nobody signed in, and no cookie was visible. If the browser
-            # actually holds one, Streamlit missed it on this run's handshake —
-            # reload once so it is read again, rather than showing a login page
-            # to somebody who is already signed in.
-            session.restore_hint()
+
     if user is None:
         with _page_container:
             login.render()
             _diag_panel()
         st.stop()
     return user
+
+
+def _restoring() -> None:
+    """The quiet beat while the browser is asked what it holds.
+
+    Deliberately not the login page: showing a sign-in form to somebody who is
+    already signed in is the bug this whole path exists to avoid. It is the
+    app's own background with a small spinner, so a reload reads as a reload
+    rather than a flash of white or a flash of login.
+    """
+    st.markdown(
+        """<style>
+        [data-testid="stHeader"] { display: none !important; }
+        html, body, [data-testid="stAppViewContainer"], .stApp {
+          background: radial-gradient(1400px 800px at 50% 50%, #101016, #07070A 75%) !important;
+        }
+        [data-testid="stSidebar"] { display: none !important; }
+        .tr-restoring { display:flex; align-items:center; justify-content:center; gap:12px;
+          min-height:72vh; color:#8E8E98; font-size:13px; letter-spacing:.14em;
+          font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+        .tr-restoring i { width:16px; height:16px; border-radius:50%; display:block;
+          border:2px solid rgba(255,51,85,.25); border-top-color:#FF3355;
+          animation: tr-spin .7s linear infinite; }
+        @keyframes tr-spin { to { transform: rotate(360deg); } }
+        </style>
+        <div class="tr-restoring"><i></i><span>RESTORING YOUR SESSION</span></div>""",
+        unsafe_allow_html=True,
+    )
 
 
 def _diag_panel() -> None:
