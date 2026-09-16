@@ -1,6 +1,18 @@
 [
   {
     "monitor_id": "3b402da0cd84",
+    "kind": "STOPPED",
+    "message": "Monitoring stopped — you stopped this alert.",
+    "movie": "Avengers Endgame: Encore",
+    "language": "English",
+    "poster_url": "https://in.bmscdn.com/events/moviecard/avengers-endgame-encore-et00514163-1787720198.jpg",
+    "targets": [
+      "ALLU Cinemas · Barco Laser 4K Atmos"
+    ],
+    "at": "2026-09-16T13:55:46.280088+05:30"
+  },
+  {
+    "monitor_id": "3b402da0cd84",
     "kind": "CREATED",
     "message": "Monitor created.",
     "movie": "Avengers Endgame: Encore",
@@ -553,16 +565,5 @@
     ],
     "at": "2026-09-14T03:57:55.076560+05:30",
     "booking_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738/20260914"
-  },
-  {
-    "monitor_id": "9a4365ef3ec9",
-    "kind": "CREATED",
-    "message": "Monitor created.",
-    "movie": "Hanuman Ansh",
-    "targets": [
-      "ALLU Cinemas · Dolby Cinema",
-      "AMB Cinemas · HDR By Barco"
-    ],
-    "at": "2026-09-14T02:55:40.373004+05:30"
   }
 ]
