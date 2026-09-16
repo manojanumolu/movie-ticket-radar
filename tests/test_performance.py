@@ -206,15 +206,23 @@ def test_repeated_reads_in_one_interaction_cost_one_request_each(cloud):
     assert sum(kinds.values()) == 4, kinds                 # not 12
 
 
-def test_the_status_card_does_not_read_the_store(cloud):
-    """It is handed the monitor and its state; it must not fetch them again."""
+def test_the_live_panel_does_not_do_a_page_load(cloud):
+    """It re-reads the one monitor's state it is showing — that is what keeps
+    an open browser current — but never the page's broad reads. Those were
+    what made every paint of Home cost four extra round trips."""
     import inspect
 
     import app
 
-    source = inspect.getsource(app.status_card)
-    assert "load_monitors" not in source and "load_state" not in source
-    params = list(inspect.signature(app.status_card.__wrapped__).parameters)
+    source = inspect.getsource(app.live_monitor_panel)
+    assert "load_monitors()" not in source
+    assert "load_state()" not in source
+    assert "load_view" not in source
+    assert "load_settings" not in source
+    assert "invalidate_cache" not in source
+    # …and it does ask for the displayed monitor's own state.
+    assert "load_states_for([monitor.id])" in source
+    params = list(inspect.signature(app.live_monitor_panel.__wrapped__).parameters)
     assert params == ["monitor", "state"]
 
 
