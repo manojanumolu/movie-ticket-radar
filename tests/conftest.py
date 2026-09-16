@@ -53,6 +53,10 @@ def isolated_data(tmp_path, monkeypatch):
 
     monkeypatch.setattr(state_mod, "MONITORS_FILE", data / "monitors.json")
     monkeypatch.setattr(state_mod, "STATE_FILE", data / "state.json")
+    # Without this one the JSON store's settings path stayed pointed at the
+    # repository, and any test that saved settings for a UID wrote test
+    # accounts into the real data/settings.json.
+    monkeypatch.setattr(state_mod, "SETTINGS_FILE", data / "settings.json")
 
     # Never mirror to GitHub from a test.
     monkeypatch.setattr(store, "push_to_github", lambda *a, **k: False)

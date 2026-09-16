@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 import requests
+from requests.adapters import HTTPAdapter
 
 BASE = "https://firestore.googleapis.com/v1"
 TIMEOUT = 15.0
@@ -192,18 +193,35 @@ def project_from_env() -> str:
 # ──────────────────────────────────────────────────────────────────────────
 # Transport — one function, so the tests can replace the service
 # ──────────────────────────────────────────────────────────────────────────
-#: One HTTP session per thread, kept open.
+#: One connection pool for the whole process, shared by every thread.
 #:
 #: ``requests.request`` opens a Session, uses it once and closes it, so every
-#: Firestore call paid for a fresh TCP connection and TLS handshake. Measured
-#: against the live project that was ~200 ms on top of a ~300 ms round trip —
-#: on every request, and a page makes several. Keeping the connection alive
-#: removes the handshake entirely.
+#: Firestore call paid for a fresh TCP connection and TLS handshake. Keeping
+#: the connection alive removes that handshake — but only if the thing holding
+#: it outlives the caller, and this is where a thread-local one was not enough.
 #:
-#: It is thread-*local* rather than a single shared session because Streamlit
-#: reruns and fragments execute on different threads and ``requests.Session``
-#: is not guaranteed thread-safe. One session per thread is the smallest safe
-#: thing that still reuses connections: no pool to manage, and no sharing.
+#: Streamlit gives each browser interaction a **new script thread**: with
+#: ``runner.fastReruns`` (the default, and this app does not override it) a
+#: rerun stops the current ScriptRunner and starts another, and the old
+#: thread exits. A thread-local session therefore began every click with an
+#: empty pool and paid a full handshake — measured at ~490 ms against the live
+#: endpoint, on top of the round trip, once per click. Only the *pool* kept at
+#: module scope survives that.
+#:
+#: The PoolManager inside an ``HTTPAdapter`` is built for concurrent use, so
+#: the adapter is the shared part. Each thread still gets its own
+#: ``requests.Session``, so no requests-level state — cookies, default
+#: headers, auth — is ever shared between threads, and so between users. What
+#: they share is TCP connections to firestore.googleapis.com, which carry no
+#: identity of their own: authorization is a per-request header, set below in
+#: :func:`_http`, and Firestore evaluates its rules per request against that
+#: token.
+#:
+#: ``pool_maxsize`` has room for several concurrent reads across several
+#: simultaneous browser sessions; beyond it urllib3 opens a connection per
+#: request as before, so the ceiling costs latency, never correctness.
+POOL_MAXSIZE = 32
+_ADAPTER = HTTPAdapter(pool_connections=4, pool_maxsize=POOL_MAXSIZE)
 _sessions = threading.local()
 
 
@@ -211,6 +229,10 @@ def _session() -> requests.Session:
     session = getattr(_sessions, "session", None)
     if session is None:
         session = requests.Session()
+        # Mount the shared adapter over both schemes so nothing can fall back
+        # to this session's own private pool.
+        session.mount("https://", _ADAPTER)
+        session.mount("http://", _ADAPTER)
         _sessions.session = session
     return session
 

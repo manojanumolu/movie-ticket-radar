@@ -32,6 +32,7 @@ with neither, they hit the JSON files.
 from __future__ import annotations
 
 import secrets
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable
@@ -476,27 +477,134 @@ def _cache_store() -> dict[str, Any] | None:
         return None
 
 
+#: Tells "nothing cached" apart from a cached empty answer.
+_MISS = object()
+
+
+def _cache_peek(cache: dict[str, Any] | None, uid: str | None, kind: str) -> Any:
+    if cache is None or uid is None:
+        return _MISS
+    entry = cache.get(f"{uid}:{kind}")
+    if entry is not None and (now_ist().timestamp() - entry[0]) < CACHE_SECONDS:
+        return entry[1]
+    return _MISS
+
+
+def _cache_put(cache: dict[str, Any] | None, uid: str | None, kind: str, value: Any) -> None:
+    if cache is not None and uid is not None:
+        cache[f"{uid}:{kind}"] = (now_ist().timestamp(), value)
+
+
 def _cached(kind: str, load: Callable[[], Any]) -> Any:
     """``load()``, reused for :data:`CACHE_SECONDS` within one account."""
     uid = _cache_scope_uid()
     cache = _cache_store() if uid else None
     if cache is None or uid is None:
         return load()
-    key = f"{uid}:{kind}"
-    entry = cache.get(key)
-    if entry is not None and (now_ist().timestamp() - entry[0]) < CACHE_SECONDS:
-        return entry[1]
+    hit = _cache_peek(cache, uid, kind)
+    if hit is not _MISS:
+        return hit
     value = load()
-    cache[key] = (now_ist().timestamp(), value)
+    _cache_put(cache, uid, kind, value)
     return value
 
 
-def invalidate_cache() -> None:
-    """Forget every cached read. Called by every write, so a change the person
-    just made is never hidden behind the cache."""
+def invalidate_cache(*kinds: str) -> None:
+    """Forget cached reads, so a change the person just made is never hidden.
+
+    With no arguments every kind goes, which is what erasing an account wants.
+    Naming kinds forgets only those: appending one history line is no reason
+    for the next rerun to re-read monitors, state *and* settings over the
+    network, and that broad eviction was most of what made saving a monitor
+    expensive — it left the rerun after every write completely cold.
+    """
     cache = _cache_store()
-    if cache is not None:
+    if cache is None:
+        return
+    if not kinds:
         cache.clear()
+        return
+    uid = _cache_scope_uid()
+    for kind in kinds:
+        cache.pop(f"{uid}:{kind}", None)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Reading several kinds at once
+# ──────────────────────────────────────────────────────────────────────────
+#: The independent reads a page makes, by name. No one of them depends on
+#: another, which is what makes the fan-out below possible at all.
+READERS: dict[str, Callable[[Any], Any]] = {
+    "monitors": lambda store: store.load_monitors(),
+    "state": lambda store: store.load_state(),
+    "history": lambda store: store.load_history(),
+    "settings": lambda store: store.load_settings(),
+}
+
+
+def _detached(store: Any) -> "_FirestoreStore | None":
+    """A copy of a Firestore store that a worker thread may safely use.
+
+    The live store's client asks ``auth.session.id_token()`` for a token, and
+    that reads — and, near expiry, writes — ``st.session_state``. A thread
+    other than Streamlit's script thread sees that state as **empty, with no
+    error at all**: the scope provider would find nobody signed in, and
+    :func:`_backend` would quietly fall through to the unscoped JSON store,
+    which answers with *every* account's records. Resolving the token here, on
+    the script thread, and handing the worker a client that can only hand that
+    one token back, is what keeps the fan-out from ever reaching Streamlit.
+
+    Returns None for the JSON store: file reads gain nothing from threads, so
+    the compatibility path stays sequential and exactly as it was.
+    """
+    if not isinstance(store, _FirestoreStore):
+        return None
+    token = store.client.token()                      # script thread only
+    client = fs.FirestoreClient(store.client.project_id, lambda: token,
+                                transport=store.client.transport)
+    return _FirestoreStore(client, uid=store.uid)
+
+
+def load_many(*kinds: str) -> dict[str, Any]:
+    """``{kind: records}`` for several kinds at once, in one round trip.
+
+    A page needs monitors, observed state, history and settings, and asking
+    for them one after another cost four sequential round trips for data with
+    no order between it. Everything that decides *whose* data this is — the
+    scope, the backend, the ID token — is resolved here, before any thread
+    starts; the workers only run the reads, against a store already bound to
+    one UID. Firestore's rules still apply to every request, and every
+    document that comes back is re-checked against that UID as before.
+    """
+    uid = _cache_scope_uid()
+    cache = _cache_store() if uid else None
+    out: dict[str, Any] = {}
+    missing: list[str] = []
+    for kind in kinds:
+        hit = _cache_peek(cache, uid, kind)
+        if hit is _MISS:
+            missing.append(kind)
+        else:
+            out[kind] = hit
+    if not missing:
+        return out
+
+    store = _backend()                                # script thread only
+    detached = _detached(store) if len(missing) > 1 else None
+    if detached is None:
+        for kind in missing:
+            out[kind] = READERS[kind](store)
+    else:
+        with ThreadPoolExecutor(max_workers=len(missing),
+                                thread_name_prefix="tr-read") as pool:
+            futures = {kind: pool.submit(READERS[kind], detached) for kind in missing}
+            for kind, future in futures.items():
+                # Raises here, on the script thread, exactly as the sequential
+                # read it replaces would have.
+                out[kind] = future.result()
+    for kind in missing:
+        _cache_put(cache, uid, kind, out[kind])
+    return out
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -507,7 +615,7 @@ def load_monitors() -> list[Monitor]:
 
 
 def save_monitors(monitors: list[Monitor], *, mirror: bool = True) -> None:
-    invalidate_cache()
+    invalidate_cache("monitors")
     _backend().save_monitors(monitors, mirror=mirror)
 
 
@@ -572,7 +680,8 @@ def extend_monitor(monitor_id: str, hours: int = 24, *, mirror: bool = True) -> 
 
 
 def delete_monitor(monitor_id: str, *, mirror: bool = True) -> None:
-    invalidate_cache()
+    # The monitor and its observed state both go.
+    invalidate_cache("monitors", "state")
     _backend().delete_monitor(monitor_id, mirror=mirror)
 
 
@@ -584,7 +693,7 @@ def load_settings() -> dict[str, Any]:
 
 
 def save_settings(settings: dict[str, Any], *, mirror: bool = True) -> None:
-    invalidate_cache()
+    invalidate_cache("settings")
     _backend().save_settings(settings, mirror=mirror)
 
 
@@ -595,7 +704,7 @@ def purge_user_data(*, mirror: bool = True) -> dict[str, int]:
     UID — never from an argument, so no caller can point it at another
     account. Returns counts of what was removed.
     """
-    invalidate_cache()
+    invalidate_cache()          # every kind: all of it is going
     return _backend().purge_user_data(mirror=mirror)
 
 
@@ -760,7 +869,7 @@ def load_state() -> dict[str, MonitorState]:
 
 
 def save_state(state: dict[str, MonitorState], *, mirror: bool = True) -> None:
-    invalidate_cache()
+    invalidate_cache("state")
     _backend().save_state(state, mirror=mirror)
 
 
@@ -769,7 +878,7 @@ def get_monitor_state(monitor_id: str) -> MonitorState:
 
 
 def clear_monitor_state(monitor_id: str, *, mirror: bool = True) -> None:
-    invalidate_cache()
+    invalidate_cache("state")
     _backend().clear_monitor_state(monitor_id, mirror=mirror)
 
 
@@ -789,7 +898,7 @@ def record_history(monitor: Monitor, kind: str, message: str, *, mirror: bool = 
     flapping check cannot flood the rail.
     """
     at = at or now_ist()
-    invalidate_cache()
+    invalidate_cache("history")
     store = _backend()
     for item in store.recent_history_for(monitor):
         if (
@@ -818,6 +927,7 @@ __all__ = [
     "HISTORY_LIMIT",
     "MonitorState",
     "NEW_SHOWTIME_COOLDOWN",
+    "READERS",
     "Scope",
     "TargetState",
     "backend_name",
@@ -828,6 +938,7 @@ __all__ = [
     "get_monitor",
     "get_monitor_state",
     "load_history",
+    "load_many",
     "load_monitors",
     "load_settings",
     "load_state",
