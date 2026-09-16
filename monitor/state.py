@@ -103,6 +103,50 @@ def backend_name() -> str:
     return "firestore" if isinstance(_backend(), _FirestoreStore) else "json"
 
 
+@dataclass(frozen=True)
+class BackendReport:
+    """Which store was selected and, when it is not the expected one, why.
+
+    Every field here is safe to print. ``project_configured`` says only
+    whether ``FIREBASE_PROJECT_ID`` holds something, never what;
+    ``service_account_configured`` says only whether the credential was
+    structurally usable, never any part of it.
+    """
+
+    name: str
+    project_configured: bool
+    service_account_configured: bool
+    problem: str = ""
+
+
+def backend_report() -> BackendReport:
+    """What :func:`_backend` decided, and what to say about it.
+
+    The worker falls back to the legacy JSON files when its credentials are
+    unusable. That is right for a laptop and wrong for production, and from
+    the outside the two are identical — a green run that checked nothing. So
+    the reason is worked out here, in terms that can be logged.
+    """
+    info, problem = fs.service_account_status()
+    project = fs.project_from_env()
+    if not project:
+        problem = problem or "FIREBASE_PROJECT_ID is not set"
+    try:
+        name = backend_name()
+    except Exception as exc:  # noqa: BLE001 - a key Google itself refuses
+        # Structurally complete but unusable: a truncated private key, say.
+        # Report it as configuration rather than a traceback; the worker's
+        # preflight still turns it into a hard failure.
+        name = "json"
+        problem = problem or f"the service account was rejected ({type(exc).__name__})"
+    return BackendReport(
+        name=name,
+        project_configured=bool(project),
+        service_account_configured=info is not None,
+        problem="" if name == "firestore" else problem,
+    )
+
+
 def _backend() -> "_Store":
     global _admin
     if _scope_provider is not None:
@@ -925,12 +969,14 @@ def record_history(monitor: Monitor, kind: str, message: str, *, mirror: bool = 
 __all__ = [
     "DUE_TOLERANCE_SECONDS",
     "HISTORY_LIMIT",
+    "BackendReport",
     "MonitorState",
     "NEW_SHOWTIME_COOLDOWN",
     "READERS",
     "Scope",
     "TargetState",
     "backend_name",
+    "backend_report",
     "clear_monitor_state",
     "delete_monitor",
     "expire_due_monitors",
