@@ -25,24 +25,31 @@ app renders inside :func:`app_container`.
 
 from __future__ import annotations
 
+import threading
+
 import streamlit as st
 
 from auth import firebase, session
 from auth.session import AuthUser
 
 #: The ``tr_page`` slot from the current run, so ``main()`` can render the app
-#: into the very container the gate reserved. Valid only within one run.
-_page_container = None
+#: into the very container the gate reserved. Valid only within one run —
+#: and held per *thread*, because Streamlit runs every session's script on
+#: its own thread and all of them share this module. A plain module global
+#: here was one slot for the whole process: with two sessions running at
+#: once (a second tab; the Google popup and the tab that opened it, which
+#: rerun together by design) one session could set it, spend a few hundred
+#: milliseconds in ``restore()``, and then render its whole page into the
+#: container the *other* session had meanwhile put there.
+_page = threading.local()
 
 
 def app_container():
     """The fixed ``tr_page`` slot the authenticated app renders into."""
-    return _page_container
+    return getattr(_page, "container", None)
 
 
 def require_user() -> AuthUser:
-    global _page_container
-
     firebase.log_config_once()
     # A sign-out or a sign-in on the previous run asked for the session to
     # be wiped; this is the first thing that runs, before any widget.
@@ -57,7 +64,7 @@ def require_user() -> AuthUser:
 
     # The two fixed slots, always here and always in this order.
     chrome = st.container(key="tr_chrome")
-    _page_container = st.container(key="tr_page")
+    _page.container = st.container(key="tr_page")
 
     # The in-memory session is the fast path: while this Streamlit session is
     # authenticated nothing is read from the browser at all.
@@ -86,7 +93,7 @@ def require_user() -> AuthUser:
         session.run_bridge(signal=session.GOOGLE_SIGNAL if popup_done else "")
 
     if popup_done:
-        with _page_container:
+        with _page.container:
             login.popup_done()
         st.stop()
 
@@ -107,7 +114,7 @@ def require_user() -> AuthUser:
             st.session_state[session.BRIDGE_RUNS_KEY] = runs
             if runs <= session.BRIDGE_MAX_RUNS:
                 print(f"[auth] gate: waiting for the browser bridge (run {runs})", flush=True)
-                with _page_container:
+                with _page.container:
                     _restoring()
                 st.stop()
             print("[auth] gate: bridge never answered; showing login", flush=True)
@@ -126,7 +133,7 @@ def require_user() -> AuthUser:
           f"renders={'app' if user is not None else 'login'}", flush=True)
 
     if user is None:
-        with _page_container:
+        with _page.container:
             login.render()
             _diag_panel()
         st.stop()

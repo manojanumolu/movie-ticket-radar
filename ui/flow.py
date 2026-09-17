@@ -75,10 +75,22 @@ def boot() -> None:
         st.session_state.setdefault(key, value.copy() if isinstance(value, (list, dict)) else value)
 
 
-def goto(step: int) -> None:
+def goto(step: int, *, rerun: bool = True) -> None:
+    """Move the wizard to ``step``.
+
+    From an ``on_click`` callback pass ``rerun=False``: a callback runs
+    *before* the script, so the run that follows already draws the new
+    step — asking for another would be a second full run for nothing.
+    """
     st.session_state["step"] = step
     st.session_state["furthest"] = max(st.session_state.get("furthest", 1), step)
-    st.rerun()
+    if rerun:
+        st.rerun()
+
+
+def _go(step: int) -> None:
+    """``goto`` as a button callback."""
+    goto(step, rerun=False)
 
 
 def reset_from(step: int) -> None:
@@ -120,18 +132,25 @@ def grid(items, per_row: int, key: str, *, gap: str = "small"):
                 yield column, item
 
 
-def pick(key: str, label: str, render, *, disabled: bool = False) -> bool:
+def pick(key: str, label: str, render, *, disabled: bool = False,
+         on_click=None, args: tuple = ()) -> bool:
     """Render a tile and return True when it was clicked.
 
     ``render`` draws the design HTML; the button underneath is what Streamlit
     sees. ``key`` is the button's key (what tests click); the container gets
     ``pick_<key>`` so the theme can find the pair.
+
+    ``on_click`` is where a tile's effect belongs. A callback runs before
+    the script, so the one run that follows the click already draws the
+    result. The old shape — ``if pick(...): change state; st.rerun()`` —
+    drew the page with the stale selection first and then ran it all again
+    (two full runs, twice the page's CSS over the wire) for every click.
     """
     with st.container(key=f"pick_{key}"):
         render()
         if disabled:
             return False
-        return st.button(label, key=key, use_container_width=True)
+        return st.button(label, key=key, use_container_width=True, on_click=on_click, args=args)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -151,10 +170,9 @@ def step_rail(step: int, furthest: int) -> None:
             state = "now" if index == step else ("done" if index <= furthest else "todo")
             with column:
                 reachable = state == "done"
-                if pick(f"step_{index}", f"Go to step {index}: {label}",
-                        lambda i=index, lb=label, s=state: C.step_pip(i, lb, s),
-                        disabled=not reachable):
-                    goto(index)
+                pick(f"step_{index}", f"Go to step {index}: {label}",
+                     lambda i=index, lb=label, s=state: C.step_pip(i, lb, s),
+                     disabled=not reachable, on_click=_go, args=(index,))
         C.html(f'<div class="tr-step-mobile">Step {step} of {len(STEPS)} · {C.e(STEPS[step - 1])}</div>')
 
 
@@ -163,13 +181,20 @@ def back_button(step: int) -> None:
     if step <= 1:
         return
     with st.container(key="trback"):
-        if st.button(f"Back to {STEPS[step - 2]}", key="back", icon=":material/arrow_back:"):
-            goto(step - 1)
+        st.button(f"Back to {STEPS[step - 2]}", key="back", icon=":material/arrow_back:",
+                  on_click=_go, args=(step - 1,))
 
 
 # ──────────────────────────────────────────────────────────────────────────
 # 1 · Location
 # ──────────────────────────────────────────────────────────────────────────
+def _choose_location(slug: str) -> None:
+    if slug != st.session_state.get("location", ""):
+        st.session_state["location"] = slug
+        reset_from(1)
+    goto(2, rerun=False)
+
+
 def step_location() -> None:
     C.step_header(1, "Where are you watching?", "Pick your city and we'll load what's on.")
 
@@ -184,17 +209,13 @@ def step_location() -> None:
                 C.location_tile(loc.name, loc.state, selected=False, enabled=False)
                 continue
             selected = loc.slug == current
-            if pick(f"loc_{loc.slug}", "Selected" if selected else f"Choose {loc.name}",
-                    lambda loc=loc, selected=selected: C.location_tile(loc.name, loc.state, selected)):
-                if loc.slug != current:
-                    st.session_state["location"] = loc.slug
-                    reset_from(1)
-                goto(2)
+            pick(f"loc_{loc.slug}", "Selected" if selected else f"Choose {loc.name}",
+                 lambda loc=loc, selected=selected: C.location_tile(loc.name, loc.state, selected),
+                 on_click=_choose_location, args=(loc.slug,))
 
     if current:
-        if st.button("Continue to movies", type="primary", use_container_width=True,
-                     key="loc_continue", icon=":material/arrow_forward:"):
-            goto(2)
+        st.button("Continue to movies", type="primary", use_container_width=True,
+                  key="loc_continue", icon=":material/arrow_forward:", on_click=_go, args=(2,))
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -204,7 +225,7 @@ def _select_movie(movie_id: str) -> None:
     if movie_id != st.session_state.get("movie_id", ""):
         st.session_state["movie_id"] = movie_id
         reset_from(2)
-    goto(3)
+    goto(3, rerun=False)
 
 
 def _poster_grid(cards: list[cv.MovieCard], selected: str, *, compact: bool = False,
@@ -214,10 +235,10 @@ def _poster_grid(cards: list[cv.MovieCard], selected: str, *, compact: bool = Fa
     for column, card in grid(cards, GRID_COLUMNS, prefix.rstrip("_")):
         with column:
             is_sel = card.id == selected
-            if pick(f"{prefix}{card.id}", "Selected" if is_sel else f"Select {card.title}",
-                    lambda c=card, is_sel=is_sel: C.poster_tile(
-                        c.title, c.meta, is_sel, c.poster_url, compact=compact)):
-                _select_movie(card.id)
+            pick(f"{prefix}{card.id}", "Selected" if is_sel else f"Select {card.title}",
+                 lambda c=card, is_sel=is_sel: C.poster_tile(
+                     c.title, c.meta, is_sel, c.poster_url, compact=compact),
+                 on_click=_select_movie, args=(card.id,))
 
 
 def step_movie() -> bool:
@@ -281,9 +302,8 @@ def step_movie() -> bool:
         current = cv.card(selected, location.slug)
         if current is not None:
             C.html(f'<div class="tr-selected"><span class="n">✓</span>Selected: <b>{C.e(current.label)}</b></div>')
-        if st.button("Continue to theatres", type="primary", use_container_width=True,
-                     key="movie_continue", icon=":material/arrow_forward:"):
-            goto(3)
+        st.button("Continue to theatres", type="primary", use_container_width=True,
+                  key="movie_continue", icon=":material/arrow_forward:", on_click=_go, args=(3,))
     return bool(selected)
 
 
@@ -308,7 +328,29 @@ def _toggle_theatre(code: str, listed: list[Venue]) -> None:
     st.session_state["theatres"] = (
         [c for c in listed_codes if c in chosen] + [c for c in chosen if c not in listed_codes]
     )
-    st.rerun()
+
+
+def _select_all(venues: list[Venue]) -> None:
+    """Every theatre listed for the film — or none, when they all already
+    are; release-watch picks stay as they are."""
+    chosen = list(st.session_state.get("theatres", []))
+    every = [v.code for v in venues]
+    extra = [c for c in chosen if c not in every]
+    listed_now = [] if set(every) <= set(chosen) and every else every
+    st.session_state["theatres"] = listed_now + extra
+
+
+def _pick_from_search(nonce: int, venues: list[Venue]) -> None:
+    """The search box's ``on_change``: toggle the picked theatre and bump
+    the box's key so the run that follows draws it empty again."""
+    code = st.session_state.get(f"theatre_query_{nonce}")
+    if code:
+        st.session_state["theatre_nonce"] = nonce + 1
+        _toggle_theatre(code, venues)
+
+
+def _set_show_all(value: bool) -> None:
+    st.session_state["show_all_theatres"] = value
 
 
 def _theatre_label(venue: Venue, city: str, listed: bool) -> str:
@@ -328,19 +370,19 @@ def step_theatres() -> list[Venue]:
         st.caption("Pick a movie first.")
         return []
 
+    # Every theatre the catalogue holds for *this* movie — the whole film,
+    # every format, nothing added and nothing left out.
+    venues = cv.venues(movie.id, slug)
+    directory = cv.view(slug).directory
+
     head, action = st.columns([3.2, 1], vertical_alignment="center")
     with head:
         C.step_header(3, "Where do you want to watch?",
                       f"Theatres showing {movie.title} in {movie.city} — or ones you want watched "
                       "until they release it.")
     with action:
-        select_all = st.button("Select all", key="select_all", use_container_width=True,
-                               icon=":material/done_all:")
-
-    # Every theatre the catalogue holds for *this* movie — the whole film,
-    # every format, nothing added and nothing left out.
-    venues = cv.venues(movie.id, slug)
-    directory = cv.view(slug).directory
+        st.button("Select all", key="select_all", use_container_width=True,
+                  icon=":material/done_all:", on_click=_select_all, args=(venues,))
     if not venues and not directory:
         problem = st.session_state.get("detail_problem", "")
         if problem:
@@ -355,13 +397,6 @@ def step_theatres() -> list[Venue]:
         return []
 
     chosen = list(st.session_state.get("theatres", []))
-    if select_all:
-        # Every theatre listed for the film; release-watch picks stay as they are.
-        every = [v.code for v in venues]
-        extra = [c for c in chosen if c not in every]
-        listed_now = [] if set(every) <= set(chosen) and every else every
-        st.session_state["theatres"] = listed_now + extra
-        st.rerun()
 
     # ── search: client-side, over every theatre the city catalogue knows ──
     # A theatre not yet listed for this movie is offered as "coming soon":
@@ -372,15 +407,13 @@ def step_theatres() -> list[Venue]:
         (c for c in directory if c not in listed_codes), key=lambda c: directory[c].name.lower())
     nonce = st.session_state.get("theatre_nonce", 0)
     C.html('<div class="tr-field-label">Search theatres</div>')
-    picked_code = st.selectbox(
+    st.selectbox(
         "Search theatres", search_codes, index=None,
         format_func=lambda c: _theatre_label(by_code[c], movie.city, c in listed_codes),
         key=f"theatre_query_{nonce}", placeholder=f"Search theatres in {movie.city}…",
         label_visibility="collapsed", filter_mode="contains",
+        on_change=_pick_from_search, args=(nonce, venues),
     )
-    if picked_code:
-        st.session_state["theatre_nonce"] = nonce + 1    # clears the box on the rerun
-        _toggle_theatre(picked_code, venues)
 
     # ── featured quick-picks: released, coming soon, or unknown ──────────
     shelf = cv.featured(venues, directory)
@@ -393,10 +426,10 @@ def step_theatres() -> list[Venue]:
             is_sel = match.venue.code in chosen
             label = "Selected ✓" if is_sel else (
                 f"Select {match.venue.name}" if match.released else f"Watch {match.venue.name} for release")
-            if pick(f"feat_{match.venue.code}", label,
-                    lambda m=match, is_sel=is_sel: C.featured_tile(
-                        m.pick.name, m.pick.area, m.venue, is_sel, released=m.released)):
-                _toggle_theatre(match.venue.code, venues)
+            pick(f"feat_{match.venue.code}", label,
+                 lambda m=match, is_sel=is_sel: C.featured_tile(
+                     m.pick.name, m.pick.area, m.venue, is_sel, released=m.released),
+                 on_click=_toggle_theatre, args=(match.venue.code, venues))
 
     # ── the full list: behind "View all" when it is long ─────────────────
     # Six featured tiles are the first screen. A film playing at 70 theatres
@@ -410,29 +443,26 @@ def step_theatres() -> list[Venue]:
                    "watched, above, and we'll tell you the moment tickets open.")
     elif not show_all:
         with st.container(key="trviewall"):
-            if st.button(f"View all {len(venues)} theatres", key="view_all_theatres",
-                         use_container_width=True, icon=":material/expand_more:"):
-                st.session_state["show_all_theatres"] = True
-                st.rerun()
+            st.button(f"View all {len(venues)} theatres", key="view_all_theatres",
+                      use_container_width=True, icon=":material/expand_more:",
+                      on_click=_set_show_all, args=(True,))
     else:
         head, hide = st.columns([3, 1], vertical_alignment="center")
         with head:
             C.rule(f"All theatres · {len(venues)}")
         with hide:
-            if len(venues) > VIEW_ALL_THRESHOLD and st.button(
-                    "Show fewer", key="hide_all_theatres", use_container_width=True,
-                    icon=":material/expand_less:"):
-                st.session_state["show_all_theatres"] = False
-                st.rerun()
+            if len(venues) > VIEW_ALL_THRESHOLD:
+                st.button("Show fewer", key="hide_all_theatres", use_container_width=True,
+                          icon=":material/expand_less:", on_click=_set_show_all, args=(False,))
         for column, venue in grid(venues, 2, "th"):
             with column:
                 is_sel = venue.code in chosen
                 label = "Selected ✓" if is_sel else f"Select {venue.name}"
-                if pick(f"th_{venue.code}", label,
-                        lambda v=venue, is_sel=is_sel: C.theatre_row(
-                            v.name, v.area, list(v.formats), is_sel, v.abbr,
-                            featured=v.code in featured_codes)):
-                    _toggle_theatre(venue.code, venues)
+                pick(f"th_{venue.code}", label,
+                     lambda v=venue, is_sel=is_sel: C.theatre_row(
+                         v.name, v.area, list(v.formats), is_sel, v.abbr,
+                         featured=v.code in featured_codes),
+                     on_click=_toggle_theatre, args=(venue.code, venues))
 
     # ── theatres being watched for release (chosen, not listed yet) ──────
     watching = [by_code[c] for c in chosen if c not in listed_codes and c in by_code]
@@ -440,17 +470,16 @@ def step_theatres() -> list[Venue]:
         C.rule(f"Watching for release · {len(watching)}")
         for column, venue in grid(watching, 2, "watch"):
             with column:
-                if pick(f"th_{venue.code}", "Selected ✓",
-                        lambda v=venue: C.theatre_row(v.name, v.area, list(v.formats), True, v.abbr,
-                                                      featured=v.code in featured_codes, coming=True)):
-                    _toggle_theatre(venue.code, venues)
+                pick(f"th_{venue.code}", "Selected ✓",
+                     lambda v=venue: C.theatre_row(v.name, v.area, list(v.formats), True, v.abbr,
+                                                   featured=v.code in featured_codes, coming=True),
+                     on_click=_toggle_theatre, args=(venue.code, venues))
 
     picked = cv.selected_venues(movie.id, slug, chosen)
     if picked:
         st.caption(f"{len(picked)} theatre(s) selected: " + ", ".join(v.name for v in picked))
-        if st.button("Continue to formats", type="primary", use_container_width=True,
-                     key="th_continue", icon=":material/arrow_forward:"):
-            goto(4)
+        st.button("Continue to formats", type="primary", use_container_width=True,
+                  key="th_continue", icon=":material/arrow_forward:", on_click=_go, args=(4,))
     else:
         st.caption("Select at least one theatre to continue.")
     return picked
@@ -514,9 +543,8 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
 
     total = sum(len(formats[v.code]) for v in venues)
     st.caption(f"Watching {total} theatre/format combination(s) independently.")
-    if st.button("Continue to monitoring", type="primary", use_container_width=True,
-                 key="fmt_continue", icon=":material/arrow_forward:"):
-        goto(5)
+    st.button("Continue to monitoring", type="primary", use_container_width=True,
+              key="fmt_continue", icon=":material/arrow_forward:", on_click=_go, args=(5,))
     return formats
 
 
@@ -526,6 +554,11 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
 DATE_MODES = [("any", "Any date", "Every date on sale"),
               ("single", "Single date", "One show date"),
               ("range", "Date range", "First to last day")]
+
+
+def _set(key: str, value) -> None:
+    """A tile that sets one value — as a callback, so one run draws it."""
+    st.session_state[key] = value
 
 
 def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[str]]:
@@ -539,10 +572,9 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
             current = 10
         for column, minutes in grid(INTERVALS, 3, "interval"):
             with column:
-                if pick(f"interval_{minutes}", f"Every {minutes} minutes",
-                        lambda m=minutes, sel=(minutes == current): C.interval_tile(m, sel)):
-                    st.session_state["interval"] = minutes
-                    st.rerun()
+                pick(f"interval_{minutes}", f"Every {minutes} minutes",
+                     lambda m=minutes, sel=(minutes == current): C.interval_tile(m, sel),
+                     on_click=_set, args=("interval", minutes))
         interval = current
         st.caption("The first check runs as soon as you start; after that, about every "
                    f"{interval} minutes.")
@@ -572,10 +604,9 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
         mode = "any"
     for column, (value, label, sub) in grid(DATE_MODES, 3, "datemode"):
         with column:
-            if pick(f"datemode_{value}", label,
-                    lambda label=label, sub=sub, sel=(value == mode): C.choice_tile(label, sub, sel)):
-                st.session_state["date_mode"] = value
-                st.rerun()
+            pick(f"datemode_{value}", label,
+                 lambda label=label, sub=sub, sel=(value == mode): C.choice_tile(label, sub, sel),
+                 on_click=_set, args=("date_mode", value))
     tomorrow = (now_ist() + timedelta(days=1)).date()
     show_dates: list[str] = []
     if mode == "single":
