@@ -66,16 +66,24 @@ NAV_ICONS = {
 
 
 def _nav_css() -> str:
+    """One icon per navigation item, by position.
+
+    Streamlit wraps each radio option in its own ``<div>``, so the labels are
+    not siblings: ``label:nth-of-type(N)`` is 1 for every one of them, and
+    all four items drew the home icon. The position that tells them apart
+    is the wrapper's — ``:nth-child(N)`` of the radiogroup. The bare-label
+    form is kept for a DOM that renders the labels as siblings.
+    """
+    side = '[data-testid="stSidebar"] [role="radiogroup"]'
     rules = []
     for index, (name, (paths, width)) in enumerate(NAV_ICONS.items(), start=1):
         idle = _svg_uri(paths, "#8E8E98", width)
         active = _svg_uri(paths, "#FF5573", width)
+        labels = (f"{side} > :nth-child({index}) label", f"{side} > label:nth-of-type({index})")
         rules.append(
-            f'[data-testid="stSidebar"] [role="radiogroup"] label:nth-of-type({index})::before '
-            f"{{ background-image:{idle}; }}\n"
-            f'[data-testid="stSidebar"] [role="radiogroup"] label:nth-of-type({index}):has(input:checked)::before, '
-            f'[data-testid="stSidebar"] [role="radiogroup"] label:nth-of-type({index})[data-selected="true"]::before '
-            f"{{ background-image:{active}; }}"
+            ", ".join(f"{lb}::before" for lb in labels) + f" {{ background-image:{idle}; }}\n"
+            + ", ".join(f"{lb}:has(input:checked)::before, {lb}[data-selected=\"true\"]::before" for lb in labels)
+            + f" {{ background-image:{active}; }}"
         )
     return "\n".join(rules)
 
@@ -234,27 +242,36 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   position:absolute; inset:0; width:100%; height:100%; min-height:0; margin:0; padding:0; opacity:0; cursor:pointer; }
 /* the menu itself (portaled to <body>) */
 [data-testid="stPopoverBody"] { background:var(--tr-surface) !important; border:1px solid var(--tr-border-strong) !important;
-  border-radius:14px !important; padding:8px !important; min-width:224px; box-shadow:0 24px 60px -20px rgba(0,0,0,.9), var(--tr-hi); }
-[data-testid="stPopoverBody"] [data-testid="stVerticalBlock"] { gap:.25rem; }
-.tr-acct-menu { padding:8px 10px 10px; border-bottom:1px solid var(--tr-border); margin-bottom:6px; min-width:0; }
+  border-radius:14px !important; padding:6px !important; min-width:248px; max-width:min(320px, calc(100vw - 24px));
+  box-shadow:0 24px 60px -20px rgba(0,0,0,.9), var(--tr-hi); }
+[data-testid="stPopoverBody"] [data-testid="stVerticalBlock"] { gap:.15rem; }
+.tr-acct-menu { padding:8px 12px 10px; border-bottom:1px solid var(--tr-border); margin-bottom:4px; min-width:0; }
 .tr-acct-menu .n { font-size:13.5px; font-weight:700; color:var(--tr-text); overflow-wrap:anywhere; }
 .tr-acct-menu .m { font-size:11.5px; color:var(--tr-text-3); overflow-wrap:anywhere; margin-top:2px; }
 .tr-acct-menu .k { font-family:var(--tr-mono); font-size:9px; letter-spacing:.18em; color:var(--tr-text-4); margin-top:8px; }
-/* the destructive action is set apart from the ordinary ones */
-.tr-acct-sep { height:1px; background:var(--tr-border); margin:8px 0 6px; }
-[class*="st-key-acct_delete"] button { color:#FF8A8A !important; border-color:rgba(255,80,80,.28) !important; }
-[class*="st-key-acct_delete"] button:hover { background:rgba(255,51,85,.10) !important; border-color:rgba(255,80,80,.55) !important; }
+/* the destructive action is set apart from the ordinary ones: a quiet row in
+   the same shape as the others, red only in its text, louder only on hover */
+.tr-acct-sep { height:1px; background:var(--tr-border); margin:6px 4px 4px; }
+[class*="st-key-acct_delete"] button { color:#FF8A8A !important; border-color:transparent !important; }
+[class*="st-key-acct_delete"] button:hover { color:#FFB0B0 !important; background:rgba(255,51,85,.10) !important; border-color:rgba(255,80,80,.45) !important; }
 /* the confirmation panel */
 [class*="st-key-trcard_delacct"] { border-color:rgba(255,80,80,.45) !important; background:linear-gradient(180deg,rgba(255,51,85,.07),rgba(255,51,85,.02)) !important; }
 .tr-danger .t { font-size:16px; font-weight:800; color:#FF8A8A; letter-spacing:-.01em; }
 .tr-danger .s { font-size:13px; color:var(--tr-text-2); margin-top:6px; line-height:1.55; }
 [class*="st-key-acct_delete_confirm"] button { background:#E02742 !important; border-color:#E02742 !important; }
 [class*="st-key-acct_delete_confirm"] button:disabled { opacity:.45 !important; }
-[data-testid="stPopoverBody"] .stButton > button { min-height:38px; font-size:13px; font-weight:600; justify-content:flex-start; gap:10px;
-  padding:.4rem .7rem; border-radius:10px; box-shadow:none; background:transparent; border-color:transparent; color:var(--tr-text-2); }
-[data-testid="stPopoverBody"] .stButton > button p { font-size:13px; font-weight:600; }
-[data-testid="stPopoverBody"] .stButton > button:hover { transform:none; color:#fff; background:rgba(255,255,255,.06); border-color:var(--tr-border); }
-[data-testid="stPopoverBody"] [class*="st-key-auth_signout"] .stButton > button:hover { color:#fff; border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); }
+/* ``.stButton button`` at any depth: a button with a ``help`` tooltip (Delete
+   account) sits one wrapper deeper than the others and must match too. */
+[data-testid="stPopoverBody"] .stButton button { min-height:38px; font-size:13px; font-weight:600; justify-content:flex-start; gap:10px;
+  padding:.4rem .75rem; border-radius:10px; box-shadow:none; background:transparent; border-color:transparent; color:var(--tr-text-2); width:100%; }
+[data-testid="stPopoverBody"] .stButton [data-testid="stTooltipHoverTarget"] { width:100%; }
+/* Streamlit centres a button's content in an inner flex box; the rows of a
+   menu line up on the left, icon then label, every one the same. */
+[data-testid="stPopoverBody"] .stButton button > div { justify-content:flex-start; width:100%; gap:10px; }
+[data-testid="stPopoverBody"] .stButton button [data-testid="stIconMaterial"] { font-size:18px; width:18px; flex:none; }
+[data-testid="stPopoverBody"] .stButton button p { font-size:13px; font-weight:600; }
+[data-testid="stPopoverBody"] .stButton button:hover { transform:none; color:#fff; background:rgba(255,255,255,.06); border-color:var(--tr-border); }
+[data-testid="stPopoverBody"] [class*="st-key-auth_signout"] .stButton button:hover { color:#fff; border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); }
 
 [data-testid="stSidebar"] [role="radiogroup"] { gap:4px; margin-top:2px; }
 [data-testid="stSidebar"] [role="radiogroup"] label {
@@ -298,6 +315,12 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   background:rgba(255,51,85,.14); color:#FF6B85; border:none; line-height:1;
 }
 __NAV_ICONS__
+
+/* The cookie bridge is a zero-height component. Until its iframe has loaded
+   Streamlit draws a skeleton bar for it — which, on a fresh load, was the
+   only thing on the page. There is nothing to preview; draw nothing. */
+[class*="st-key-tr_chrome"] [data-testid="stSkeleton"] { display:none !important; }
+[class*="st-key-tr_chrome"] iframe { display:block; height:0 !important; min-height:0 !important; border:0; }
 
 /* ── hero ──────────────────────────────────────────────────────────── */
 .tr-hero {
