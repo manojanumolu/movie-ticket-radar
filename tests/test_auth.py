@@ -13,6 +13,7 @@ gate from the outside.
 
 from __future__ import annotations
 
+import json
 import re
 import time
 
@@ -54,6 +55,12 @@ class FakeFirebase:
 
     def add(self, email: str, password: str, *, uid: str = "uid-1", name: str = "", verified: bool = True) -> None:
         self.accounts[email] = {"password": password, "uid": uid, "name": name, "verified": verified}
+
+    def set_claims(self, email: str, claims: dict | None) -> None:
+        """What an administrator's ``setCustomUserClaims`` does to the account
+        record. There is no client call that can — only this, on the fake, as
+        only the Admin SDK can on the real thing."""
+        self.accounts[email]["claims"] = claims
 
     def verify(self, email: str) -> None:
         """What clicking Firebase's link does."""
@@ -129,8 +136,12 @@ class FakeFirebase:
             email, acct = self._by_token(payload.get("idToken", ""))
             if acct is None:
                 return self._error("INVALID_ID_TOKEN")
-            return 200, {"users": [{"localId": acct["uid"], "email": email, "displayName": acct["name"],
-                                    "emailVerified": acct["verified"]}]}
+            user = {"localId": acct["uid"], "email": email, "displayName": acct["name"],
+                    "emailVerified": acct["verified"]}
+            if acct.get("claims") is not None:
+                # Google reports custom claims as a JSON *string*.
+                user["customAttributes"] = json.dumps(acct["claims"])
+            return 200, {"users": [user]}
         if action == "token":
             for acct in self.accounts.values():
                 if self.refresh_token_for(acct["uid"]) == payload.get("refresh_token"):
@@ -298,7 +309,8 @@ def test_refresh_and_lookup_restore_an_account(fake):
     creds = client.refresh("refresh.uid-ravi")
     assert creds.uid == "uid-ravi" and creds.id_token == "id.uid-ravi"
     assert client.lookup(creds.id_token) == {"uid": "uid-ravi", "email": "ravi@example.com",
-                                             "display_name": "Ravi Teja", "email_verified": True}
+                                             "display_name": "Ravi Teja", "email_verified": True,
+                                             "admin": False}
     with pytest.raises(AuthError) as exc:
         client.refresh("refresh.stale")
     assert "sign in again" in str(exc.value)

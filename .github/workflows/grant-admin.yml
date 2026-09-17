@@ -1,0 +1,47 @@
+name: Grant admin claim
+
+# Sets, shows or removes the `admin: true` custom claim on ONE Firebase
+# account — the claim that lifts TicketRadar's active-monitor limit for the
+# owner. Custom claims can only be written with the project's service
+# account, which lives in this repository's secrets and nowhere a browser
+# can reach; this is the one place that credential is used for anything but
+# the worker. Nothing here touches Firestore, rules, or any other account.
+#
+# Run it from the Actions tab: Grant admin claim → Run workflow → your
+# sign-in email, action "grant". The log shows the UID and the claims
+# before and after — never a key or a token.
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "The account's sign-in email address"
+        type: string
+        required: true
+      action:
+        description: "show: print current claims · grant: set admin true · revoke: remove it"
+        type: choice
+        options: [show, grant, revoke]
+        default: show
+
+permissions:
+  contents: read
+
+jobs:
+  claim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests google-auth
+      - name: ${{ inputs.action }} admin claim
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python tools/grant_admin.py --email "${{ inputs.email }}" \
+            ${{ inputs.action == 'grant' && '--grant' || '' }} \
+            ${{ inputs.action == 'revoke' && '--revoke' || '' }}

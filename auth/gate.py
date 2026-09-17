@@ -92,6 +92,7 @@ def require_user() -> AuthUser:
     # that was restored but is not rendered, and a user cleared after this
     # point. Booleans only — never a UID, an email or a token.
     print(f"[auth] gate: in_memory={from_memory is not None} user_present={user is not None} "
+          f"admin={str(bool(user is not None and user.admin)).lower()} "
           f"renders={'app' if user is not None else 'login'}", flush=True)
 
     if user is None:
