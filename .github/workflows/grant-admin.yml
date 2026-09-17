@@ -8,8 +8,9 @@ name: Grant admin claim
 # the worker. Nothing here touches Firestore, rules, or any other account.
 #
 # Run it from the Actions tab: Grant admin claim → Run workflow → your
-# sign-in email, action "grant". The log shows the UID and the claims
-# before and after — never a key or a token.
+# sign-in email, action "grant". This repository and its logs are public,
+# so the log shows a masked address and whether the claim is set — never
+# the full address, the UID, a key or a token.
 
 on:
   workflow_dispatch:
@@ -32,16 +33,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
       - run: pip install requests google-auth
-      - name: ${{ inputs.action }} admin claim
+      - name: Manage admin claim
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          INPUT_EMAIL: ${{ inputs.email }}
+          INPUT_ACTION: ${{ inputs.action }}
         run: |
-          python tools/grant_admin.py --email "${{ inputs.email }}" \
-            ${{ inputs.action == 'grant' && '--grant' || '' }} \
-            ${{ inputs.action == 'revoke' && '--revoke' || '' }}
+          args=()
+          [ "$INPUT_ACTION" = "grant" ] && args+=(--grant)
+          [ "$INPUT_ACTION" = "revoke" ] && args+=(--revoke)
+          python tools/grant_admin.py --email "$INPUT_EMAIL" "${args[@]}"

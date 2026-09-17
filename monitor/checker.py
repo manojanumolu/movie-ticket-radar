@@ -84,6 +84,13 @@ class RunReport:
         return text
 
 
+def short_id(monitor_id: str) -> str:
+    """A monitor id as it appears in a log line. The repository — and so
+    every Actions log — is public; eight characters still tell two monitors
+    apart when reading a run, without publishing the whole identifier."""
+    return monitor_id[:8]
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Evaluating one target against one snapshot
 # ──────────────────────────────────────────────────────────────────────────
@@ -328,11 +335,11 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
         if monitor_id and monitor.id != monitor_id:
             continue
         if not monitor.is_running(at):
-            report.skipped.append(f"{monitor.id} ({monitor.status.value.lower()})")
+            report.skipped.append(f"{short_id(monitor.id)} ({monitor.status.value.lower()})")
             continue
         ms: MonitorState = state.setdefault(monitor.id, MonitorState())
         if not force and not ms.is_due(monitor.interval_minutes, at):
-            report.skipped.append(f"{monitor.id} (not due)")
+            report.skipped.append(f"{short_id(monitor.id)} (not due)")
             continue
         due.append(monitor)
 
@@ -345,7 +352,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
 
     for monitor in due:
         ms = state[monitor.id]
-        print(f"[checker] {monitor.id} — {monitor.movie.title} ({len(monitor.targets)} target(s))")
+        print(f"[checker] {short_id(monitor.id)} — {monitor.movie.title} ({len(monitor.targets)} target(s))")
         outcome = check_monitor(monitor, at=at)
         changes = detect_changes(monitor, outcome, ms)
         apply_outcome(outcome, ms)
@@ -372,7 +379,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
             try:
                 notifier(monitor, change)
             except Exception as exc:  # noqa: BLE001 - retried on the next tick
-                report.email_errors.append(f"{monitor.id}: {exc}")
+                report.email_errors.append(f"{short_id(monitor.id)}: {exc}")
                 ms.last_email_error = f"{type(exc).__name__}: {exc}"[:300]
                 print(f"    email failed ({exc}) — will retry next check")
                 continue
@@ -396,4 +403,4 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     return report
 
 
-__all__ = ["RunReport", "check_monitor", "evaluate_target", "run_once"]
+__all__ = ["RunReport", "check_monitor", "evaluate_target", "run_once", "short_id"]

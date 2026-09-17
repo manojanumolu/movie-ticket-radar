@@ -41,11 +41,11 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
           cache: pip
@@ -56,16 +56,23 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.probe }}
         env:
           TZ: Asia/Kolkata
-        run: python sync_catalogue.py --probe --city "${{ inputs.city || 'hyderabad' }}"
+          INPUT_CITY: ${{ inputs.city }}
+        run: python sync_catalogue.py --probe --city "${INPUT_CITY:-hyderabad}"
 
       - name: Sync catalogue
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.probe) }}
         env:
           TZ: Asia/Kolkata
+          DISPATCHED: ${{ github.event_name == 'workflow_dispatch' }}
+          INPUT_CITY: ${{ inputs.city }}
+          INPUT_NO_DETAIL: ${{ inputs.no_detail }}
         run: |
-          python sync_catalogue.py \
-            ${{ (github.event_name == 'workflow_dispatch' && inputs.city != '') && format('--city {0}', inputs.city) || '' }} \
-            ${{ (github.event_name == 'workflow_dispatch' && inputs.no_detail) && '--no-detail' || '' }}
+          args=()
+          if [ "$DISPATCHED" = "true" ]; then
+            [ -n "$INPUT_CITY" ] && args+=(--city "$INPUT_CITY")
+            [ "$INPUT_NO_DETAIL" = "true" ] && args+=(--no-detail)
+          fi
+          python sync_catalogue.py "${args[@]}"
 
       - name: Commit catalogue
         # Probe runs change nothing, so this is a no-op for them.

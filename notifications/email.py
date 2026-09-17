@@ -116,7 +116,7 @@ def send_email(to: str, subject: str, html: str, text: str) -> None:
 
 
 def _mask(address: str) -> str:
-    """'manoj@gmail.com' -> 'm***@gmail.com' — safe for CI logs."""
+    """'someone@gmail.com' -> 's***@gmail.com' — safe for CI logs."""
     if "@" not in address:
         return "***"
     local, _, domain = address.partition("@")

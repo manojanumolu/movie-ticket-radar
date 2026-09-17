@@ -8,6 +8,12 @@ secrets.toml
 *.key
 credentials.json
 token.json
+# A downloaded Firebase / Google Cloud service-account key, whatever it was
+# saved as. The worker gets its key from an Actions secret, never a file.
+*-firebase-adminsdk-*.json
+*service*account*.json
+*serviceaccount*.json
+client_secret*.json
 
 # ── Python ──────────────────────────────────────────────────────────────
 __pycache__/

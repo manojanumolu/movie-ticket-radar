@@ -526,7 +526,7 @@ class _FirestoreStore:
     def append_history(self, monitor: Monitor, item: dict[str, Any], *, mirror: bool = True) -> None:
         owner = self.uid or monitor.owner_uid
         if not owner:
-            print(f"[state] history for {monitor.id} has no owner; not written", flush=True)
+            print(f"[state] history for {monitor.id[:8]} has no owner; not written", flush=True)
             return
         stamp = str(item.get("at", "")).replace(":", "").replace("-", "")[:15] or "0"
         self.client.set(HISTORY, f"{stamp}-{monitor.id[:8]}-{secrets.token_hex(3)}",

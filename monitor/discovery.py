@@ -281,7 +281,7 @@ def _merge_into(monitor: Monitor, listed: list[MovieRef], report: DiscoveryRepor
     report.updated[monitor.id] = new
     print(f"[discover]   {label} ({movie.event_code}): +{len(new)} new sibling event(s) — "
           + ", ".join(f"{code} '{fmt or '?'}'" for code, fmt in new)
-          + f" — monitor {monitor.id} will sweep them from this check on")
+          + f" — monitor {monitor.id[:8]} will sweep them from this check on")
 
 
 __all__ = [

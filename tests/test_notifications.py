@@ -108,7 +108,7 @@ def test_rendered_email_never_contains_the_password(change, monkeypatch):
 
 
 def test_addresses_are_masked_in_logs():
-    assert mail._mask("manoj@gmail.com") == "m***@gmail.com"
+    assert mail._mask("someone@gmail.com") == "s***@gmail.com"
     assert mail._mask("nonsense") == "***"
 
 

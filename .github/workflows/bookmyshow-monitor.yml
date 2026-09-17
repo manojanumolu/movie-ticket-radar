@@ -69,12 +69,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0   # the rebase needs a merge base
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
           cache: pip
@@ -94,11 +94,20 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TZ: Asia/Kolkata
           PYTHONUNBUFFERED: "1"
+          # Dispatch inputs reach the shell as variables, never spliced into
+          # the command. On a push or schedule run they are simply empty.
+          DISPATCHED: ${{ github.event_name == 'workflow_dispatch' }}
+          INPUT_FORCE: ${{ inputs.force }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_MONITOR_ID: ${{ inputs.monitor_id }}
         run: |
-          python run_monitor.py --loop --max-minutes 50 --poll-seconds 30 \
-            ${{ (github.event_name == 'workflow_dispatch' && inputs.force) && '--force' || '' }} \
-            ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }} \
-            ${{ (github.event_name == 'workflow_dispatch' && inputs.monitor_id != '') && format('--monitor {0}', inputs.monitor_id) || '' }}
+          args=()
+          if [ "$DISPATCHED" = "true" ]; then
+            [ "$INPUT_FORCE" = "true" ] && args+=(--force)
+            [ "$INPUT_DRY_RUN" = "true" ] && args+=(--dry-run)
+            [ -n "$INPUT_MONITOR_ID" ] && args+=(--monitor "$INPUT_MONITOR_ID")
+          fi
+          python run_monitor.py --loop --max-minutes 50 --poll-seconds 30 "${args[@]}"
 
       - name: Commit state
         # The segment commits after every check; this is the net under it. It
