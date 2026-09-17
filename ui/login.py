@@ -259,8 +259,9 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 [class*="st-key-auth_google"] .stButton > button::before, a.tr-auth-google::before { content:""; width:20px; height:20px; flex:none; background: url("data:image/svg+xml;utf8,__GOOGLE__") no-repeat center / 20px 20px; }
 [class*="st-key-auth_google"] .stButton > button:hover, a.tr-auth-google:hover { border-color: rgba(255,255,255,.3); background: linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.05)); }
 [class*="st-key-auth_google"] .stButton > button p { font-size:15.5px; font-weight:700; }
-/* The live Google control is a real link — a top-level navigation to Google —
-   drawn as the very same button: same box, same face, same hover. */
+/* The live Google control is a real link — opened in a new tab, the one
+   navigation the host's sandbox allows — drawn as the very same button:
+   same box, same face, same hover. */
 a.tr-auth-google { display:flex; align-items:center; justify-content:center; width:100%; box-sizing:border-box; padding:0 16px;
   font-family: inherit; line-height:1.2; text-decoration:none !important; cursor:pointer; user-select:none;
   transition: border-color .18s var(--tr-ease), background .18s var(--tr-ease), transform .18s var(--tr-ease); }
@@ -601,11 +602,15 @@ def _google_button() -> None:
     """The one control on the page that is a link rather than a button.
 
     A Streamlit button reruns the script; it cannot send the browser to
-    Google, and the bridge's iframe is sandboxed without permission to. An
-    anchor with ``target="_top"`` is a plain top-level navigation — allowed
-    from anywhere, framed or not — and it is styled to be indistinguishable
-    from the button it replaces. When Google is not configured the button
-    stays, and says so honestly, exactly as before.
+    Google. And on Community Cloud the app itself runs inside the host's
+    iframe, sandboxed with ``allow-popups allow-popups-to-escape-sandbox``
+    but **without** ``allow-top-navigation`` (read off the deployed host's
+    own iframe chunk) — so ``target="_top"`` is refused silently, while a
+    plain ``target="_blank"`` on the person's own click opens an unsandboxed
+    tab: no script, no popup blocker, Google loads there and returns to the
+    app's URL top-level in that tab. The anchor is styled to be
+    indistinguishable from the button it replaces. When Google is not
+    configured the button stays, and says so honestly, exactly as before.
     """
     ready, redirect = google_ready()
     if not ready:
@@ -613,7 +618,7 @@ def _google_button() -> None:
         return
     url = google.authorization_url(session.oauth_state(), redirect)
     with st.container(key="auth_google"):
-        C.html(f'<a class="tr-auth-google" href="{escape(url, quote=True)}" target="_top" '
+        C.html(f'<a class="tr-auth-google" href="{escape(url, quote=True)}" target="_blank" '
                f'rel="noopener" data-testid="tr-google-signin">Continue with Google</a>')
 
 

@@ -568,7 +568,7 @@ def test_the_login_page_draws_the_link_when_google_is_configured(monkeypatch):
     app = run()
     assert not app.exception and on_login_page(app)
     html = " ".join(m.value for m in app.markdown)
-    assert 'class="tr-auth-google"' in html and 'target="_top"' in html
+    assert 'class="tr-auth-google"' in html
     assert "https://accounts.google.com/o/oauth2/v2/auth?" in html
     assert "Continue with Google" in html
     assert "client_secret" not in html
@@ -638,3 +638,38 @@ def test_the_existing_uid_is_kept_for_a_verified_password_account_with_both_meth
     assert after["ravi@example.com"]["providers"] == ["password", "google.com"]
     # …and the password sign-in still lands on the same UID afterwards.
     assert firebase.FirebaseAuth("k").sign_in("ravi@example.com", "Popcorn2026").uid == "uid-ravi"
+
+
+def test_the_google_control_opens_in_a_new_tab_never_the_top_frame(monkeypatch):
+    """Community Cloud runs the app inside the host's iframe, sandboxed with
+    allow-popups + allow-popups-to-escape-sandbox but no allow-top-navigation
+    (read off the deployed host's own iframe chunk). ``_top`` is refused
+    silently there — the status bar previews the URL, the click does nothing.
+    ``_blank`` on the person's own click is a plain, script-free, unsandboxed
+    new tab: exactly what the sandbox permits, and immune to popup blockers.
+    """
+    import re
+
+    from tests.test_auth import on_login_page, run
+
+    monkeypatch.setattr(session, "restore", lambda: None)
+    monkeypatch.setattr(session, "BRIDGE_ENABLED", False)
+    monkeypatch.setenv("FIREBASE_WEB_API_KEY", "test-web-api-key")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "web-client-id")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "web-client-secret")
+    monkeypatch.setenv("GOOGLE_OAUTH_REDIRECT_URI", APP_URL)
+
+    app = run()
+    assert on_login_page(app)
+    html = " ".join(m.value for m in app.markdown)
+    anchor = re.search(r'<a class="tr-auth-google"[^>]*>', html)
+    assert anchor, html
+    tag = anchor.group(0)
+    assert 'target="_blank"' in tag
+    assert 'rel="noopener"' in tag                                  # the new tab gets no opener
+    assert 'target="_top"' not in tag and "window.open" not in html and "onclick" not in tag.lower()
+    # The URL itself is untouched: still the server-minted authorization request.
+    href = re.search(r'href="([^"]+)"', tag).group(1).replace("&amp;", "&")
+    assert href.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
+    assert f"state={app.session_state[session.OAUTH_STATE_KEY]}" in href
+    assert "client_secret" not in href
