@@ -49,12 +49,33 @@ class FakeFirebase:
         self.fail_verify_with: str | None = None  # …or only for VERIFY_EMAIL
         self.fail_delete_with: str | None = None  # …or only for accounts:delete
         self.deleted: list[str] = []             # emails whose account was deleted
+        #: Google identities Firebase would accept: google_id_token -> profile.
+        self.google: dict[str, dict] = {}
+        self.google_enabled: bool = True
+        #: The project's "one account per email address" setting (the default).
+        #: Off, Firebase would mint a second UID for a Google sign-in whose
+        #: email already has a password account — the duplicate the app must
+        #: never let happen. Kept so a test can show what that would look like.
+        self.one_account_per_email: bool = True
+        #: Firebase asks for confirmation instead of linking (a non-trusted
+        #: provider's collision). Set by a test to exercise that answer.
+        self.need_confirmation: bool = False
+        #: Whether the account record ends up ``emailVerified`` after a Google
+        #: sign-in. Firebase does mark it so; a test turns this off to prove
+        #: the app takes Firebase's word for it, not the provider's name.
+        self.google_marks_verified: bool = True
 
     def refresh_token_for(self, uid: str) -> str:
         return f"refresh.{uid}{self.token_suffix}"
 
     def add(self, email: str, password: str, *, uid: str = "uid-1", name: str = "", verified: bool = True) -> None:
         self.accounts[email] = {"password": password, "uid": uid, "name": name, "verified": verified}
+
+    def add_google_identity(self, id_token: str, *, email: str, name: str = "",
+                            photo: str = "", sub: str = "") -> None:
+        """A Google account Firebase would verify an ID token for."""
+        self.google[id_token] = {"email": email, "name": name, "photo": photo,
+                                 "sub": sub or f"g-{email}"}
 
     def set_claims(self, email: str, claims: dict | None) -> None:
         """What an administrator's ``setCustomUserClaims`` does to the account
@@ -69,12 +90,57 @@ class FakeFirebase:
     def _by_token(self, id_token: str):
         for email, acct in self.accounts.items():
             if f"id.{acct['uid']}" == id_token:
-                return email, acct
+                return acct.get("email", email), acct
         return None, None
 
     @staticmethod
     def _error(code: str, status: int = 400):
         return status, {"error": {"code": status, "message": code, "errors": [{"message": code}]}}
+
+    def _sign_in_with_idp(self, payload: dict) -> tuple[int, dict]:
+        """``accounts:signInWithIdp`` as Firebase answers it for Google.
+
+        Firebase verifies the ID token with Google and then, under *one
+        account per email address*, treats Google as a trusted provider: an
+        email that already has a password account resolves to **that
+        account's UID** with google.com linked. It never mints a second UID
+        in that mode. With the setting off it would — modelled so the test
+        can show why the setting matters.
+        """
+        if not self.google_enabled:
+            return self._error("OPERATION_NOT_ALLOWED")
+        if not payload.get("requestUri", "").startswith("http"):
+            return self._error("INVALID_IDP_RESPONSE")
+        body = dict(part.split("=", 1) for part in payload.get("postBody", "").split("&") if "=" in part)
+        if body.get("providerId") != "google.com":
+            return self._error("INVALID_CREDENTIAL_OR_PROVIDER_ID")
+        profile = self.google.get(body.get("id_token", ""))
+        if profile is None:
+            return self._error("INVALID_IDP_RESPONSE")
+        email = profile["email"]
+        acct = self.accounts.get(email)
+        if self.need_confirmation and acct is not None:
+            return 200, {"needConfirmation": True, "email": email, "verifiedProvider": ["password"]}
+        new_user = False
+        if acct is None or (not self.one_account_per_email and "google.com" not in acct.get("providers", [])):
+            new_user = True
+            uid = f"uid-google-{profile['sub']}"
+            key = email if acct is None else f"{email}#google"
+            self.accounts[key] = {"password": None, "uid": uid, "name": profile["name"],
+                                  "verified": self.google_marks_verified,
+                                  "providers": ["google.com"], "email": email}
+            acct = self.accounts[key]
+        else:
+            acct["verified"] = acct["verified"] or self.google_marks_verified
+            acct.setdefault("providers", ["password"])
+            if "google.com" not in acct["providers"]:
+                acct["providers"].append("google.com")
+        return 200, {
+            "localId": acct["uid"], "email": email, "displayName": profile["name"] or acct["name"],
+            "photoUrl": profile["photo"], "emailVerified": acct["verified"], "providerId": "google.com",
+            "idToken": f"id.{acct['uid']}", "refreshToken": self.refresh_token_for(acct["uid"]),
+            "expiresIn": "3600", "isNewUser": new_user, "federatedId": f"https://accounts.google.com/{profile['sub']}",
+        }
 
     def _creds(self, email: str) -> dict:
         acct = self.accounts[email]
@@ -93,6 +159,8 @@ class FakeFirebase:
             if acct is None or acct["password"] != payload.get("password"):
                 return self._error("INVALID_LOGIN_CREDENTIALS")
             return 200, self._creds(payload["email"])
+        if action == "signInWithIdp":
+            return self._sign_in_with_idp(payload)
         if action == "signUp":
             email = payload.get("email", "")
             if email in self.accounts:

@@ -33,11 +33,12 @@ from __future__ import annotations
 
 import math
 import time
+from html import escape
 from typing import Callable
 
 import streamlit as st
 
-from auth import firebase, session
+from auth import firebase, google, session
 from auth.firebase import AuthError
 from ui import catalogue_view as cv
 from ui import components as C
@@ -253,11 +254,18 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 [class*="st-key-trauth_panel"] .stFormSubmitButton > button:active { transform:translateY(0) scale(.995); }
 [class*="st-key-trauth_panel"] .stFormSubmitButton > button p { font-size:15px; font-weight:800; letter-spacing:.14em; }
 [class*="st-key-trauth_panel"] .stFormSubmitButton > button [data-testid="stIconMaterial"] { font-size:22px; }
-[class*="st-key-auth_google"] .stButton > button { min-height:58px; border-radius:16px; font-size:15.5px; font-weight:700; letter-spacing:0; text-transform:none; gap:12px;
+[class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { min-height:58px; border-radius:16px; font-size:15.5px; font-weight:700; letter-spacing:0; text-transform:none; gap:12px;
   background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.14); color:#fff; }
-[class*="st-key-auth_google"] .stButton > button::before { content:""; width:20px; height:20px; flex:none; background: url("data:image/svg+xml;utf8,__GOOGLE__") no-repeat center / 20px 20px; }
-[class*="st-key-auth_google"] .stButton > button:hover { border-color: rgba(255,255,255,.3); background: linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.05)); }
+[class*="st-key-auth_google"] .stButton > button::before, a.tr-auth-google::before { content:""; width:20px; height:20px; flex:none; background: url("data:image/svg+xml;utf8,__GOOGLE__") no-repeat center / 20px 20px; }
+[class*="st-key-auth_google"] .stButton > button:hover, a.tr-auth-google:hover { border-color: rgba(255,255,255,.3); background: linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.05)); }
 [class*="st-key-auth_google"] .stButton > button p { font-size:15.5px; font-weight:700; }
+/* The live Google control is a real link — a top-level navigation to Google —
+   drawn as the very same button: same box, same face, same hover. */
+a.tr-auth-google { display:flex; align-items:center; justify-content:center; width:100%; box-sizing:border-box; padding:0 16px;
+  font-family: inherit; line-height:1.2; text-decoration:none !important; cursor:pointer; user-select:none;
+  transition: border-color .18s var(--tr-ease), background .18s var(--tr-ease), transform .18s var(--tr-ease); }
+a.tr-auth-google:active { transform: scale(.995); }
+a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outline-offset: 2px; }
 .tr-auth-or { display:flex; align-items:center; gap:14px; margin:10px 0 6px; font-family:var(--tr-mono); font-size:11px; letter-spacing:.24em; color:var(--tr-text-4); }
 .tr-auth-or::before, .tr-auth-or::after { content:""; flex:1; height:1px; background:rgba(255,255,255,.1); }
 
@@ -401,7 +409,7 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
   .tr-auth-p { font-size:14.5px; margin-bottom:12px; }
   [class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"] input { font-size:16px !important; }   /* no iOS zoom */
   [class*="st-key-trauth_panel"] .stFormSubmitButton > button { min-height:56px; font-size:14px; }
-  [class*="st-key-auth_google"] .stButton > button { min-height:54px; font-size:14.5px; }
+  [class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { min-height:54px; font-size:14.5px; }
   [class*="st-key-trpair_auth_foot"] [data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; }
   .tr-auth-foot-text { font-size:13.5px; }
   .tr-auth-bottom { flex-direction:column; align-items:flex-start; gap:12px; padding-top:14px; }
@@ -560,8 +568,109 @@ def _switch(mode: str) -> None:
 
 
 def _google_notice() -> None:
-    st.session_state[NOTICE_KEY] = ("info", "Google sign-in isn't switched on for this TicketRadar yet — "
-                                            "use your email and password for now.")
+    st.session_state[NOTICE_KEY] = ("info", google.MESSAGES["not_configured"])
+
+
+def _page_url() -> str:
+    """The URL the browser is on, for deriving the redirect URI. Empty when
+    Streamlit cannot say (bare mode, older runtimes)."""
+    try:
+        return str(st.context.url or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def google_ready() -> tuple[bool, str]:
+    """Is Google sign-in usable here: configured, and a redirect URI known?
+    Returns ``(ready, redirect_uri)``."""
+    if not google.is_configured():
+        return False, ""
+    redirect = google.redirect_uri(_page_url())
+    return bool(redirect), redirect
+
+
+def prepare_google() -> None:
+    """Mint this session's ``state`` and queue its cookie — called by the
+    gate *before* the bridge renders, so the cookie exists by the time the
+    link below is drawn. Nothing happens unless Google is configured."""
+    if google.is_configured():
+        session.oauth_state()
+
+
+def _google_button() -> None:
+    """The one control on the page that is a link rather than a button.
+
+    A Streamlit button reruns the script; it cannot send the browser to
+    Google, and the bridge's iframe is sandboxed without permission to. An
+    anchor with ``target="_top"`` is a plain top-level navigation — allowed
+    from anywhere, framed or not — and it is styled to be indistinguishable
+    from the button it replaces. When Google is not configured the button
+    stays, and says so honestly, exactly as before.
+    """
+    ready, redirect = google_ready()
+    if not ready:
+        st.button("Continue with Google", key="auth_google", use_container_width=True, on_click=_google_notice)
+        return
+    url = google.authorization_url(session.oauth_state(), redirect)
+    with st.container(key="auth_google"):
+        C.html(f'<a class="tr-auth-google" href="{escape(url, quote=True)}" target="_top" '
+               f'rel="noopener" data-testid="tr-google-signin">Continue with Google</a>')
+
+
+def handle_google_return() -> session.AuthUser | None:
+    """Back from Google with ``?code=…&state=…`` — or ``?error=…``.
+
+    Runs once the bridge has answered, because the ``state`` cookie is the
+    only thing that ties this brand-new session to the link the person
+    clicked. The code is single-use and never reaches a second run: the
+    query string is cleared before anything else happens. A success signs
+    in through ``session.sign_in_user`` — the same call a password sign-in
+    makes — and reruns into the app; every failure is one clean line on the
+    login page, and nothing is created.
+    """
+    try:
+        params = {k: str(v) for k, v in st.query_params.to_dict().items()}
+    except Exception:  # noqa: BLE001 - no query params in bare mode
+        return None
+    code, state, error = params.get("code", ""), params.get("state", ""), params.get("error", "")
+    if not code and not error:
+        return None
+    try:
+        st.query_params.clear()
+    except Exception:  # noqa: BLE001
+        pass
+    st.session_state[MODE_KEY] = "signin"
+
+    if error and not code:
+        print(f"[auth] google return: error={error[:40]}", flush=True)
+        session.clear_oauth_state()
+        st.session_state[NOTICE_KEY] = ("info", google.MESSAGES["cancelled"] if error == "access_denied"
+                                        else google.MESSAGES["failed"])
+        return None
+
+    if not session.oauth_state_matches(state):
+        print("[auth] google return: state mismatch - code not exchanged", flush=True)
+        session.clear_oauth_state()
+        st.session_state[ERROR_KEY] = google.MESSAGES["state"]
+        return None
+    session.clear_oauth_state()
+
+    try:
+        redirect = google.redirect_uri(_page_url())
+        id_token = google.exchange_code(code, redirect)
+        creds = firebase.FirebaseAuth().sign_in_with_google(id_token, redirect)
+        if not creds.email_verified:
+            # Google always vouches for its addresses; if Firebase still
+            # says otherwise, do not enter and do not start the password
+            # account's verification flow for an account that has none.
+            raise AuthError(firebase.MESSAGES["EMAIL_NOT_VERIFIED"], "EMAIL_NOT_VERIFIED")
+        user = session.sign_in_user(creds)
+    except (google.GoogleError, AuthError) as exc:
+        st.session_state[ERROR_KEY] = str(exc)
+        return None
+    print("[auth] google return: signed in", flush=True)
+    st.rerun()
+    return user
 
 
 def _forgot_from_signin() -> None:
@@ -644,8 +753,7 @@ def _signin() -> None:
     status = st.empty()
 
     C.html('<div class="tr-auth-or">OR</div>')
-    # Visible as designed; honest until the provider is enabled in Firebase.
-    st.button("Continue with Google", key="auth_google", use_container_width=True, on_click=_google_notice)
+    _google_button()
 
     with st.container(key="trpair_auth_foot"):
         a, b = st.columns([1, 1], gap="small", vertical_alignment="center")
