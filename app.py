@@ -59,6 +59,7 @@ from monitor import catalogue  # noqa: E402
 from monitor.models import ANY_FORMAT, Availability, Monitor, MonitorStatus, TheatreTarget  # noqa: E402
 from monitor import state as state_store  # noqa: E402
 from monitor.state import (  # noqa: E402
+    MonitorLimitError,
     MonitorState,
     Scope,
     delete_monitor,
@@ -103,7 +104,10 @@ def _scope() -> Scope | None:
     if user is None:
         return None
     return Scope(project, user.uid, auth_session.id_token,
-                 firestore_enabled=enabled in {"1", "true", "yes", "on"})
+                 firestore_enabled=enabled in {"1", "true", "yes", "on"},
+                 # Firebase's account record said so at sign-in; nothing on a
+                 # page can. Lifts the active-monitor limit, nothing else.
+                 admin=user.admin)
 
 
 state_store.set_scope_provider(_scope)
@@ -377,7 +381,13 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     #    workflow listens for pushes to data/monitors.json).
     if start_now:
         monitor.first_check_requested_at = now_ist()
-    upsert_monitor(monitor, mirror=mirrored())
+    try:
+        upsert_monitor(monitor, mirror=mirrored())
+    except MonitorLimitError as exc:
+        # Refused in the store, before anything was written — the button
+        # above is only a courtesy; this is the guard.
+        flash("error", str(exc))
+        st.rerun()
     firestore = state_store.backend_name() == "firestore"
     mirror = {"committed": False, "error": ""} if firestore else last_mirror()
     record_history(monitor, "CREATED", "Monitor created.", mirror=mirrored())
@@ -578,9 +588,16 @@ def page_home(monitors, states, history, settings) -> None:
                                   listed=cv.listed_formats(movie_id, slug, codes))
             else:
                 interval, until, email, start_now, dates = flow.step_monitoring(settings.get("notify_email", ""))
+                # Ordinary accounts have a ceiling on running monitors; the
+                # store refuses past it whatever this page shows, so this is
+                # the explanation, not the enforcement. An admin account has
+                # no ceiling and never sees this.
+                at_limit = state_store.monitor_limit_reached(monitors)
+                if at_limit:
+                    st.warning(state_store.LIMIT_MESSAGE.format(limit=state_store.ACTIVE_MONITOR_LIMIT))
                 cta, helper = st.columns([2.2, 1], gap="medium")
                 with cta:
-                    if st.button("Start monitoring", type="primary",
+                    if st.button("Start monitoring", type="primary", disabled=at_limit,
                                  use_container_width=True, key="start", icon=":material/play_arrow:"):
                         start_monitor(interval, until, email, start_now, dates,
                                       settings=settings)
@@ -613,7 +630,11 @@ def monitor_actions(monitor: Monitor, state: MonitorState) -> None:
         else:
             a, b, _ = st.columns([1.3, 1, 1.9], gap="small")
             if a.button("Extend by 24 hours", key=f"m_ext_{monitor.id}", use_container_width=True, icon=":material/more_time:"):
-                extend_monitor(monitor.id, 24, mirror=mirrored())
+                try:
+                    extend_monitor(monitor.id, 24, mirror=mirrored())
+                except MonitorLimitError as exc:
+                    flash("error", str(exc))
+                    st.rerun()
                 ok, _ = request_check_now(monitor.id)
                 flash("success", "Extended by 24 hours — monitoring is active again"
                       + (" and a check is running now." if ok else "."))

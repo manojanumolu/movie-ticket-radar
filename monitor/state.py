@@ -79,6 +79,11 @@ class Scope:
     #: legacy JSON compatibility store is still scoped to this UID, never
     #: shared with every signed-in person.
     firestore_enabled: bool = True
+    #: The account carries Firebase's ``admin: true`` custom claim, as read
+    #: from its account record at sign-in (``auth.session.is_admin``). It
+    #: lifts the application's active-monitor limit and nothing else: not
+    #: what this UID may read or write, which the rules alone decide.
+    admin: bool = False
 
 
 ScopeProvider = Callable[[], "Scope | None"]
@@ -745,6 +750,73 @@ def load_many(*kinds: str) -> dict[str, Any]:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# How many monitors one person may have running
+# ──────────────────────────────────────────────────────────────────────────
+#: The most ACTIVE monitors an ordinary account may have at once. Only
+#: running ones count: a STOPPED or EXPIRED monitor holds no slot, and every
+#: past monitor stays in My Monitors and History regardless.
+ACTIVE_MONITOR_LIMIT = 5
+
+LIMIT_MESSAGE = ("Active monitor limit reached — you can have up to {limit} active monitors "
+                 "at a time. Stop an existing monitor to start another.")
+
+
+class MonitorLimitError(Exception):
+    """Making this monitor ACTIVE would take the account past its limit."""
+
+    def __init__(self, limit: int):
+        super().__init__(LIMIT_MESSAGE.format(limit=limit))
+        self.limit = limit
+
+
+def active_monitor_limit() -> int | None:
+    """How many ACTIVE monitors the current caller may have; None = no limit.
+
+    The limit is an *application* guard on the signed-in person, so it is
+    read from the scope the app registered — and lifted only by the
+    ``admin`` claim Firebase's account record reported for that session,
+    which nothing in the browser or on a page can supply. With no signed-in
+    scope there is nobody to limit: the worker never creates monitors, and
+    the command line is the operator's own machine.
+
+    "No limit" means no limit *here*. Firebase's project quotas are what
+    they are for every account, this one included.
+    """
+    if _scope_provider is None:
+        return None
+    scope = _scope_provider()
+    if scope is None or not scope.uid:
+        return None
+    return None if scope.admin else ACTIVE_MONITOR_LIMIT
+
+
+def active_monitor_count(monitors: list[Monitor], *, at: datetime | None = None) -> int:
+    return sum(1 for m in monitors if m.is_running(at))
+
+
+def monitor_limit_reached(monitors: list[Monitor], *, at: datetime | None = None) -> bool:
+    """Would one more running monitor go over the limit? For the page to
+    say so before the person fills in a wizard — the write below refuses
+    regardless."""
+    limit = active_monitor_limit()
+    return limit is not None and active_monitor_count(monitors, at=at) >= limit
+
+
+def _assert_may_run(monitor: Monitor, monitors: list[Monitor], *, at: datetime | None = None) -> None:
+    """Refuse a write that would make ``monitor`` running while ``limit``
+    others already are. Counts the *other* monitors, so re-saving one that
+    is already running (a retry, a cleared problem) is never refused, and
+    a monitor that is not running (stopped, or being stopped) never is.
+    """
+    limit = active_monitor_limit()
+    if limit is None or not monitor.is_running(at):
+        return
+    others = sum(1 for m in monitors if m.id != monitor.id and m.is_running(at))
+    if others >= limit:
+        raise MonitorLimitError(limit)
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Monitors — the functions the UI, the checker and the worker call
 # ──────────────────────────────────────────────────────────────────────────
 def load_monitors() -> list[Monitor]:
@@ -764,7 +836,10 @@ def save_monitors(monitors: list[Monitor], *, mirror: bool = True) -> None:
 
 
 def upsert_monitor(monitor: Monitor, *, mirror: bool = True) -> list[Monitor]:
+    """Save a monitor — refusing, before anything is written, one that
+    would put the account over :data:`ACTIVE_MONITOR_LIMIT`."""
     monitors = load_monitors()
+    _assert_may_run(monitor, monitors)
     for i, existing in enumerate(monitors):
         if existing.id == monitor.id:
             monitors[i] = monitor
@@ -814,10 +889,17 @@ def stop_monitor(monitor_id: str, *, at: datetime | None = None, mirror: bool = 
 
 
 def extend_monitor(monitor_id: str, hours: int = 24, *, mirror: bool = True) -> Monitor | None:
+    """Extending a finished monitor makes it ACTIVE again, so it is a slot
+    like any other and the same limit applies — checked before the flip."""
     monitors = load_monitors()
     target = next((m for m in monitors if m.id == monitor_id), None)
     if target is None:
         return None
+    if not target.is_running():
+        # It holds no slot now and would after: the same test as a new one.
+        limit = active_monitor_limit()
+        if limit is not None and active_monitor_count(monitors) >= limit:
+            raise MonitorLimitError(limit)
     target.extend(hours)
     save_monitors(monitors, mirror=mirror)
     return target
@@ -1107,8 +1189,14 @@ __all__ = [
     "get_monitor_state",
     "load_history",
     "load_many",
+    "ACTIVE_MONITOR_LIMIT",
+    "LIMIT_MESSAGE",
+    "MonitorLimitError",
+    "active_monitor_count",
+    "active_monitor_limit",
     "load_monitors",
     "load_monitors_for_checking",
+    "monitor_limit_reached",
     "load_settings",
     "load_state",
     "load_states_for",

@@ -20,6 +20,7 @@ translated here and never shown to a user.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass, replace
@@ -194,6 +195,35 @@ class Credentials:
     #: Only ``accounts:lookup`` says this; sign-in and sign-up fill it from
     #: there. False until the person has clicked Firebase's verification link.
     email_verified: bool = False
+    #: The account carries the custom claim ``admin: true``. Also only ever
+    #: from ``accounts:lookup`` — see :func:`admin_claim`.
+    admin: bool = False
+
+
+#: The custom claim that marks the owner's account. Set on the account record
+#: by an administrator with the service account (``tools/grant_admin.py``);
+#: nothing in the app, and nothing a person can type, can put it there.
+ADMIN_CLAIM = "admin"
+
+
+def admin_claim(custom_attributes: Any) -> bool:
+    """Does the account record carry exactly ``{"admin": true}``?
+
+    ``customAttributes`` is how ``accounts:lookup`` reports custom claims: a
+    JSON *string* of the claims an administrator set with the Admin SDK (or
+    its REST equivalent). It comes from Firebase's account record over the
+    same authenticated call that tells us the UID and whether the email is
+    verified — never from the browser, the cookie, a form or a document a
+    person can write. Only the boolean ``true`` counts: ``"true"``, ``1``
+    or anything else that merely looks affirmative does not.
+    """
+    if not custom_attributes:
+        return False
+    try:
+        claims = json.loads(custom_attributes) if isinstance(custom_attributes, str) else custom_attributes
+    except (TypeError, ValueError):
+        return False
+    return isinstance(claims, dict) and claims.get(ADMIN_CLAIM) is True
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -248,7 +278,7 @@ class FirebaseAuth:
         info = self.lookup(creds.id_token)
         return replace(creds, email=info["email"] or creds.email,
                        display_name=info["display_name"] or creds.display_name,
-                       email_verified=info["email_verified"])
+                       email_verified=info["email_verified"], admin=info["admin"])
 
     def sign_up(self, name: str, email: str, password: str) -> Credentials:
         """Create the account. The credentials come back *unverified*: they
@@ -304,7 +334,7 @@ class FirebaseAuth:
         if not info["email_verified"]:
             return None
         return replace(creds, email=info["email"], display_name=info["display_name"],
-                       email_verified=True)
+                       email_verified=True, admin=info["admin"])
 
     def send_password_reset(self, email: str) -> None:
         """Ask Firebase to email a reset link. Says nothing about whether the
@@ -334,7 +364,7 @@ class FirebaseAuth:
 
     def lookup(self, id_token: str) -> dict[str, Any]:
         """The account behind an ID token:
-        ``{uid, email, display_name, email_verified}``."""
+        ``{uid, email, display_name, email_verified, admin}``."""
         body = self._call("lookup", {"idToken": id_token})
         users = body.get("users") or []
         if not users:
@@ -345,6 +375,7 @@ class FirebaseAuth:
             "email": str(user.get("email", "")),
             "display_name": str(user.get("displayName", "") or ""),
             "email_verified": bool(user.get("emailVerified", False)),
+            "admin": admin_claim(user.get("customAttributes")),
         }
 
     def delete_account(self, id_token: str) -> None:
@@ -390,12 +421,14 @@ def password_problem(password: str) -> str:
 
 
 __all__ = [
+    "ADMIN_CLAIM",
     "AuthError",
     "Credentials",
     "FirebaseAuth",
     "FirebaseConfig",
     "MESSAGES",
     "PASSWORD_MIN",
+    "admin_claim",
     "config",
     "explain",
     "is_configured",

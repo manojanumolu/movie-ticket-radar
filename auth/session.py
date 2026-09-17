@@ -85,6 +85,11 @@ class AuthUser:
     refresh_token: str = field(default="", repr=False)
     expires_at: float = 0.0
     signed_in_at: float = field(default_factory=time.time)
+    #: The account's ``admin: true`` custom claim, as Firebase's own account
+    #: record reports it on sign-in and on every restore. Server-side only:
+    #: it lives here in ``st.session_state``, which the browser cannot write,
+    #: and nothing on any page can set it.
+    admin: bool = False
 
     @property
     def first_name(self) -> str:
@@ -117,6 +122,13 @@ def current_uid() -> str:
     return user.uid if user else ""
 
 
+def is_admin() -> bool:
+    """Does the signed-in account carry the ``admin`` claim? False for
+    nobody, and for every account Firebase did not say so about."""
+    user = current_user()
+    return bool(user is not None and user.admin)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Writing
 # ──────────────────────────────────────────────────────────────────────────
@@ -128,6 +140,7 @@ def _from_credentials(creds: Credentials, *, email: str = "", display_name: str 
         id_token=creds.id_token,
         refresh_token=creds.refresh_token,
         expires_at=time.time() + max(60, creds.expires_in),
+        admin=creds.admin,
     )
 
 
@@ -608,11 +621,13 @@ def restore() -> AuthUser | None:
     user = _from_credentials(creds, email=info["email"], display_name=info["display_name"])
     if info["uid"]:
         user.uid = info["uid"]
+    # The refresh exchange knows nothing of claims; the account record does.
+    user.admin = info["admin"]
     if not user.uid:
         log_restore("FAILED reason=no_uid")
         st.session_state["auth_cookie_clear"] = True
         return None
-    log_restore("uid_present=True SUCCESS")
+    log_restore(f"uid_present=True admin={str(user.admin).lower()} SUCCESS")
     st.session_state[USER_KEY] = user
     st.session_state[SESSION_STARTED_KEY] = started
     st.session_state[SESSION_EXPIRES_KEY] = expires
@@ -687,6 +702,7 @@ __all__ = [
     "clear_pending",
     "continue_if_verified",
     "current_uid",
+    "is_admin",
     "cookie_report",
     "current_user",
     "log_cleared",
