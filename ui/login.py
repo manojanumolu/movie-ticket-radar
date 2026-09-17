@@ -590,11 +590,29 @@ def google_ready() -> tuple[bool, str]:
     return bool(redirect), redirect
 
 
+def _returning_from_google() -> bool:
+    """Is this run the one Google sent back — ``?code``, ``?state`` or
+    ``?error`` on the URL? Nothing may touch the state cookie on that run."""
+    try:
+        params = st.query_params.to_dict()
+    except Exception:  # noqa: BLE001 - bare mode
+        return False
+    return any(k in params for k in ("code", "state", "error"))
+
+
 def prepare_google() -> None:
     """Mint this session's ``state`` and queue its cookie — called by the
     gate *before* the bridge renders, so the cookie exists by the time the
-    link below is drawn. Nothing happens unless Google is configured."""
-    if google.is_configured():
+    link below is drawn. Nothing happens unless Google is configured.
+
+    Never on the return from Google. That run is a brand-new session, so a
+    mint here would queue a *fresh* state, and the bridge writes queued
+    cookies before it reads the jar — the cookie the link was made with
+    would be gone before ``handle_google_return`` could compare it, and
+    every sign-in would end in "didn't complete". The return must compare
+    against the cookie the click left behind, and only then spend it.
+    """
+    if google.is_configured() and not _returning_from_google():
         session.oauth_state()
 
 
@@ -617,9 +635,24 @@ def _google_button() -> None:
         st.button("Continue with Google", key="auth_google", use_container_width=True, on_click=_google_notice)
         return
     url = google.authorization_url(session.oauth_state(), redirect)
+    # The bridge opens this in a popup from the click; ``target="_blank"`` is
+    # what happens when the popup is blocked. No ``noopener``: the popup
+    # needs its opener to say it has finished (see the bridge).
     with st.container(key="auth_google"):
         C.html(f'<a class="tr-auth-google" href="{escape(url, quote=True)}" target="_blank" '
-               f'rel="noopener" data-testid="tr-google-signin">Continue with Google</a>')
+               f'data-testid="tr-google-signin">Continue with Google</a>')
+
+
+def popup_done() -> None:
+    """The popup's last paint: signed in, the opener has been told, and the
+    bridge is closing this window. One line in the page's own voice, in
+    case the browser keeps the window open."""
+    st.markdown(CSS, unsafe_allow_html=True)
+    C.html(
+        '<div class="tr-auth-shell" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">'
+        f'<div class="tr-auth-done" style="justify-content:center;">{_icon("check", 16, "#3ED598", "2.4")}'
+        '<span>SIGNED IN — YOU CAN CLOSE THIS WINDOW</span></div></div>'
+    )
 
 
 def handle_google_return() -> session.AuthUser | None:
@@ -646,17 +679,22 @@ def handle_google_return() -> session.AuthUser | None:
         pass
     st.session_state[MODE_KEY] = "signin"
 
+    # Whatever happens next, this run is spent: the next one mints a fresh
+    # state and the bridge writes it before any link is drawn, so a retry
+    # from this window starts consistent rather than one cookie behind.
     if error and not code:
         print(f"[auth] google return: error={error[:40]}", flush=True)
         session.clear_oauth_state()
         st.session_state[NOTICE_KEY] = ("info", google.MESSAGES["cancelled"] if error == "access_denied"
                                         else google.MESSAGES["failed"])
+        st.rerun()
         return None
 
     if not session.oauth_state_matches(state):
         print("[auth] google return: state mismatch - code not exchanged", flush=True)
         session.clear_oauth_state()
         st.session_state[ERROR_KEY] = google.MESSAGES["state"]
+        st.rerun()
         return None
     session.clear_oauth_state()
 
@@ -672,8 +710,14 @@ def handle_google_return() -> session.AuthUser | None:
         user = session.sign_in_user(creds)
     except (google.GoogleError, AuthError) as exc:
         st.session_state[ERROR_KEY] = str(exc)
+        st.rerun()
         return None
-    print("[auth] google return: signed in", flush=True)
+    popup = session.bridge_has_opener()
+    if popup:
+        # Opened from the login page: don't draw the app in here. The next
+        # run writes the session cookie, tells the opener, and closes.
+        st.session_state[session.POPUP_DONE_KEY] = True
+    print(f"[auth] google return: signed in popup={str(popup).lower()}", flush=True)
     st.rerun()
     return user
 

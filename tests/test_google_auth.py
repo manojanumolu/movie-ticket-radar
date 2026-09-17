@@ -130,14 +130,19 @@ class _Rerun(Exception):
 
 
 def _complete(stack):
-    """Run the return handler; True means it signed in and asked to rerun."""
+    """Run the return handler; True means it signed somebody in.
+
+    Every return — success or failure — ends in ``st.rerun()`` now, so the
+    next run mints a fresh state and the bridge writes it before any link
+    is drawn. What tells success from failure is whether a user exists.
+    """
     from ui import login
 
     try:
         login.handle_google_return()
     except _Rerun:
-        return True
-    return False
+        pass
+    return session.USER_KEY in stack.session
 
 
 def _link_params(stack) -> dict[str, str]:
@@ -665,8 +670,10 @@ def test_the_google_control_opens_in_a_new_tab_never_the_top_frame(monkeypatch):
     anchor = re.search(r'<a class="tr-auth-google"[^>]*>', html)
     assert anchor, html
     tag = anchor.group(0)
-    assert 'target="_blank"' in tag
-    assert 'rel="noopener"' in tag                                  # the new tab gets no opener
+    assert 'target="_blank"' in tag                                 # the fallback when a popup is blocked
+    # No ``noopener``: the bridge opens this href in a popup that must be
+    # able to tell its opener it has finished. The popup is our own origin.
+    assert "noopener" not in tag
     assert 'target="_top"' not in tag and "window.open" not in html and "onclick" not in tag.lower()
     # The URL itself is untouched: still the server-minted authorization request.
     href = re.search(r'href="([^"]+)"', tag).group(1).replace("&amp;", "&")
