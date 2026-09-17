@@ -78,6 +78,12 @@ class MemoryFirestore:
 
     RULES_WRITE_DENIED = {"monitor_state"}          # users never create/update these
     RULES_UPDATE_DENIED = {"history"}               # append-only: never rewritten
+    #: Collections whose read and delete rules are ``ownsExisting()`` — they
+    #: dereference ``resource.data``, so the operation is denied outright when
+    #: the document does not exist. ``users`` is not one of them: its rule
+    #: compares the *path* to the UID and never touches ``resource``, so a
+    #: person reading their own settings before they have any gets NOT_FOUND.
+    RULES_NEED_EXISTING = {"monitors", "monitor_state", "history"}
     # Nothing is delete-denied outright: every collection gates delete on the
     # existing document's owner, so an account can take its own records with
     # it. ``history`` is deletable but still not *updatable*.
@@ -129,6 +135,14 @@ class MemoryFirestore:
         collection, doc = path.strip("/").split("/")
         fields = self.docs.get(collection, {}).get(doc)
         if fields is None:
+            if who is not None and collection in self.RULES_NEED_EXISTING:
+                # The real service, on the real rules. ``ownsExisting()`` reads
+                # ``resource.data.owner_uid``, and on a document that is not
+                # there ``resource`` is null: the expression errors, the rule
+                # denies, and Firestore answers PERMISSION_DENIED — *not*
+                # NOT_FOUND. "Never written" and "not yours" are the same
+                # answer, which is what the app has to be written against.
+                raise Denied("no such document (rules read resource.data)")
             return 404, {"error": {"message": "NOT_FOUND"}}
         if collection == "users" and who is not None and doc != who:
             raise Denied("not your user document")
@@ -161,10 +175,16 @@ class MemoryFirestore:
             if "delete" in write:
                 collection, doc = write["delete"].split("/")[-2:]
                 existing = self.docs.get(collection, {}).get(doc)
-                if who is not None and existing is not None:
+                if who is not None:
                     if collection == "users":
                         if doc != who:
                             raise Denied("not your user document")
+                    elif existing is None:
+                        if collection in self.RULES_NEED_EXISTING:
+                            # Same null ``resource`` as a read: deleting a
+                            # document that was never written is refused, and
+                            # a commit is atomic, so it takes the rest with it.
+                            raise Denied("delete of a document that does not exist")
                     elif existing.get(fs.OWNER) != who:
                         raise Denied("delete of a document you don't own")
                 staged.append((collection, doc, None))
@@ -380,6 +400,37 @@ def test_the_simulated_rules_refuse_forged_requests(cloud):
     with pytest.raises(fs.FirestoreError, match="PERMISSION_DENIED"):
         client.get("users", "uid-a")                                 # another person's settings
     assert client.query("monitors", equals={fs.OWNER: "uid-b"}) == {}
+
+
+def test_a_document_that_does_not_exist_is_denied_not_missing(cloud):
+    """Why the fake answers 403 to a read of nothing, and why that matters.
+
+    ``ownsExisting()`` is ``resource.data.owner_uid == request.auth.uid``. On
+    a document that was never written ``resource`` is null, the dereference
+    errors, and an erroring rule denies: the service answers PERMISSION_DENIED
+    where a bare ``allow read: if true`` would have answered NOT_FOUND. Every
+    collection gated on ``ownsExisting()`` behaves this way, and a caller
+    reading one document by id cannot tell "not yours" from "not there".
+
+    ``users/{uid}`` is the exception that proves it is the rule and not the
+    service: its rule compares the path to the UID and never touches
+    ``resource``, so reading your own settings before you have any is an
+    ordinary 404.
+    """
+    rules = Path("firestore.rules").read_text(encoding="utf-8")
+    for collection in MemoryFirestore.RULES_NEED_EXISTING:
+        assert re.search(rf"match /{collection}/\{{id\}} \{{[^}}]*allow read[^;]*ownsExisting\(\)",
+                         rules, re.S), collection
+
+    mine = fs.FirestoreClient(PROJECT, lambda: "id.uid-a", transport=state_mod._transport)
+    for collection in sorted(MemoryFirestore.RULES_NEED_EXISTING):
+        with pytest.raises(fs.FirestoreError, match="PERMISSION_DENIED"):
+            mine.get(collection, "never-written")
+        # The client may say it knows that, and then both answers are None.
+        assert mine.get(collection, "never-written", absent_if_denied=True) is None
+
+    # users/{uid}: no resource in the rule, so a plain not-found.
+    assert mine.get("users", "uid-a") is None
 
 
 def test_the_rules_file_says_what_the_fake_enforces():

@@ -287,12 +287,13 @@ class FirestoreClient:
     def _url(self, suffix: str) -> str:
         return f"{BASE}/{self.root}{suffix}"
 
-    def _call(self, method: str, suffix: str, body: dict[str, Any] | None = None) -> Any:
+    def _call(self, method: str, suffix: str, body: dict[str, Any] | None = None,
+              *, absent: tuple[int, ...] = (404,)) -> Any:
         try:
             status, payload = self.transport(method, self._url(suffix), self.token(), body)
         except (requests.RequestException, OSError) as exc:
             raise FirestoreError(f"Firestore unreachable ({type(exc).__name__})") from None
-        if status == 404 and method == "GET":
+        if method == "GET" and status in absent:
             return None
         if status >= 400:
             error = (payload or {}).get("error") if isinstance(payload, dict) else None
@@ -302,8 +303,26 @@ class FirestoreClient:
         return payload
 
     # -- documents ----------------------------------------------------------
-    def get(self, collection: str, doc: str) -> dict[str, Any] | None:
-        payload = self._call("GET", f"/{collection}/{doc}")
+    def get(self, collection: str, doc: str, *, absent_if_denied: bool = False) -> dict[str, Any] | None:
+        """One document, or None when it is not there.
+
+        ``absent_if_denied`` says that, for this read, *denied* and *not
+        there* are the same answer and both mean None. That is not a
+        convenience: on the rules in ``firestore.rules`` it is what the
+        service actually does. ``allow read: if ownsExisting()`` dereferences
+        ``resource.data.owner_uid``, and on a document that was never written
+        ``resource`` is null — the expression errors, the rule denies, and
+        Firestore returns 403 PERMISSION_DENIED rather than 404. A caller that
+        cannot tell the two apart (and under these rules no caller can) should
+        say so, rather than treat an ordinary "not yet" as a failure and log
+        it as one.
+
+        It is only ever right for a caller reading with a *user's* token: the
+        worker's service account bypasses the rules, so a 403 there is a real
+        fault and must still be raised.
+        """
+        absent = (404, 403) if absent_if_denied else (404,)
+        payload = self._call("GET", f"/{collection}/{doc}", absent=absent)
         return fields_of(payload) if payload else None
 
     def query(self, collection: str, *, equals: dict[str, Any] | None = None,

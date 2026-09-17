@@ -268,8 +268,8 @@ def test_an_unowned_state_document_is_never_returned(live, monkeypatch):
 
     store = state_mod._backend()
     monkeypatch.setattr(store.client, "get",
-                        lambda c, d: {**MonitorState(check_count=9).to_dict(),
-                                      "owner_uid": UID_B})
+                        lambda c, d, **kw: {**MonitorState(check_count=9).to_dict(),
+                                            "owner_uid": UID_B})
     assert store.states_for([monitor.id]) == {}
 
 
@@ -312,3 +312,169 @@ def test_a_failed_live_read_surfaces(live, monkeypatch):
     monkeypatch.setattr(state_mod, "_transport", broken)
     with pytest.raises(fs.FirestoreError):
         state_mod.load_states_for([monitor.id])
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Production, 17 Sep: 403 on the owner's own monitor
+# ──────────────────────────────────────────────────────────────────────────
+# The Streamlit logs filled with
+#
+#     [firestore] GET /monitor_state/8f3f1ff0d4bf: HTTP 403 Missing or
+#     insufficient permissions.
+#
+# for the signed-in owner's *own* active monitor, while the worker checked it
+# and mailed about it quite happily. Nothing was wrong with the rules, the
+# token or the owner: the document simply did not exist yet. `allow read: if
+# ownsExisting()` dereferences `resource.data.owner_uid`, `resource` is null
+# on a document that was never written, the expression errors, and Firestore
+# denies — 403, not 404. The live panel reads one document by id every thirty
+# seconds, so every tick before the first check landed logged a permission
+# error against a monitor the person owned.
+def test_a_state_document_that_was_never_written_is_not_a_permission_error(live, capsys):
+    """The exact production line, and it must not be printed.
+
+    Reading a monitor_state document that is not there is the *normal* state
+    of a monitor between being saved and its first check landing. It has to
+    come back as "nothing yet", quietly — a logged permission error against
+    the owner's own data sends somebody hunting a security fault that isn't
+    there.
+    """
+    live.as_user(UID_A)
+    monitor = _monitor(UID_A)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    assert monitor.id not in live.docs.get("monitor_state", {})
+
+    capsys.readouterr()
+    before = len(live.calls)
+    got = state_mod.load_states_for([monitor.id])
+    printed = capsys.readouterr().out
+
+    assert got == {}                                   # the panel keeps its argument
+    assert live.requests_since(before) == [f"GET /monitor_state/{monitor.id}"]
+    assert "403" not in printed, printed
+    assert "[firestore]" not in printed, printed
+
+
+def test_the_worker_writing_it_makes_the_very_next_tick_succeed(live, capsys):
+    """And the moment the document exists the same read returns it, so the
+    quiet 403 above can never be hiding a permanent failure."""
+    live.as_user(UID_A)
+    monitor = _monitor(UID_A)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    assert state_mod.load_states_for([monitor.id]) == {}
+
+    live.worker_writes(monitor.id, UID_A, AVAILABLE, checks=1)
+
+    capsys.readouterr()
+    fresh = state_mod.load_states_for([monitor.id])[monitor.id]
+    assert fresh.check_count == 1
+    assert fresh.targets["ALLU|Any format"].availability is Availability.AVAILABLE
+    assert "[firestore]" not in capsys.readouterr().out
+
+
+def test_deleting_a_monitor_whose_first_check_never_landed(live):
+    """The same null ``resource``, on the other side of the rules.
+
+    ``allow delete: if ownsExisting()`` reads the existing document too, so
+    staging a delete of a state document that was never written is refused —
+    and a commit is atomic, so it took the monitor's own deletion with it.
+    Stopping an alert before its first check is exactly when somebody deletes
+    one, so this was the whole of "Delete" for a brand-new monitor.
+    """
+    live.as_user(UID_A)
+    monitor = _monitor(UID_A)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    assert monitor.id not in live.docs.get("monitor_state", {})
+
+    state_mod.delete_monitor(monitor.id, mirror=False)
+
+    assert monitor.id not in live.docs.get("monitors", {})
+    assert state_mod.load_monitors() == []
+
+
+def test_deleting_a_checked_monitor_still_takes_its_state_with_it(live):
+    """…and when there *is* a state document it still goes, in one commit."""
+    live.as_user(UID_A)
+    monitor = _monitor(UID_A)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    live.worker_writes(monitor.id, UID_A, AVAILABLE)
+
+    state_mod.delete_monitor(monitor.id, mirror=False)
+
+    assert monitor.id not in live.docs.get("monitors", {})
+    assert monitor.id not in live.docs.get("monitor_state", {})
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Ownership, proven at the rules and in the code
+# ──────────────────────────────────────────────────────────────────────────
+def test_an_owner_reads_their_own_state_document(live):
+    """A. The thing the 403 was mistaken for still works."""
+    live.as_user(UID_A)
+    monitor = _monitor(UID_A)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    live.worker_writes(monitor.id, UID_A, AVAILABLE, checks=3)
+
+    got = state_mod.load_states_for([monitor.id])
+    assert list(got) == [monitor.id]
+    assert got[monitor.id].check_count == 3
+    assert live.docs["monitor_state"][monitor.id]["owner_uid"] == UID_A
+
+
+def test_another_account_is_refused_the_same_document(live):
+    """B. The rules, not this code, do the refusing — assert the service
+    itself says no to the other account's token for that exact id."""
+    live.as_user(UID_A)
+    monitor = _monitor(UID_A)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    live.worker_writes(monitor.id, UID_A, AVAILABLE)
+
+    theirs = fs.FirestoreClient(PROJECT, lambda: f"id.{UID_B}",
+                                transport=state_mod._transport)
+    with pytest.raises(fs.FirestoreError, match="PERMISSION_DENIED"):
+        theirs.get("monitor_state", monitor.id)
+
+    # …and the quiet-absence path never turns that into data either.
+    assert theirs.get("monitor_state", monitor.id, absent_if_denied=True) is None
+    live.as_user(UID_B)
+    assert state_mod.load_states_for([monitor.id]) == {}
+
+
+def test_the_live_read_carries_the_signed_in_scopes_own_token(live):
+    """C. Same scope, same UID, same token as the page's own reads — the
+    live panel is not a second, differently-authenticated path."""
+    live.as_user(UID_A)
+    monitor = _monitor(UID_A)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    live.worker_writes(monitor.id, UID_A, AVAILABLE)
+
+    page = state_mod._backend()
+    assert page.uid == UID_A
+    assert page.client.token() == f"id.{UID_A}"
+
+    before = len(live.calls)
+    state_mod.load_many("monitors", "state", "history", "settings")
+    state_mod.load_states_for([monitor.id])
+    callers = {who for _, _, who in live.calls[before:]}
+
+    assert callers == {UID_A}, callers          # never "admin", never UID_B
+    assert (f"GET /monitor_state/{monitor.id}", UID_A) in [
+        (f"{m} {p}", who) for m, p, who in live.calls[before:]]
+
+
+def test_a_mismatched_owner_uid_denies_instead_of_leaking(live, capsys):
+    """D. A state document stamped with somebody else's UID under this
+    monitor's id is refused, and nothing in it reaches the panel."""
+    live.as_user(UID_A)
+    monitor = _monitor(UID_A)
+    state_mod.upsert_monitor(monitor, mirror=False)
+    live.worker_writes(monitor.id, UID_B, AVAILABLE, checks=7)   # wrong owner
+
+    before = len(live.calls)
+    got = state_mod.load_states_for([monitor.id])
+
+    assert got == {}
+    # The request really was made: the denial came from the rules, not from
+    # this code declining to ask.
+    assert live.requests_since(before) == [f"GET /monitor_state/{monitor.id}"]
+    assert "7" not in str(got)

@@ -383,14 +383,23 @@ class _FirestoreStore:
         # collection, so make deletion the same harmless no-op as stop/extend
         # instead of surfacing a permission error.
         try:
-            doc = self.client.get(MONITORS, monitor_id)
+            doc = self.client.get(MONITORS, monitor_id, absent_if_denied=self.uid is not None)
+            if doc is None or not self._owned(doc):
+                return
+            writes: list[tuple[str, str, dict[str, Any] | None]] = [(MONITORS, monitor_id, None)]
+            # Only delete the state document if there *is* one. ``allow
+            # delete: if ownsExisting()`` reads the existing document, so
+            # deleting one that was never written is refused — and a commit is
+            # atomic, which would take the monitor's own deletion down with
+            # it. A monitor stopped before its first check ever landed has no
+            # state document, and that is exactly when people delete one.
+            if self.client.get(STATES, monitor_id, absent_if_denied=self.uid is not None) is not None:
+                writes.append((STATES, monitor_id, None))
+            self.client.commit(writes)
         except fs.FirestoreError as exc:
             if self.uid is not None and exc.status in (401, 403):
                 return
             raise
-        if doc is None or not self._owned(doc):
-            return
-        self.client.commit([(MONITORS, monitor_id, None), (STATES, monitor_id, None)])
         _owner_of.pop(monitor_id, None)
 
     # -- observed state ---------------------------------------------------
@@ -412,7 +421,9 @@ class _FirestoreStore:
         self.client.commit(writes)
 
     def clear_monitor_state(self, monitor_id: str, *, mirror: bool = True) -> None:
-        doc = self.client.get(STATES, monitor_id)
+        # Absent and not-ours are one answer here (see ``states_for``), and
+        # both mean there is nothing of this person's to clear.
+        doc = self.client.get(STATES, monitor_id, absent_if_denied=self.uid is not None)
         if doc is not None and self._owned(doc):
             self.client.delete(STATES, monitor_id)
 
@@ -426,13 +437,25 @@ class _FirestoreStore:
         to somebody else is refused by the rules before we ever see it —
         which from here is indistinguishable from one that does not exist,
         and is treated the same way.
+
+        So is a document that has *never been written*, and that is the common
+        case rather than the odd one: between saving a monitor and its first
+        check landing, this panel ticks every thirty seconds against a
+        document id that has nothing behind it yet. ``allow read: if
+        ownsExisting()`` dereferences ``resource.data`` on a null ``resource``
+        and Firestore answers 403, not 404 — hence ``absent_if_denied``, which
+        is the client saying it knows that and means None either way. Without
+        it every one of those ticks logged a permission error against the
+        owner's own monitor.
         """
         out: dict[str, MonitorState] = {}
         for monitor_id in monitor_ids:
             try:
-                doc = self.client.get(STATES, monitor_id)
+                doc = self.client.get(STATES, monitor_id, absent_if_denied=self.uid is not None)
             except fs.FirestoreError as exc:
-                if self.uid is not None and exc.status in (401, 403):
+                # 403 is folded into "absent" above; this is a token that has
+                # stopped being accepted, which the next full rerun re-reads.
+                if self.uid is not None and exc.status == 401:
                     continue
                 raise
             if doc is not None and self._owned(doc):
