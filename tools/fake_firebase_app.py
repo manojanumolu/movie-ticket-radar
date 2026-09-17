@@ -72,6 +72,9 @@ def _install_fake() -> None:
     store.DATA_DIR = data
     state_mod.MONITORS_FILE = data / "monitors.json"
     state_mod.STATE_FILE = data / "state.json"
+    # Imported by value too; without this a browser session's settings
+    # were written into the repository's own data/settings.json.
+    state_mod.SETTINGS_FILE = data / "settings.json"
     store.push_to_github = lambda *a, **k: False
     store.sync_from_github = lambda *a, **k: None
     print(f"[fake-firebase] accounts ready; data in {data}", flush=True)

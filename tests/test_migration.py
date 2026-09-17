@@ -308,8 +308,15 @@ def test_the_migration_never_touches_the_json(data_dir):
     assert {p.name: p.read_bytes() for p in sorted(data_dir.glob("*.json"))} == before
 
 
-def test_the_real_data_plan_matches_the_signed_off_counts(tmp_path):
-    """The repository's own records, against the numbers that were approved.
+def test_the_committed_legacy_files_hold_no_user_records(tmp_path):
+    """The repository's own ``data/*.json``, as committed, are empty.
+
+    Until the Firestore cutover this test pinned the migration plan against
+    the real legacy records (8 monitors, 2 users, …). The migration is done
+    and those records — real addresses and UIDs in a public repository —
+    were then deliberately removed, so the assertion that now holds, and
+    matters, is the inverse: the committed files carry nothing to migrate
+    and nothing personal. The plan over them must be empty and clean.
 
     The files are read from the last commit rather than the working tree: the
     suite writes to ``data/`` as it runs, and this assertion is about the
@@ -330,9 +337,11 @@ def test_the_real_data_plan_matches_the_signed_off_counts(tmp_path):
 
     plan = build_plan(data_dir=pristine)
     assert plan.ok, plan.problems
-    assert plan.counts == {MONITORS: 8, STATES: 8, HISTORY: 17, USERS: 2}
-    assert plan.excluded == {"test monitors": 6, "their state": 6, "their history": 12,
-                             "history of deleted monitors": 21, "orphan state": 1}
-    assert plan.orphan_state == ["080ddf390dde"]
-    assert plan.history_owner_recovered == 7
-    assert len(plan.writes) == 35
+    assert plan.counts == {MONITORS: 0, STATES: 0, HISTORY: 0, USERS: 0}
+    assert plan.writes == []
+    # …and nothing personal survives in them: no address, no owner.
+    import re
+    committed = "".join((pristine / n).read_text(encoding="utf-8") for n in
+                        ("monitors.json", "state.json", "history.json", "settings.json"))
+    assert not re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}", committed)
+    assert '"owner_uid"' not in committed
