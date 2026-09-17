@@ -86,6 +86,15 @@ MESSAGES: dict[str, str] = {
     "CONFIGURATION_NOT_FOUND": "TicketRadar's sign-in isn't configured correctly on this host.",
     "EMAIL_NOT_VERIFIED": "Verify your email address first — the link is in your inbox.",
     "CREDENTIAL_TOO_OLD_LOGIN_AGAIN": "Please sign in again to confirm account deletion.",
+    # Google sign-in (accounts:signInWithIdp).
+    "FEDERATED_USER_ID_ALREADY_LINKED": "That Google account is already linked to a different TicketRadar account.",
+    "INVALID_IDP_RESPONSE": "Google didn't return a valid sign-in. Please try again.",
+    "INVALID_CREDENTIAL_OR_PROVIDER_ID": "Google didn't return a valid sign-in. Please try again.",
+    "MISSING_OR_INVALID_NONCE": "Google didn't return a valid sign-in. Please try again.",
+    "NEED_CONFIRMATION": "There's already a TicketRadar account for that email that signs in with a password. "
+                         "Sign in with your password to keep your monitors and history.",
+    "GOOGLE_NO_EMAIL": "Google didn't share an email address for that account, so TicketRadar can't sign it in.",
+    "GOOGLE_NOT_ENABLED": "Google sign-in isn't switched on for this TicketRadar yet — use your email and password for now.",
     "network": "Couldn't reach the sign-in service. Check your connection and try again.",
     "not_configured": "Sign-in isn't configured on this host yet — the Firebase Web API key is missing.",
 }
@@ -198,6 +207,10 @@ class Credentials:
     #: The account carries the custom claim ``admin: true``. Also only ever
     #: from ``accounts:lookup`` — see :func:`admin_claim`.
     admin: bool = False
+    #: Google shares one; a password account has none. Kept, not rendered.
+    photo_url: str = ""
+    #: ``"password"`` or ``"google.com"`` — what produced these credentials.
+    provider: str = "password"
 
 
 #: The custom claim that marks the owner's account. Set on the account record
@@ -279,6 +292,55 @@ class FirebaseAuth:
         return replace(creds, email=info["email"] or creds.email,
                        display_name=info["display_name"] or creds.display_name,
                        email_verified=info["email_verified"], admin=info["admin"])
+
+    def sign_in_with_google(self, google_id_token: str, request_uri: str) -> Credentials:
+        """``POST accounts:signInWithIdp`` — Firebase's own "sign in with an
+        OAuth credential". Firebase verifies the Google ID token with Google,
+        finds or creates the account, and answers with exactly what a
+        password sign-in answers: ``idToken``, ``refreshToken``, ``localId``.
+        The account record is then read as for every other sign-in, so
+        ``email_verified`` and ``admin`` come from the same place they
+        always do.
+
+        Collisions are Firebase's to decide, and under the project's default
+        *one account per email address* it decides safely: Google is a
+        trusted provider, so an email that already has a password account
+        resolves to that account's UID with Google linked — never a second
+        UID. When Firebase instead asks for confirmation (``needConfirmation``)
+        or reports ``EMAIL_EXISTS``, nothing is signed in and the person is
+        told to use their password. No account is created in either case.
+        """
+        try:
+            body = self._call("signInWithIdp", {
+                "postBody": f"id_token={google_id_token}&providerId=google.com",
+                "requestUri": request_uri,
+                "returnSecureToken": True,
+                "returnIdpCredential": True,
+            })
+        except AuthError as exc:
+            if exc.code in ("OPERATION_NOT_ALLOWED",):
+                raise AuthError(MESSAGES["GOOGLE_NOT_ENABLED"], exc.code, exc.status) from None
+            if exc.code == "EMAIL_EXISTS":
+                raise AuthError(MESSAGES["NEED_CONFIRMATION"], exc.code, exc.status) from None
+            raise
+        if body.get("needConfirmation"):
+            print("[auth] signInWithIdp: needConfirmation=true — not signed in", flush=True)
+            raise AuthError(MESSAGES["NEED_CONFIRMATION"], "NEED_CONFIRMATION")
+        creds = _credentials(body)
+        if not creds.email:
+            raise AuthError(MESSAGES["GOOGLE_NO_EMAIL"], "GOOGLE_NO_EMAIL")
+        print(f"[auth] signInWithIdp: new_user={str(bool(body.get('isNewUser'))).lower()} "
+              f"provider={body.get('providerId', '')}", flush=True)
+        info = self.lookup(creds.id_token)
+        return replace(creds,
+                       email=info["email"] or creds.email,
+                       display_name=info["display_name"] or creds.display_name,
+                       # The account record decides, exactly as for a password
+                       # sign-in — never "it came from Google, so it's verified".
+                       email_verified=info["email_verified"],
+                       admin=info["admin"],
+                       photo_url=str(body.get("photoUrl") or ""),
+                       provider="google.com")
 
     def sign_up(self, name: str, email: str, password: str) -> Credentials:
         """Create the account. The credentials come back *unverified*: they

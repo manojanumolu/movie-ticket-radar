@@ -65,6 +65,14 @@ def require_user() -> AuthUser:
 
     with chrome:
         login.entrance()
+        if from_memory is None:
+            # Somebody may be about to see the login page, and its Google link
+            # needs a ``state`` the browser already holds when it is clicked.
+            # Minting it here — before the bridge renders — means the same
+            # bridge pass that reports the jar also writes it, so the link
+            # and its cookie agree from the first paint. If a restore then
+            # signs the person in, an unused ten-minute cookie is all it cost.
+            login.prepare_google()
         # Queue any pending cookie write, then run the bridge once. The bridge
         # performs the writes and brings back what the browser holds — on
         # Community Cloud that is the only way the cookie ever reaches Python.
@@ -86,6 +94,11 @@ def require_user() -> AuthUser:
                     _restoring()
                 st.stop()
             print("[auth] gate: bridge never answered; showing login", flush=True)
+        if user is None:
+            # Back from Google? The browser has answered, so the state cookie
+            # is readable; a genuine return signs in and reruns, anything
+            # else becomes a line on the login page.
+            user = login.handle_google_return()
 
     session.log_cookie_report()
     # Closes the loop on the two cases a restore log alone cannot show: a user

@@ -33,6 +33,12 @@ USER_KEY = "auth_user"
 PENDING_KEY = "auth_pending"
 COOKIE = "tr_session"
 SESSION_STARTED_COOKIE = "tr_session_started"
+#: The one thing a Google sign-in has to remember across the redirect: the
+#: ``state`` the link was minted with. Short-lived, written and read through
+#: the same bridge as the session cookie, and it carries no authority — it
+#: only proves the return belongs to a link this browser was shown.
+OAUTH_STATE_COOKIE = "tr_oauth_state"
+OAUTH_STATE_KEY = "auth_oauth_state"
 SESSION_STARTED_KEY = "auth_session_started"
 SESSION_EXPIRES_KEY = "auth_session_expires"
 # This is an absolute deadline, not a sliding refresh-token lifetime.
@@ -90,6 +96,8 @@ class AuthUser:
     #: it lives here in ``st.session_state``, which the browser cannot write,
     #: and nothing on any page can set it.
     admin: bool = False
+    #: From Google, when the account signed in that way. Kept, not rendered.
+    photo_url: str = ""
 
     @property
     def first_name(self) -> str:
@@ -141,6 +149,7 @@ def _from_credentials(creds: Credentials, *, email: str = "", display_name: str 
         refresh_token=creds.refresh_token,
         expires_at=time.time() + max(60, creds.expires_in),
         admin=creds.admin,
+        photo_url=creds.photo_url,
     )
 
 
@@ -445,7 +454,7 @@ def run_bridge() -> dict | None:
     try:
         value = _bridge_component()(
             ops=ops,
-            names=[COOKIE, SESSION_STARTED_COOKIE],
+            names=[COOKIE, SESSION_STARTED_COOKIE, OAUTH_STATE_COOKIE],
             # Changes whenever there is work to do, so a repeat write is still
             # a new render rather than a no-op.
             nonce=len(ops) and time.time() or 0,
@@ -467,7 +476,7 @@ def bridge_jar() -> dict[str, str]:
     if not isinstance(value, dict):
         return {}
     return {k: v for k, v in value.items()
-            if k in (COOKIE, SESSION_STARTED_COOKIE) and isinstance(v, str) and v}
+            if k in (COOKIE, SESSION_STARTED_COOKIE, OAUTH_STATE_COOKIE) and isinstance(v, str) and v}
 
 
 def bridge_answered() -> bool:
@@ -667,6 +676,46 @@ def id_token() -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Google sign-in: the state that has to survive the redirect
+# ──────────────────────────────────────────────────────────────────────────
+def oauth_state() -> str:
+    """The ``state`` the Google link is minted with, for this session.
+
+    Made once per session and queued for the bridge to write as a cookie
+    *in the same run* that draws the link — the gate calls this before
+    ``flush_cookie``. The return from Google opens a new session, whose
+    only memory of this one is that cookie; :func:`oauth_state_matches`
+    compares against it there.
+    """
+    from auth import google
+
+    state = str(st.session_state.get(OAUTH_STATE_KEY) or "")
+    if not state:
+        state = google.new_state()
+        st.session_state[OAUTH_STATE_KEY] = state
+        queue_cookie(OAUTH_STATE_COOKIE, state, google.STATE_SECONDS)
+    return state
+
+
+def oauth_state_matches(returned: str) -> bool:
+    """Does the ``state`` Google sent back match the cookie this browser
+    holds? Constant-time, and False for a missing or empty either side."""
+    import hmac
+
+    expected = _read_cookie(OAUTH_STATE_COOKIE)
+    if not expected or not returned:
+        return False
+    return hmac.compare_digest(expected, returned)
+
+
+def clear_oauth_state() -> None:
+    """Spent — one link, one return. The cookie goes and the next visit to
+    the login page mints a fresh one."""
+    st.session_state.pop(OAUTH_STATE_KEY, None)
+    queue_cookie(OAUTH_STATE_COOKIE, "", 0)
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # The cookie itself — written by the browser, from a zero-height component
 # ──────────────────────────────────────────────────────────────────────────
 def flush_cookie() -> None:
@@ -701,8 +750,11 @@ __all__ = [
     "AuthUser",
     "clear_pending",
     "continue_if_verified",
+    "clear_oauth_state",
     "current_uid",
     "is_admin",
+    "oauth_state",
+    "oauth_state_matches",
     "cookie_report",
     "current_user",
     "log_cleared",
