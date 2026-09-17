@@ -195,6 +195,17 @@ class _JsonStore:
                 print(f"[state] skipping unreadable monitor: {exc}")
         return monitors
 
+    def load_monitors_for_checking(self) -> list[Monitor]:
+        """What a worker tick starts from: here, the whole file, as before.
+
+        A file costs the same to read whatever it holds, and this store writes
+        the list back *whole* (``save_monitors`` with no UID replaces the
+        file), so handing the tick a subset would drop every other record on
+        the next save. ``run_once`` skips the stopped ones itself, exactly as
+        it always has on this store.
+        """
+        return self.load_monitors()
+
     def save_monitors(self, monitors: list[Monitor], *, mirror: bool = True) -> None:
         if self.uid is None:
             payload = [m.to_dict() for m in monitors]
@@ -354,8 +365,32 @@ class _FirestoreStore:
 
     # -- monitors ---------------------------------------------------------
     def load_monitors(self) -> list[Monitor]:
+        return self._monitors(self._mine())
+
+    def load_monitors_for_checking(self) -> list[Monitor]:
+        """Only the documents whose ``status`` is ``ACTIVE``.
+
+        The worker reads monitors twice a tick, every thirty seconds, for as
+        long as anything is being watched — and until now that read returned
+        every monitor anyone had ever created, STOPPED and EXPIRED ones
+        included, forever. Each of those was a billed document read that the
+        tick then threw away. Filtering on the stored status is a single-field
+        equality Firestore indexes on its own, so no index has to be created.
+
+        The filter is on the stored *field*, not on ``is_running()``: a monitor
+        past its end time is still ``ACTIVE`` in the store until a tick flips
+        it, and it has to be read for that flip to happen. ``expire_due_monitors``
+        therefore sees exactly what it saw before.
+
+        With a UID the owner filter stays in place as well, so the query is
+        one the rules would accept from a signed-in person too — though the
+        app never calls this: My Monitors and History still show everything.
+        """
+        return self._monitors({**(self._mine() or {}), "status": MonitorStatus.ACTIVE.value})
+
+    def _monitors(self, equals: dict[str, Any] | None) -> list[Monitor]:
         monitors: list[Monitor] = []
-        for doc_id, doc in self.client.query(MONITORS, equals=self._mine()).items():
+        for doc_id, doc in self.client.query(MONITORS, equals=equals).items():
             if not self._owned(doc):
                 continue
             try:
@@ -408,6 +443,14 @@ class _FirestoreStore:
         for doc_id, doc in self.client.query(STATES, equals=self._mine()).items():
             if self._owned(doc):
                 out[doc_id] = MonitorState.from_dict(doc)
+                # Remember the owner this document already carries. The worker
+                # writes the whole state back each dirty tick, and for a
+                # monitor it did not load this tick — a stopped one, now that
+                # it reads only ACTIVE monitors — ``save_state`` would
+                # otherwise fetch this very document again just to read this
+                # field. The monitor's own record, when loaded, still wins.
+                if doc.get(fs.OWNER):
+                    _owner_of.setdefault(doc_id, str(doc[fs.OWNER]))
         return out
 
     def save_state(self, state: dict[str, MonitorState], *, mirror: bool = True) -> None:
@@ -706,6 +749,13 @@ def load_many(*kinds: str) -> dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────
 def load_monitors() -> list[Monitor]:
     return _cached("monitors", lambda: _backend().load_monitors())
+
+
+def load_monitors_for_checking() -> list[Monitor]:
+    """The worker's read: on Firestore, only ACTIVE monitors (see the store);
+    on JSON, the file. Never cached — the worker has no session to cache in,
+    and must see a monitor stopped, created or expired since the last tick."""
+    return _backend().load_monitors_for_checking()
 
 
 def save_monitors(monitors: list[Monitor], *, mirror: bool = True) -> None:
@@ -1058,6 +1108,7 @@ __all__ = [
     "load_history",
     "load_many",
     "load_monitors",
+    "load_monitors_for_checking",
     "load_settings",
     "load_state",
     "load_states_for",

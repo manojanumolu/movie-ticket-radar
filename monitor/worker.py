@@ -46,7 +46,15 @@ from typing import Callable
 from config.store import MONITOR_WORKFLOW, REPO_ROOT, dispatch_workflow, running_in_actions
 from config.timezone import fmt_datetime, now_ist
 from monitor.checker import RunReport, run_once
-from monitor.state import DUE_TOLERANCE_SECONDS, backend_report, load_monitors, load_state
+from monitor.models import Monitor
+from monitor.state import (
+    DUE_TOLERANCE_SECONDS,
+    MonitorState,
+    backend_report,
+    load_monitors,
+    load_monitors_for_checking,
+    load_state,
+)
 
 DEFAULT_MAX_MINUTES = 50
 DEFAULT_POLL_SECONDS = 30
@@ -160,17 +168,28 @@ def report_did_work(report: RunReport) -> bool:
     return bool(report.checked or report.failed or report.expired)
 
 
-def seconds_until_next_due(at: datetime, poll_seconds: int) -> float | None:
+def seconds_until_next_due(at: datetime, poll_seconds: int, *,
+                           monitors: list[Monitor] | None = None,
+                           state: dict[str, MonitorState] | None = None) -> float | None:
     """How long to sleep: until the earliest due monitor, capped at the poll.
 
     Returns None when nothing is running — the caller stops. Polling is
     capped so a monitor created in the UI is noticed within ``poll_seconds``
     even while every existing monitor is minutes away from being due.
+
+    ``monitors`` and ``state`` are what the tick that just ran read (and, if
+    it changed them, wrote back), so this need not read the same two
+    collections again seconds later. They are this tick's and nobody
+    else's: the next tick starts from a fresh read, so a monitor stopped or
+    created meanwhile is seen exactly as soon as it was before.
     """
-    monitors = [m for m in load_monitors() if m.is_running(at)]
+    if monitors is None:
+        monitors = load_monitors_for_checking()
+    monitors = [m for m in monitors if m.is_running(at)]
     if not monitors:
         return None
-    state = load_state()
+    if state is None:
+        state = load_state()
     soonest = None
     for m in monitors:
         ms = state.get(m.id)
@@ -311,7 +330,8 @@ def run_loop(
             loop.commits += int(committed)
             loop.push_failures += int(committed and not pushed)
 
-        wait = seconds_until_next_due(clock(), poll_seconds)
+        wait = seconds_until_next_due(clock(), poll_seconds,
+                                      monitors=report.monitors, state=report.state)
         if wait is None:
             loop.stopped_reason = "nothing running"
             break

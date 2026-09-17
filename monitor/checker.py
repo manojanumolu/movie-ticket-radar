@@ -42,7 +42,7 @@ from monitor.models import (
 from monitor.state import (
     MonitorState,
     expire_due_monitors,
-    load_monitors,
+    load_monitors_for_checking,
     load_state,
     record_history,
     save_monitors,
@@ -66,6 +66,12 @@ class RunReport:
     email_errors: list[str] = field(default_factory=list)
     #: What sibling-event discovery did before the checks (see ``monitor.discovery``).
     discovery: DiscoveryReport = field(default_factory=DiscoveryReport)
+    #: The monitors and observed state this tick read and, where it changed
+    #: them, wrote back — handed to the segment so deciding when to wake next
+    #: does not read the same two collections a second time. Valid for this
+    #: tick only; the next tick reads afresh.
+    monitors: list[Monitor] = field(default_factory=list)
+    state: dict[str, MonitorState] = field(default_factory=dict)
 
     def summary(self) -> str:
         text = (
@@ -308,7 +314,10 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
 
         notifier = send_change_email
 
-    monitors, newly_expired = expire_due_monitors(at=at, mirror=mirror)
+    # Only what can still be checked. On Firestore that is the ACTIVE
+    # documents alone — a stopped or expired monitor is never read again by
+    # the worker, and never written back by it either.
+    monitors, newly_expired = expire_due_monitors(load_monitors_for_checking(), at=at, mirror=mirror)
     report.expired = [m.id for m in newly_expired]
 
     state = load_state()
@@ -381,6 +390,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     if dirty:
         save_state(state, mirror=mirror)
 
+    report.monitors = monitors
+    report.state = state
     print(f"[checker] {report.summary()}")
     return report
 
