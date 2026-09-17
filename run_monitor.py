@@ -19,7 +19,7 @@ import argparse
 import sys
 
 from config.timezone import fmt_datetime, now_ist
-from monitor.checker import run_once
+from monitor.checker import run_once, short_id
 from monitor.worker import DEFAULT_MAX_MINUTES, DEFAULT_POLL_SECONDS, run_loop
 
 
@@ -88,11 +88,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"::error::worker crashed: {type(exc).__name__}: {exc}")
         return 1
 
+    def ids(items: list[str]) -> str:
+        # Public log: enough of each id to read a run, never the whole thing.
+        return ", ".join(short_id(i) for i in items) if items else "—"
+
     for line in (
-        f"checked:  {report.checked or '—'}",
-        f"skipped:  {report.skipped or '—'}",
-        f"expired:  {report.expired or '—'}",
-        f"failed:   {report.failed or '—'}",
+        f"checked:  {ids(report.checked)}",
+        f"skipped:  {', '.join(report.skipped) if report.skipped else '—'}",
+        f"expired:  {ids(report.expired)}",
+        f"failed:   {ids(report.failed)}",
         f"changes:  {len(report.changes)}",
         f"emails:   {report.emails_sent}",
     ):

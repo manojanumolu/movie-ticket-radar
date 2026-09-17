@@ -1,16 +1,20 @@
 # 1.42 is where st.context.cookies exists. Below it the session cookie is
 # unreadable, so every browser refresh would sign the user out.
-streamlit>=1.42
-requests>=2.32
+# Upper bounds throughout: this is a deployed app that redeploys on every push
+# from an unpinned resolve, and it leans on Streamlit surface a major release
+# could change (st.context.url, st.query_params, fragments, keyed containers,
+# the component sandbox policy). Same-major updates still flow.
+streamlit>=1.42,<2
+requests>=2.32,<3
 # BookMyShow's bot check refuses urllib3's TLS fingerprint outright; curl_cffi
 # replays a real browser's handshake. See platforms/http.py for the evidence.
-curl_cffi>=0.7
-PyGithub>=2.4
-tzdata>=2025.1
+curl_cffi>=0.7,<1
+PyGithub>=2.4,<3
+tzdata>=2025.1,<2027
 # Streamlit's module reloader needs a real file watcher; without it a deploy
 # that changes ui/*.py keeps serving the old modules until a manual reboot.
-watchdog>=6.0
+watchdog>=6.0,<7
 # The worker signs in to Firestore with a service account; google-auth mints
 # the access token. Imported only on that path (config/firestore.py) — the
 # Streamlit app talks to Firestore with the signed-in person's own ID token.
-google-auth>=2.30
+google-auth>=2.30,<3

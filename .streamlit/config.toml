@@ -13,5 +13,12 @@ codeFont = "DM Mono, monospace"
 [server]
 headless = true
 
+[client]
+# The app is public. An uncaught exception shows a viewer only its type and
+# a generic line; the message and traceback go to the console log, which
+# only the owner can read. TicketRadar's own error lines (st.error, the
+# flash) are rendered by the app and are unaffected.
+showErrorDetails = "type"
+
 [browser]
 gatherUsageStats = false

@@ -27,8 +27,10 @@ can also run locally with the same two variables set.
 The email is only how the account is *found*; the UID is what the claim is
 set on, and the app authorises on the claim, never on the address.
 
-Nothing secret is printed: the address you typed, the UID Firebase reports
-for it, and the claims before and after.
+Nothing secret — and nothing personal — is printed. This repository is
+public, and so is every Actions log, so the address is masked to its first
+character and domain, the UID to its first four characters, and the only
+other output is whether the claim is set before and after.
 """
 
 from __future__ import annotations
@@ -82,8 +84,22 @@ def call(project: str, token: str, action: str, body: dict[str, Any]) -> dict[st
 def lookup(project: str, token: str, email: str) -> dict[str, Any]:
     users = call(project, token, "lookup", {"email": [email]}).get("users") or []
     if not users:
-        raise SystemExit(f"error: no Firebase account has the address {email}")
+        raise SystemExit(f"error: no Firebase account has the address {mask_email(email)}")
     return users[0]
+
+
+def mask_email(address: str) -> str:
+    """'someone@gmail.com' -> 's***@gmail.com' — the same mask the worker
+    uses for recipients, safe in a public log."""
+    if "@" not in address:
+        return "***"
+    local, _, domain = address.partition("@")
+    return f"{local[:1]}***@{domain}"
+
+
+def mask_uid(uid: str) -> str:
+    """Enough to tell two accounts apart when reading a log; never the UID."""
+    return f"{uid[:4]}…" if len(uid) > 4 else "…"
 
 
 def claims_of(user: dict[str, Any]) -> dict[str, Any]:
@@ -114,9 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     token = access_token(info or {})
     user = lookup(project, token, args.email)
     uid, before = str(user.get("localId", "")), claims_of(user)
-    print(f"account: {args.email}")
-    print(f"uid:     {uid}")
-    print(f"claims:  {json.dumps(before)}")
+    print(f"account: {mask_email(args.email)} ({mask_uid(uid)})")
     print(f"admin:   {'true' if before.get(CLAIM) is True else 'false'}")
 
     if not (args.grant or args.revoke):
@@ -128,15 +142,15 @@ def main(argv: list[str] | None = None) -> int:
     else:
         after.pop(CLAIM, None)
     if after == before:
-        print("nothing to change")
+        print("Nothing to change.")
         return 0
 
     # ``customAttributes`` replaces the whole claims object, so the other
     # claims (if any) are carried across rather than dropped.
     call(project, token, "update", {"localId": uid, "customAttributes": json.dumps(after)})
     confirmed = claims_of(lookup(project, token, args.email))
-    print(f"claims now: {json.dumps(confirmed)}")
-    print(f"admin now:  {'true' if confirmed.get(CLAIM) is True else 'false'}")
+    print(f"admin now: {'true' if confirmed.get(CLAIM) is True else 'false'}")
+    print("Admin claim updated successfully.")
     print("The person must sign out and back in — or simply reload the app, which "
           "re-reads the account record — before the app sees the change.")
     return 0

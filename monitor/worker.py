@@ -116,7 +116,7 @@ def preflight(*, in_actions: bool, monitor_id: str = "",
     running = [m for m in monitors if m.is_running(at)]
     print(f"[worker] monitor_count={len(monitors)}")
     print(f"[worker] running_monitor_count={len(running)}")
-    print(f"[worker] requested_monitor_id={monitor_id or ''}")
+    print(f"[worker] requested_monitor_id={monitor_id[:8] if monitor_id else ''}")
 
     requested = next((m for m in monitors if m.id == monitor_id), None) if monitor_id else None
     print(f"[worker] requested_monitor_found={_yn(requested is not None)}")
