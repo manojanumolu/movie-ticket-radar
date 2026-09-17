@@ -63,6 +63,10 @@ def require_user() -> AuthUser:
     # authenticated nothing is read from the browser at all.
     from_memory = session.current_user()
 
+    # A Google popup whose sign-in has just succeeded: not the app — one
+    # line, the signal to the opener, and the popup closes itself.
+    popup_done = from_memory is not None and bool(st.session_state.get(session.POPUP_DONE_KEY))
+
     with chrome:
         login.entrance()
         if from_memory is None:
@@ -72,15 +76,28 @@ def require_user() -> AuthUser:
             # bridge pass that reports the jar also writes it, so the link
             # and its cookie agree from the first paint. If a restore then
             # signs the person in, an unused ten-minute cookie is all it cost.
+            # On a return from Google this mints nothing: the cookie the
+            # link was made with is the one about to be compared.
             login.prepare_google()
         # Queue any pending cookie write, then run the bridge once. The bridge
         # performs the writes and brings back what the browser holds — on
         # Community Cloud that is the only way the cookie ever reaches Python.
         session.flush_cookie()
-        session.run_bridge()
+        session.run_bridge(signal=session.GOOGLE_SIGNAL if popup_done else "")
+
+    if popup_done:
+        with _page_container:
+            login.popup_done()
+        st.stop()
 
     user = from_memory
     if user is None:
+        if session.google_signal_pending():
+            # The popup told this tab it has signed in. That is not proof of
+            # anything; it is a reason to look at the jar once more, and to
+            # let restore() — Google's answer to the refresh token — decide.
+            print("[auth] gate: google popup signalled; restoring", flush=True)
+            session.allow_restore_again()
         user = session.restore()
         if user is None and session.BRIDGE_ENABLED and not session.bridge_answered():
             # The browser has not answered yet. Rendering the login page now

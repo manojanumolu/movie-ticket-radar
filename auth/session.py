@@ -39,6 +39,17 @@ SESSION_STARTED_COOKIE = "tr_session_started"
 #: only proves the return belongs to a link this browser was shown.
 OAUTH_STATE_COOKIE = "tr_oauth_state"
 OAUTH_STATE_KEY = "auth_oauth_state"
+#: The one message a Google popup sends its opener when Python has signed it
+#: in: a UI signal meaning "look at the jar again", carrying nothing else.
+#: The bridge sends it to this exact origin and accepts it from this exact
+#: origin only. Python never treats it as proof of anything — the opener
+#: restores the session the way it restores a reload, against Google.
+GOOGLE_SIGNAL = "ticketradar-google-auth-complete"
+#: Set in the popup's session once its sign-in succeeded: the next run draws
+#: the closing beat and hands the bridge the signal instead of the app.
+POPUP_DONE_KEY = "auth_google_popup_done"
+#: How many completion signals this session has already acted on.
+SIGNALS_SEEN_KEY = "auth_google_signals_seen"
 SESSION_STARTED_KEY = "auth_session_started"
 SESSION_EXPIRES_KEY = "auth_session_expires"
 # This is an absolute deadline, not a sliding refresh-token lifetime.
@@ -52,7 +63,12 @@ REFRESH_MARGIN = 120
 #: on. Nothing that belongs to the previous person.
 RESET_KEEPS = frozenset({USER_KEY, "auth_just_signed_in", "auth_restore_tried",
                          "auth_cookie_set", "auth_cookie_clear", "auth_session_cookie_set",
-                         SESSION_STARTED_KEY, SESSION_EXPIRES_KEY})
+                         SESSION_STARTED_KEY, SESSION_EXPIRES_KEY,
+                         # Google popup bookkeeping: "this window is done" is set
+                         # right after sign_in_user asks for the reset, and the
+                         # count of signals already acted on must outlive a
+                         # sign-out, or a stale signal could re-open the door.
+                         POPUP_DONE_KEY, SIGNALS_SEEN_KEY})
 RESET_FLAG = "auth_reset_pending"
 
 
@@ -443,21 +459,29 @@ def queue_cookie(name: str, value: str, max_age: int) -> None:
     st.session_state[BRIDGE_OPS_KEY] = ops
 
 
-def run_bridge() -> dict | None:
+def run_bridge(*, signal: str = "") -> dict | None:
     """Render the bridge: carry out any queued cookie writes and bring back
     what the browser holds. ``None`` until the browser has answered.
 
-    The value travels on Streamlit's own component channel — the same private
-    websocket every widget value uses — and is never logged or put on screen.
+    ``signal`` is the one thing Python ever asks the bridge to *say*: in a
+    Google popup whose sign-in succeeded, :data:`GOOGLE_SIGNAL`, which the
+    bridge delivers to the opener and then closes the popup. It is passed
+    only after ``sign_in_user`` has run, so the cookie write it carries in
+    the same render lands before the opener is told to look.
+
+    The value travels on Streamlit's own component channel — the same
+    private websocket every widget value uses — and is never logged or put
+    on screen.
     """
     ops = st.session_state.pop(BRIDGE_OPS_KEY, [])
     try:
         value = _bridge_component()(
             ops=ops,
             names=[COOKIE, SESSION_STARTED_COOKIE, OAUTH_STATE_COOKIE],
+            signal=signal,
             # Changes whenever there is work to do, so a repeat write is still
             # a new render rather than a no-op.
-            nonce=len(ops) and time.time() or 0,
+            nonce=(len(ops) or bool(signal)) and time.time() or 0,
             key="tr_auth_bridge",
             default=None,
         )
@@ -481,6 +505,39 @@ def bridge_jar() -> dict[str, str]:
 
 def bridge_answered() -> bool:
     return isinstance(st.session_state.get(BRIDGE_JAR_KEY), dict)
+
+
+def bridge_has_opener() -> bool:
+    """Did the browser say this window was opened by another — a popup?
+    False before the bridge has answered, and in a plain tab."""
+    value = st.session_state.get(BRIDGE_JAR_KEY)
+    return isinstance(value, dict) and value.get("opener") is True
+
+
+def google_signal_pending() -> bool:
+    """Has the bridge heard a completion signal this session has not yet
+    acted on? Acting on it means letting :func:`restore` run once more —
+    nothing else. Each signal is counted so a second sign-in in the same
+    session is a new event, and each is consumed exactly once.
+    """
+    value = st.session_state.get(BRIDGE_JAR_KEY)
+    if not isinstance(value, dict):
+        return False
+    try:
+        heard = int(value.get("signals") or 0)
+    except (TypeError, ValueError):
+        return False
+    seen = int(st.session_state.get(SIGNALS_SEEN_KEY, 0) or 0)
+    if heard <= seen:
+        return False
+    st.session_state[SIGNALS_SEEN_KEY] = heard
+    return True
+
+
+def allow_restore_again() -> None:
+    """Let :func:`restore` run once more in this session: the popup has
+    just written a session cookie this session has never looked at."""
+    st.session_state.pop("auth_restore_tried", None)
 
 
 def cookie_report() -> dict[str, object]:
@@ -750,8 +807,13 @@ __all__ = [
     "AuthUser",
     "clear_pending",
     "continue_if_verified",
+    "GOOGLE_SIGNAL",
+    "POPUP_DONE_KEY",
+    "allow_restore_again",
+    "bridge_has_opener",
     "clear_oauth_state",
     "current_uid",
+    "google_signal_pending",
     "is_admin",
     "oauth_state",
     "oauth_state_matches",

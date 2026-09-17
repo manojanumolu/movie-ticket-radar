@@ -16,6 +16,23 @@
 
   The frame is zero height and renders nothing, and a value is posted only
   when it actually changes, so this can never loop or flicker.
+
+  Google sign-in rides the same component. On Community Cloud the app runs
+  inside the host's iframe, sandboxed with allow-popups and
+  allow-popups-to-escape-sandbox but without allow-top-navigation, so the
+  only way to Google is a popup opened by the person's own click. This frame
+  is same-origin with the app frame, so it can:
+
+    * open that popup from the click on the page's own "Continue with
+      Google" link (user activation propagates to same-origin descendants),
+      falling back to the link's target="_blank" when the popup is blocked;
+    * in the popup, once Python says the sign-in succeeded, tell the opener
+      and close — a UI signal only, carrying no token and no data, sent to
+      this exact origin and nothing else;
+    * in the opener, hear that signal (from this exact origin only), re-read
+      the jar and hand it to Python, which then restores the session the
+      way it restores any reload: Google's answer to the refresh token is
+      the authority, never this message.
 -->
 <html>
   <head><meta charset="utf-8" /><title>auth bridge</title></head>
@@ -82,19 +99,91 @@
           }
         }
 
-        function onMessage(event) {
-          var data = event.data;
-          if (!data || data.type !== "streamlit:render") return;
-          var args = (data.args || {});
+        // ---- Google sign-in: the popup, the signal, the listener ----------
+        var GOOGLE_LINK = "a.tr-auth-google";
+        var POPUP_NAME = "tr_google_auth";
+        var POPUP_FEATURES = "popup,width=520,height=680,resizable=yes,scrollbars=yes";
+        var SIGNAL_TYPE = "ticketradar-google-auth-complete";
+        var lastNames = [];
+        var lastNonce = 0;
+        var heard = 0;           // completion signals this opener has heard (a count, so each one changes the value)
+        var signalled = false;   // the popup speaks and closes once
 
-          var ops = args.ops || [];
-          for (var i = 0; i < ops.length; i++) {
-            try { writeCookie(ops[i].name, String(ops[i].value), Number(ops[i].max_age) || 0); } catch (e) {}
-          }
+        function origin() {
+          return window.location.origin;
+        }
 
+        function topWindow() {
+          try { return window.top || window; } catch (e) { return window; }
+        }
+
+        function hasOpener() {
+          // `opener` is readable across origins by design, and the host's
+          // frames are our own origin anyway. Null in a plain tab.
+          try { return !!(topWindow().opener); } catch (e) { return false; }
+        }
+
+        function openPopup(href) {
+          // Called inside the click on the page's own link, in the parent
+          // frame: that frame has user activation and so, being
+          // same-origin descendants, do we. A named window means a second
+          // click focuses the same popup rather than opening another.
+          var w = null;
+          try { w = window.parent.open(href, POPUP_NAME, POPUP_FEATURES); } catch (e) { w = null; }
+          if (!w) { try { w = window.open(href, POPUP_NAME, POPUP_FEATURES); } catch (e) { w = null; } }
+          if (w) { try { w.focus(); } catch (e) {} }
+          return w;
+        }
+
+        function installClickHandler() {
+          // Delegated on the parent document: Streamlit replaces the link
+          // element on every rerun, the document stays.
+          var doc = null;
+          try { doc = window.parent.document; } catch (e) { doc = null; }
+          if (!doc || doc.__trGoogleClick) return;
+          doc.__trGoogleClick = true;
+          doc.addEventListener("click", function (e) {
+            var a = e.target && e.target.closest ? e.target.closest(GOOGLE_LINK) : null;
+            if (!a) return;
+            var href = a.getAttribute("href") || "";
+            if (href.indexOf("https://accounts.google.com/") !== 0) return;
+            if (openPopup(href)) {
+              e.preventDefault();   // the popup has it; otherwise the link's own target="_blank" runs
+            }
+          }, true);
+        }
+
+        function installSignalListener() {
+          // The opener side. Only a message from this exact origin, with this
+          // exact type, counts — and it only ever means "look at the jar
+          // again": Python does the actual restoring, against Google.
+          var target = null;
+          try { target = window.parent; } catch (e) { target = null; }
+          if (!target || target.__trGoogleListen) return;
+          target.__trGoogleListen = true;
+          target.addEventListener("message", function (e) {
+            if (e.origin !== origin()) return;
+            var d = e.data;
+            if (!d || typeof d !== "object" || d.type !== SIGNAL_TYPE) return;
+            heard += 1;
+            report(lastNames, lastNonce, true);
+          });
+        }
+
+        function signalAndClose() {
+          // The popup side, once per popup, and only when Python said so.
+          if (signalled) return;
+          signalled = true;
+          var top = topWindow();
+          try {
+            if (top.opener) top.opener.postMessage({ type: SIGNAL_TYPE }, origin());
+          } catch (e) {}
+          try { top.close(); } catch (e) {}
+        }
+
+        function report(names, nonce, force) {
           var jar = readJar();
-          var names = args.names || [];
-          var value = { seen: 0, nonce: args.nonce || 0 };
+          var value = { seen: 0, nonce: nonce || 0, opener: hasOpener(), signals: heard };
           var total = 0;
           for (var k in jar) { if (jar.hasOwnProperty(k)) total++; }
           value.seen = total;
@@ -105,10 +194,28 @@
           // Only speak when something actually changed: an unchanged value
           // would be a rerun for nothing, and a loop waiting to happen.
           var encoded = JSON.stringify(value);
-          if (encoded !== lastSent) {
+          if (force || encoded !== lastSent) {
             lastSent = encoded;
             post("streamlit:setComponentValue", { value: value, dataType: "json" });
           }
+        }
+
+        function onMessage(event) {
+          var data = event.data;
+          if (!data || data.type !== "streamlit:render") return;
+          var args = (data.args || {});
+
+          var ops = args.ops || [];
+          for (var i = 0; i < ops.length; i++) {
+            try { writeCookie(ops[i].name, String(ops[i].value), Number(ops[i].max_age) || 0); } catch (e) {}
+          }
+
+          lastNames = args.names || [];
+          lastNonce = args.nonce || 0;
+          installClickHandler();
+          installSignalListener();
+          report(lastNames, lastNonce, false);
+          if (args.signal === SIGNAL_TYPE) signalAndClose();
           flat();
         }
 
