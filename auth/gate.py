@@ -141,24 +141,30 @@ def require_user() -> AuthUser:
 
 
 def _restoring() -> None:
-    """The beat while the browser is asked what it holds: deliberately nothing.
+    """The beat while the browser is asked what it holds.
 
-    Not the login page — showing a sign-in form to somebody who is already
-    signed in is the bug this whole path exists to avoid — and not a spinner
-    either. The restore is one component round trip, so anything drawn here
-    would be a flash and a layout shift on every reload.
+    On Community Cloud this is the first thing a returning person sees, for
+    as long as one component round trip and one more script run take. It
+    used to draw nothing at all — a dark page with the bridge's placeholder
+    bar, measured at a couple of seconds on the deployed app — on the
+    reasoning that anything drawn here would be a flash and a layout shift.
+    That is true of the login page, which stays out of here: showing a
+    sign-in form to somebody who is already signed in is the bug this path
+    exists to avoid. It is not true of the brand. The sidebar's logo is the
+    same element the app draws first in the same place, so it does not
+    move; and one status line in the page slot says honestly what is
+    happening and is replaced by the app on the next run.
 
-    Nothing is rendered at all, which also means nothing can be mis-rendered:
-    ``st.markdown`` runs a fragment through a Markdown parser first, and an
-    indented line after the opening one becomes a *code block*, which is how
-    this very screen printed its own ``<div class="tr-restoring">`` as text.
-    ``ui.components.clean_html`` exists for that trap; there is no markup left
-    here to need it.
-
-    The page is not blank white: ``app.py`` calls ``inject()`` at import, so
-    the theme's dark background is already painted by the time the gate runs.
+    No account data, no navigation, nothing private: the logo is on the
+    login page too. ``st.markdown`` runs a fragment through a Markdown
+    parser first and an indented line becomes a code block —
+    ``ui.components.html`` cleans that, which is why it is used here.
     """
-    return
+    from ui import components as C
+
+    with st.sidebar:
+        C.logo()
+    C.status_line("wait", "Restoring your session…")
 
 
 def _diag_panel() -> None:
