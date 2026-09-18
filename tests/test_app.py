@@ -564,7 +564,9 @@ def test_stopped_monitor_moves_to_finished_and_delete_removes_it(make_monitor):
     assert section(text(app), "Active") == "0" and section(text(app), "Finished") == "1"
 
 
-def test_delete_all_finished_clears_the_clutter(make_monitor):
+def test_delete_all_means_every_monitor_after_confirming(make_monitor):
+    """Delete all is the account's whole list — active and finished alike —
+    behind a confirmation. ``tests/test_delete_all.py`` has the rest."""
     keep = make_monitor()
     upsert_monitor(keep, mirror=False)
     for _ in range(3):
@@ -572,9 +574,11 @@ def test_delete_all_finished_clears_the_clutter(make_monitor):
         m.stop()
         upsert_monitor(m, mirror=False)
     app = run("My Monitors")
-    app.button(key="m_clear_finished").click().run()
+    app.button(key="m_delete_all").click().run()
+    assert len(load_monitors()) == 4                     # asked, not yet done
+    app.button(key="m_delete_all_confirm").click().run()
     assert not app.exception
-    assert [m.id for m in load_monitors()] == [keep.id]
+    assert load_monitors() == []
     assert section(text(app), "Finished") is None
 
 

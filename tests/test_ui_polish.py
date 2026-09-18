@@ -104,3 +104,42 @@ def test_the_brand_in_the_beat_is_the_apps_own_first_sidebar_element(signed_in):
     app = run()
     sidebar_first = app.sidebar.markdown[0].value if app.sidebar.markdown else ""
     assert 'class="tr-logo"' in sidebar_first
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The scroll-to-top helper uses the supported iframe, not the deprecated call
+# ──────────────────────────────────────────────────────────────────────────
+def test_nothing_in_the_app_uses_the_deprecated_components_html():
+    """``st.components.v1.html`` is deprecated (Streamlit logged it on every
+    page paint of the deployed app). ``st.iframe`` is the supported way."""
+    from pathlib import Path
+
+    for name in ("app.py", "ui/components.py", "ui/flow.py", "ui/login.py", "auth/gate.py", "auth/session.py"):
+        src = Path(name).read_text(encoding="utf-8")
+        assert "components.v1.html" not in src.replace("``st.components.v1.html``", ""), name
+        assert "components.html(" not in src, name
+
+
+@pytest.mark.parametrize("page", ["Home", "My Monitors", "History", "Settings"])
+def test_every_page_paints_without_a_deprecation_warning(page, caplog):
+    import logging
+
+    from tests.test_app import run
+
+    with caplog.at_level(logging.WARNING, logger="streamlit"):
+        app = run(page)
+    assert not app.exception
+    assert not [r for r in caplog.records if "components.v1.html" in r.getMessage()]
+
+
+def test_the_scroll_helper_is_an_iframe_in_a_collapsed_container():
+    from tests.test_app import run
+
+    app = run("Home")
+    frames = [e for e in app.main if getattr(e, "type", "") == "iframe"]
+    assert len(frames) == 1, [getattr(e, "type", "") for e in app.main]
+    frame = frames[0]
+    assert frame.proto.srcdoc.startswith("<!doctype html>") and "scrollTo" in frame.proto.srcdoc
+    assert "Home#" in frame.proto.srcdoc                     # the page token that re-fires it
+    # The theme gives its keyed container no room at all.
+    assert '[class*="st-key-tr_scrolltop"] { height:0 !important' in CSS

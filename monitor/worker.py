@@ -307,6 +307,7 @@ def run_loop(
         git_configure()
 
     first = True
+    known_state: dict[str, MonitorState] | None = None
     while True:
         at = clock()
         if not first and use_git:
@@ -318,7 +319,11 @@ def run_loop(
             monitor_id=monitor_id if first else "",
             mirror=False,
             notifier=notifier,
+            # This segment's own last-written state: lets a tick where nothing
+            # is due skip the state read. Never carried across segments.
+            known_state=known_state,
         )
+        known_state = report.state
         loop.ticks += 1
         loop.reports.append(report)
         first = False

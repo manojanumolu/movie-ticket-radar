@@ -95,8 +95,9 @@ MESSAGES: dict[str, str] = {
                          "Sign in with your password to keep your monitors and history.",
     "GOOGLE_NO_EMAIL": "Google didn't share an email address for that account, so TicketRadar can't sign it in.",
     "GOOGLE_NOT_ENABLED": "Google sign-in isn't switched on for this TicketRadar yet — use your email and password for now.",
+    "DISPOSABLE_EMAIL": "Please use a permanent email address. Disposable or temporary email addresses are not supported.",
     "network": "Couldn't reach the sign-in service. Check your connection and try again.",
-    "not_configured": "Sign-in isn't configured on this host yet — the Firebase Web API key is missing.",
+    "not_configured": "Sign-in isn't configured on this host yet.",
 }
 FALLBACK = "Something went wrong signing you in. Please try again."
 
@@ -346,7 +347,23 @@ class FirebaseAuth:
         """Create the account. The credentials come back *unverified*: they
         are enough to request the verification email (the caller does that,
         and shows exactly what Firebase answered), never enough to enter
-        the app."""
+        the app.
+
+        A disposable-domain address is refused *here*, before Firebase is
+        asked for anything: this is the one path every sign-up goes through,
+        so a form that forgot to check could not get past it, and a refusal
+        leaves no account and no document behind. The domain, not the
+        address, is what is logged.
+        """
+        from auth import disposable
+
+        normalised = disposable.normalise_email(email)
+        if not normalised:
+            raise AuthError(MESSAGES["INVALID_EMAIL"], "INVALID_EMAIL")
+        if disposable.is_disposable(normalised):
+            print(f"[auth] sign-up refused: disposable domain {disposable.domain_of(normalised)}", flush=True)
+            raise AuthError(MESSAGES["DISPOSABLE_EMAIL"], "DISPOSABLE_EMAIL")
+        email = normalised
         body = self._call("signUp", {"email": email, "password": password, "returnSecureToken": True})
         creds = _credentials(body)
         if name:

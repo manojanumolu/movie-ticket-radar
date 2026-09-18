@@ -171,7 +171,11 @@ def explain_github_error(exc: BaseException) -> str:
         return "GitHub rejected the GH_TOKEN (401): it is invalid or expired."
     if "Not Found" in text or text.startswith("404"):
         return "GitHub answered 404: the repository or workflow was not found for this token."
-    return text[:300]
+    # Anything else is GitHub's own error body. It goes to the log, where the
+    # owner reads it; the page gets a sentence that names the kind of failure
+    # and nothing GitHub said about the repository or the request.
+    print(f"[github] {type(exc).__name__}: {text[:300]}", flush=True)
+    return f"GitHub answered with an error ({type(exc).__name__}). Try again in a moment."
 
 
 #: The files the UI reads that somebody else writes: the worker owns

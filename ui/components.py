@@ -119,21 +119,26 @@ def scroll_to_top(token: str) -> None:
     """Scroll the page to the top once per ``token`` (a page change).
 
     Streamlit keeps the scroll position across reruns, so switching to Home
-    from the bottom of My Monitors used to land mid-page. A zero-height
-    component runs one line of script in the parent document; the token in
-    the markup is what makes it run again on the next change, not on every
-    rerun.
-    """
-    import streamlit.components.v1 as components
+    from the bottom of My Monitors used to land mid-page. One line of script
+    runs in the parent document from an ``st.iframe`` whose document is the
+    script and nothing else; the token in the markup is what makes it run
+    again on the next change, not on every rerun.
 
-    components.html(
-        "<script>(function(){"
-        "var d=window.parent.document;"
-        "['[data-testid=\"stAppViewContainer\"]','[data-testid=\"stMain\"]','section.stMain','.stMain']"
-        ".forEach(function(s){var el=d.querySelector(s); if(el){el.scrollTo({top:0});}});"
-        f"window.parent.scrollTo(0,0);}})();/* {e(token)} */</script>",
-        height=0,
-    )
+    ``st.iframe`` replaced the deprecated ``st.components.v1.html`` here. It
+    sandboxes the frame the same way (``allow-same-origin allow-scripts``),
+    so the script still reaches the parent. It refuses a height of 0, so the
+    frame is 1px tall inside a keyed container the theme collapses to
+    nothing — the page gains no space and no gap.
+    """
+    with st.container(key="tr_scrolltop"):
+        st.iframe(
+            "<!doctype html><html><body style=\"margin:0\"><script>(function(){"
+            "var d=window.parent.document;"
+            "['[data-testid=\"stAppViewContainer\"]','[data-testid=\"stMain\"]','section.stMain','.stMain']"
+            ".forEach(function(s){var el=d.querySelector(s); if(el){el.scrollTo({top:0});}});"
+            f"window.parent.scrollTo(0,0);}})();/* {e(token)} */</script></body></html>",
+            height=1,
+        )
 
 
 def clean_html(markup: str) -> str:
@@ -171,9 +176,13 @@ def asset_uri(name: str) -> str:
 # ──────────────────────────────────────────────────────────────────────────
 # Chrome
 # ──────────────────────────────────────────────────────────────────────────
-def logo() -> None:
+def logo(*, css: str = "") -> None:
+    """``css`` is a stylesheet fragment carried inside the logo's own markdown
+    block — a separate ``st.markdown`` for it would be one more element with
+    its own vertical gap under the brand."""
     html(
-        f"""<div class="tr-logo">
+        (f"<style>{css}</style>" if css else "")
+        + f"""<div class="tr-logo">
           <div class="tr-logo-mark">{TICKET_GLYPH}</div>
           <div><div class="tr-logo-name">Ticket<em>Radar</em></div>
           <div class="tr-logo-sub">Be first in line.</div></div>
@@ -798,6 +807,19 @@ PILL_LABEL = {
     "problem": "PROBLEM", "blocked": "BLOCKED", "error": "ERROR", "waiting": "WAITING",
     "not_released": "ACTIVE",
 }
+#: One plain sentence per status, shown on hover of the pill and the Status
+#: cell. Beginner-friendly; nothing about how the check is made.
+PILL_HELP = {
+    "available": "Tickets are on sale at one or more of your targets. You have been emailed.",
+    "sold_out": "Shows are listed but every seat is taken. We keep checking.",
+    "stopped": "You stopped this monitor. Extend it to start checking again.",
+    "expired": "The end time you set has passed. Extend it to keep watching.",
+    "problem": "Something needs your attention — open PROBLEM OCCURRED on the card.",
+    "blocked": "BookMyShow refused the last check. We retry automatically.",
+    "error": "The last check failed. We retry automatically.",
+    "waiting": "Saved. The first check runs within a minute or two.",
+    "not_released": "Being checked on schedule. You are emailed the moment tickets open.",
+}
 
 
 def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None = None) -> None:
@@ -839,9 +861,9 @@ def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None =
           <div class="top">
             {thumb(monitor.movie.poster_url)}
             <div class="info">
-              <div class="pills"><span class="tr-pill {phase.css} lg">{'<span class="tr-dot ok live"></span>' if phase.key == 'available' else ''}{e(PILL_LABEL.get(phase.key, phase.label))}</span>
-                <span class="tr-pill neutral">EVERY {monitor.interval_minutes} MIN</span>
-                <span class="tr-pill neutral">{len(monitor.targets)} TARGET{'S' if len(monitor.targets) != 1 else ''}</span></div>
+              <div class="pills"><span class="tr-pill {phase.css} lg" title="{e(PILL_HELP.get(phase.key, ''))}">{'<span class="tr-dot ok live"></span>' if phase.key == 'available' else ''}{e(PILL_LABEL.get(phase.key, phase.label))}</span>
+                <span class="tr-pill neutral" title="How often this monitor checks BookMyShow">EVERY {monitor.interval_minutes} MIN</span>
+                <span class="tr-pill neutral" title="Each theatre × format is watched on its own">{len(monitor.targets)} TARGET{'S' if len(monitor.targets) != 1 else ''}</span></div>
               <div class="title">{e(monitor.movie.title)}</div>
               {language_line(monitor.movie.language)}
               <div class="where">BookMyShow · {e(monitor.movie.city)}
@@ -854,14 +876,14 @@ def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None =
             <div class="tr-metric span2"><div class="k">Format{'s' if len(formats) != 1 else ''}</div>
               <div class="v soft">{e(' · '.join(formats))}</div></div>
             <div class="tr-metric"><div class="k">Show dates</div><div class="v soft">{e(dates)}</div></div>
-            <div class="tr-metric"><div class="k">Monitoring until</div>
+            <div class="tr-metric" title="The monitor stops itself after this time"><div class="k">Monitoring until</div>
               <div class="v soft">{e(fmt_datetime(monitor.monitor_until))}</div></div>
-            <div class="tr-metric"><div class="k">Last checked</div>
+            <div class="tr-metric" title="When the background worker last looked"><div class="k">Last checked</div>
               <div class="v">{e(fmt_time(state.last_check_at))}</div></div>
-            <div class="tr-metric"><div class="k">Next check</div>
+            <div class="tr-metric" title="When the next check is due"><div class="k">Next check</div>
               <div class="v {next_class}">{e(next_value)}</div></div>
-            <div class="tr-metric"><div class="k">Checks run</div><div class="v">{e(checked)}</div></div>
-            <div class="tr-metric"><div class="k">Status</div>
+            <div class="tr-metric" title="Successful checks of all checks so far"><div class="k">Checks run</div><div class="v">{e(checked)}</div></div>
+            <div class="tr-metric" title="{e(PILL_HELP.get(phase.key, ''))}"><div class="k">Status</div>
               <div class="v soft">{e(phase.label.capitalize())}</div></div>
           </div>
           <div class="targets">{rows}</div>

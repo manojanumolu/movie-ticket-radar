@@ -265,9 +265,14 @@ def test_the_wake_up_decision_uses_the_state_the_tick_just_wrote(firestore_worke
     assert fresh == wait
 
 
-def test_nothing_is_reused_across_ticks(firestore_worker):
-    """Two ticks of the real loop: each one issues its own monitors and state
-    queries. There is no cache in the worker, before or after this change."""
+def test_monitors_are_read_every_tick_and_state_only_when_something_can_be_due(firestore_worker):
+    """Two ticks of the real loop, thirty seconds apart, one 10-minute
+    monitor. The monitors collection is read on both (a monitor stopped or
+    created in the app must be seen at once). The state collection is read
+    on the first — the segment has nothing of its own yet — and *not* on the
+    second: the segment wrote that monitor's state itself twenty-nine seconds
+    ago, it is the only writer, and nothing is due. Nothing is checked or
+    written on that tick either way, so nothing about the monitor changes."""
     w = firestore_worker
     w.seed(_monitor("Active one", until=w.now + timedelta(days=2)), checked=False)
     clock = Clock(w.now)
@@ -280,7 +285,92 @@ def test_nothing_is_reused_across_ticks(firestore_worker):
     monitors_queries = w.queries("monitors")
     # preflight (unfiltered, once per segment) + one filtered read per tick
     assert len(monitors_queries) == 1 + loop.ticks
-    assert len(w.queries("monitor_state")) == loop.ticks
+    assert len(w.queries("monitor_state")) == 1
+    assert [r.state_read_skipped for r in loop.reports] == [False, True]
+    assert [len(r.checked) for r in loop.reports] == [1, 0]
+    assert w.gets() == 0
+
+
+def test_the_state_hint_never_outlives_its_segment(firestore_worker):
+    """A new segment starts from a fresh read, whatever the last one held."""
+    w = firestore_worker
+    w.seed(_monitor("Active one", until=w.now + timedelta(days=2)), checked=False)
+    clock = Clock(w.now)
+    worker.run_loop(max_minutes=1, poll_seconds=30, use_git=False, chain=False,
+                    clock=clock, sleeper=clock.sleep, notifier=lambda m, c: None)
+    w.reset()
+    loop = worker.run_loop(max_minutes=1, poll_seconds=30, use_git=False, chain=False,
+                           clock=clock, sleeper=clock.sleep, notifier=lambda m, c: None)
+    assert loop.reports[0].state_read_skipped is False
+    assert len(w.queries("monitor_state")) >= 1
+
+
+def test_a_due_monitor_is_checked_on_time_across_skipped_ticks(firestore_worker):
+    """Twenty-five ticks over twelve minutes for a 10-minute monitor: the
+    first checks, the next nineteen skip the state read and check nothing,
+    the tick at ten minutes reads state and checks, and the count of checks
+    is exactly what it was before the hint existed."""
+    w = firestore_worker
+    active = w.seed(_monitor("Active one", until=w.now + timedelta(days=2)), checked=False)
+    clock = Clock(w.now)
+    w.reset()
+    loop = worker.run_loop(max_minutes=12, poll_seconds=30, use_git=False, chain=False,
+                           clock=clock, sleeper=clock.sleep, notifier=lambda m, c: None)
+    checks = [r.started_at for r in loop.reports if r.checked]
+    assert len(checks) == 2
+    assert timedelta(minutes=9, seconds=30) <= checks[1] - checks[0] <= timedelta(minutes=10, seconds=30)
+    assert w.docs["monitor_state"][active.id]["check_count"] == 2
+    skipped = [r.state_read_skipped for r in loop.reports]
+    assert skipped[0] is False and skipped[-1] is True
+    assert sum(1 for r in loop.reports if not r.state_read_skipped) == len(w.queries("monitor_state"))
+    assert all(r.state_read_skipped is False for r in loop.reports if r.checked)
+
+
+def test_a_monitor_never_checked_is_read_and_checked_even_when_the_hint_says_nothing(firestore_worker):
+    """The hint only speaks for monitors it holds. A running monitor it has
+    never seen — created, or extended back to ACTIVE, since the last tick —
+    always means a full read."""
+    w = firestore_worker
+    first = w.seed(_monitor("First", until=w.now + timedelta(days=2), interval=30), checked=False)
+    tick1 = checker.run_once(at=w.now, mirror=False, notifier=lambda m, c: None)
+    assert tick1.checked == [first.id]
+    second = w.app_creates("Second")
+    w.reset()
+    tick2 = checker.run_once(at=w.now + timedelta(seconds=30), mirror=False,
+                             notifier=lambda m, c: None, known_state=tick1.state)
+    assert tick2.state_read_skipped is False
+    assert len(w.queries("monitor_state")) == 1
+    assert tick2.checked == [second.id]
+
+
+def test_expiry_and_a_stop_still_happen_on_a_tick_that_skips_the_state_read(firestore_worker):
+    w = firestore_worker
+    soon = w.seed(_monitor("Ends soon", until=w.now + timedelta(minutes=3)), checked=False)
+    other = w.seed(_monitor("Other", until=w.now + timedelta(days=2)), checked=False)
+    tick1 = checker.run_once(at=w.now, mirror=False, notifier=lambda m, c: None)
+    assert sorted(tick1.checked) == sorted([soon.id, other.id])
+    w.app_stops(other.id)
+    w.reset()
+    tick2 = checker.run_once(at=w.now + timedelta(minutes=4), mirror=False,
+                             notifier=lambda m, c: None, known_state=tick1.state)
+    assert tick2.state_read_skipped is True             # nothing running is due
+    assert tick2.expired == [soon.id]                   # expiry ran on the fresh monitors read
+    assert w.docs["monitors"][soon.id]["status"] == "EXPIRED"
+    assert [m.id for m in tick2.monitors if m.is_running(w.now + timedelta(minutes=4))] == []
+    assert len(w.queries("monitor_state")) == 0
+    assert worker.seconds_until_next_due(w.now + timedelta(minutes=4), 30,
+                                         monitors=tick2.monitors, state=tick2.state) is None
+
+
+def test_a_forced_or_named_tick_always_reads_state(firestore_worker):
+    w = firestore_worker
+    active = w.seed(_monitor("Active one", until=w.now + timedelta(days=2)), checked=False)
+    tick1 = checker.run_once(at=w.now, mirror=False, notifier=lambda m, c: None)
+    for kw in ({"force": True}, {"monitor_id": active.id}):
+        w.reset()
+        tick = checker.run_once(at=w.now + timedelta(seconds=30), mirror=False,
+                                notifier=lambda m, c: None, known_state=tick1.state, **kw)
+        assert tick.state_read_skipped is False and len(w.queries("monitor_state")) == 1
 
 
 def test_a_monitor_the_app_stops_is_gone_from_the_next_tick(firestore_worker, monkeypatch):
@@ -385,20 +475,22 @@ def test_the_json_worker_still_reads_and_writes_the_whole_file(monkeypatch, isol
 # owner_uid on state documents the worker no longer loads the monitor for
 # ──────────────────────────────────────────────────────────────────────────
 def test_finished_monitors_state_keeps_its_owner_without_a_second_read(firestore_worker):
-    """The worker writes the whole state back each dirty tick, finished
-    monitors included. Now that it never loads a finished monitor's record,
-    the owner has to come from the state document itself — the field it just
-    read — not from a GET of that same document, and never as ''."""
+    """Finished monitors' state documents are read with the collection and
+    left exactly as they were: a tick that checked one monitor writes that
+    one document. (It used to rewrite every loaded record, owner and all;
+    the owner still comes from the document itself, never from a GET.)"""
     w = firestore_worker
     active, finished = _active_plus_finished(w)
     owners_before = {m.id: w.docs["monitor_state"][m.id][fs.OWNER] for m in finished}
+    docs_before = {m.id: dict(w.docs["monitor_state"][m.id]) for m in finished}
     assert all(owners_before.values())
 
     w.reset()
     checker.run_once(at=w.now, force=True, mirror=False, notifier=lambda m, c: None)
 
     assert w.gets() == 0
-    assert w.writes() == 1 + len(finished)            # the whole state, as before
+    assert w.writes() == 1                             # the checked monitor's record, nothing else
+    assert {m.id: dict(w.docs["monitor_state"][m.id]) for m in finished} == docs_before
     assert {m.id: w.docs["monitor_state"][m.id][fs.OWNER] for m in finished} == owners_before
     assert w.docs["monitor_state"][active.id][fs.OWNER] == OWNER
     # …and the owner's own live read of a finished monitor's state still works.

@@ -232,6 +232,19 @@ class _JsonStore:
         self.clear_monitor_state(monitor_id, mirror=mirror)
         self.save_monitors([m for m in self.load_monitors() if m.id != monitor_id], mirror=mirror)
 
+    def delete_all_monitors(self, *, mirror: bool = True) -> int:
+        """Every monitor this UID owns, and their state. Refused for the
+        ownerless view: "all" would then mean every account's, and no caller
+        of this store has that authority. Returns how many went."""
+        if self.uid is None:
+            raise PermissionError("delete all needs a signed-in account")
+        mine = self.load_monitors()
+        if not mine:
+            return 0
+        self.save_state({}, mirror=mirror)          # drops only this UID's entries
+        self.save_monitors([], mirror=mirror)       # keeps every other account's
+        return len(mine)
+
     def load_state(self) -> dict[str, MonitorState]:
         raw = read_json(STATE_FILE)
         if not isinstance(raw, dict):
@@ -442,6 +455,32 @@ class _FirestoreStore:
             raise
         _owner_of.pop(monitor_id, None)
 
+    def delete_all_monitors(self, *, mirror: bool = True) -> int:
+        """Every monitor this UID owns, with its state document, in one
+        atomic commit. Both collections are queried on ``owner_uid`` and every
+        document re-checked, so nothing of anybody else's is in the batch. A
+        state document is deleted only when it exists: the rules read the
+        existing document to allow the delete, and one write refused would
+        take the whole commit down with it. History is kept — it is the
+        record of what happened, exactly as a single Delete leaves it."""
+        if not self.uid:
+            raise PermissionError("delete all needs a signed-in account")
+        monitors = [doc_id for doc_id, doc in self.client.query(MONITORS, equals=self._mine()).items()
+                    if self._owned(doc)]
+        if not monitors:
+            return 0
+        states = {doc_id for doc_id, doc in self.client.query(STATES, equals=self._mine()).items()
+                  if self._owned(doc)}
+        writes: list[tuple[str, str, dict[str, Any] | None]] = []
+        for monitor_id in monitors:
+            writes.append((MONITORS, monitor_id, None))
+            if monitor_id in states:
+                writes.append((STATES, monitor_id, None))
+        self.client.commit(writes)
+        for monitor_id in monitors:
+            _owner_of.pop(monitor_id, None)
+        return len(monitors)
+
     # -- observed state ---------------------------------------------------
     def load_state(self) -> dict[str, MonitorState]:
         out: dict[str, MonitorState] = {}
@@ -459,14 +498,27 @@ class _FirestoreStore:
         return out
 
     def save_state(self, state: dict[str, MonitorState], *, mirror: bool = True) -> None:
+        """Write the records that changed since they were read — and only
+        those. A tick that checked one monitor used to rewrite every state
+        document it had loaded, finished monitors' included: a document
+        write each, for records that were byte-for-byte what the store
+        already held. A record never loaded (a first check) is always
+        written; a record loaded and untouched is not. Nothing about *what*
+        is written changes, and the JSON store still writes its file whole.
+        """
         writes = []
-        for monitor_id, ms in state.items():
+        dirty = [(monitor_id, ms) for monitor_id, ms in state.items() if ms.is_dirty()]
+        for monitor_id, ms in dirty:
             owner = self.uid or _owner_of.get(monitor_id, "")
             if not owner:
                 existing = self.client.get(STATES, monitor_id) or self.client.get(MONITORS, monitor_id) or {}
                 owner = str(existing.get(fs.OWNER, ""))
             writes.append((STATES, monitor_id, {**ms.to_dict(), fs.OWNER: owner}))
+        if not writes:
+            return
         self.client.commit(writes)
+        for _, ms in dirty:
+            ms.mark_clean()
 
     def clear_monitor_state(self, monitor_id: str, *, mirror: bool = True) -> None:
         # Absent and not-ours are one answer here (see ``states_for``), and
@@ -607,6 +659,19 @@ def _cache_scope_uid() -> str | None:
 
 
 def _cache_store() -> dict[str, Any] | None:
+    """The session's cache mapping, or None where there is no session.
+
+    Only the app registers a scope provider (``set_scope_provider`` in
+    ``app.py``). Without one — the worker on GitHub Actions, the command
+    line, a test — there is no Streamlit session to keep a cache in, so
+    this answers None *before* touching Streamlit at all. The worker used
+    to reach ``st.session_state`` here on every write (through
+    ``invalidate_cache``), which imported Streamlit into the worker process
+    and logged "missing ScriptRunContext" eight times a segment — noise,
+    and a dependency the worker must not have.
+    """
+    if _scope_provider is None:
+        return None
     try:
         import streamlit as st
 
@@ -911,6 +976,15 @@ def delete_monitor(monitor_id: str, *, mirror: bool = True) -> None:
     _backend().delete_monitor(monitor_id, mirror=mirror)
 
 
+def delete_all_monitors(*, mirror: bool = True) -> int:
+    """Delete every monitor the signed-in account owns — active ones too —
+    and their observed state. Whose they are comes from the scope provider,
+    never from an argument. Returns how many were deleted; 0 is a fine
+    answer, and calling it again is harmless."""
+    invalidate_cache("monitors", "state")
+    return _backend().delete_all_monitors(mirror=mirror)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Settings — per person in Firestore, the one file in JSON
 # ──────────────────────────────────────────────────────────────────────────
@@ -1027,6 +1101,19 @@ class MonitorState:
     #: automatically; surfaced as a problem so it is never silent.
     last_email_error: str = ""
     targets: dict[str, TargetState] = field(default_factory=dict)
+    #: What this record looked like when it was read from the store, as
+    #: :meth:`to_dict` renders it — so a store can tell an untouched record
+    #: from a changed one and write only the latter. Not part of the record
+    #: (``to_dict`` never emits it) and not part of equality. None for a
+    #: record that was never loaded, which is always written.
+    loaded_as: dict[str, Any] | None = field(default=None, repr=False, compare=False)
+
+    def is_dirty(self) -> bool:
+        """Has this record changed since it was loaded (or was it never loaded)?"""
+        return self.loaded_as is None or self.to_dict() != self.loaded_as
+
+    def mark_clean(self) -> None:
+        self.loaded_as = self.to_dict()
 
     @property
     def is_blocked(self) -> bool:
@@ -1073,7 +1160,7 @@ class MonitorState:
         if not isinstance(raw, dict):
             return cls()
         targets = raw.get("targets")
-        return cls(
+        state = cls(
             last_check_at=parse_iso(raw.get("last_check_at")),
             last_success_at=parse_iso(raw.get("last_success_at")),
             check_count=int(raw.get("check_count", 0) or 0),
@@ -1088,6 +1175,8 @@ class MonitorState:
                 if isinstance(v, dict)
             },
         )
+        state.mark_clean()
+        return state
 
 
 def load_state() -> dict[str, MonitorState]:
@@ -1182,6 +1271,7 @@ __all__ = [
     "backend_name",
     "backend_report",
     "clear_monitor_state",
+    "delete_all_monitors",
     "delete_monitor",
     "expire_due_monitors",
     "extend_monitor",
