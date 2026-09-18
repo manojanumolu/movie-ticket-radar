@@ -48,15 +48,66 @@ def test_malformed_addresses_are_not_disposable_they_are_malformed(bad):
     assert disposable.is_disposable(bad) is False
 
 
-def test_the_denylist_is_auditable_and_sane():
+def test_the_denylists_are_auditable_and_sane():
     listed = disposable.denylist()
-    assert len(listed) > 300
+    assert len(listed) > 8000                      # curated + vendored community list
     assert all(d == d.lower() and " " not in d and "@" not in d and "." in d for d in listed)
-    # No ordinary mailbox provider may ever be on it.
+    # No ordinary mailbox provider may ever be refused — whether or not a
+    # future refresh of the community list carries it.
     for keeper in ("gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com",
                    "yahoo.com", "yahoo.co.in", "icloud.com", "me.com", "protonmail.com",
-                   "proton.me", "rediffmail.com", "zoho.com", "fastmail.com", "yeah.net", "163.com"):
-        assert keeper not in listed, keeper
+                   "proton.me", "rediffmail.com", "zoho.com", "fastmail.com", "yeah.net", "163.com",
+                   "sify.com"):
+        assert disposable.is_disposable(f"person@{keeper}") is False, keeper
+    header = disposable.COMMUNITY_FILE.read_text(encoding="utf-8").splitlines()[:4]
+    assert any("Upstream commit" in line for line in header)      # provenance travels with the file
+    assert any("CC0" in line for line in header)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# temp-mail.org: the site's name never appears in a mailbox address
+# ──────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("email", [
+    "anyone@duidir.com",          # the domain temp-mail.org actually assigned on 18 Sep 2026
+    "anyone@temp-mail.org",
+    "anyone@mail.temp-mail.org",      # a subdomain of a listed domain
+    "anyone@temp-mail.io",
+    "anyone@tempmail.plus",
+    "anyone@emailfake.com",
+    "anyone@10minutemail.com",
+])
+def test_temp_mail_style_providers_are_refused(email):
+    assert disposable.is_disposable(email) is True
+
+
+@pytest.mark.parametrize("email", [
+    "person@gmail.com", "Person@Outlook.com", "person@yahoo.com", "person@yahoo.co.in",
+    "person@icloud.com", "person@hotmail.com", "person@protonmail.com",
+    "dev@acme-corp.example", "someone@my-startup.io", "student@iith.ac.in",
+])
+def test_permanent_providers_and_custom_domains_are_accepted(email):
+    assert disposable.is_disposable(email) is False
+
+
+def test_the_allowlist_wins_over_both_denylists(monkeypatch):
+    """A refresh of the community list that carried a real provider must
+    not refuse it: the allowlist is checked first, parents included."""
+    monkeypatch.setattr(disposable, "denylist", lambda: frozenset({"gmail.com", "sify.com", "example.org"}))
+    disposable.allowlist.cache_clear()
+    assert disposable.is_disposable("x@gmail.com") is False
+    assert disposable.is_disposable("x@mail.sify.com") is False
+    assert disposable.is_disposable("x@example.org") is True
+
+
+def test_sign_up_refuses_the_domain_temp_mail_actually_uses_before_firebase(fake):
+    """The end-to-end path for the bypass that was found in manual testing:
+    the address's domain is one temp-mail.org rotates in, not temp-mail.org."""
+    client = firebase.FirebaseAuth()
+    with pytest.raises(AuthError) as exc:
+        client.sign_up("Temp Person", "anyone@duidir.com", "Interval99")
+    assert exc.value.code == "DISPOSABLE_EMAIL"
+    assert fake.calls == []                                     # no signUp, no account, nothing
+    assert "duidir" not in fake.accounts
 
 
 # ──────────────────────────────────────────────────────────────────────────

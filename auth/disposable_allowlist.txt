@@ -1,0 +1,43 @@
+# Domains never refused at sign-up, whatever the denylists say.
+#
+# The vendored community list is broad and occasionally carries a domain that
+# is a real, permanent mailbox provider for some people (sify.com is one).
+# A domain here — or any subdomain of it — is always accepted. Keep this to
+# providers people genuinely keep an address at; it is not a place to punch
+# holes for one sign-up.
+
+# ── caught by the community list but permanent for real people ────────────
+sify.com
+
+# ── defence in depth: the big providers, so no future refresh can ever
+#    refuse them by accident ───────────────────────────────────────────────
+gmail.com
+googlemail.com
+outlook.com
+hotmail.com
+live.com
+msn.com
+yahoo.com
+yahoo.co.in
+yahoo.in
+ymail.com
+icloud.com
+me.com
+mac.com
+aol.com
+protonmail.com
+proton.me
+pm.me
+zoho.com
+zohomail.in
+fastmail.com
+gmx.com
+gmx.de
+gmx.net
+web.de
+mail.com
+mail.ru
+yandex.com
+yandex.ru
+rediffmail.com
+rediff.com

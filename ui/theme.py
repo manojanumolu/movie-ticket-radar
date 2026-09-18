@@ -136,7 +136,7 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
   text-rendering: optimizeLegibility;
 }
 [data-testid="stCaptionContainer"] p, [data-testid="stWidgetLabel"] p { font-weight:500; }
-.stButton > button p { font-weight:700; }
+.stButton button p { font-weight:700; }
 [data-testid="stHeader"] { background: transparent !important; }
 /* The toolbar itself stays: in Streamlit 1.59 it holds the "open sidebar"
    control, which is the only navigation a phone has (and the only way back
@@ -425,7 +425,7 @@ __NAV_ICONS__
   height:auto !important; min-height:0 !important; width:100% !important;
 }
 [class*="st-key-pick_"] .stButton { position:absolute; inset:0; margin:0; height:100%; width:100%; }
-[class*="st-key-pick_"] .stButton > button {
+[class*="st-key-pick_"] .stButton button {
   position:absolute; inset:0; width:100% !important; height:100% !important; min-height:0;
   opacity:0; cursor:pointer; border-radius:13px; padding:0; margin:0;
 }
@@ -564,12 +564,12 @@ __NAV_ICONS__
 /* Back button: small, quiet, first thing in the card. */
 [class*="st-key-trback"] { margin-bottom:2px; }
 [class*="st-key-trback"] .stButton { width:auto; display:inline-block; }
-[class*="st-key-trback"] .stButton > button {
+[class*="st-key-trback"] .stButton button {
   width:auto !important; min-height:36px; padding:6px 13px 6px 10px; font-size:12.5px; font-weight:700;
   color:var(--tr-text-2); background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.12);
   border-radius:10px; box-shadow: var(--tr-hi);
 }
-[class*="st-key-trback"] .stButton > button:hover { color:#fff; border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); }
+[class*="st-key-trback"] .stButton button:hover { color:#fff; border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); }
 
 /* ── location tiles ────────────────────────────────────────────────── */
 .tr-loc {
@@ -661,12 +661,12 @@ __NAV_ICONS__
 [class*="st-key-pick_feat_"]:hover .tr-feat.soon:not(.selected) { border-color:rgba(232,178,92,.45); }
 
 /* "View all N theatres": prominent but secondary */
-[class*="st-key-trviewall"] .stButton > button {
+[class*="st-key-trviewall"] .stButton button {
   min-height:52px; font-size:13px; font-weight:800; letter-spacing:.08em; text-transform:uppercase;
   background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.18); color:var(--tr-text); border-radius:14px;
 }
-[class*="st-key-trviewall"] .stButton > button:hover { background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.05)); border-color:rgba(255,51,85,.5); color:#fff; }
-[class*="st-key-hide_all_theatres"] .stButton > button { min-height:34px; font-size:12px; color:var(--tr-text-3); }
+[class*="st-key-trviewall"] .stButton button:hover { background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.05)); border-color:rgba(255,51,85,.5); color:#fff; }
+[class*="st-key-hide_all_theatres"] .stButton button { min-height:34px; font-size:12px; color:var(--tr-text-3); }
 
 /* ── format panels ─────────────────────────────────────────────────── */
 .tr-fmt-head { min-width:0; }
@@ -892,73 +892,80 @@ __NAV_ICONS__
 }
 
 /* ── buttons ───────────────────────────────────────────────────────── */
-.stButton > button, .stDownloadButton > button, .stFormSubmitButton > button, .stLinkButton > a {
+/* ``.stButton button`` — descendant, not child. A button given a ``help``
+   tooltip is wrapped in [data-testid="stTooltipHoverTarget"], one level
+   deeper than a plain one; the child combinator these rules used to have
+   skipped every such button, which is how the card actions went flat the
+   day they gained tooltips. A .stButton holds exactly one <button>, so the
+   descendant form is the same rule for every button either way. */
+.stButton [data-testid="stTooltipHoverTarget"] { display:block; width:100%; }
+.stButton button, .stDownloadButton > button, .stFormSubmitButton > button, .stLinkButton > a {
   background: linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.04)); color: var(--tr-text);
   border:1px solid rgba(255,255,255,.16); border-radius:12px;
   font-family: var(--tr-sans); font-weight:700; font-size:13.5px; letter-spacing:-.01em;
   padding:.6rem 1rem; transition: all var(--tr-fast) var(--tr-ease); width:100%; min-height:46px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 10px 22px -16px rgba(0,0,0,.9);
 }
-.stButton > button:hover, .stFormSubmitButton > button:hover {
+.stButton button:hover, .stFormSubmitButton > button:hover {
   border-color: rgba(255,255,255,.28); color: #fff; background: linear-gradient(180deg,rgba(255,255,255,.15),rgba(255,255,255,.06));
   transform:translateY(-2px); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 16px 30px -16px rgba(0,0,0,.95);
 }
-.stButton > button:active { transform:translateY(0); }
-.stButton > button:focus:not(:active) { border-color: rgba(255,51,85,.5); color: var(--tr-text); box-shadow:0 0 0 3px rgba(255,51,85,.12); }
-.stButton > button [data-testid="stIconMaterial"] { font-size:18px; vertical-align:middle; }
-.stButton > button[kind="primary"], .stFormSubmitButton > button[kind="primary"] {
+.stButton button:active { transform:translateY(0); }
+.stButton button:focus:not(:active) { border-color: rgba(255,51,85,.5); color: var(--tr-text); box-shadow:0 0 0 3px rgba(255,51,85,.12); }
+.stButton button [data-testid="stIconMaterial"] { font-size:18px; vertical-align:middle; }
+.stButton button[kind="primary"], .stFormSubmitButton > button[kind="primary"] {
   background: linear-gradient(180deg,#FF6A85 0%,#FF3355 48%,#D4123F 100%); color:#fff; border:1px solid rgba(255,140,160,.45);
   font-size:14px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
   padding:.85rem 1rem; border-radius:14px; min-height:54px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.40), inset 0 -1px 0 rgba(0,0,0,.25), 0 20px 46px -16px rgba(255,51,85,.95), 0 0 0 4px rgba(255,51,85,.08);
   text-shadow: 0 1px 0 rgba(0,0,0,.2);
 }
-.stButton > button[kind="primary"]:hover { transform:translateY(-2px); color:#fff;
+.stButton button[kind="primary"]:hover { transform:translateY(-2px); color:#fff;
   background: linear-gradient(180deg,#FF7A93 0%,#FF3F5F 48%,#DC1746 100%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 0 -1px 0 rgba(0,0,0,.25), 0 26px 56px -16px rgba(255,51,85,1), 0 0 0 5px rgba(255,51,85,.10); }
-.stButton > button[kind="primary"]:active { transform:translateY(0) scale(.995); filter:brightness(.98); }
-.stButton > button[kind="primary"] p { font-size:14px; font-weight:800; }
+.stButton button[kind="primary"]:active { transform:translateY(0) scale(.995); filter:brightness(.98); }
+.stButton button[kind="primary"] p { font-size:14px; font-weight:800; }
 /* START MONITORING — the one CTA */
-[class*="st-key-start"] .stButton > button[kind="primary"] { font-size:17px; min-height:66px; letter-spacing:.1em; border-radius:18px; }
-[class*="st-key-start"] .stButton > button[kind="primary"] p { font-size:16px; }
-[class*="st-key-start"] .stButton > button[kind="primary"] [data-testid="stIconMaterial"] { font-size:22px; }
-[class*="st-key-save_settings"] .stButton > button[kind="primary"] { min-height:44px; font-size:13px; border-radius:11px; box-shadow:none; }
-[class*="st-key-save_settings"] .stButton > button[kind="primary"] p { font-size:13px; }
+[class*="st-key-start"] .stButton button[kind="primary"] { font-size:17px; min-height:66px; letter-spacing:.1em; border-radius:18px; }
+[class*="st-key-start"] .stButton button[kind="primary"] p { font-size:16px; }
+[class*="st-key-start"] .stButton button[kind="primary"] [data-testid="stIconMaterial"] { font-size:22px; }
+[class*="st-key-save_settings"] .stButton button[kind="primary"] { min-height:44px; font-size:13px; border-radius:11px; box-shadow:none; }
+[class*="st-key-save_settings"] .stButton button[kind="primary"] p { font-size:13px; }
 /* Destructive: tinted, not solid — visible without shouting (DESIGN-SPEC §5). */
-.tr-danger .stButton > button, [class*="st-key-stop_"] .stButton > button, [class*="st-key-m_stop_"] .stButton > button {
+.tr-danger .stButton button, [class*="st-key-stop_"] .stButton button, [class*="st-key-m_stop_"] .stButton button {
   background: rgba(255,51,85,.12); border:1px solid rgba(255,51,85,.42);
   color: var(--tr-accent-soft); font-weight:700; letter-spacing:.06em; font-size:13px;
   text-transform:uppercase; padding:.75rem 1rem; border-radius:11px;
 }
-.tr-danger .stButton > button:hover, [class*="st-key-stop_"] .stButton > button:hover,
-[class*="st-key-m_stop_"] .stButton > button:hover { background: rgba(255,51,85,.2); color:#fff; }
-[class*="st-key-m_del_"] .stButton > button, [class*="st-key-m_clear_finished"] .stButton > button {
+.tr-danger .stButton button:hover, [class*="st-key-stop_"] .stButton button:hover,
+[class*="st-key-m_stop_"] .stButton button:hover { background: rgba(255,51,85,.2); color:#fff; }
+[class*="st-key-m_del_"] .stButton button, [class~="st-key-m_delete_all"] .stButton button {
   color:var(--tr-text-3); font-size:12.5px; min-height:40px;
 }
-[class*="st-key-m_del_"] .stButton > button:hover, [class*="st-key-m_clear_finished"] .stButton > button:hover {
+[class*="st-key-m_del_"] .stButton button:hover, [class~="st-key-m_delete_all"] .stButton button:hover {
   color:var(--tr-danger); border-color:rgba(255,92,92,.45); background:rgba(255,92,92,.08);
 }
-[class*="st-key-tractions_"] .stButton > button { min-height:40px; }
+[class*="st-key-tractions_"] .stButton button { min-height:40px; }
 [class*="st-key-tractions_"] [data-testid="stVerticalBlock"] { gap:.5rem; }
 /* PROBLEM OCCURRED — solid, the one thing that is allowed to shout. */
-[class*="st-key-prob_"] .stButton > button {
+[class*="st-key-prob_"] .stButton button {
   background: linear-gradient(135deg,#FF5C5C,#D42F2F); border:none; color:#fff;
   font-weight:800; letter-spacing:.08em; text-transform:uppercase; font-size:13px;
   border-radius:11px; padding:.85rem 1rem; box-shadow:0 14px 34px -14px rgba(255,92,92,.9);
 }
-[class*="st-key-prob_"] .stButton > button:hover { filter:brightness(1.08); color:#fff; }
-[class*="st-key-retry_"] .stButton > button {
+[class*="st-key-prob_"] .stButton button:hover { filter:brightness(1.08); color:#fff; }
+[class*="st-key-retry_"] .stButton button {
   background: rgba(255,92,92,.12); border:1px solid rgba(255,92,92,.42); color:var(--tr-danger);
   font-weight:700; letter-spacing:.05em; text-transform:uppercase;
 }
-.tr-amber .stButton > button, [class*="st-key-m_ext_"] .stButton > button {
+.tr-amber .stButton button, [class*="st-key-m_ext_"] .stButton button {
   background: rgba(232,178,92,.12); border:1px solid rgba(232,178,92,.4);
   color: var(--tr-warning); font-weight:700; letter-spacing:.05em; text-transform:uppercase; font-size:12.5px;
 }
-.tr-amber .stButton > button:hover, [class*="st-key-m_ext_"] .stButton > button:hover { background: rgba(232,178,92,.22); color:var(--tr-warning); }
-[class*="st-key-select_all"] .stButton > button { min-height:34px; padding:6px 11px; font-size:12px;
+.tr-amber .stButton button:hover, [class*="st-key-m_ext_"] .stButton button:hover { background: rgba(232,178,92,.22); color:var(--tr-warning); }
+[class*="st-key-select_all"] .stButton button { min-height:34px; padding:6px 11px; font-size:12px;
   color:var(--tr-text-2); border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.03); border-radius:8px; }
-[class*="st-key-select_all"] .stButton > button [data-testid="stIconMaterial"] { font-size:16px; }
+[class*="st-key-select_all"] .stButton button [data-testid="stIconMaterial"] { font-size:16px; }
 
 /* Toggle */
 [data-testid="stCheckbox"] [role="checkbox"][aria-checked="true"],
@@ -1280,7 +1287,7 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   .tr-state .h { font-size: 20px; }
   .tr-live .detected { text-align: left; }
   .tr-cta-help { padding-top: 4px; }
-  [class*="st-key-start"] .stButton > button[kind="primary"] { min-height: 60px; font-size: 15px; }
+  [class*="st-key-start"] .stButton button[kind="primary"] { min-height: 60px; font-size: 15px; }
   /* 16px in the field itself stops iOS zooming the page on focus; the
      placeholder alone is a touch smaller so the whole sentence fits. */
   .stSelectbox .react-aria-ComboBox > [role="group"] { min-height: 54px; padding-left: 42px !important; }
