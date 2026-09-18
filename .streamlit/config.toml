@@ -12,6 +12,11 @@ codeFont = "DM Mono, monospace"
 
 [server]
 headless = true
+# The Login page's poster wall and, later, the avatar gallery are files under
+# static/ (see ui/assets_registry.py). Served at app/static/… the browser
+# fetches each once and revalidates it, instead of the page carrying ~1.2 MB
+# of base64 on every rerun.
+enableStaticServing = true
 
 [client]
 # The app is public. An uncaught exception shows a viewer only its type and
