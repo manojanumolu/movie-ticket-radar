@@ -86,16 +86,19 @@ CRAFTS: tuple[Craft, ...] = (
 BY_KEY = {c.key: c for c in CRAFTS}
 
 #: Where each craft sits in the desktop visual, as (left %, top %) of the
-#: cinematic zone — in the negative space: a thin column between the radar
-#: and the posters, the band beneath the posters, and the floor under the
-#: headline. Order follows :data:`CRAFTS`.
-LAYOUT: tuple[tuple[float, float], ...] = (
-    (45.5, 7), (47, 21), (44.5, 36), (48.5, 49),
-    (64, 58), (75, 55.5), (87, 57), (97, 62),
-    (61, 69), (71.5, 72), (83, 68), (94, 75.5),
-    (65, 84.5), (78, 87), (90, 83), (98, 92),
-    (5, 93), (17, 96), (29, 92), (41, 96), (53, 93),
-    (4, 44), (16, 47.5), (27, 43),
+#: cinematic zone — or (left %, None) for the *ledge*: a fixed distance
+#: above the headline's eyebrow, because the eyebrow's height is a
+#: different fraction of the zone at every breakpoint. They follow the
+#: room rather than fill it: a row under the posters, a column down the
+#: right edge, the top-right corner, the ledge under the radar. Order
+#: follows :data:`CRAFTS`; the slots were placed against measured text
+#: and poster boxes at 1600, 1366, 1280 and 1150 wide.
+LAYOUT: tuple[tuple[float, float | None], ...] = (
+    (67, 58.5), (74, 60), (81, 57.5), (88, 59.5), (95, 56.5), (97, 65), (97, 76), (96, 82),
+    (91, 66), (17, None), (26, None), (58, 49),
+    (90, 4), (96, 12), (78, 2),
+    (63, 51), (54, 59.5), (67, 56), (59, 57.5), (35, None),
+    (96, 70.5), (92, 83.5), (84, 3), (60, 44),
 )
 
 
@@ -121,8 +124,9 @@ def constellation() -> str:
     """The twenty-four, positioned for the desktop visual."""
     marks = []
     for craft, (x, y) in zip(CRAFTS, LAYOUT):
+        cls, pos = ("ledge " + _side(x, 50), f"left:{x}%") if y is None else (_side(x, y), f"left:{x}%;top:{y}%")
         marks.append(
-            f'<span class="tr-craft {_side(x, y)}" style="left:{x}%;top:{y}%" tabindex="0" '
+            f'<span class="tr-craft {cls.strip()}" style="{pos}" tabindex="0" '
             f'role="img" aria-label="{escape(craft.tip)}" data-tip="{escape(craft.tip)}">{icon(craft)}</span>'
         )
     return f'<div class="tr-crafts" aria-label="The crafts of filmmaking">{"".join(marks)}</div>'
@@ -141,9 +145,10 @@ def strip(keys: tuple[str, ...] = ("direction", "cinematography", "sound", "edit
 CSS = """
 .tr-crafts { position:absolute; inset:0; z-index:3; pointer-events:none; }
 .tr-craft { position:absolute; width:36px; height:36px; margin:-18px 0 0 -18px; display:flex; align-items:center; justify-content:center;
-  border-radius:50%; color:rgba(255,255,255,.66); opacity:.42; pointer-events:auto; cursor:default; outline:none;
+  border-radius:50%; color:rgba(255,255,255,.66); opacity:.38; pointer-events:auto; cursor:default; outline:none;
   transition: opacity .2s var(--tr-ease), transform .2s var(--tr-ease), color .2s var(--tr-ease), background .2s var(--tr-ease), box-shadow .2s var(--tr-ease); }
 .tr-craft svg { display:block; }
+.tr-craft.ledge { top:calc(var(--tr-copy-top, 400px) - 44px); }
 .tr-craft:hover, .tr-craft:focus-visible { opacity:1; color:#FF8CA0; transform:scale(1.18); background:rgba(255,51,85,.10);
   box-shadow: 0 0 0 1px rgba(255,51,85,.38), 0 0 22px -4px rgba(255,51,85,.75); z-index:5; }
 .tr-craft::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 10px); left:50%; transform:translate(-50%, 4px);

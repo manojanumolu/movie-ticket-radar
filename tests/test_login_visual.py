@@ -27,11 +27,70 @@ SOURCE = (ROOT / "ui" / "login.py").read_text(encoding="utf-8")
 # ──────────────────────────────────────────────────────────────────────────
 # What is gone
 # ──────────────────────────────────────────────────────────────────────────
-def test_the_charminar_the_seats_and_the_catalogue_wall_are_gone():
-    for relic in ("CHARMINAR", "tr-auth-skyline", "tr-auth-seats", "tr-auth-wall", "catalogue_view"):
+def test_the_charminar_and_the_catalogue_wall_are_gone():
+    for relic in ("CHARMINAR", "tr-auth-skyline", "tr-auth-wall", "catalogue_view", "Charminar"):
         assert relic not in SOURCE, relic
     visual = login._visual()
-    assert "skyline" not in visual and "seats" not in visual
+    assert "skyline" not in visual and "charminar" not in visual.lower()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The room
+# ──────────────────────────────────────────────────────────────────────────
+def test_the_room_is_layered_back_to_front():
+    visual = login._visual()
+    order = [visual.index(s) for s in ('class="beam"', 'class="scan"', 'class="tr-auth-strip"', 'class="tr-auth-reel"',
+                                        'class="tr-radar hero"', 'class="tr-auth-posters"', 'class="tr-crafts"',
+                                        'class="tr-auth-copy"', 'class="tr-auth-seats"', 'class="tr-auth-mark"')]
+    assert order == sorted(order)
+
+
+def test_the_film_strip_is_one_path_stroked_not_an_image():
+    strip = login._strip()
+    assert strip.count(f'd="{login.STRIP_PATH}"') == 5                 # halo, band, holes, film, frames
+    assert "<img" not in strip and "url(" not in strip
+    assert ".tr-auth-strip .holes" in login.CSS and "stroke-dasharray:7 15" in login.CSS
+
+
+def test_the_seats_are_two_rows_of_css_that_fade_into_the_floor():
+    seats = login._seats()
+    assert seats.count("<i></i>") == 20 and 'class="row back"' in seats and 'class="row front"' in seats
+    assert 'aria-hidden="true"' in seats
+    rule = login.CSS.split(".tr-auth-seats {")[1].split("}")[0]
+    assert "mask-image" in rule and "pointer-events:none" in rule
+    assert "rgba(255,100,130,.42)" in login.CSS                          # the rim light
+
+
+def test_the_sweep_continues_across_the_room_in_step_with_the_dish():
+    scan = login.CSS.split(".tr-auth-visual .scan {")[1].split("}")[0]
+    assert "tr-radar-sweep 6.5s linear infinite" in scan               # the same clock as radar.CSS
+    assert "--trr-sweep:6.5s" in radar.CSS
+
+
+def test_the_aperture_is_a_faint_vector_in_the_negative_space():
+    reel = login._reel()
+    assert reel.count("<circle") == 9 and "<img" not in reel
+    assert "opacity:.05" in login.CSS.split(".tr-auth-reel {")[1].split("}")[0]
+
+
+def test_every_poster_shows_most_of_itself():
+    """Corners may overlap; nothing may cover a poster's middle."""
+    boxes = dict(login.FAN)
+    for a, (ax, ay, aw, ah, *_a) in boxes.items():
+        for b_, (bx, by, bw, bh, *_b) in boxes.items():
+            if a == b_:
+                continue
+            ox = max(0, min(ax + aw, bx + bw) - max(ax, bx))
+            oy = max(0, min(ay + ah, by + bh) - max(ay, by))
+            assert ox * oy <= .12 * aw * ah, f"{b_} covers {ox * oy / (aw * ah):.0%} of {a}"
+    assert boxes["avengers_endgame"][5] == max(v[5] for v in boxes.values())   # the lead is in front
+    assert boxes["spiderman_brand_new_day"][0] + boxes["spiderman_brand_new_day"][2] <= 600
+
+
+def test_the_hover_lift_is_not_held_down_by_the_entrance_animation():
+    card = login.CSS.split(".tr-auth-poster {")[1].split(".tr-auth-poster img")[0]
+    assert "tr-auth-deal 1s var(--delay, 0s) var(--tr-ease) backwards" in card
+    assert "translateY(-10px) scale(1.035)" in login.CSS.split(".tr-auth-poster:hover {")[1].split("}")[0]
 
 
 def test_the_login_page_never_reads_the_catalogue_for_artwork():
@@ -133,7 +192,8 @@ def test_there_are_twenty_four_crafts_each_with_a_line_of_its_own():
         assert c.label and c.blurb.endswith(".") and c.tip == f"{c.label} — {c.blurb}"
         assert "<path" in c.paths or "<circle" in c.paths or "<rect" in c.paths
     for x, y in crafts.LAYOUT:
-        assert 0 <= x <= 100 and 0 <= y <= 100
+        assert 0 <= x <= 100 and (y is None or 0 <= y <= 100)
+    assert sum(y is None for _, y in crafts.LAYOUT) == 3          # the ledge under the radar
 
 
 def test_the_brief_s_crafts_are_all_there():
@@ -154,9 +214,9 @@ def test_the_constellation_has_tooltips_that_work_without_script():
     assert "content:attr(data-tip)" in crafts.CSS and ":focus-visible::after" in crafts.CSS
     assert "<script" not in html
     # the ones near an edge open inward
-    assert re.search(r'class="tr-craft tip-r[^"]*" style="left:4%', html)
-    assert re.search(r'class="tr-craft tip-l[^"]*" style="left:97%', html)
-    assert re.search(r'class="tr-craft [^"]*tip-b[^"]*" style="left:45.5%;top:7%', html)
+    assert re.search(r'class="tr-craft ledge tip-r" style="left:17%"', html)        # no top: the ledge places it
+    assert re.search(r'class="tr-craft tip-l" style="left:97%;top:65%"', html)
+    assert re.search(r'class="tr-craft tip-l tip-b" style="left:90%;top:4%"', html)
 
 
 def test_the_phone_strip_is_decoration_only():
@@ -174,6 +234,7 @@ def test_the_visual_is_radar_first_then_posters_crafts_and_the_headline():
     assert 'data-state="scanning"' in visual
     assert visual.count('class="tr-craft ') == 24 and visual.count("<picture>") == 6
     assert "HYDERABAD" in visual and "Charminar" not in visual
+    assert visual.count('class="tr-craft ledge') == 3
 
 
 def test_the_stylesheet_is_one_payload_that_carries_the_radar_and_the_crafts_once():
