@@ -147,27 +147,52 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 .tr-auth-status .sep { width:1px; height:12px; background:rgba(255,255,255,.14); }
 
 /* ── the cinematic zone ────────────────────────────────────────────── */
-.tr-auth-visual { position:relative; min-height:780px; isolation:isolate; padding:410px 24px 120px 8px; animation: tr-auth-fade 1s var(--tr-ease) both; }
-.tr-auth-visual .beam { position:absolute; right:-10%; top:-30%; width:70%; height:120%; z-index:0; pointer-events:none; opacity:.55;
-  background: linear-gradient(200deg, rgba(255,107,133,.10), rgba(255,51,85,.02) 45%, transparent 70%); filter: blur(20px); }
-.tr-auth-visual .glow { position:absolute; left:-18%; bottom:-14%; width:70%; height:55%; z-index:0; pointer-events:none;
-  background: radial-gradient(closest-side, rgba(255,51,85,.26), rgba(255,51,85,.05) 55%, transparent 75%); filter: blur(12px); animation: tr-auth-breathe 8s ease-in-out infinite; }
-.tr-auth-visual .horizon { position:absolute; left:2%; right:2%; bottom:96px; height:1px; z-index:1; pointer-events:none;
-  background: linear-gradient(90deg, transparent, rgba(255,107,133,.55) 30%, rgba(255,107,133,.55) 70%, transparent); box-shadow: 0 0 24px 2px rgba(255,51,85,.35); opacity:.55; }
-.tr-auth-visual .floor { position:absolute; left:0; right:0; bottom:0; height:180px; z-index:1; pointer-events:none; background: linear-gradient(180deg, transparent, rgba(7,7,10,.9) 75%); }
+.tr-auth-visual { --tr-copy-top:412px; position:relative; min-height:860px; isolation:isolate; overflow:hidden; padding:var(--tr-copy-top) 24px 170px 8px; animation: tr-auth-fade 1s var(--tr-ease) both; }
+/* the projector: one cone of light from the top right, across the room */
+.tr-auth-visual .beam { position:absolute; right:-12%; top:-16%; width:96%; height:110%; z-index:0; pointer-events:none; opacity:.9;
+  background: conic-gradient(from 197deg at 94% 8%, transparent 0deg, rgba(255,107,133,.13) 14deg, rgba(255,51,85,.05) 30deg, rgba(255,51,85,.015) 44deg, transparent 56deg); filter: blur(14px); }
+.tr-auth-visual .glow { position:absolute; left:-18%; bottom:-10%; width:70%; height:50%; z-index:0; pointer-events:none;
+  background: radial-gradient(closest-side, rgba(255,51,85,.24), rgba(255,51,85,.05) 55%, transparent 75%); filter: blur(12px); animation: tr-auth-breathe 8s ease-in-out infinite; }
+/* the radar's sweep, continued across the room: the dish scans the posters */
+.tr-auth-visual .scan { position:absolute; left:165px; top:185px; width:1500px; height:1500px; margin:-750px 0 0 -750px; border-radius:50%; z-index:1; pointer-events:none; opacity:.9;
+  background: conic-gradient(from 0deg, transparent 0deg 286deg, rgba(255,51,85,.035) 330deg, rgba(255,51,85,.10) 359deg, transparent 360deg);
+  animation: tr-radar-sweep 6.5s linear infinite; }
+/* the film strip: one curve that ties the radar to the posters */
+.tr-auth-strip { position:absolute; right:8px; top:0; width:600px; height:470px; z-index:1; pointer-events:none; }
+.tr-auth-strip svg { position:absolute; left:-460px; top:-110px; width:1180px; height:760px; overflow:visible; display:block; }
+.tr-auth-strip .halo { fill:none; stroke:rgba(255,51,85,.06); stroke-width:118; }
+.tr-auth-strip .band { fill:none; stroke:#1A1219; stroke-width:66; }
+.tr-auth-strip .holes { fill:none; stroke:rgba(255,120,145,.11); stroke-width:66; stroke-dasharray:7 15; }
+.tr-auth-strip .film { fill:none; stroke:#0F0B11; stroke-width:48; }
+.tr-auth-strip .frames { fill:none; stroke:rgba(255,255,255,.05); stroke-width:48; stroke-dasharray:1 118; }
+/* an aperture, out of focus, in the dark on the right */
+.tr-auth-reel { position:absolute; right:-170px; bottom:40px; width:520px; height:520px; z-index:0; pointer-events:none; opacity:.05; color:#FF8CA0; }
+.tr-auth-reel svg { width:100%; height:100%; display:block; }
+/* a row of seats: the house, in the foreground, fading into the floor */
+.tr-auth-seats { position:absolute; left:-4%; right:-4%; bottom:0; z-index:2; display:flex; flex-direction:column; gap:10px; pointer-events:none; padding-bottom:6px;
+  -webkit-mask-image: linear-gradient(180deg, #000 45%, transparent 100%); mask-image: linear-gradient(180deg, #000 45%, transparent 100%); }
+.tr-auth-seats .row { display:flex; justify-content:center; gap:12px; }
+.tr-auth-seats .row.back { transform:scale(.86); opacity:.6; }
+.tr-auth-seats i { width:68px; height:44px; border-radius:16px 16px 6px 6px; flex:none; position:relative;
+  background: linear-gradient(180deg,#3E0D1B 0%,#240811 50%,#12040A 100%); border-top:1px solid rgba(255,100,130,.42);
+  box-shadow: inset 0 -12px 18px -12px #000, inset 0 1px 0 rgba(255,140,160,.12), 0 -8px 26px -18px rgba(255,51,85,.9); }
+.tr-auth-seats i::after { content:""; position:absolute; left:8px; right:8px; bottom:-7px; height:9px; border-radius:0 0 5px 5px; background:#150409; border-top:1px solid rgba(255,90,120,.18); }
+.tr-auth-seats .row.front i { width:84px; height:58px; }
+.tr-auth-visual .floor { position:absolute; left:0; right:0; bottom:0; height:220px; z-index:1; pointer-events:none; background: linear-gradient(180deg, transparent, rgba(7,7,10,.75) 80%); }
 
-/* the radar, front and left */
-.tr-auth-visual .tr-radar.hero { position:absolute; left:8px; top:14px; z-index:2; animation: tr-auth-rise 1s .1s var(--tr-ease) both; }
-.tr-auth-visual .tr-radar.hero .tag { left:auto; right:-6%; top:auto; bottom:1%; animation: tr-auth-rise .8s .7s var(--tr-ease) both; }
-.tr-auth-visual .tr-radar.hero .tag::before { left:auto; right:100%; margin-right:1px; }
+/* the radar, front and left; .scan above is centred on it */
+.tr-auth-visual .tr-radar.hero { position:absolute; left:0; top:20px; z-index:2; animation: tr-auth-rise 1s .1s var(--tr-ease) both; }
+.tr-auth-visual .tr-radar.hero .tag { left:2%; right:auto; top:auto; bottom:-6%; animation: tr-auth-rise .8s .7s var(--tr-ease) both; }
+.tr-auth-visual .tr-radar.hero .tag::before { left:50%; right:auto; top:-9px; width:1px; height:8px; }
 
-/* the posters: a fanned hand of six, leaning into the room */
-.tr-auth-posters { position:absolute; right:0; top:0; width:600px; height:360px; z-index:2; perspective:1400px; }
-.tr-auth-posters .hand { position:absolute; inset:0; transform: rotateY(-9deg) rotateX(3deg); transform-style:preserve-3d; transform-origin:70% 50%; }
+/* the posters: six at three depths, hung along the strip */
+.tr-auth-posters { position:absolute; right:8px; top:0; width:600px; height:470px; z-index:3; perspective:1600px; }
+.tr-auth-posters .hand { position:absolute; inset:0; transform: rotateY(-6deg) rotateX(2deg); transform-style:preserve-3d; transform-origin:60% 50%; }
 .tr-auth-poster { position:absolute; border-radius:12px; overflow:hidden; background:#150B10; border:1px solid rgba(255,255,255,.14);
   box-shadow: 0 30px 60px -22px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.05), 0 14px 40px -26px rgba(255,51,85,.6);
   transform: rotate(var(--rot)) translateY(0); transition: transform .5s var(--tr-ease), box-shadow .5s var(--tr-ease), filter .5s var(--tr-ease);
-  animation: tr-auth-deal 1s var(--delay, 0s) var(--tr-ease) both; filter: brightness(var(--dim, 1)); }
+  /* "backwards", not "both": a filled animation would keep holding transform and beat :hover's lift */
+  animation: tr-auth-deal 1s var(--delay, 0s) var(--tr-ease) backwards; filter: brightness(var(--dim, 1)); }
 .tr-auth-poster img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 20%; display:block; }
 .tr-auth-poster::before { content:""; position:absolute; inset:0; z-index:1; pointer-events:none; border-radius:inherit;
   background: linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,0) 38%, rgba(0,0,0,0) 62%, rgba(0,0,0,.35)); }
@@ -178,22 +203,22 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
   box-shadow: 0 40px 70px -24px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.25), 0 24px 60px -24px rgba(255,51,85,.9); }
 .tr-auth-poster.lead .sheen { position:absolute; inset:-40% -60%; z-index:1; pointer-events:none;
   background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.13) 50%, transparent 58%); animation: tr-auth-sheen 9s 2s ease-in-out infinite; }
-.tr-auth-posters .credit { position:absolute; right:10px; bottom:-30px; font-family:var(--tr-mono); font-size:10px; letter-spacing:.3em; color:var(--tr-text-4); white-space:nowrap; }
+.tr-auth-posters .credit { position:absolute; right:0; bottom:-26px; font-family:var(--tr-mono); font-size:10px; letter-spacing:.3em; color:var(--tr-text-4); white-space:nowrap; }
 
 /* headline & the four promises */
-.tr-auth-copy { position:relative; z-index:2; max-width:640px; animation: tr-auth-rise .9s .2s var(--tr-ease) both; }
+.tr-auth-copy { position:relative; z-index:2; max-width:none; animation: tr-auth-rise .9s .2s var(--tr-ease) both; }
 .tr-auth-copy .eyebrow { font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; color:#FF8CA0; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
 .tr-auth-copy .eyebrow::before { content:""; width:28px; height:1px; background:rgba(255,107,133,.7); }
 .tr-auth-copy h1 { font-size:60px; line-height:1; letter-spacing:-.04em; font-weight:800; color:#fff; margin:0; }
 .tr-auth-copy h1 em { font-style:normal; color:var(--tr-accent); }
 .tr-auth-copy .lede { font-size:18px; line-height:1.55; color:var(--tr-text-2); margin:20px 0 0; max-width:560px; font-weight:500; }
-.tr-auth-feats { display:flex; gap:10px; margin-top:28px; flex-wrap:wrap; }
-.tr-auth-feat { display:inline-flex; align-items:center; gap:9px; padding:9px 14px 9px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.10);
-  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.18em; color:var(--tr-text-2);
+.tr-auth-feats { display:flex; gap:8px; margin-top:26px; flex-wrap:nowrap; }
+.tr-auth-feat { display:inline-flex; align-items:center; gap:8px; padding:7px 12px 7px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); font-family:var(--tr-mono); font-size:10px; letter-spacing:.16em; color:var(--tr-text-2);
   transition: border-color .25s var(--tr-ease), transform .25s var(--tr-ease), background .25s var(--tr-ease); }
-.tr-auth-feat .ic { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#FF6B85; background:rgba(255,51,85,.10); border:1px solid rgba(255,51,85,.35); }
+.tr-auth-feat .ic { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#FF6B85; background:rgba(255,51,85,.10); border:1px solid rgba(255,51,85,.35); }
 .tr-auth-feat:hover { border-color:rgba(255,51,85,.45); transform:translateY(-2px); background: linear-gradient(180deg, rgba(255,51,85,.10), rgba(255,51,85,.03)); }
-.tr-auth-mark { position:absolute; left:0; right:0; bottom:26px; z-index:3; font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; line-height:1.9; color:var(--tr-text-3); text-align:center; text-shadow:0 2px 14px #000; }
+.tr-auth-mark { position:absolute; left:0; right:0; bottom:22px; z-index:3; font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; line-height:1.9; color:var(--tr-text-3); text-align:center; text-shadow:0 2px 14px #000; }
 
 /* ── the panel ─────────────────────────────────────────────────────── */
 [class*="st-key-trauth_panel"] {
@@ -378,22 +403,27 @@ __CRAFTS__
 
 /* ── laptops: the hand of posters scales down, the radar too ──────── */
 @media (max-width: 1440px) {
-  .tr-auth-posters { transform: scale(.8); transform-origin: 100% 0; }
-  .tr-auth-visual { padding-top:370px; }
+  .tr-auth-posters, .tr-auth-strip { transform: scale(.82); transform-origin: 100% 0; }
+  .tr-auth-visual { --tr-copy-top:372px; min-height:820px; }
+  .tr-auth-feats { flex-wrap:wrap; }
   .tr-auth-visual .tr-radar.hero { width:300px !important; }
+  .tr-auth-visual .scan { left:150px; top:170px; }
 }
 @media (max-width: 1280px) {
-  .tr-auth-posters { transform: scale(.7); }
-  .tr-auth-visual { padding-top:330px; min-height:720px; }
+  .tr-auth-posters, .tr-auth-strip { transform: scale(.72); }
+  .tr-auth-visual { --tr-copy-top:340px; min-height:780px; }
   .tr-auth-visual .tr-radar.hero { width:270px !important; }
+  .tr-auth-visual .scan { left:135px; top:155px; }
   .tr-auth-copy h1 { font-size:52px; }
 }
 /* ── tablets: the room keeps its radar and headline; the hand and the
    constellation step aside so nothing crowds the form ──────────────── */
 @media (max-width: 1100px) {
   .block-container { padding: .9rem 1.4rem 1.4rem !important; }
-  .tr-auth-posters, .tr-crafts, .tr-auth-visual .horizon { display:none; }
-  .tr-auth-visual { min-height:640px; padding:300px 12px 110px 4px; }
+  .tr-auth-posters, .tr-auth-strip, .tr-auth-reel, .tr-crafts, .tr-auth-visual .beam { display:none; }
+  .tr-auth-visual { --tr-copy-top:300px; min-height:700px; padding:var(--tr-copy-top) 12px 170px 4px; }
+  .tr-auth-visual .scan { left:125px; top:145px; width:1000px; height:1000px; margin:-500px 0 0 -500px; }
+  .tr-auth-seats .row.back { display:none; }
   .tr-auth-visual .tr-radar.hero { width:250px !important; }
   .tr-auth-copy { max-width:none; }
   .tr-auth-copy h1 { font-size:44px; }
@@ -475,20 +505,22 @@ def _topbar() -> str:
     </div>"""
 
 
-#: The hand of six on a desktop: where each poster sits in a 600×360 box —
-#: (left, top, width, height, rotation°, z, brightness, deal delay s). The
-#: centre card leads: largest, upright, in front, and the only one that
-#: catches a slow sheen. A seventh or eighth poster in the folder takes an
-#: :data:`EXTRA_SLOTS` place at the back.
+#: The six on a desktop: where each poster hangs in a 600×470 box —
+#: (left, top, width, height, rotation°, z, brightness, deal delay s).
+#: Three depths, not a fan: the lead (Avengers) is largest and in front;
+#: Interstellar and Avatar flank it a step back; RRR, Baahubali and
+#: Spider-Man sit lower and further back. Overlaps are corners only, so
+#: every poster shows at least nine-tenths of itself. A seventh or eighth
+#: poster in the folder takes an :data:`EXTRA_SLOTS` place at the back.
 FAN = {
-    "interstellar":            (0,   84, 118, 177, -12, 1, .78, .05),
-    "rrr":                     (96,  50, 130, 195,  -7, 2, .88, .12),
-    "avengers_endgame":        (208, 16, 156, 234,  -2, 5, 1.0, .20),
-    "avatar":                  (340, 34, 142, 213,   4, 4, .95, .28),
-    "baahubali":               (452, 66, 124, 186,   9, 3, .85, .36),
-    "spiderman_brand_new_day": (500, 160, 100, 150, 15, 2, .80, .44),
+    "interstellar":            (44,  52, 118, 177, -10, 2, .82, .05),
+    "rrr":                     (118, 224, 116, 174, -5, 3, .90, .30),
+    "avengers_endgame":        (214, 24, 164, 246,  -2, 5, 1.0, .12),
+    "avatar":                  (366, 84, 130, 195,   5, 4, .95, .20),
+    "baahubali":               (276, 284, 112, 168,  3, 4, .88, .38),
+    "spiderman_brand_new_day": (482, 236, 98, 147,   9, 3, .86, .46),
 }
-EXTRA_SLOTS = ((-36, 150, 96, 144, -17, 0, .7, .5), (532, 260, 96, 144, 19, 0, .7, .56))
+EXTRA_SLOTS = ((-30, 260, 96, 144, -16, 1, .7, .54), (500, 30, 90, 135, 12, 1, .7, .6))
 LEAD = "avengers_endgame"
 #: The three that fit a phone, front to back.
 PHONE_POSTERS = ("rrr", "avengers_endgame", "interstellar")
@@ -534,6 +566,38 @@ def _hand() -> str:
             f'<div class="credit">NOW PLAYING ACROSS HYDERABAD</div></div>')
 
 
+#: The curve the posters hang from — one path, stroked five times: a soft
+#: red halo, the dark band, the sprocket holes (a dashed stroke that the
+#: narrower film stroke covers except at the edges), the film, and faint
+#: frame lines.
+STRIP_PATH = "M-40 640 C 220 610, 330 330, 560 250 S 860 60, 1010 190 S 1160 520, 1080 800"
+
+
+def _strip() -> str:
+    return f"""<div class="tr-auth-strip" aria-hidden="true"><svg viewBox="0 0 1180 760">
+      <path class="halo" d="{STRIP_PATH}"/><path class="band" d="{STRIP_PATH}"/>
+      <path class="holes" d="{STRIP_PATH}"/><path class="film" d="{STRIP_PATH}"/>
+      <path class="frames" d="{STRIP_PATH}"/>
+    </svg></div>"""
+
+
+#: A projector's aperture: a ring, six holes, a hub — drawn once, oversized.
+REEL_HOLES = '<circle cx="318.0" cy="200.0" r="34"/><circle cx="259.0" cy="302.2" r="34"/><circle cx="141.0" cy="302.2" r="34"/><circle cx="82.0" cy="200.0" r="34"/><circle cx="141.0" cy="97.8" r="34"/><circle cx="259.0" cy="97.8" r="34"/>'
+
+
+def _reel() -> str:
+    return (f'<div class="tr-auth-reel" aria-hidden="true"><svg viewBox="0 0 400 400" fill="none" stroke="currentColor">'
+            f'<circle cx="200" cy="200" r="190" stroke-width="14"/><circle cx="200" cy="200" r="160" stroke-width="1.5"/>'
+            f'<g stroke-width="10">{REEL_HOLES}</g><circle cx="200" cy="200" r="30" stroke-width="12"/></svg></div>')
+
+
+def _seats() -> str:
+    """Two rows of the house, rim-lit from the screen."""
+    back = "".join("<i></i>" for _ in range(11))
+    front = "".join("<i></i>" for _ in range(9))
+    return f'<div class="tr-auth-seats" aria-hidden="true"><div class="row back">{back}</div><div class="row front">{front}</div></div>'
+
+
 def _phone_strip() -> str:
     cards = [_poster_card(a, media="(max-width: 768px)")
              for a in (art.poster(k) for k in PHONE_POSTERS) if a is not None]
@@ -549,11 +613,15 @@ def _feats() -> str:
 
 
 def _visual() -> str:
-    """The room: the radar leading, the hand of posters behind it, the
-    crafts scattered in the dark, the headline on the floor."""
+    """The room, back to front: the projector's cone and the floor glow, the
+    radar's sweep continued across the room, the film strip, the aperture,
+    the radar, the posters hung along the strip, the crafts in the dark,
+    the headline, and the house's seats in the foreground."""
     return f"""<div class="tr-auth-visual">
-      <div class="beam"></div><div class="glow"></div>
-      {radar.svg(size=340, state="scanning", tag="TICKETS<br>DETECTED", cls="hero", label="TicketRadar radar, scanning")}
+      <div class="beam"></div><div class="glow"></div><div class="scan"></div>
+      {_strip()}
+      {_reel()}
+      {radar.svg(size=330, state="scanning", tag="TICKETS<br>DETECTED", cls="hero", label="TicketRadar radar, scanning")}
       {_hand()}
       {crafts.constellation()}
       <div class="tr-auth-copy">
@@ -562,7 +630,7 @@ def _visual() -> str:
         <p class="lede">We watch the ticket counters so you don't have to. The moment a show opens at your theatre, the alert is already in your inbox.</p>
         <div class="tr-auth-feats">{_feats()}</div>
       </div>
-      <div class="horizon"></div>
+      {_seats()}
       <div class="floor"></div>
       <div class="tr-auth-mark">SOME MOVIES ARE MEANT<br>TO BE EXPERIENCED TOGETHER</div>
     </div>"""

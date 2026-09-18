@@ -117,6 +117,22 @@ Rules:
 - The platform logos (`ui/assets/logo-*.png`, via `components.asset_uri`)
   are UI chrome, not brand artwork, and stay where they are.
 
+### The Login room (Phase 1 refinement)
+
+The left column is one environment, layered back to front, all of it CSS
+and inline SVG: a projector cone from the top right (`.beam`), the radar's
+sweep continued across the room as a slow conic wedge on the same 6.5 s
+clock as the dish (`.scan`), a curved film strip — one path stroked five
+times: halo, band, sprocket holes, film, frame lines (`_strip`) — a faint
+aperture in the dark on the right (`_reel`), the radar, the six posters at
+three depths hung along the strip (`FAN`: the lead largest and in front,
+two flanking a step back, three lower and further back; corners may
+overlap, never more than 12 % of a card), the crafts in the negative
+space, the headline, and two rows of rim-lit theatre seats fading into the
+floor (`_seats`). No Charminar, no skyline, no photograph. Poster hover
+lifts the card: the deal-in animation uses `fill-mode: backwards` so it
+cannot keep holding `transform` against `:hover`.
+
 ## 5. The radar
 
 There is deliberately **no radar image**. The radar is code: an inline SVG
