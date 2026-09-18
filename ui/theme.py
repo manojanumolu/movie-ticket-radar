@@ -235,6 +235,9 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 .tr-acct-chip .av { width:30px; height:30px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
   font-family:var(--tr-mono); font-size:12.5px; font-weight:500; color:#fff;
   background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
+.tr-acct-chip .av.has-avatar, .tr-acct-menu .av.has-avatar { padding:0; overflow:hidden; background:#150B10; border:1px solid rgba(255,51,85,.45);
+  box-shadow:0 0 0 2px rgba(255,51,85,.12), 0 8px 20px -10px rgba(255,51,85,.9); }
+.tr-acct-chip .av img, .tr-acct-menu .av img { width:100%; height:100%; object-fit:cover; display:block; }
 .tr-acct-chip .n { font-size:13px; font-weight:700; color:var(--tr-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
 .tr-acct-chip .chev { color:var(--tr-text-4); display:flex; flex:none; }
 [class*="st-key-tracct_top"] [data-testid="stPopover"] { position:absolute; inset:0; margin:0; }
@@ -245,7 +248,9 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   border-radius:14px !important; padding:6px !important; min-width:248px; max-width:min(320px, calc(100vw - 24px));
   box-shadow:0 24px 60px -20px rgba(0,0,0,.9), var(--tr-hi); }
 [data-testid="stPopoverBody"] [data-testid="stVerticalBlock"] { gap:.15rem; }
-.tr-acct-menu { padding:8px 12px 10px; border-bottom:1px solid var(--tr-border); margin-bottom:4px; min-width:0; }
+.tr-acct-menu { display:flex; align-items:center; gap:12px; padding:8px 12px 10px; border-bottom:1px solid var(--tr-border); margin-bottom:4px; min-width:0; }
+.tr-acct-menu .av { width:40px; height:40px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+  font-family:var(--tr-mono); font-size:15px; color:#fff; background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
 .tr-acct-menu .n { font-size:13.5px; font-weight:700; color:var(--tr-text); overflow-wrap:anywhere; }
 .tr-acct-menu .m { font-size:11.5px; color:var(--tr-text-3); overflow-wrap:anywhere; margin-top:2px; }
 /* the destructive action is set apart from the ordinary ones: a quiet row in

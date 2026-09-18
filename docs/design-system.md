@@ -5,8 +5,8 @@ direction in `ticketradar-ui-design-system-2/project/DESIGN-SPEC.md` (V1)
 where the two disagree; V1's component and Streamlit notes still apply
 unless a later phase says otherwise.
 
-Status: **Phase 1 — Login / Sign-up done.** The Login page is the first
-page built on this document; the rest of the app is still V1.
+Status: **Phase 2 — avatars done.** The Login page and the avatar
+preference are built on this document; the rest of the app is still V1.
 
 ## 1. Identity
 
@@ -111,9 +111,14 @@ Rules:
   pixel. The Login page fetches six posters on a desktop, three on a phone,
   none on a tablet. `loading="lazy"` alone did not achieve this.
 - **Size rule**: `oversized()` lists anything above `EMBED_LIMIT`
-  (300 KB) — the ten 1254px avatar PNGs. Even served, they are too heavy
-  for a picker; Phase 2 resizes them first (a deliberate, reviewed step).
-  See `static/README.md` for the current list.
+  (300 KB). The avatars are all ≤ 512 px and < 150 KB since Phase 2
+  (`tools/optimize_avatars.py`); two Login posters remain over the line
+  and are served, never embedded. See `static/README.md`.
+- **Avatar keys**: a stored `avatar_key` becomes an image only through
+  `resolve_avatar()` — a registered stem or nothing. `ui/avatar.py` reads
+  it off the settings document the app already loads, shows the initial
+  when it is absent or invalid, and writes it once, on Save, only when
+  it changed. Google's `photo_url` is separate and untouched.
 - The platform logos (`ui/assets/logo-*.png`, via `components.asset_uri`)
   are UI chrome, not brand artwork, and stay where they are.
 
@@ -168,6 +173,16 @@ inward near an edge, and works on hover and keyboard focus. Phones get
 `strip()` — eight icons, no tooltips, decoration only. Inline SVG, no
 icon font, no JS.
 
+### The avatar picker (Phase 2)
+
+A dialog from the account menu ("Change avatar"): the current face large,
+then one row per category that has files, in the theme's `pick_` tile
+mechanics — a circular 74 px ring, a name under it, a red ring + check +
+lift when selected, seven a row on a desktop and three on a phone. Its
+CSS rides inside the dialog, so the page never carries it; the thumbnails
+are the served static files. Nothing is written on select; Save writes
+the one field, and only if it differs.
+
 ## 7. Performance rules (every phase)
 
 Learned the hard way and not negotiable:
@@ -190,8 +205,8 @@ Learned the hard way and not negotiable:
 |---|---|---|
 | 0 | asset foundation, registry, this document | done |
 | 1 | Login / Sign-up — radar, poster hand, crafts, charcoal panel, honest wait | done |
-| 2 | Avatar system | next |
-| 3 | Home | |
+| 2 | Avatar system — `ui/avatar.py`, one field on `users/{uid}` | done |
+| 3 | Home | next |
 | 4 | My Monitors | |
 | 5 | Create Monitor wizard | |
 | 6 | History | |
