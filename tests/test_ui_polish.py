@@ -143,3 +143,39 @@ def test_the_scroll_helper_is_an_iframe_in_a_collapsed_container():
     assert "Home#" in frame.proto.srcdoc                     # the page token that re-fires it
     # The theme gives its keyed container no room at all.
     assert '[class*="st-key-tr_scrolltop"] { height:0 !important' in CSS
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Buttons with a tooltip keep the theme's styling
+# ──────────────────────────────────────────────────────────────────────────
+def test_button_rules_reach_a_button_behind_a_help_tooltip():
+    """A ``help`` tooltip wraps the button in stTooltipHoverTarget, one level
+    deeper. ``.stButton > button`` rules skipped every such button — the
+    card actions went flat the day they gained tooltips. Every button rule
+    is the descendant form now, and the wrapper spans the row."""
+    import re
+
+    assert ".stButton > button" not in CSS
+    assert '.stButton [data-testid="stTooltipHoverTarget"] { display:block; width:100%; }' in CSS
+    # The rules that give the card actions their look are still there, in descendant form.
+    for selector in ('[class*="st-key-m_stop_"] .stButton button',
+                     '[class*="st-key-m_del_"] .stButton button',
+                     '[class*="st-key-m_ext_"] .stButton button',
+                     '[class~="st-key-m_delete_all"] .stButton button',
+                     '.stButton button[kind="primary"]'):
+        assert selector in CSS, selector
+    # …and the base gloss (gradient + inset highlight + shadow) is intact.
+    base = re.search(r"\.stButton button, \.stDownloadButton > button[^{]*\{([^}]*)\}", CSS).group(1)
+    assert "linear-gradient" in base and "inset 0 1px 0" in base and "box-shadow" in base
+
+
+def test_the_card_actions_carry_tooltips_and_are_styled(make_monitor):
+    from monitor.state import upsert_monitor
+    from tests.test_app import run
+
+    monitor = make_monitor()
+    upsert_monitor(monitor, mirror=False)
+    app = run("My Monitors")
+    stop = app.button(key=f"m_stop_{monitor.id}")
+    assert stop.proto.help                                   # the tooltip is there…
+    assert '[class*="st-key-m_stop_"] .stButton button' in CSS   # …and so is the rule that reaches past it

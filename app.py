@@ -544,7 +544,23 @@ def languages_of(monitors: list[Monitor]) -> dict[str, str]:
     return {m.id: m.movie.language for m in monitors if m.movie.language}
 
 
+def recent_activity(monitors: list[Monitor], history: list[dict]) -> list[dict]:
+    """The rail's "Recent history": the history of the monitors that exist.
+
+    History is the permanent record and the History page shows all of it —
+    a deleted monitor's lines included, exactly as before. The rail is not
+    a record; it is the current state of *this person's monitors*, and a
+    monitor that has been deleted is not one of them. Its lines therefore
+    stop here, at the data, before anything is drawn. Attribution is the
+    ``monitor_id`` every history record carries; a record that has none
+    cannot be tied to a current monitor and is left to the History page.
+    """
+    current = {m.id for m in monitors}
+    return [item for item in history if item.get("monitor_id") in current]
+
+
 def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list[dict]) -> None:
+    history = recent_activity(monitors, history)
     active = [m for m in monitors if m.is_running()]
     if not active:
         C.html('<div class="tr-rail-title"><span class="tr-dot grey"></span><span>Active monitor</span></div>')
@@ -676,8 +692,19 @@ def do_stop_monitor_from_rail(monitor_id: str) -> None:
     st.rerun(scope="app")
 
 
+def forget_monitor_keys(monitor_ids: list[str] | None = None) -> None:
+    """Drop the page's own per-monitor bookkeeping (the open/closed state of
+    a card's problem panel) for these monitors — or, with None, for all —
+    so no session key refers to a monitor that is no longer there."""
+    prefixes = ("show_problem_", "prob_", "retry_")
+    for key in [k for k in st.session_state.keys() if isinstance(k, str) and k.startswith(prefixes)]:
+        if monitor_ids is None or any(key.endswith(f"_{mid}") for mid in monitor_ids):
+            st.session_state.pop(key, None)
+
+
 def do_delete_monitor(monitor_id: str) -> None:
     delete_monitor(monitor_id, mirror=mirrored())
+    forget_monitor_keys([monitor_id])
     flash("success", "Monitor deleted.")
 
 
@@ -742,9 +769,7 @@ def do_delete_all() -> None:
         print(f"[app] delete all failed: {type(exc).__name__}", flush=True)
         flash("error", "Couldn't delete your monitors just now. Please try again.")
         return
-    for key in [k for k in st.session_state.keys()
-                if isinstance(k, str) and k.startswith(("show_problem_", "prob_", "retry_"))]:
-        st.session_state.pop(key, None)
+    forget_monitor_keys()
     flash("success", f"Deleted {count} monitor(s). History keeps their record."
           if count else "There was nothing to delete.")
 
