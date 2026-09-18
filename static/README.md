@@ -13,7 +13,7 @@ as base64 on every rerun (`assets_registry.static_url`).
 static/
   login/posters/     the Login wall — six fixed films, never BookMyShow's catalogue
   avatars/
-    animation/       jack, jerry, kung_fu_panda, oggy, tom
+    animation/       jack, kung_fu_panda, oggy, tom
     cartoon/         doraemon, dorami, gian, nobita, shizuka, suneo
     marvel/          black_widow, captain_america, hulk, iron_man, logan, spiderman, thor
     dc/              batman
@@ -49,38 +49,43 @@ Posters — all JPEG, RGB, no alpha:
 | baahubali | 335×597 | 0.561 | 37 |
 | spiderman_brand_new_day | 375×533 | 0.704 | 30 |
 
-Avatars:
+Avatars (Phase 2: every one at most 512 px and under 150 KB, rewritten by
+`tools/optimize_avatars.py` — a resize and re-encode only; the originals are
+in git history at `8df12a1`):
 
 | category | key | format | px | KB |
 |---|---|---|---|---|
-| animation | jack | PNG RGB | 1254×1254 | 1998 ⚠ |
-| animation | jerry | PNG RGB | 1254×1254 | 1856 ⚠ |
+| animation | jack | WEBP | 512×512 | 52 |
 | animation | kung_fu_panda | JPEG | 447×447 | 21 |
-| animation | oggy | PNG RGB | 1254×1254 | 1848 ⚠ |
-| animation | tom | PNG RGB | 1254×1254 | 1952 ⚠ |
-| cartoon | doraemon | PNG RGB | 1254×1254 | 1761 ⚠ |
-| cartoon | dorami | PNG RGB | 1254×1254 | 1856 ⚠ |
-| cartoon | gian | PNG RGB | 1254×1254 | 1811 ⚠ |
-| cartoon | nobita | PNG RGB | 1254×1254 | 1669 ⚠ |
-| cartoon | shizuka | PNG RGB | 1254×1254 | 1827 ⚠ |
-| cartoon | suneo | PNG RGB | 1254×1254 | 1741 ⚠ |
+| animation | oggy | WEBP | 512×512 | 46 |
+| animation | tom | WEBP | 512×512 | 48 |
+| cartoon | doraemon | WEBP | 512×512 | 38 |
+| cartoon | dorami | WEBP | 512×512 | 42 |
+| cartoon | gian | WEBP | 512×512 | 41 |
+| cartoon | nobita | WEBP | 512×512 | 41 |
+| cartoon | shizuka | WEBP | 512×512 | 44 |
+| cartoon | suneo | WEBP | 512×512 | 40 |
 | marvel | black_widow | JPEG | 447×447 | 23 |
-| marvel | captain_america | JPEG | 548×559 | 62 (not square) |
-| marvel | hulk | JPEG | 300×300 | 16 (smallest) |
-| marvel | iron_man | JPEG | 736×736 | 106 |
-| marvel | logan | JPEG | 736×736 | 87 |
-| marvel | spiderman | PNG RGB | 324×576 | 222 (9:16 portrait — needs a crop to be an avatar) |
-| marvel | thor | JPEG | 554×554 | 42 |
-| dc | batman | JPEG | 554×554 | 29 |
+| marvel | captain_america | WEBP | 502×512 | 66 |
+| marvel | hulk | JPEG | 300×300 | 16 |
+| marvel | iron_man | WEBP | 512×512 | 76 |
+| marvel | logan | WEBP | 512×512 | 62 |
+| marvel | spiderman | WEBP | 288×512 | 13 |
+| marvel | thor | WEBP | 512×512 | 61 |
+| dc | batman | WEBP | 512×512 | 33 |
 
 ⚠ = above `EMBED_LIMIT`; do not embed inline as-is.
 
 Known issues, left for a deliberate decision (nothing was altered):
 
-- **`jerry.png` and `dorami.png` are byte-identical** (md5 `2aeafb9e…`).
-  One of them is the wrong picture.
-- The ten 1254×1254 PNGs have no transparency and would be ~60–90 KB each
-  as 512×512 WebP/JPEG. Total today: 18.3 MB of avatar PNG.
+- `jerry.png` was a second copy of Dorami's picture (Phase 0 found them
+  byte-identical; Phase 2 looked: it is Dorami). It was removed rather than
+  offered as "Jerry". There is no Jerry artwork; add `jerry.<ext>` to
+  `avatars/animation/` when there is.
+- The ten 1254×1254 PNGs (18.3 MB) became 512×512 WebP (~40–50 KB each)
+  in Phase 2; the whole avatar set is now 763 KB.
+- `kung_fu_panda`, `hulk` and `batman` carry a white or checkerboard
+  background inside the circle — that is in the artwork, not the UI.
 - The posters arrived as JPEG bytes under `.webp` names; they were renamed
   to `.jpg` (content untouched). If real WebP was intended, re-export.
 - The tree was `assets/` in Phase 0 and became `static/` in Phase 1 so

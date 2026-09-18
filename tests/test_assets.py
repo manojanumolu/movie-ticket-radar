@@ -24,11 +24,12 @@ from ui import assets_registry as R
 KEY = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)*$")
 
 #: Avatars the redesign brief names and the folders hold today. Absent ones
-#: (Hawkeye, Doctor Strange, Loki, the Tollywood set) are a reported gap,
-#: not something a test can conjure.
+#: (Hawkeye, Doctor Strange, Loki, the Tollywood set — and Jerry, whose
+#: file turned out to be a second copy of Dorami's picture and was dropped
+#: in Phase 2) are a reported gap, not something a test can conjure.
 EXPECTED_AVATARS = {
     "doraemon", "nobita", "shizuka", "gian", "suneo", "dorami",
-    "kung_fu_panda", "tom", "jerry", "oggy",
+    "kung_fu_panda", "tom", "oggy",
     "iron_man", "thor", "hulk", "captain_america", "black_widow",
     "batman",
 }

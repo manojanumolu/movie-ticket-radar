@@ -75,6 +75,7 @@ from monitor.state import (  # noqa: E402
 from notifications.email import NotificationError, is_configured, send_test_email  # noqa: E402
 from platforms import PLATFORMS  # noqa: E402
 from platforms.http import HAS_CURL_CFFI  # noqa: E402
+from ui import avatar  # noqa: E402
 from ui import catalogue_view as cv  # noqa: E402
 from ui import components as C  # noqa: E402
 from ui import flow  # noqa: E402
@@ -290,28 +291,34 @@ def delete_account_panel() -> None:
             st.caption(f"Type {DELETE_WORD} above to enable the button.")
 
 
-def account_bar() -> None:
+def account_bar(settings: dict | None = None) -> None:
     """The account control, top-right of the main content: who Firebase
     says you are — never a name the browser supplied — as a compact chip
-    that opens a small menu with Account settings, Delete account and Sign
-    out. It is part of the TicketRadar page, not the sidebar and not
-    Streamlit's toolbar."""
+    that opens a small menu with Change avatar, Account settings, Delete
+    account and Sign out. It is part of the TicketRadar page, not the
+    sidebar and not Streamlit's toolbar. The face on the chip is the
+    avatar chosen in ``settings`` (``ui.avatar``), else the initial."""
     user = auth_session.current_user()
     if user is None:
         return
+    settings = settings or {}
     with st.container(key="tracct_top"):
         C.html(
             '<div class="tr-acct-chip">'
-            f'<div class="av">{C.e(user.first_name[:1].upper() or "·")}</div>'
+            f'{avatar.mark(user, settings)}'
             f'<div class="n">{C.e(user.first_name)}</div>'
             f'<div class="chev">{C.icon("chevron", 14, "currentColor", "2")}</div></div>'
         )
         with st.popover("Account", key="acct_menu"):
             C.html(
                 '<div class="tr-acct-menu">'
-                f'<div class="n">{C.e(user.label)}</div>'
-                f'<div class="m">{C.e(user.email)}</div></div>'
+                f'{avatar.mark(user, settings, cls="av big")}'
+                f'<div><div class="n">{C.e(user.label)}</div>'
+                f'<div class="m">{C.e(user.email)}</div></div></div>'
             )
+            st.button("Change avatar", key="acct_avatar", use_container_width=True,
+                      icon=":material/face:", on_click=avatar.open_picker, args=(settings,),
+                      help="Pick the character that stands for you")
             st.button("Account settings", key="acct_settings", use_container_width=True,
                       icon=":material/manage_accounts:", on_click=open_account_settings,
                       help="Change the email your alerts go to")
@@ -937,7 +944,8 @@ def main() -> None:
 
         monitors, states, history, settings = load_view()
         page = sidebar(sum(1 for m in monitors if m.is_running()))
-        account_bar()
+        account_bar(settings)
+        avatar.picker(user, settings, mirror=mirrored(), notify=flash)
         delete_account_panel()
 
         # Navigation lands at the top of the new page — the hero, on Home.

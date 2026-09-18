@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -214,6 +215,25 @@ def avatar(key: str) -> Asset | None:
     return _avatars().get(key)
 
 
+#: What a stored avatar key may look like: a registered stem, nothing else.
+#: ``resolve_avatar`` is the only way a value from outside (a Firestore
+#: document, a query string) becomes an image — a path, a URL or a scheme
+#: can never get past it, because the answer is always one of our files.
+AVATAR_KEY = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)*$")
+AVATAR_KEY_MAX = 40
+
+
+def is_avatar_key(value: object) -> bool:
+    """Is ``value`` the key of an avatar we have on disk?"""
+    return (isinstance(value, str) and 0 < len(value) <= AVATAR_KEY_MAX
+            and AVATAR_KEY.match(value) is not None and value in _avatars())
+
+
+def resolve_avatar(value: object) -> Asset | None:
+    """The avatar a stored value names, or None for anything unregistered."""
+    return _avatars()[value] if is_avatar_key(value) else None
+
+
 def avatars_by_category() -> dict[str, list[Asset]]:
     groups: dict[str, list[Asset]] = {}
     for asset in avatars():
@@ -297,7 +317,8 @@ def duplicates() -> list[tuple[Asset, Asset]]:
 
 __all__ = [
     "AVATAR_CATEGORIES", "Asset", "EMBED_LIMIT", "LOGIN_POSTERS", "ROOT", "STATIC_PREFIX",
+    "AVATAR_KEY", "AVATAR_KEY_MAX",
     "all_assets", "avatar", "avatars", "avatars_by_category", "brand", "branding",
-    "data_uri", "duplicates", "fingerprint", "label_for", "mismatched", "oversized",
-    "poster", "posters", "refresh", "sniff", "static_url",
+    "data_uri", "duplicates", "fingerprint", "is_avatar_key", "label_for", "mismatched", "oversized",
+    "poster", "posters", "refresh", "resolve_avatar", "sniff", "static_url",
 ]
