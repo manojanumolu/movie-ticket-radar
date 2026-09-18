@@ -1,12 +1,14 @@
 """The entrance: sign in, create an account, reset a password.
 
-Built from the approved login design (the attached reference in step 6): a
-cinematic left zone — radar sweep, the headline, four promises, a wall of
-what's showing, Charminar and a house of seats — and a glass panel on the
-right that holds the form. Everything on screen is the same HTML-in-markdown
-plus keyed-container technique the rest of the UI uses, so the page is still
-plain Streamlit: the inputs, buttons and reruns are Streamlit's, which is
-what lets ``AppTest`` drive it.
+A cinematic room on the left — the radar (``ui.radar``) leading, a fanned
+hand of six fixed posters (``ui.assets_registry``, the brand's own files,
+never the catalogue's), the twenty-four crafts of filmmaking scattered in
+the dark (``ui.crafts``), the headline on the floor — and a charcoal panel
+on the right that holds the form. Everything on screen is the same
+HTML-in-markdown plus keyed-container technique the rest of the UI uses,
+so the page is still plain Streamlit: the inputs, buttons and reruns are
+Streamlit's, which is what lets ``AppTest`` drive it. Nothing here reads
+the catalogue, Firestore or a network for decoration.
 
 Three states share the panel and the visual:
 
@@ -24,9 +26,13 @@ Firebase is only ever spoken to from ``auth.firebase``; this module renders,
 validates what can be validated before a network call, and shows the one
 sentence ``AuthError`` carries. A raw Firebase message never reaches the page.
 
-On a phone the visual steps aside: the brand and the headline sit above the
-panel, the panel is the page, and the poster wall, skyline and seats are
-gone rather than squeezed.
+On a phone the room steps aside for a stack of its own: the brand, a short
+hero with a small radar and three posters, then the panel, which is the
+page. The desktop composition is gone rather than squeezed.
+
+Waiting is honest: a Firebase call puts one mono line with a tiny radar in
+the panel at once, and only if it drags past half a second does the room
+dim behind a larger radar and a status line — a CSS delay, never a sleep.
 """
 
 from __future__ import annotations
@@ -40,8 +46,9 @@ import streamlit as st
 
 from auth import disposable, firebase, google, session
 from auth.firebase import AuthError
-from ui import catalogue_view as cv
+from ui import assets_registry as art
 from ui import components as C
+from ui import crafts, radar
 
 MODE_KEY = "auth_mode"
 ERROR_KEY = "auth_error"
@@ -107,21 +114,25 @@ def _input_icon_uri(name: str, color: str = "#8E8E98") -> str:
 # ──────────────────────────────────────────────────────────────────────────
 CSS = """
 <style>
-/* the room: a near-black house with the projector's glow low on the left */
+/* ── the room: near-black, one projector's warmth low on the left, a cooler
+   spill high on the right — the light of a theatre before the film ────── */
 html, body, [data-testid="stAppViewContainer"], .stApp {
   background:
-    radial-gradient(900px 620px at 8% 92%, rgba(255,51,85,.24), transparent 62%),
-    radial-gradient(700px 480px at 92% 8%, rgba(255,51,85,.10), transparent 60%),
-    radial-gradient(1400px 800px at 50% 50%, #101016, #07070A 75%) !important;
+    radial-gradient(1100px 700px at 6% 96%, rgba(255,51,85,.20), transparent 60%),
+    radial-gradient(800px 520px at 96% 4%, rgba(255,51,85,.09), transparent 58%),
+    radial-gradient(1600px 900px at 50% 40%, #0F0F15, #07070A 78%) !important;
   background-attachment: fixed !important;
 }
 .block-container { padding: 1rem 2.4rem 1.6rem !important; max-width: 1600px !important; }
 [data-testid="stMainBlockContainer"] { padding-top: .6rem !important; }
 [data-testid="stHeader"] { display: none !important; }
 [class*="st-key-trauth_shell"] { position: relative; }
+/* a fine film grain over the whole room; one tiny repeating gradient, no image */
+[class*="st-key-trauth_shell"]::before { content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.35;
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px); }
 
 /* ── top bar ───────────────────────────────────────────────────────── */
-.tr-auth-top { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:4px 2px 14px; animation: tr-auth-fade .7s var(--tr-ease) both; }
+.tr-auth-top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:4px 2px 12px; animation: tr-auth-fade .7s var(--tr-ease) both; }
 .tr-auth-lockup { display:flex; align-items:center; gap:13px; }
 .tr-auth-lockup .mark { width:46px; height:46px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none;
   background: radial-gradient(circle at 40% 35%, rgba(255,120,140,.35), rgba(255,51,85,.08) 60%, transparent 70%);
@@ -130,94 +141,79 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 .tr-auth-lockup .name { font-size:24px; font-weight:800; letter-spacing:-.035em; line-height:1; color:#fff; }
 .tr-auth-lockup .name em { font-style:normal; color:var(--tr-accent); }
 .tr-auth-lockup .sub { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.32em; color:var(--tr-text-3); margin-top:6px; }
-.tr-auth-nav { display:flex; align-items:center; gap:22px; font-size:13px; font-weight:600; color:var(--tr-text-2); }
-.tr-auth-nav .city { display:inline-flex; align-items:center; gap:5px; color:#fff; }
-.tr-auth-nav .tag { font-size:11px; color:var(--tr-text-4); font-weight:500; }
+.tr-auth-status { display:flex; align-items:center; gap:18px; font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.22em; color:var(--tr-text-3); }
+.tr-auth-status .live { display:inline-flex; align-items:center; gap:8px; color:#9FEBC9; }
+.tr-auth-status .live i { width:7px; height:7px; border-radius:50%; background:#3ED598; box-shadow:0 0 0 3px rgba(62,213,152,.18), 0 0 12px rgba(62,213,152,.8); animation: tr-auth-live 2.2s ease-in-out infinite; }
+.tr-auth-status .sep { width:1px; height:12px; background:rgba(255,255,255,.14); }
 
 /* ── the cinematic zone ────────────────────────────────────────────── */
-.tr-auth-visual { position:relative; min-height:760px; overflow:hidden; isolation:isolate; padding:292px 0 150px 12px; animation: tr-auth-fade 1s var(--tr-ease) both; }
-.tr-auth-visual .glow { position:absolute; inset:auto -10% -20% -20%; height:60%; z-index:0; pointer-events:none;
-  background: radial-gradient(closest-side, rgba(255,51,85,.28), rgba(255,51,85,.06) 55%, transparent 75%);
-  filter: blur(10px); animation: tr-auth-breathe 7s ease-in-out infinite; }
+.tr-auth-visual { position:relative; min-height:780px; isolation:isolate; padding:410px 24px 120px 8px; animation: tr-auth-fade 1s var(--tr-ease) both; }
+.tr-auth-visual .beam { position:absolute; right:-10%; top:-30%; width:70%; height:120%; z-index:0; pointer-events:none; opacity:.55;
+  background: linear-gradient(200deg, rgba(255,107,133,.10), rgba(255,51,85,.02) 45%, transparent 70%); filter: blur(20px); }
+.tr-auth-visual .glow { position:absolute; left:-18%; bottom:-14%; width:70%; height:55%; z-index:0; pointer-events:none;
+  background: radial-gradient(closest-side, rgba(255,51,85,.26), rgba(255,51,85,.05) 55%, transparent 75%); filter: blur(12px); animation: tr-auth-breathe 8s ease-in-out infinite; }
+.tr-auth-visual .horizon { position:absolute; left:2%; right:2%; bottom:96px; height:1px; z-index:1; pointer-events:none;
+  background: linear-gradient(90deg, transparent, rgba(255,107,133,.55) 30%, rgba(255,107,133,.55) 70%, transparent); box-shadow: 0 0 24px 2px rgba(255,51,85,.35); opacity:.55; }
+.tr-auth-visual .floor { position:absolute; left:0; right:0; bottom:0; height:180px; z-index:1; pointer-events:none; background: linear-gradient(180deg, transparent, rgba(7,7,10,.9) 75%); }
 
-/* radar */
-.tr-radar { position:absolute; left:12px; top:0; width:300px; height:300px; z-index:1; }
-.tr-radar .ring { position:absolute; border-radius:50%; border:1px solid rgba(255,51,85,.34); left:50%; top:50%; transform:translate(-50%,-50%); }
-.tr-radar .ring.r1 { width:60px; height:60px; border-color:rgba(255,51,85,.6); }
-.tr-radar .ring.r2 { width:130px; height:130px; }
-.tr-radar .ring.r3 { width:200px; height:200px; border-color:rgba(255,51,85,.26); }
-.tr-radar .ring.r4 { width:270px; height:270px; border-color:rgba(255,51,85,.16); }
-.tr-radar .axis { position:absolute; left:50%; top:50%; width:270px; height:1px; background:rgba(255,51,85,.16); transform:translate(-50%,-50%); }
-.tr-radar .axis.v { transform:translate(-50%,-50%) rotate(90deg); }
-.tr-radar .sweep { position:absolute; inset:15px; border-radius:50%; overflow:hidden; transform-origin:50% 50%;
-  background: conic-gradient(from 0deg, rgba(255,51,85,0) 0deg, rgba(255,51,85,0) 250deg, rgba(255,51,85,.06) 300deg, rgba(255,51,85,.42) 359deg, rgba(255,51,85,0) 360deg);
-  animation: tr-radar-sweep 6.5s linear infinite; }
-.tr-radar .sweep::after { content:""; position:absolute; left:50%; top:50%; width:135px; height:2px; transform-origin:0 50%; transform:rotate(-90deg);
-  background: linear-gradient(90deg, #FF6B85, rgba(255,51,85,.15)); box-shadow: 0 0 12px rgba(255,51,85,.9); }
-.tr-radar .core { position:absolute; left:50%; top:50%; width:10px; height:10px; border-radius:50%; background:#FF3355; transform:translate(-50%,-50%);
-  box-shadow: 0 0 0 4px rgba(255,51,85,.25), 0 0 22px 4px rgba(255,51,85,.7); }
-.tr-radar .blip { position:absolute; width:8px; height:8px; border-radius:50%; background:#FF5573; box-shadow:0 0 14px 3px rgba(255,51,85,.8); animation: tr-blip 2.8s ease-out infinite; }
-.tr-radar .blip.b1 { left:214px; top:66px; }
-.tr-radar .blip.b2 { left:190px; top:190px; animation-delay:1.3s; }
-.tr-radar .blip.b3 { left:104px; top:118px; width:5px; height:5px; animation-delay:.6s; }
-.tr-radar .tag { position:absolute; left:262px; top:152px; padding:8px 12px; border:1px solid rgba(255,51,85,.7); border-radius:8px; white-space:nowrap;
-  font-family:var(--tr-mono); font-size:11px; letter-spacing:.2em; color:#FF6B85; line-height:1.45; background:rgba(12,8,10,.72);
-  box-shadow: 0 0 0 1px rgba(255,51,85,.12), 0 12px 30px -14px rgba(255,51,85,.8); animation: tr-auth-rise .8s .5s var(--tr-ease) both; }
+/* the radar, front and left */
+.tr-auth-visual .tr-radar.hero { position:absolute; left:8px; top:14px; z-index:2; animation: tr-auth-rise 1s .1s var(--tr-ease) both; }
+.tr-auth-visual .tr-radar.hero .tag { left:auto; right:-6%; top:auto; bottom:1%; animation: tr-auth-rise .8s .7s var(--tr-ease) both; }
+.tr-auth-visual .tr-radar.hero .tag::before { left:auto; right:100%; margin-right:1px; }
 
-/* headline & promises */
-.tr-auth-copy { position:relative; z-index:2; max-width:600px; animation: tr-auth-rise .9s .15s var(--tr-ease) both; }
-.tr-auth-copy h1 { font-size:58px; line-height:1.02; letter-spacing:-.04em; font-weight:800; color:#fff; margin:0; }
+/* the posters: a fanned hand of six, leaning into the room */
+.tr-auth-posters { position:absolute; right:0; top:0; width:600px; height:360px; z-index:2; perspective:1400px; }
+.tr-auth-posters .hand { position:absolute; inset:0; transform: rotateY(-9deg) rotateX(3deg); transform-style:preserve-3d; transform-origin:70% 50%; }
+.tr-auth-poster { position:absolute; border-radius:12px; overflow:hidden; background:#150B10; border:1px solid rgba(255,255,255,.14);
+  box-shadow: 0 30px 60px -22px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.05), 0 14px 40px -26px rgba(255,51,85,.6);
+  transform: rotate(var(--rot)) translateY(0); transition: transform .5s var(--tr-ease), box-shadow .5s var(--tr-ease), filter .5s var(--tr-ease);
+  animation: tr-auth-deal 1s var(--delay, 0s) var(--tr-ease) both; filter: brightness(var(--dim, 1)); }
+.tr-auth-poster img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 20%; display:block; }
+.tr-auth-poster::before { content:""; position:absolute; inset:0; z-index:1; pointer-events:none; border-radius:inherit;
+  background: linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,0) 38%, rgba(0,0,0,0) 62%, rgba(0,0,0,.35)); }
+.tr-auth-poster::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none; background: linear-gradient(180deg, transparent 58%, rgba(6,6,9,.9)); }
+.tr-auth-poster .t { position:absolute; left:11px; right:11px; bottom:10px; z-index:2; font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.88);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 8px #000; }
+.tr-auth-poster:hover { transform: rotate(var(--rot)) translateY(-10px) scale(1.035); z-index:9 !important; filter:brightness(1.05);
+  box-shadow: 0 40px 70px -24px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.25), 0 24px 60px -24px rgba(255,51,85,.9); }
+.tr-auth-poster.lead .sheen { position:absolute; inset:-40% -60%; z-index:1; pointer-events:none;
+  background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.13) 50%, transparent 58%); animation: tr-auth-sheen 9s 2s ease-in-out infinite; }
+.tr-auth-posters .credit { position:absolute; right:10px; bottom:-30px; font-family:var(--tr-mono); font-size:10px; letter-spacing:.3em; color:var(--tr-text-4); white-space:nowrap; }
+
+/* headline & the four promises */
+.tr-auth-copy { position:relative; z-index:2; max-width:640px; animation: tr-auth-rise .9s .2s var(--tr-ease) both; }
+.tr-auth-copy .eyebrow { font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; color:#FF8CA0; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
+.tr-auth-copy .eyebrow::before { content:""; width:28px; height:1px; background:rgba(255,107,133,.7); }
+.tr-auth-copy h1 { font-size:60px; line-height:1; letter-spacing:-.04em; font-weight:800; color:#fff; margin:0; }
 .tr-auth-copy h1 em { font-style:normal; color:var(--tr-accent); }
-.tr-auth-copy .lede { font-size:19px; line-height:1.55; color:var(--tr-text-2); margin:22px 0 0; max-width:600px; font-weight:500; }
-.tr-auth-feats { display:flex; gap:26px; margin-top:30px; }
-.tr-auth-feat { display:flex; flex-direction:column; align-items:center; gap:10px; width:96px; text-align:center; }
-.tr-auth-feat .ic { width:54px; height:54px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-  border:1px solid rgba(255,51,85,.45); background: radial-gradient(circle at 50% 40%, rgba(255,51,85,.22), rgba(255,51,85,.04) 70%);
-  box-shadow: 0 0 0 5px rgba(255,51,85,.05), 0 10px 26px -14px rgba(255,51,85,.9); color:#FF5573; transition: transform .25s var(--tr-ease), box-shadow .25s var(--tr-ease); }
-.tr-auth-feat:hover .ic { transform: translateY(-3px); box-shadow: 0 0 0 6px rgba(255,51,85,.08), 0 16px 30px -14px rgba(255,51,85,1); }
-.tr-auth-feat .t { font-size:13px; line-height:1.35; color:var(--tr-text); font-weight:600; }
-.tr-auth-city { position:absolute; right:60px; bottom:268px; z-index:2; font-family:var(--tr-mono); font-size:11.5px; letter-spacing:.34em; line-height:1.9; color:var(--tr-text-2); text-align:center; }
-.tr-auth-mark { position:absolute; left:0; right:0; bottom:24px; z-index:3; font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; line-height:1.9; color:var(--tr-text-2); text-align:center; text-shadow:0 2px 14px #000, 0 0 6px #000; }
-
-/* the wall of what's showing */
-.tr-auth-wall { position:absolute; right:14px; top:0; z-index:1; width:360px; perspective:900px; }
-.tr-auth-wall .grid { display:grid; grid-template-columns:repeat(3, 104px); gap:14px; justify-content:end; transform: rotateY(-22deg) rotateX(5deg); transform-origin:100% 40%; }
-.tr-auth-wall .card { position:relative; height:154px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,.14);
-  background: linear-gradient(160deg,#2A1218,#120B10 60%,#1A0D12); box-shadow: 0 26px 50px -22px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.06);
-  animation: tr-auth-rise .8s var(--tr-ease) both; }
-.tr-auth-wall .card:nth-child(2) { animation-delay:.08s; } .tr-auth-wall .card:nth-child(3) { animation-delay:.16s; }
-.tr-auth-wall .card:nth-child(4) { animation-delay:.24s; } .tr-auth-wall .card:nth-child(5) { animation-delay:.32s; } .tr-auth-wall .card:nth-child(6) { animation-delay:.4s; }
-.tr-auth-wall .card img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; filter:saturate(1.05) contrast(1.02); }
-.tr-auth-wall .card::after { content:""; position:absolute; inset:0; background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(6,6,9,.85)); pointer-events:none; }
-.tr-auth-wall .card .t { position:absolute; left:10px; right:10px; bottom:9px; z-index:1; font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.85);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.tr-auth-wall .card.ph .t { color:rgba(255,255,255,.4); }
-.tr-auth-wall .card.ph::before { content:""; position:absolute; inset:16px; border:1px dashed rgba(255,255,255,.12); border-radius:8px; }
-
-/* skyline and the house */
-.tr-auth-skyline { position:absolute; right:30px; bottom:120px; z-index:1; width:250px; height:135px; color:rgba(255,255,255,.07); }
-.tr-auth-skyline svg { width:100%; height:100%; display:block; filter: drop-shadow(0 0 22px rgba(255,51,85,.25)); }
-.tr-auth-seats { position:absolute; left:-6%; right:-6%; bottom:0; z-index:2; display:flex; flex-direction:column; gap:10px; pointer-events:none; }
-.tr-auth-seats .row { display:flex; justify-content:center; gap:12px; }
-.tr-auth-seats .row.back { transform:scale(.86); opacity:.55; }
-.tr-auth-seats i { width:68px; height:44px; border-radius:16px 16px 6px 6px; flex:none;
-  background: linear-gradient(180deg,#4A0F1E 0%,#2B0912 55%,#150409 100%); border-top:1px solid rgba(255,90,120,.35); box-shadow: inset 0 -12px 18px -12px #000, 0 -8px 26px -18px rgba(255,51,85,.8); }
-.tr-auth-seats .row.front i { width:84px; height:58px; }
-.tr-auth-visual .floor { position:absolute; left:0; right:0; bottom:0; height:200px; z-index:1; pointer-events:none; background: linear-gradient(180deg, transparent, rgba(7,7,10,.92) 70%); }
+.tr-auth-copy .lede { font-size:18px; line-height:1.55; color:var(--tr-text-2); margin:20px 0 0; max-width:560px; font-weight:500; }
+.tr-auth-feats { display:flex; gap:10px; margin-top:28px; flex-wrap:wrap; }
+.tr-auth-feat { display:inline-flex; align-items:center; gap:9px; padding:9px 14px 9px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.18em; color:var(--tr-text-2);
+  transition: border-color .25s var(--tr-ease), transform .25s var(--tr-ease), background .25s var(--tr-ease); }
+.tr-auth-feat .ic { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#FF6B85; background:rgba(255,51,85,.10); border:1px solid rgba(255,51,85,.35); }
+.tr-auth-feat:hover { border-color:rgba(255,51,85,.45); transform:translateY(-2px); background: linear-gradient(180deg, rgba(255,51,85,.10), rgba(255,51,85,.03)); }
+.tr-auth-mark { position:absolute; left:0; right:0; bottom:26px; z-index:3; font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; line-height:1.9; color:var(--tr-text-3); text-align:center; text-shadow:0 2px 14px #000; }
 
 /* ── the panel ─────────────────────────────────────────────────────── */
 [class*="st-key-trauth_panel"] {
-  position:relative; max-width:560px; margin-left:auto; padding:34px 34px 30px !important; border-radius:24px;
-  background: linear-gradient(165deg, rgba(28,20,24,.82), rgba(14,12,16,.9) 60%, rgba(18,12,16,.88));
-  border:1px solid rgba(255,255,255,.12); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 40px 90px -40px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.06), 0 30px 80px -50px rgba(255,51,85,.6);
-  animation: tr-auth-rise .9s .1s var(--tr-ease) both; gap:.55rem;
+  position:relative; z-index:3; max-width:560px; margin-left:auto; padding:34px 34px 30px !important; border-radius:26px;
+  background: linear-gradient(168deg, #17131A 0%, #0F0D12 52%, #120E14 100%);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 50px 100px -40px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.05), 0 30px 90px -50px rgba(255,51,85,.55);
+  /* opacity only, and never "both": a transform here — even the identity
+     matrix a finished rise leaves behind — would pin the fixed veil inside
+     the panel, and a filled animation makes the panel a backdrop root that
+     stops the veil's blur at its edge. "backwards" lets the effect end. */
+  animation: tr-auth-fade .9s .1s var(--tr-ease) backwards; gap:.55rem;
 }
-[class*="st-key-trauth_panel"]::before { content:""; position:absolute; inset:0; border-radius:24px; pointer-events:none;
-  background: radial-gradient(500px 220px at 85% 0%, rgba(255,51,85,.12), transparent 60%); }
-.tr-auth-brand { display:flex; align-items:center; gap:18px; justify-content:center; padding:2px 0 22px; }
+[class*="st-key-trauth_panel"]::before { content:""; position:absolute; inset:0; border-radius:26px; pointer-events:none;
+  background: radial-gradient(560px 240px at 88% -4%, rgba(255,51,85,.16), transparent 60%), radial-gradient(400px 200px at 0% 104%, rgba(255,51,85,.07), transparent 60%); }
+[class*="st-key-trauth_panel"]::after { content:""; position:absolute; left:14%; right:14%; top:-1px; height:1px; pointer-events:none;
+  background: linear-gradient(90deg, transparent, rgba(255,140,160,.75), transparent); }
+.tr-auth-brand { display:flex; align-items:center; gap:18px; justify-content:center; padding:2px 0 22px; animation: tr-auth-rise .9s .15s var(--tr-ease) both; }
 .tr-auth-brand .lock { display:flex; flex-direction:column; align-items:center; gap:10px; }
-.tr-auth-brand .lock svg { width:44px; height:44px; filter: drop-shadow(0 0 14px rgba(255,51,85,.7)); }
+.tr-auth-brand .lock .tr-radar { width:52px; filter: drop-shadow(0 0 14px rgba(255,51,85,.55)); }
 .tr-auth-brand .lock .n { font-size:21px; font-weight:800; letter-spacing:.06em; color:#fff; }
 .tr-auth-brand .lock .n em { font-style:normal; color:var(--tr-accent); }
 .tr-auth-brand .sep { width:1px; height:64px; background:rgba(255,255,255,.14); }
@@ -226,12 +222,15 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 .tr-auth-p { font-size:15.5px; line-height:1.55; color:var(--tr-text-2); margin:10px 0 18px; font-weight:500; }
 .tr-auth-label { font-family:var(--tr-mono); font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--tr-text-3); margin:6px 0 -4px 2px; }
 
-/* inputs: a glyph on the left, the same glass as the app */
+/* inputs: a glyph on the left, a sunken charcoal field, a red ring on focus */
 [class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"],
 [class*="st-key-trauth_panel"] .stTextInput [data-baseweb="base-input"] { min-height:56px; border-radius:14px !important; position:relative;
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03)) !important; border-color: rgba(255,255,255,.13) !important; }
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.025)) !important; border-color: rgba(255,255,255,.11) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), inset 0 2px 6px rgba(0,0,0,.35); transition: border-color .18s var(--tr-ease), box-shadow .18s var(--tr-ease); }
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"]:focus-within { border-color: rgba(255,51,85,.65) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 0 0 3px rgba(255,51,85,.16), 0 8px 24px -14px rgba(255,51,85,.8); }
 [class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"]::before { content:""; position:absolute; left:17px; top:50%; width:20px; height:20px; transform:translateY(-50%);
-  background-repeat:no-repeat; background-size:20px 20px; opacity:.85; pointer-events:none; transition: opacity var(--tr-fast) var(--tr-ease); }
+  background-repeat:no-repeat; background-size:20px 20px; opacity:.8; pointer-events:none; transition: opacity var(--tr-fast) var(--tr-ease); }
 [class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"] input { padding-left:50px !important; padding-right:14px !important; font-size:15px !important; }
 [class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"]:focus-within::before { opacity:1; }
 [class*="st-key-auth_email"] [data-baseweb="input"]::before, [class*="st-key-auth_su_email"] [data-baseweb="input"]::before, [class*="st-key-auth_reset_email"] [data-baseweb="input"]::before { background-image: __MAIL__; }
@@ -243,21 +242,25 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 [class*="st-key-trauth_panel"] [data-testid="stForm"] { padding:0; border:none; }
 [class*="st-key-trauth_panel"] [data-testid="stForm"] [data-testid="stVerticalBlock"] { gap:.55rem; }
 
-/* the CTA and the Google button */
+/* the CTA: a glossy red key, and the Google button in the same box */
 [class*="st-key-trauth_panel"] .stFormSubmitButton > button, [class*="st-key-trauth_panel"] .stFormSubmitButton > button[kind*="primary"] {
-  background: linear-gradient(180deg,#FF6A85 0%,#FF3355 48%,#D4123F 100%); color:#fff; border:1px solid rgba(255,140,160,.45);
+  position:relative; overflow:hidden; background: linear-gradient(180deg,#FF6E88 0%,#FF3355 50%,#D6133F 100%); color:#fff; border:1px solid rgba(255,140,160,.5);
   font-size:15px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; min-height:60px; border-radius:16px; margin-top:8px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.4), inset 0 -1px 0 rgba(0,0,0,.25), 0 22px 46px -16px rgba(255,51,85,.95), 0 0 0 4px rgba(255,51,85,.08);
-  flex-direction: row-reverse; gap:12px; transition: all .22s var(--tr-ease); }
-[class*="st-key-trauth_panel"] .stFormSubmitButton > button:hover { transform:translateY(-2px); background: linear-gradient(180deg,#FF7A93 0%,#FF3F5F 48%,#DC1746 100%); color:#fff;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 0 -1px 0 rgba(0,0,0,.25), 0 28px 56px -16px rgba(255,51,85,1), 0 0 0 5px rgba(255,51,85,.10); }
-[class*="st-key-trauth_panel"] .stFormSubmitButton > button:active { transform:translateY(0) scale(.995); }
-[class*="st-key-trauth_panel"] .stFormSubmitButton > button p { font-size:15px; font-weight:800; letter-spacing:.14em; }
-[class*="st-key-trauth_panel"] .stFormSubmitButton > button [data-testid="stIconMaterial"] { font-size:22px; }
-[class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { min-height:58px; border-radius:16px; font-size:15.5px; font-weight:700; letter-spacing:0; text-transform:none; gap:12px;
-  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.14); color:#fff; }
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -2px 0 rgba(0,0,0,.28), 0 20px 44px -16px rgba(255,51,85,.95), 0 0 0 4px rgba(255,51,85,.08);
+  flex-direction: row-reverse; gap:12px; transition: transform .22s var(--tr-ease), box-shadow .22s var(--tr-ease), filter .22s var(--tr-ease); }
+[class*="st-key-trauth_panel"] .stFormSubmitButton > button::before { content:""; position:absolute; left:1px; right:1px; top:1px; height:48%; border-radius:15px 15px 40% 40%; pointer-events:none;
+  background: linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.04)); }
+[class*="st-key-trauth_panel"] .stFormSubmitButton > button:hover { transform:translateY(-2px); filter:brightness(1.06); color:#fff; border-color: rgba(255,160,175,.65);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 0 -2px 0 rgba(0,0,0,.28), 0 26px 54px -16px rgba(255,51,85,1), 0 0 0 5px rgba(255,51,85,.11); }
+[class*="st-key-trauth_panel"] .stFormSubmitButton > button:active { transform:translateY(0) scale(.99); filter:brightness(.97);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.35), 0 12px 30px -16px rgba(255,51,85,.8), 0 0 0 4px rgba(255,51,85,.08); }
+[class*="st-key-trauth_panel"] .stFormSubmitButton > button p { font-size:15px; font-weight:800; letter-spacing:.14em; position:relative; }
+[class*="st-key-trauth_panel"] .stFormSubmitButton > button [data-testid="stIconMaterial"] { font-size:22px; position:relative; }
+[class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { position:relative; overflow:hidden; min-height:58px; border-radius:16px; font-size:15.5px; font-weight:700; letter-spacing:0; text-transform:none; gap:12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.035)); border:1px solid rgba(255,255,255,.14); color:#fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 14px 30px -18px rgba(0,0,0,.9); }
 [class*="st-key-auth_google"] .stButton > button::before, a.tr-auth-google::before { content:""; width:20px; height:20px; flex:none; background: url("data:image/svg+xml;utf8,__GOOGLE__") no-repeat center / 20px 20px; }
-[class*="st-key-auth_google"] .stButton > button:hover, a.tr-auth-google:hover { border-color: rgba(255,255,255,.3); background: linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.05)); }
+[class*="st-key-auth_google"] .stButton > button:hover, a.tr-auth-google:hover { border-color: rgba(255,255,255,.3); background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05)); transform:translateY(-1px); }
 [class*="st-key-auth_google"] .stButton > button p { font-size:15.5px; font-weight:700; }
 /* The live Google control is a real link — opened in a new tab, the one
    navigation the host's sandbox allows — drawn as the very same button:
@@ -305,11 +308,22 @@ a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outli
 .tr-auth-alert.info { background: rgba(232,178,92,.08); border:1px solid rgba(232,178,92,.32); color:#F2D19A; }
 .tr-auth-alert.success { background: rgba(62,213,152,.09); border:1px solid rgba(62,213,152,.35); color:#9FEBC9; }
 .tr-auth-alert svg { flex:none; margin-top:1px; }
-.tr-auth-busy { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px; padding:12px; border-radius:14px; font-family:var(--tr-mono); font-size:12px; letter-spacing:.24em; color:#FF8CA0;
-  background: rgba(255,51,85,.08); border:1px solid rgba(255,51,85,.3); }
-.tr-auth-busy .spin { width:16px; height:16px; border-radius:50%; border:2px solid rgba(255,107,133,.25); border-top-color:#FF6B85; animation: tr-spin .8s linear infinite; }
-.tr-auth-done { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px; padding:14px; border-radius:14px; font-family:var(--tr-mono); font-size:12px; letter-spacing:.24em; color:#9FEBC9;
+
+/* the wait: a line in the panel at once; the room dims only if it drags on */
+.tr-auth-busy { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px; padding:10px 14px; border-radius:14px; font-family:var(--tr-mono); font-size:12px; letter-spacing:.24em; color:#FF8CA0;
+  background: rgba(255,51,85,.08); border:1px solid rgba(255,51,85,.3); animation: tr-auth-fade .2s var(--tr-ease) both; }
+.tr-auth-busy .tr-radar { width:26px; flex:none; }
+.tr-auth-veil { position:fixed; inset:0; z-index:100000; display:flex; align-items:center; justify-content:center; pointer-events:none;
+  background: radial-gradient(900px 600px at 50% 50%, rgba(20,10,14,.55), rgba(6,6,9,.78)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  opacity:0; animation: tr-auth-fade .35s .6s var(--tr-ease) forwards; }
+.tr-auth-veil .box { display:flex; flex-direction:column; align-items:center; gap:18px; padding:34px 44px 30px; border-radius:24px;
+  background: linear-gradient(168deg, rgba(23,19,26,.96), rgba(15,13,18,.98)); border:1px solid rgba(255,255,255,.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 50px 100px -40px rgba(0,0,0,1), 0 30px 90px -50px rgba(255,51,85,.6); }
+.tr-auth-veil .msg { font-family:var(--tr-mono); font-size:12.5px; letter-spacing:.3em; color:#FF8CA0; text-align:center; }
+.tr-auth-veil .sub { font-family:var(--tr-mono); font-size:10px; letter-spacing:.3em; color:var(--tr-text-4); }
+.tr-auth-done { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px; padding:12px 14px; border-radius:14px; font-family:var(--tr-mono); font-size:12px; letter-spacing:.24em; color:#9FEBC9;
   background: rgba(62,213,152,.10); border:1px solid rgba(62,213,152,.4); animation: tr-auth-rise .3s var(--tr-ease) both; }
+.tr-auth-done .tr-radar { width:26px; flex:none; }
 .tr-auth-sent { text-align:center; padding:26px 8px 12px; animation: tr-auth-rise .5s var(--tr-ease) both; }
 .tr-auth-sent .ic { width:76px; height:76px; margin:0 auto 18px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#3ED598;
   background: radial-gradient(circle at 50% 40%, rgba(62,213,152,.22), rgba(62,213,152,.04) 70%); border:1px solid rgba(62,213,152,.45); box-shadow: 0 0 0 8px rgba(62,213,152,.05), 0 14px 40px -18px rgba(62,213,152,.9); }
@@ -324,12 +338,15 @@ a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outli
 .tr-auth-sent .step b { flex:none; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
   font-family:var(--tr-mono); font-size:10.5px; color:#FF6B85; border:1px solid rgba(255,51,85,.45); background:rgba(255,51,85,.08); }
 [class*="st-key-auth_resend"] .stButton > button {
-  background: linear-gradient(180deg,#FF6A85 0%,#FF3355 48%,#D4123F 100%); color:#fff; border:1px solid rgba(255,140,160,.45);
+  position:relative; overflow:hidden; background: linear-gradient(180deg,#FF6E88 0%,#FF3355 50%,#D6133F 100%); color:#fff; border:1px solid rgba(255,140,160,.5);
   font-size:13.5px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; min-height:54px; border-radius:16px; margin-top:6px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.4), inset 0 -1px 0 rgba(0,0,0,.25), 0 22px 46px -16px rgba(255,51,85,.95); }
-[class*="st-key-auth_resend"] .stButton > button:hover { background: linear-gradient(180deg,#FF7A93 0%,#FF3F5F 48%,#DC1746 100%); color:#fff; }
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -2px 0 rgba(0,0,0,.28), 0 20px 44px -16px rgba(255,51,85,.95); }
+[class*="st-key-auth_resend"] .stButton > button::before { content:""; position:absolute; left:1px; right:1px; top:1px; height:48%; border-radius:15px 15px 40% 40%; pointer-events:none;
+  background: linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.04)); }
+[class*="st-key-auth_resend"] .stButton > button:hover { filter:brightness(1.06); color:#fff; }
 [class*="st-key-auth_resend"] .stButton > button:disabled { opacity:.55; transform:none; box-shadow:none; cursor:default; }
-[class*="st-key-auth_resend"] .stButton > button p { font-size:13.5px; font-weight:800; letter-spacing:.12em; }
+[class*="st-key-auth_resend"] .stButton > button:disabled::before { display:none; }
+[class*="st-key-auth_resend"] .stButton > button p { font-size:13.5px; font-weight:800; letter-spacing:.12em; position:relative; }
 [class*="st-key-auth_verify_back"] .stButton > button { min-height:50px; border-radius:16px; font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
   background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.14); color:var(--tr-text); }
 [class*="st-key-auth_verify_back"] .stButton > button p { font-size:13px; font-weight:700; letter-spacing:.1em; }
@@ -338,7 +355,7 @@ a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outli
 .tr-auth-mhead { display:none; }
 
 /* ── foot ──────────────────────────────────────────────────────────── */
-.tr-auth-bottom { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 2px 0; margin-top:8px; border-top:1px solid rgba(255,255,255,.07); animation: tr-auth-fade 1s .3s var(--tr-ease) both; }
+.tr-auth-bottom { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 2px 0; margin-top:8px; border-top:1px solid rgba(255,255,255,.07); animation: tr-auth-fade 1s .3s var(--tr-ease) both; }
 .tr-auth-bottom .items { display:flex; gap:28px; flex-wrap:wrap; }
 .tr-auth-bottom .item { display:inline-flex; align-items:center; gap:9px; font-size:13.5px; color:var(--tr-text-2); font-weight:600; }
 .tr-auth-bottom .item svg { color:#FF5573; }
@@ -349,61 +366,71 @@ a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outli
 @keyframes tr-auth-rise { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
 @keyframes tr-auth-fade { from { opacity:0; } to { opacity:1; } }
 @keyframes tr-auth-breathe { 0%,100% { opacity:.8; transform:scale(1); } 50% { opacity:1; transform:scale(1.06); } }
-@keyframes tr-radar-sweep { to { transform:rotate(360deg); } }
-@keyframes tr-blip { 0% { box-shadow:0 0 0 0 rgba(255,51,85,.7); opacity:1; } 70% { box-shadow:0 0 0 14px rgba(255,51,85,0); opacity:.9; } 100% { box-shadow:0 0 0 0 rgba(255,51,85,0); opacity:1; } }
+@keyframes tr-auth-deal { from { opacity:0; transform: rotate(var(--rot)) translateY(34px); } to { opacity:1; transform: rotate(var(--rot)) translateY(0); } }
+@keyframes tr-auth-sheen { 0%, 70% { transform: translateX(-60%); } 100% { transform: translateX(60%); } }
+@keyframes tr-auth-live { 0%,100% { opacity:1; } 50% { opacity:.45; } }
+__RADAR__
+__CRAFTS__
 @media (prefers-reduced-motion: reduce) {
   [class*="st-key-trauth_shell"] *, [class*="st-key-trauth_shell"] *::before, [class*="st-key-trauth_shell"] *::after { animation: none !important; transition: none !important; }
-  .tr-radar .sweep { transform: rotate(35deg); }
+  .tr-auth-veil { opacity:1; }
 }
 
-/* ── laptops: the wall goes first, the radar shrinks ───────────────── */
-@media (max-width: 1280px) {
-  .tr-auth-wall { width:300px; }
-  .tr-auth-wall .grid { grid-template-columns:repeat(3, 88px); gap:12px; }
-  .tr-auth-wall .card { height:130px; }
-  .tr-auth-copy h1 { font-size:50px; }
-  .tr-auth-city { right:250px; }
+/* ── laptops: the hand of posters scales down, the radar too ──────── */
+@media (max-width: 1440px) {
+  .tr-auth-posters { transform: scale(.8); transform-origin: 100% 0; }
+  .tr-auth-visual { padding-top:370px; }
+  .tr-auth-visual .tr-radar.hero { width:300px !important; }
 }
+@media (max-width: 1280px) {
+  .tr-auth-posters { transform: scale(.7); }
+  .tr-auth-visual { padding-top:330px; min-height:720px; }
+  .tr-auth-visual .tr-radar.hero { width:270px !important; }
+  .tr-auth-copy h1 { font-size:52px; }
+}
+/* ── tablets: the room keeps its radar and headline; the hand and the
+   constellation step aside so nothing crowds the form ──────────────── */
 @media (max-width: 1100px) {
   .block-container { padding: .9rem 1.4rem 1.4rem !important; }
-  .tr-auth-wall, .tr-auth-skyline, .tr-auth-city { display:none; }
+  .tr-auth-posters, .tr-crafts, .tr-auth-visual .horizon { display:none; }
+  .tr-auth-visual { min-height:640px; padding:300px 12px 110px 4px; }
+  .tr-auth-visual .tr-radar.hero { width:250px !important; }
   .tr-auth-copy { max-width:none; }
-  .tr-auth-visual { padding-right:12px; }
   .tr-auth-copy h1 { font-size:44px; }
-  .tr-auth-copy .lede { font-size:16.5px; }
-  .tr-auth-feats { gap:12px; }
-  .tr-auth-feat { width:92px; }
-  .tr-auth-visual { min-height:680px; padding-bottom:140px; }
-  .tr-auth-nav .tag { display:none; }
+  .tr-auth-copy .lede { font-size:16px; }
+  .tr-auth-status .city, .tr-auth-status .sep { display:none; }
   [class*="st-key-trauth_panel"] { padding:26px 24px 24px !important; }
 }
 
-/* ── phones: the panel is the page ─────────────────────────────────── */
+/* ── phones: a deliberate stack — brand, a short hero, three posters,
+   the form. The desktop room is not squeezed; it is gone ───────────── */
 @media (max-width: 768px) {
   .block-container { padding: .9rem 1rem 2rem !important; }
   [data-testid="stMainBlockContainer"] { padding-top: .4rem !important; }
   .tr-auth-top { padding:2px 0 10px; }
-  .tr-auth-nav { display:none; }
+  .tr-auth-status { display:none; }
   .tr-auth-lockup .mark { width:40px; height:40px; }
   .tr-auth-lockup .name { font-size:21px; }
   .tr-auth-lockup .sub { font-size:8.5px; letter-spacing:.26em; }
-  /* the cinematic column is gone; a compact header carries the message */
   [class*="st-key-trauth_shell"] > div > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { display:none !important; }
-  .tr-auth-mhead { display:block; position:relative; padding:14px 2px 18px; overflow:hidden; animation: tr-auth-rise .7s var(--tr-ease) both; }
-  .tr-auth-mhead h1 { font-size:clamp(30px, 8.6vw, 38px); line-height:1.04; letter-spacing:-.04em; font-weight:800; color:#fff; margin:0; }
+  .tr-auth-mhead { display:block; position:relative; padding:12px 2px 18px; overflow:hidden; animation: tr-auth-rise .7s var(--tr-ease) both; }
+  .tr-auth-mhead .eyebrow { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.3em; color:#FF8CA0; margin-bottom:10px; }
+  .tr-auth-mhead h1 { font-size:clamp(30px, 8.6vw, 38px); line-height:1.02; letter-spacing:-.04em; font-weight:800; color:#fff; margin:0; max-width:62%; }
   .tr-auth-mhead h1 em { font-style:normal; color:var(--tr-accent); }
   .tr-auth-mhead .lede { font-size:14.5px; line-height:1.5; color:var(--tr-text-2); margin:10px 0 0; max-width:34ch; }
-  .tr-auth-mhead .mini { position:absolute; right:0; top:-10px; width:130px; height:130px; opacity:.85; }
-  .tr-auth-mhead .mini .ring { position:absolute; border-radius:50%; border:1px solid rgba(255,51,85,.35); left:50%; top:50%; transform:translate(-50%,-50%); }
-  .tr-auth-mhead .mini .r1 { width:40px; height:40px; border-color:rgba(255,51,85,.6); } .tr-auth-mhead .mini .r2 { width:86px; height:86px; } .tr-auth-mhead .mini .r3 { width:120px; height:120px; border-color:rgba(255,51,85,.2); }
-  .tr-auth-mhead .mini .sweep { position:absolute; inset:8px; border-radius:50%; background: conic-gradient(from 0deg, rgba(255,51,85,0) 0deg, rgba(255,51,85,0) 270deg, rgba(255,51,85,.4) 359deg, rgba(255,51,85,0) 360deg); animation: tr-radar-sweep 6.5s linear infinite; }
-  .tr-auth-mhead .mini .core { position:absolute; left:50%; top:50%; width:7px; height:7px; border-radius:50%; background:#FF3355; transform:translate(-50%,-50%); box-shadow:0 0 16px 3px rgba(255,51,85,.8); }
-  .tr-auth-mhead .feats { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
-  .tr-auth-mhead .feats span { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,51,85,.3); background:rgba(255,51,85,.07); font-size:11.5px; font-weight:600; color:var(--tr-text-2); white-space:nowrap; }
-  .tr-auth-mhead .feats svg { color:#FF5573; }
+  .tr-auth-mhead .tr-radar.mini { position:absolute; right:2px; top:-2px; width:112px !important; opacity:.95; }
+  .tr-auth-mstrip { position:relative; height:118px; margin:18px 0 0; }
+  .tr-auth-mstrip .tr-auth-poster { position:absolute; width:72px; height:106px; border-radius:9px; animation:none; }
+  .tr-auth-mstrip .tr-auth-poster .t { display:none; }
+  .tr-auth-mstrip .tr-auth-poster:nth-child(1) { left:0; top:8px; --rot:-7deg; z-index:1; }
+  .tr-auth-mstrip .tr-auth-poster:nth-child(2) { left:58px; top:0; --rot:-1deg; z-index:3; }
+  .tr-auth-mstrip .tr-auth-poster:nth-child(3) { left:120px; top:9px; --rot:6deg; z-index:2; }
+  .tr-auth-mstrip .credit { position:absolute; left:210px; top:34px; font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.22em; line-height:1.9; color:var(--tr-text-3); }
+  .tr-auth-mhead .tr-craft-strip { margin-top:14px; }
   [class*="st-key-trauth_panel"] { max-width:none; margin:0; padding:22px 18px 20px !important; border-radius:20px; }
+  [class*="st-key-trauth_panel"]::before, [class*="st-key-trauth_panel"]::after { border-radius:20px; }
   .tr-auth-brand { gap:14px; padding-bottom:16px; }
-  .tr-auth-brand .lock svg { width:38px; height:38px; }
+  .tr-auth-brand .lock .tr-radar { width:44px; }
   .tr-auth-brand .lock .n { font-size:18px; }
   .tr-auth-brand .tag { font-size:9.5px; letter-spacing:.28em; }
   .tr-auth-h { font-size:27px; }
@@ -413,6 +440,7 @@ a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outli
   [class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { min-height:54px; font-size:14.5px; }
   [class*="st-key-trpair_auth_foot"] [data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; }
   .tr-auth-foot-text { font-size:13.5px; }
+  .tr-auth-veil .box { padding:26px 28px 24px; margin:0 16px; }
   .tr-auth-bottom { flex-direction:column; align-items:flex-start; gap:12px; padding-top:14px; }
   .tr-auth-bottom .items { gap:12px 18px; }
   .tr-auth-bottom .item { font-size:12.5px; }
@@ -422,10 +450,13 @@ a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outli
   [class*="st-key-trauth_panel"] { padding:20px 15px 18px !important; }
   .tr-auth-brand { gap:10px; } .tr-auth-brand .sep { display:none; } .tr-auth-brand .tag { display:none; }
   .tr-auth-foot-text { font-size:13px; }
+  .tr-auth-mhead .tr-radar.mini { width:96px !important; }
+  .tr-auth-mstrip .credit { display:none; }
 }
 </style>
 """.replace("__MAIL__", _input_icon_uri("mail")).replace("__LOCK__", _input_icon_uri("lock")) \
-   .replace("__USER__", _input_icon_uri("user")).replace("__GOOGLE__", GOOGLE_G)
+   .replace("__USER__", _input_icon_uri("user")).replace("__GOOGLE__", GOOGLE_G) \
+   .replace("__RADAR__", radar.CSS).replace("__CRAFTS__", crafts.CSS)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -437,95 +468,120 @@ def _topbar() -> str:
         <div class="mark">{C.TICKET_GLYPH.replace('stroke="#fff"', 'stroke="#FF5573"')}</div>
         <div><div class="name">Ticket<em>Radar</em></div><div class="sub">MOVIES • ALERTS • YOU FIRST</div></div>
       </div>
-      <div class="tr-auth-nav">
-        <span class="city">Hyderabad {_icon("pin", 15, "#FF5573")}</span>
-        <span>Movies</span><span>Theatres</span><span>Alerts</span>
-        <span class="tag">A Better Movie Experience</span>
+      <div class="tr-auth-status">
+        <span class="live"><i></i>RADAR ONLINE</span><span class="sep"></span>
+        <span class="city">HYDERABAD</span><span class="sep"></span><span>24 / 7</span>
       </div>
     </div>"""
 
 
-def _posters(limit: int = 6) -> list[tuple[str, str]]:
-    """(title, poster url) for the wall — the city's real catalogue, never a
-    made-up film. Placeholders fill in when the catalogue is empty."""
-    picked: list[tuple[str, str]] = []
-    seen: set[str] = set()
-    try:
-        for m in cv.view("hyderabad").movies:
-            # Rows are per language; one poster per film is enough here.
-            if m.poster_url and m.title not in seen:
-                seen.add(m.title)
-                picked.append((m.title, m.poster_url))
-            if len(picked) == limit:
-                break
-    except Exception:  # noqa: BLE001 - the login page must never depend on the catalogue
-        return []
-    return picked
+#: The hand of six on a desktop: where each poster sits in a 600×360 box —
+#: (left, top, width, height, rotation°, z, brightness, deal delay s). The
+#: centre card leads: largest, upright, in front, and the only one that
+#: catches a slow sheen. A seventh or eighth poster in the folder takes an
+#: :data:`EXTRA_SLOTS` place at the back.
+FAN = {
+    "interstellar":            (0,   84, 118, 177, -12, 1, .78, .05),
+    "rrr":                     (96,  50, 130, 195,  -7, 2, .88, .12),
+    "avengers_endgame":        (208, 16, 156, 234,  -2, 5, 1.0, .20),
+    "avatar":                  (340, 34, 142, 213,   4, 4, .95, .28),
+    "baahubali":               (452, 66, 124, 186,   9, 3, .85, .36),
+    "spiderman_brand_new_day": (500, 160, 100, 150, 15, 2, .80, .44),
+}
+EXTRA_SLOTS = ((-36, 150, 96, 144, -17, 0, .7, .5), (532, 260, 96, 144, 19, 0, .7, .56))
+LEAD = "avengers_endgame"
+#: The three that fit a phone, front to back.
+PHONE_POSTERS = ("rrr", "avengers_endgame", "interstellar")
 
 
-def _wall() -> str:
+#: A transparent pixel: what an ``<img>`` shows where its ``<picture>`` has
+#: no source for this viewport, so nothing is fetched for a hidden card.
+BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACw="
+CAPTIONS = {"spiderman_brand_new_day": "Spider-Man"}
+
+
+def _poster_card(asset, slot=None, *, media: str, lead: bool = False) -> str:
+    """One card. ``slot`` is the hand's inline geometry; the phone strip
+    positions its three by CSS instead. ``media`` is the viewport that
+    shows this card — the only one that downloads it."""
+    style = ""
+    if slot:
+        left, top, width, height, rot, z, dim, delay = slot
+        style = (f' style="left:{left}px;top:{top}px;width:{width}px;height:{height}px;'
+                 f'--rot:{rot}deg;z-index:{z};--dim:{dim};--delay:{delay}s"')
+    src = art.static_url(asset)
+    sheen = '<span class="sheen"></span>' if lead else ""
+    caption = CAPTIONS.get(asset.key, asset.label)
+    return (f'<div class="tr-auth-poster{" lead" if lead else ""}"{style}>'
+            f'<picture><source media="{media}" srcset="{C.e(src)}">'
+            f'<img src="{BLANK}" alt="" decoding="async"></picture>'
+            f'{sheen}<div class="t">{C.e(caption)}</div></div>')
+
+
+def _hand() -> str:
+    """The six fixed posters, fanned. They are the brand's own files
+    (``static/login/posters``), never the catalogue's, so the wall is the
+    same on every visit and costs the browser one cached fetch each."""
     cards = []
-    for title, url in _posters():
-        cards.append(f'<div class="card"><img src="{C.e(url)}" alt="" loading="lazy" onerror="this.remove()">'
-                     f'<div class="t">{C.e(title)}</div></div>')
-    for label in ("Now showing", "Coming soon", "Premieres", "Re-release", "Late night", "IMAX")[len(cards):]:
-        cards.append(f'<div class="card ph"><div class="t">{label}</div></div>')
-    return f'<div class="tr-auth-wall"><div class="grid">{"".join(cards)}</div></div>'
+    extras = 0
+    for asset in art.posters():
+        slot = FAN.get(asset.key)
+        if slot is None:
+            slot = EXTRA_SLOTS[extras % len(EXTRA_SLOTS)]
+            extras += 1
+        cards.append(_poster_card(asset, slot, media="(min-width: 1101px)", lead=asset.key == LEAD))
+    return (f'<div class="tr-auth-posters"><div class="hand">{"".join(cards)}</div>'
+            f'<div class="credit">NOW PLAYING ACROSS HYDERABAD</div></div>')
 
 
-CHARMINAR = """<svg viewBox="0 0 280 150" fill="currentColor" aria-hidden="true">
-<path d="M18 150V60c0-6 3-10 7-12 1-6 2-12 4-18l3-2 3 2c2 6 3 12 4 18 4 2 7 6 7 12v90zM234 150V60c0-6 3-10 7-12 1-6 2-12 4-18l3-2 3 2c2 6 3 12 4 18 4 2 7 6 7 12v90z"/>
-<path d="M86 150V68c0-5 2-9 6-11 1-5 2-9 3-14l3-2 3 2c1 5 2 9 3 14 4 2 6 6 6 11v82zM170 150V68c0-5 2-9 6-11 1-5 2-9 3-14l3-2 3 2c1 5 2 9 3 14 4 2 6 6 6 11v82z"/>
-<path d="M46 150V96h188v54H210v-30a18 18 0 0 0-36 0v30h-14v-28a20 20 0 0 0-40 0v28h-14v-30a18 18 0 0 0-36 0v30z"/>
-<path d="M46 96V80h188v16z" opacity=".7"/><path d="M30 80h220v6H30z" opacity=".5"/>
-<circle cx="140" cy="60" r="10" opacity=".5"/><path d="M128 70h24l-12-24z" opacity=".35"/>
-</svg>"""
+def _phone_strip() -> str:
+    cards = [_poster_card(a, media="(max-width: 768px)")
+             for a in (art.poster(k) for k in PHONE_POSTERS) if a is not None]
+    return (f'<div class="tr-auth-mstrip">{"".join(cards)}'
+            f'<div class="credit">NOW PLAYING<br>ACROSS<br>HYDERABAD</div></div>')
+
+
+def _feats() -> str:
+    return "".join(
+        f'<span class="tr-auth-feat"><span class="ic">{_icon(icon, 13, "currentColor", "1.9")}</span>{C.e(f"{a} {b}".upper())}</span>'
+        for icon, a, b in PROMISES
+    )
 
 
 def _visual() -> str:
-    feats = "".join(
-        f'<div class="tr-auth-feat"><div class="ic">{_icon(icon, 22, "currentColor", "1.7")}</div>'
-        f'<div class="t">{a}<br>{b}</div></div>'
-        for icon, a, b in PROMISES
-    )
-    seats_back = "".join("<i></i>" for _ in range(11))
-    seats_front = "".join("<i></i>" for _ in range(9))
+    """The room: the radar leading, the hand of posters behind it, the
+    crafts scattered in the dark, the headline on the floor."""
     return f"""<div class="tr-auth-visual">
-      <div class="glow"></div>
-      <div class="tr-radar">
-        <div class="ring r4"></div><div class="ring r3"></div><div class="ring r2"></div><div class="ring r1"></div>
-        <div class="axis"></div><div class="axis v"></div>
-        <div class="sweep"></div><div class="core"></div>
-        <div class="blip b1"></div><div class="blip b2"></div><div class="blip b3"></div>
-        <div class="tag">TICKETS<br>DETECTED</div>
-      </div>
+      <div class="beam"></div><div class="glow"></div>
+      {radar.svg(size=340, state="scanning", tag="TICKETS<br>DETECTED", cls="hero", label="TicketRadar radar, scanning")}
+      {_hand()}
+      {crafts.constellation()}
       <div class="tr-auth-copy">
+        <div class="eyebrow">HYDERABAD · EVERY SCREEN · EVERY RELEASE</div>
         <h1>Never Miss<br>the <em>Moment</em></h1>
-        <p class="lede">We track movie ticket releases so you don't have to.<br>Get instant email alerts the moment tickets go live.</p>
-        <div class="tr-auth-feats">{feats}</div>
+        <p class="lede">We watch the ticket counters so you don't have to. The moment a show opens at your theatre, the alert is already in your inbox.</p>
+        <div class="tr-auth-feats">{_feats()}</div>
       </div>
-      <div class="tr-auth-city">HYDERABAD<br>MOVES DIFFERENTLY</div>
-      {_wall()}
-      <div class="tr-auth-skyline">{CHARMINAR}</div>
+      <div class="horizon"></div>
       <div class="floor"></div>
-      <div class="tr-auth-seats"><div class="row back">{seats_back}</div><div class="row front">{seats_front}</div></div>
       <div class="tr-auth-mark">SOME MOVIES ARE MEANT<br>TO BE EXPERIENCED TOGETHER</div>
     </div>"""
 
 
 def _mobile_head() -> str:
-    chips = "".join(f'<span>{_icon(icon, 13)}{a} {b}</span>' for icon, a, b in PROMISES)
     return f"""<div class="tr-auth-mhead">
-      <div class="mini"><div class="ring r3"></div><div class="ring r2"></div><div class="ring r1"></div><div class="sweep"></div><div class="core"></div></div>
+      {radar.svg(size=124, state="scanning", cls="mini", label="TicketRadar radar, scanning")}
+      <div class="eyebrow">HYDERABAD · EVERY RELEASE</div>
       <h1>Never Miss<br>the <em>Moment</em></h1>
       <p class="lede">Instant email alerts the moment tickets go live.</p>
-      <div class="feats">{chips}</div>
+      {_phone_strip()}
+      {crafts.strip()}
     </div>"""
 
 
 def _brand() -> str:
     return f"""<div class="tr-auth-brand">
-      <div class="lock">{C.TICKET_GLYPH.replace('stroke="#fff"', 'stroke="#FF3355"').replace('width="19" height="19"', 'width="44" height="44"')}
+      <div class="lock">{radar.svg(size=52, state="idle", cls="mark brandmark", label="TicketRadar")}
         <div class="n">TICKET<em>RADAR</em></div></div>
       <div class="sep"></div>
       <div class="tag">GOOD<br>MOVIES<br>FIND<br>YOU</div>
@@ -749,8 +805,16 @@ def _feedback() -> None:
 
 
 def _busy(placeholder, text: str) -> None:
-    placeholder.markdown(f'<div class="tr-auth-busy"><span class="spin"></span>{C.e(text)}</div>',
-                         unsafe_allow_html=True)
+    """The wait, in two beats from one paint: the line in the panel shows
+    at once; the veil over the room is in the same markup but its CSS
+    holds it invisible for 600 ms, so a quick answer never shows it and a
+    slow one dims the page without a second render or a timer."""
+    placeholder.markdown(C.clean_html(
+        f'<div class="tr-auth-busy">{radar.svg(size=26, state="detecting", cls="mark busy", label="")}<span>{C.e(text)}</span></div>'
+        f'<div class="tr-auth-veil" role="status" aria-live="polite"><div class="box">'
+        f'{radar.svg(size=120, state="detecting", cls="veil", label="")}'
+        f'<div class="msg">{C.e(text)}</div><div class="sub">ONE MOMENT</div></div></div>'
+    ), unsafe_allow_html=True)
 
 
 def _attempt(placeholder, busy_text: str, action: Callable[[], None]) -> None:
@@ -766,11 +830,10 @@ def _attempt(placeholder, busy_text: str, action: Callable[[], None]) -> None:
 
 def _welcome(placeholder, user: session.AuthUser) -> None:
     """The success beat: a green line for half a second, then the app."""
-    placeholder.markdown(
-        f'<div class="tr-auth-done">{_icon("check", 16, "#3ED598", "2.4")}'
-        f'<span>SIGNED IN — WELCOME, {C.e(user.first_name.upper())}</span></div>',
-        unsafe_allow_html=True,
-    )
+    placeholder.markdown(C.clean_html(
+        f'<div class="tr-auth-done">{radar.svg(size=26, state="success", cls="mark done", label="")}'
+        f'<span>SIGNED IN — WELCOME, {C.e(user.first_name.upper())}</span></div>'
+    ), unsafe_allow_html=True)
     time.sleep(0.45)
     st.rerun()
 
@@ -831,7 +894,7 @@ def _signin() -> None:
             user = session.sign_in_user(creds)
             _welcome(status, user)
 
-        _attempt(status, "SIGNING IN…", go)
+        _attempt(status, "TUNING INTO THE RADAR…", go)
 
 
 def _signup() -> None:
@@ -901,7 +964,7 @@ def _signup() -> None:
                 st.session_state[NOTICE_KEY] = ("success", _accepted(creds.email))
             st.rerun()
 
-        _attempt(status, "CREATING YOUR ACCOUNT…", go)
+        _attempt(status, "CONNECTING TO TICKETRADAR…", go)
 
 
 def _send_failure(exc: AuthError, *, created: bool = False) -> str:
@@ -1092,7 +1155,7 @@ def _reset() -> None:
             st.session_state[MODE_KEY] = "reset_sent"
             st.rerun()
 
-        _attempt(status, "SENDING…", go)
+        _attempt(status, "SENDING YOUR RESET LINK…", go)
 
 
 def _reset_sent() -> None:

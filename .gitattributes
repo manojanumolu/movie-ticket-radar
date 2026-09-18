@@ -1,4 +1,10 @@
 # Keep LF in the repository. The Actions runner executes the shell blocks in
 # .github/workflows on Linux, where CRLF would break them.
 * text=auto eol=lf
+# Never let the line-ending filter near an image (assets/, ui/assets/).
 *.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary

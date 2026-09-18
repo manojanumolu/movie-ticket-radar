@@ -114,7 +114,8 @@ def test_nothing_in_the_app_uses_the_deprecated_components_html():
     page paint of the deployed app). ``st.iframe`` is the supported way."""
     from pathlib import Path
 
-    for name in ("app.py", "ui/components.py", "ui/flow.py", "ui/login.py", "auth/gate.py", "auth/session.py"):
+    for name in ("app.py", "ui/components.py", "ui/flow.py", "ui/login.py", "ui/radar.py", "ui/crafts.py",
+                 "auth/gate.py", "auth/session.py"):
         src = Path(name).read_text(encoding="utf-8")
         assert "components.v1.html" not in src.replace("``st.components.v1.html``", ""), name
         assert "components.html(" not in src, name
