@@ -758,3 +758,20 @@ def test_checker_explains_why_shows_were_filtered_out(make_monitor, provider_fac
     assert "none in 'IMAX'" in log and "Dolby Cinema" in log       # wrong format, with what was listed
     assert result.availability is Availability.SHOW_NOT_AVAILABLE
     assert "none in IMAX" in result.detail
+
+
+def test_an_unrecognised_github_error_reaches_the_page_as_a_sentence_not_a_body(capsys):
+    """The 401/403/404 cases have their own sentences. Anything else used to
+    reach the monitor card as the first 300 characters of GitHub's response
+    body; now the body goes to the log and the page names only the kind."""
+    from config.store import explain_github_error
+
+    class Odd(Exception):
+        pass
+
+    exc = Odd('422 {"message": "Unexpected inputs provided", "documentation_url": "https://docs.github.com/x", '
+              '"repository": "someone/private-repo"}')
+    said = explain_github_error(exc)
+    assert said == "GitHub answered with an error (Odd). Try again in a moment."
+    assert "private-repo" not in said and "documentation_url" not in said
+    assert "private-repo" in capsys.readouterr().out         # the owner's log still has it

@@ -76,11 +76,23 @@ def clean_read_cache():
     process-wide session_state, so without this a cached read would carry from
     one test into the next — a boundary production has and bare mode does not.
     """
+    import streamlit as st
+
     from monitor import state as state_mod
 
-    state_mod.invalidate_cache()
+    # Straight into bare mode's process-wide session state: with no scope
+    # provider registered, ``invalidate_cache()`` deliberately never touches
+    # Streamlit (that is the worker's path), so it cannot be the one to
+    # clear what a previous test's signed-in run left behind.
+    def clear() -> None:
+        try:
+            st.session_state.pop(state_mod.CACHE_KEY, None)
+        except Exception:  # noqa: BLE001 - no session state at all
+            pass
+
+    clear()
     yield
-    state_mod.invalidate_cache()
+    clear()
 
 
 @pytest.fixture(autouse=True)

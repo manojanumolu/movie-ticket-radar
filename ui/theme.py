@@ -248,7 +248,6 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 .tr-acct-menu { padding:8px 12px 10px; border-bottom:1px solid var(--tr-border); margin-bottom:4px; min-width:0; }
 .tr-acct-menu .n { font-size:13.5px; font-weight:700; color:var(--tr-text); overflow-wrap:anywhere; }
 .tr-acct-menu .m { font-size:11.5px; color:var(--tr-text-3); overflow-wrap:anywhere; margin-top:2px; }
-.tr-acct-menu .k { font-family:var(--tr-mono); font-size:9px; letter-spacing:.18em; color:var(--tr-text-4); margin-top:8px; }
 /* the destructive action is set apart from the ordinary ones: a quiet row in
    the same shape as the others, red only in its text, louder only on hover */
 .tr-acct-sep { height:1px; background:var(--tr-border); margin:6px 4px 4px; }
@@ -313,6 +312,14 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 [data-testid="stSidebar"] [role="radiogroup"] label code {
   margin-left:auto; font-family:var(--tr-mono); font-size:10.5px; padding:3px 7px; border-radius:6px;
   background:rgba(255,51,85,.14); color:#FF6B85; border:none; line-height:1;
+}
+/* The active-monitor count on "My Monitors" (item 2). It is drawn from a CSS
+   variable the page sets each run — never from the option's label, whose
+   text is the radio's stored identity in the browser; see app.sidebar(). */
+[data-testid="stSidebar"] [role="radiogroup"] > :nth-child(2) label [data-testid="stMarkdownContainer"] p::after,
+[data-testid="stSidebar"] [role="radiogroup"] > label:nth-of-type(2) [data-testid="stMarkdownContainer"] p::after {
+  content:var(--tr-nav-count, none); margin-left:auto; font-family:var(--tr-mono); font-size:10.5px;
+  padding:3px 7px; border-radius:6px; background:rgba(255,51,85,.14); color:#FF6B85; line-height:1;
 }
 __NAV_ICONS__
 
@@ -960,7 +967,11 @@ __NAV_ICONS__
 .stCheckbox [data-baseweb="checkbox"] > div:first-of-type[role] { background: rgba(255,255,255,.2); }
 .stCheckbox [data-baseweb="checkbox"] > div[aria-checked="true"] { background: rgba(255,51,85,.9) !important; }
 
-/* The scroll-to-top helper is a zero-height component; give it no room. */
+/* The scroll-to-top helper is a 1px iframe in its own keyed container; the
+   container takes no room at all. */
+[class*="st-key-tr_scrolltop"] { height:0 !important; min-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden; gap:0 !important; }
+[class*="st-key-tr_scrolltop"] iframe { display:block; height:1px; border:0; }
+/* (Kept for any remaining zero-height component.) */
 [data-testid="stElementContainer"]:has(> iframe[height="0"]), [data-testid="stElementContainer"]:has(> [data-testid="stCustomComponentV1"][height="0"]),
 [data-testid="stElementContainer"]:has(> [data-testid="stCustomComponentV1"]) {
   height:0 !important; margin:0 !important; padding:0 !important; min-height:0 !important; overflow:hidden;

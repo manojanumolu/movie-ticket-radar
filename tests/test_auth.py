@@ -811,7 +811,7 @@ def test_B_firebase_refuses_the_request_then_error_and_no_cooldown(visitor, fake
     fake.fail_verify_with = "OPERATION_NOT_ALLOWED"       # only VERIFY_EMAIL is refused
     app.button(key="auth_signup").click().run()
     text = body(app)                                                # the rerun that shows the error
-    assert "Firebase rejected the verification email request: OPERATION_NOT_ALLOWED (HTTP 400)" in text
+    assert "the verification email couldn't be sent: OPERATION_NOT_ALLOWED (HTTP 400)" in text
     assert "Your account was created, but" in text
     assert "accepted" not in text.lower()
     app = settle(app)
@@ -825,7 +825,7 @@ def test_B_firebase_refuses_the_request_then_error_and_no_cooldown(visitor, fake
     # Resend refused too: same honesty.
     resend_button(app).click().run()
     text = body(app)
-    assert "rejected the verification email request: OPERATION_NOT_ALLOWED (HTTP 400)" in text
+    assert "verification email couldn't be sent: OPERATION_NOT_ALLOWED (HTTP 400)" in text
     assert "accepted" not in text.lower()
     assert app.session_state["auth_pending"]["sends"] == 0
     assert "LAST REQUEST HTTP 400 OPERATION_NOT_ALLOWED" not in body(app)

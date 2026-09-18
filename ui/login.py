@@ -38,7 +38,7 @@ from typing import Callable
 
 import streamlit as st
 
-from auth import firebase, google, session
+from auth import disposable, firebase, google, session
 from auth.firebase import AuthError
 from ui import catalogue_view as cv
 from ui import components as C
@@ -872,6 +872,10 @@ def _signup() -> None:
             _fail("Enter your email address.")
         if not firebase.valid_email(email):
             _fail(firebase.MESSAGES["INVALID_EMAIL"])
+        # Said here so the person hears it without a round trip; enforced in
+        # ``FirebaseAuth.sign_up`` regardless, before Firebase is asked.
+        if disposable.is_disposable(email):
+            _fail(firebase.MESSAGES["DISPOSABLE_EMAIL"])
         problem = firebase.password_problem(password or "")
         if problem:
             _fail(f"Choose a stronger password — {problem.lower()}")
@@ -901,18 +905,19 @@ def _signup() -> None:
 
 
 def _send_failure(exc: AuthError, *, created: bool = False) -> str:
-    """What to say when Firebase did not accept a VERIFY_EMAIL request.
-    Names the code and status, because that is what fixes the project
-    configuration; never a key, a token or an address."""
+    """What to say when the sign-in service did not accept a VERIFY_EMAIL
+    request. Names the code and status, because that is what fixes the
+    project configuration; never a key, a token, an address — or the
+    name of the service behind the page."""
     lead = "Your account was created, but " if created else ""
-    return (f"{lead}Firebase rejected the verification email request: {exc.code} "
+    return (f"{lead}the verification email couldn't be sent: {exc.code} "
             f"(HTTP {exc.status}). {exc}")
 
 
 def _accepted(email: str) -> str:
     """Accepted is not delivered — say exactly that, without saying "Inbox"."""
     return (f"Verification email sent to {email}. Check your Inbox, Spam, or Promotions folder — "
-            "it comes from Firebase, not from TicketRadar's own address.")
+            "the sender may not say TicketRadar.")
 
 
 def _continue_url(email: str) -> str:
@@ -998,7 +1003,7 @@ def _resend() -> None:
         session.record_verification_answer(exc.status, exc.code)
         if exc.code in ("INVALID_ID_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND", "CREDENTIAL_TOO_OLD_LOGIN_AGAIN"):
             session.clear_pending()
-            st.session_state[ERROR_KEY] = ("Firebase rejected the verification email request: "
+            st.session_state[ERROR_KEY] = ("The verification email couldn't be sent: "
                                            f"{exc.code} (HTTP {exc.status}). Sign in again and we'll send a fresh link.")
         else:
             st.session_state[ERROR_KEY] = _send_failure(exc)

@@ -72,6 +72,9 @@ class RunReport:
     #: tick only; the next tick reads afresh.
     monitors: list[Monitor] = field(default_factory=list)
     state: dict[str, MonitorState] = field(default_factory=dict)
+    #: True when this tick decided from ``known_state`` that nothing was due
+    #: and read no state document at all (see ``run_once``).
+    state_read_skipped: bool = False
 
     def summary(self) -> str:
         text = (
@@ -306,12 +309,25 @@ def check_monitor(monitor: Monitor, *, at: datetime | None = None) -> CheckOutco
 # The worker tick
 # ──────────────────────────────────────────────────────────────────────────
 def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str = "",
-             mirror: bool = False, notifier=None) -> RunReport:
+             mirror: bool = False, notifier=None,
+             known_state: dict[str, MonitorState] | None = None) -> RunReport:
     """Check every monitor that is due. This is what the workflow calls.
 
     ``mirror`` is False by default because inside Actions the workflow makes
     one commit of the whole data directory at the end; mirroring each write
     through the API as well would race it.
+
+    ``known_state`` is the segment's own copy of the observed state from
+    its previous tick — the records this same process last wrote. The
+    worker is the only writer of state, and the workflow runs one segment
+    at a time, so for a monitor that was running then and is running now
+    that copy *is* what the store holds. When every running monitor is in
+    it and none is due, this tick reads no state document: nothing would be
+    checked, so nothing would be written. Anything else — a monitor that is
+    new, extended, due, or was never checked; a forced tick; a tick for a
+    named monitor — reads the collection exactly as before. Monitors are
+    read every tick regardless, so a monitor stopped or created in the app
+    is seen at once and expiry runs as it always has.
     """
     at = at or now_ist()
     report = RunReport(started_at=at)
@@ -327,7 +343,14 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     monitors, newly_expired = expire_due_monitors(load_monitors_for_checking(), at=at, mirror=mirror)
     report.expired = [m.id for m in newly_expired]
 
-    state = load_state()
+    if known_state is not None and not force and not monitor_id and all(
+        m.id in known_state and not known_state[m.id].is_due(m.interval_minutes, at)
+        for m in monitors if m.is_running(at)
+    ):
+        state = known_state
+        report.state_read_skipped = True
+    else:
+        state = load_state()
     dirty = bool(newly_expired)
 
     due: list[Monitor] = []

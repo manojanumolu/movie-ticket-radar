@@ -70,9 +70,58 @@ DEFAULTS = {
 }
 
 
+#: Widget-backed keys the monitoring step owns. They are not in DEFAULTS
+#: because Streamlit initialises them from the widget's ``value`` argument
+#: when the widget is drawn — but they persist in the session exactly like
+#: the keys above, so a reset has to drop them too.
+WIDGET_KEYS = ("notify_email", "notify_email_draft", "until_date", "until_time",
+               "start_now_toggle", "show_date_single", "show_date_range")
+#: Prefixes of the per-venue / per-nonce widget keys (format checkboxes,
+#: theatre search boxes) — the exact keys depend on what was picked.
+WIDGET_PREFIXES = ("fmt_", "theatre_query_")
+RESET_FLAG = "wizard_reset_pending"
+
+
 def boot() -> None:
+    """Prepare the wizard's session keys for this run.
+
+    Runs before any widget is drawn, so this is also where a reset asked for
+    on the previous run (``request_reset``) is carried out: widget-backed keys
+    cannot be touched while their widget is on screen.
+    """
+    if st.session_state.pop(RESET_FLAG, False):
+        reset_wizard()
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value.copy() if isinstance(value, (list, dict)) else value)
+
+
+def wizard_keys() -> list[str]:
+    """Every session key that describes the monitor being set up."""
+    dynamic = [k for k in st.session_state.keys()
+               if isinstance(k, str) and k.startswith(WIDGET_PREFIXES)]
+    return [k for k in DEFAULTS if k != "location"] + list(WIDGET_KEYS) + dynamic
+
+
+def reset_wizard() -> None:
+    """Forget the monitor that was being set up — every pick, every widget.
+
+    Called once a monitor has been saved (and by anything else that wants a
+    clean wizard). Only the city survives: it is where the person is, not
+    something about the monitor they just made. Everything else — movie,
+    theatres, formats, dates, interval, end time, email, step — goes, so the
+    next monitor starts from nothing rather than inheriting the last one's
+    details behind a step-1 screen.
+    """
+    for key in wizard_keys():
+        st.session_state.pop(key, None)
+    for key, value in DEFAULTS.items():
+        if key != "location":
+            st.session_state[key] = value.copy() if isinstance(value, (list, dict)) else value
+
+
+def request_reset() -> None:
+    """Ask for :func:`reset_wizard` at the start of the next run."""
+    st.session_state[RESET_FLAG] = True
 
 
 def goto(step: int, *, rerun: bool = True) -> None:
@@ -382,7 +431,8 @@ def step_theatres() -> list[Venue]:
                       "until they release it.")
     with action:
         st.button("Select all", key="select_all", use_container_width=True,
-                  icon=":material/done_all:", on_click=_select_all, args=(venues,))
+                  icon=":material/done_all:", on_click=_select_all, args=(venues,),
+                  help="Select every theatre showing this movie (again to clear)")
     if not venues and not directory:
         problem = st.session_state.get("detail_problem", "")
         if problem:
@@ -488,6 +538,22 @@ def step_theatres() -> list[Venue]:
 # ──────────────────────────────────────────────────────────────────────────
 # 4 · Formats
 # ──────────────────────────────────────────────────────────────────────────
+def unknown_formats(venue: Venue, chosen: list[str]) -> list[str]:
+    """The chosen formats this theatre is not known to run at all.
+
+    ``venue.formats`` is what the catalogue has ever seen the theatre run,
+    for any film (see ``catalogue_view.selected_venues``). A format outside
+    that set is not "unreleased" — it has no basis — and is the one thing
+    the monitoring step refuses. Any format always passes, and a theatre
+    with no known formats has nothing reliable to check against, so
+    everything passes for it: the existing behaviour, unchanged.
+    """
+    known = {normalise_format(f) for f in venue.formats}
+    if not known:
+        return []
+    return [f for f in chosen if f != ANY_FORMAT and normalise_format(f) not in known]
+
+
 def step_formats(venues: list[Venue], coming: set[str] | None = None,
                  listed: dict[str, tuple[str, ...]] | None = None) -> dict[str, list[str]]:
     """``venues`` carry every format each theatre is known to run (see
@@ -526,10 +592,22 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                 chosen: list[str] = []
                 any_key = f"fmt_{venue.code}_any"
                 any_on = st.checkbox("Any format", key=any_key,
-                                     value=ANY_FORMAT in formats.get(venue.code, []))
+                                     value=ANY_FORMAT in formats.get(venue.code, []),
+                                     help="Watch every format this theatre runs — alerts on the first to open.")
                 for fmt in options:
+                    # Said at the box itself, not only in the panel head: which
+                    # formats this movie lists here today, and which the
+                    # theatre runs but has not listed for it yet.
+                    if venue.code in coming:
+                        hint = "This theatre hasn't listed the movie yet — you'll be told when it opens in this format."
+                    elif here and normalise_format(fmt) not in here:
+                        hint = "Not listed for this movie at this theatre yet — pick it to be told if it's added."
+                    elif here:
+                        hint = "Listed for this movie at this theatre now."
+                    else:
+                        hint = None
                     if st.checkbox(fmt, key=f"fmt_{venue.code}_{fmt}",
-                                   value=fmt in formats.get(venue.code, [])):
+                                   value=fmt in formats.get(venue.code, []), help=hint):
                         chosen.append(fmt)
                 if any_on:
                     chosen = [ANY_FORMAT]
@@ -544,7 +622,8 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
     total = sum(len(formats[v.code]) for v in venues)
     st.caption(f"Watching {total} theatre/format combination(s) independently.")
     st.button("Continue to monitoring", type="primary", use_container_width=True,
-              key="fmt_continue", icon=":material/arrow_forward:", on_click=_go, args=(5,))
+              key="fmt_continue", icon=":material/arrow_forward:", on_click=_go, args=(5,),
+              help="Next: how often to check, until when, and where to email you")
     return formats
 
 
@@ -585,9 +664,11 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
             date_col, time_col = st.columns([1.5, 1], gap="small")
         end_date = date_col.date_input("End date", value=(now_ist() + timedelta(days=1)).date(),
                                        min_value=now_ist().date(), format="DD/MM/YYYY",
-                                       key="until_date", label_visibility="collapsed")
+                                       key="until_date", label_visibility="collapsed",
+                                       help="The last day this monitor keeps checking")
         end_time = time_col.time_input("End time", value=dtime(23, 59), step=timedelta(minutes=15),
-                                       key="until_time", label_visibility="collapsed")
+                                       key="until_time", label_visibility="collapsed",
+                                       help="The time on that day it stops")
         until = datetime.combine(end_date, end_time, tzinfo=IST)
         start_now = st.toggle("Start checking immediately", key="start_now_toggle",
                               value=bool(st.session_state.get("start_now", True)),
@@ -632,10 +713,20 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
     C.rule("Alerts")
     C.step_header("mail", "Where should we email you?", "One message the moment tickets open — nothing else.")
     C.html('<div class="tr-field-label">Notification email</div>')
-    email = st.text_input("Notification email", value=default_email,
+    # ``default_email`` fills the box only while nothing has been typed: the
+    # draft is what the person last entered, kept outside the widget so it
+    # survives a visit to another page (Streamlit drops a widget's own state
+    # when the widget is not drawn) and is never overwritten by a rerun.
+    draft = st.session_state.get("notify_email_draft")
+    email = st.text_input("Notification email", value=default_email if draft is None else draft,
                           placeholder="you@gmail.com", label_visibility="collapsed",
-                          key="notify_email")
+                          key="notify_email", on_change=_remember_email,
+                          help="Where the alert is sent. Prefilled with your account's email — change it if you like.")
     return interval, until, email.strip(), bool(start_now), show_dates
+
+
+def _remember_email() -> None:
+    st.session_state["notify_email_draft"] = st.session_state.get("notify_email", "")
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -685,7 +776,9 @@ __all__ = [
     "goto",
     "grid",
     "pick",
+    "request_reset",
     "reset_from",
+    "reset_wizard",
     "step_formats",
     "step_location",
     "step_monitoring",
@@ -693,4 +786,6 @@ __all__ = [
     "step_rail",
     "step_theatres",
     "summary",
+    "unknown_formats",
+    "wizard_keys",
 ]

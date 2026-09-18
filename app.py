@@ -195,13 +195,26 @@ def cached_github_status() -> tuple[bool, str]:
 # ──────────────────────────────────────────────────────────────────────────
 # Sidebar
 # ──────────────────────────────────────────────────────────────────────────
+PAGES = ["Home", "My Monitors", "History", "Settings"]
+
+
 def sidebar(active_count: int) -> str:
+    """The navigation. Its four option labels never change.
+
+    The active-monitor count next to *My Monitors* used to be part of the
+    option's label (``format_func`` → "My Monitors `3`"). Streamlit 1.64
+    keeps a radio's state in the browser as the *formatted label*, so the
+    moment the count changed — stopping a monitor, one expiring, starting
+    one — the browser's stored selection no longer matched any option, and
+    the next click's rerun reset the radio to its default: Home. That is the
+    "stop a few monitors and land on Home" bug, reproduced in a real browser.
+    The count is now drawn by the theme from a CSS variable instead, so the
+    badge looks the same and the option's identity is just "My Monitors".
+    """
     with st.sidebar:
-        C.logo()
-        pages = ["Home", "My Monitors", "History", "Settings"]
-        labels = {"My Monitors": f"My Monitors `{active_count}`"} if active_count else {}
-        choice = st.radio("Navigation", pages, format_func=lambda p: labels.get(p, p),
-                          key="page", label_visibility="collapsed")
+        badge = f'"{active_count}"' if active_count else "none"
+        C.logo(css=f":root{{--tr-nav-count:{badge};}}")
+        choice = st.radio("Navigation", PAGES, key="page", label_visibility="collapsed")
         C.html(
             '<div class="tr-side-foot">'
             '<div class="tr-quote">“Good movies find their audience. '
@@ -297,12 +310,13 @@ def account_bar() -> None:
             C.html(
                 '<div class="tr-acct-menu">'
                 f'<div class="n">{C.e(user.label)}</div>'
-                f'<div class="m">{C.e(user.email)}</div>'
-                '<div class="k">SIGNED IN WITH FIREBASE</div></div>'
+                f'<div class="m">{C.e(user.email)}</div></div>'
             )
             st.button("Account settings", key="acct_settings", use_container_width=True,
-                      icon=":material/manage_accounts:", on_click=open_account_settings)
-            if st.button("Sign out", key="auth_signout", use_container_width=True, icon=":material/logout:"):
+                      icon=":material/manage_accounts:", on_click=open_account_settings,
+                      help="Change the email your alerts go to")
+            if st.button("Sign out", key="auth_signout", use_container_width=True, icon=":material/logout:",
+                         help="Sign out of TicketRadar in this browser"):
                 auth_session.sign_out()
                 st.rerun()
             # Destructive, so it is set apart from the two ordinary actions.
@@ -343,6 +357,20 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
         problems.append("choose an end time in the future")
     if not email:
         problems.append("enter a notification email")
+    # A format the theatre has never been seen to run is not a target, it is
+    # a typo's worth of stale state — refused here, on the server, whatever
+    # the page showed. A format the theatre runs but this movie has not
+    # listed there *yet* is exactly what a release monitor waits for, and
+    # passes; so does Any format; so does a theatre whose formats the
+    # catalogue does not know at all (nothing reliable to check against).
+    # Existing monitors are never touched by this: it only guards creation.
+    for code in st.session_state.get("theatres", []):
+        venue = venues.get(code)
+        if venue is None:
+            continue
+        unknown = flow.unknown_formats(venue, formats.get(code) or [ANY_FORMAT])
+        if unknown:
+            problems.append(f"{venue.name} isn't known to run {', '.join(unknown)} — pick a format it lists")
     if problems:
         flash("warning", "Almost — " + ", ".join(problems) + ".")
         st.rerun()
@@ -429,8 +457,10 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     else:
         flash("success", where + " The scheduled worker will pick it up.")
 
-    st.session_state["step"] = 1
-    st.session_state["furthest"] = 1
+    # The monitor is saved; nothing about it belongs in the wizard any more.
+    # Applied at the top of the next run (widget keys are on screen now), so
+    # the next monitor starts from a clean step 1 with only the city kept.
+    flow.request_reset()
     st.rerun()
 
 
@@ -459,11 +489,13 @@ def problem_panel(monitor: Monitor, state: MonitorState) -> None:
         return
     key = f"show_problem_{monitor.id}"
     label = f"!  PROBLEM OCCURRED ({len(problems)})" if len(problems) > 1 else "!  PROBLEM OCCURRED"
-    if st.button(label, key=f"prob_{monitor.id}", use_container_width=True):
+    if st.button(label, key=f"prob_{monitor.id}", use_container_width=True,
+                 help="See what went wrong, and retry"):
         st.session_state[key] = not st.session_state.get(key, False)
     if st.session_state.get(key):
         C.problem_card(problems)
-        if st.button("Retry now", key=f"retry_{monitor.id}", use_container_width=True, icon=":material/refresh:"):
+        if st.button("Retry now", key=f"retry_{monitor.id}", use_container_width=True, icon=":material/refresh:",
+                     help="Ask the background worker to check this monitor again now"):
             retry_check(monitor)
 
 
@@ -495,10 +527,13 @@ def live_monitor_panel(monitor: Monitor, state: MonitorState) -> None:
     C.active_monitor_card(monitor, fresh)
     problem_panel(monitor, fresh)
 
-    if st.button("Stop monitoring", key=f"stop_{monitor.id}", use_container_width=True, icon=":material/stop:"):
-        stop_monitor(monitor.id, mirror=mirrored())
-        flash("success", "Monitoring stopped. The background worker will skip it from now on.")
-        st.rerun()   # scope="app" by default: the whole page, exactly as before
+    # The callback asks for a whole-app rerun (the rail's header, the live
+    # card and My Monitors' count all change), exactly as the inline
+    # ``st.rerun()`` it replaces did — but from a callback, before the script
+    # starts, so no run is ever interrupted part-way through.
+    st.button("Stop monitoring", key=f"stop_{monitor.id}", use_container_width=True, icon=":material/stop:",
+              on_click=do_stop_monitor_from_rail, args=(monitor.id,),
+              help="Stop checking this monitor. The background worker skips it from now on.")
 
     C.target_rows(monitor, fresh)
 
@@ -587,7 +622,12 @@ def page_home(monitors, states, history, settings) -> None:
                                   coming=cv.coming_soon_codes(movie_id, slug, codes),
                                   listed=cv.listed_formats(movie_id, slug, codes))
             else:
-                interval, until, email, start_now, dates = flow.step_monitoring(settings.get("notify_email", ""))
+                # The box starts as the saved notification address or, for an
+                # account that has never set one, the address they signed in
+                # with — from Firebase's record, never from anything typed here.
+                user = auth_session.current_user()
+                default_email = settings.get("notify_email") or (user.email if user else "")
+                interval, until, email, start_now, dates = flow.step_monitoring(default_email)
                 # Ordinary accounts have a ceiling on running monitors; the
                 # store refuses past it whatever this page shows, so this is
                 # the explanation, not the enforcement. An admin account has
@@ -598,7 +638,9 @@ def page_home(monitors, states, history, settings) -> None:
                 cta, helper = st.columns([2.2, 1], gap="medium")
                 with cta:
                     if st.button("Start monitoring", type="primary", disabled=at_limit,
-                                 use_container_width=True, key="start", icon=":material/play_arrow:"):
+                                 use_container_width=True, key="start", icon=":material/play_arrow:",
+                                 help="Save this monitor. The first check runs right away, then on the "
+                                      "schedule you chose, until the end time."):
                         start_monitor(interval, until, email, start_now, dates,
                                       settings=settings)
                 with helper:
@@ -611,38 +653,120 @@ def page_home(monitors, states, history, settings) -> None:
         rail(monitors, states, history)
 
 
+# Card actions run as ``on_click`` callbacks: the store is written *before*
+# the script runs, and the one run that follows draws the result. They used
+# to run inline and end with ``st.rerun()``, which interrupts the script
+# mid-run. Measured in a real browser (Streamlit 1.64): once the Home rail's
+# live fragment had rendered in a session, the second such interrupted stop
+# on My Monitors lost the sidebar's widget state and the next run opened on
+# Home. A callback never interrupts anything, so the page the person is on
+# is the page they stay on.
+def do_stop_monitor(monitor_id: str) -> None:
+    if stop_monitor(monitor_id, mirror=mirrored()) is None:
+        flash("warning", "That monitor is no longer here.")
+        return
+    flash("success", "Monitoring stopped.")
+
+
+def do_stop_monitor_from_rail(monitor_id: str) -> None:
+    """The rail's button lives in a fragment, whose own rerun would redraw
+    only the rail. Everything else on the page reads this monitor too, so
+    ask for the whole app — the last thing the callback does."""
+    do_stop_monitor(monitor_id)
+    st.rerun(scope="app")
+
+
+def do_delete_monitor(monitor_id: str) -> None:
+    delete_monitor(monitor_id, mirror=mirrored())
+    flash("success", "Monitor deleted.")
+
+
+def do_extend_monitor(monitor_id: str) -> None:
+    try:
+        extend_monitor(monitor_id, 24, mirror=mirrored())
+    except MonitorLimitError as exc:
+        flash("error", str(exc))
+        return
+    ok, _ = request_check_now(monitor_id)
+    flash("success", "Extended by 24 hours — monitoring is active again"
+          + (" and a check is running now." if ok else "."))
+
+
 def monitor_actions(monitor: Monitor, state: MonitorState) -> None:
-    """Stop / Extend / Delete for one card. Every action rewrites the file the
-    worker reads, then reruns — so the card is gone (or changed) on the very
-    next paint, never left on screen as a stale copy."""
+    """Stop / Extend / Delete for one card. Every action rewrites the store
+    the worker reads before the page is drawn — so the card is gone (or
+    changed) on the very next paint, never left on screen as a stale copy."""
     with st.container(key=f"tractions_{monitor.id}"):
         if monitor.is_running():
             problem_panel(monitor, state)
             a, b, _ = st.columns([1, 1, 2.2], gap="small")
-            if a.button("Stop", key=f"m_stop_{monitor.id}", use_container_width=True, icon=":material/stop:"):
-                stop_monitor(monitor.id, mirror=mirrored())
-                flash("success", "Monitoring stopped.")
-                st.rerun()
-            if b.button("Delete", key=f"m_del_{monitor.id}", use_container_width=True, icon=":material/delete:"):
-                delete_monitor(monitor.id, mirror=mirrored())
-                flash("success", "Monitor deleted.")
-                st.rerun()
+            a.button("Stop", key=f"m_stop_{monitor.id}", use_container_width=True, icon=":material/stop:",
+                     on_click=do_stop_monitor, args=(monitor.id,),
+                     help="Stop checking this monitor. It stays listed under Finished and can be extended later.")
+            b.button("Delete", key=f"m_del_{monitor.id}", use_container_width=True, icon=":material/delete:",
+                     on_click=do_delete_monitor, args=(monitor.id,),
+                     help="Remove this monitor for good. Its history entries are kept.")
         else:
             a, b, _ = st.columns([1.3, 1, 1.9], gap="small")
-            if a.button("Extend by 24 hours", key=f"m_ext_{monitor.id}", use_container_width=True, icon=":material/more_time:"):
-                try:
-                    extend_monitor(monitor.id, 24, mirror=mirrored())
-                except MonitorLimitError as exc:
-                    flash("error", str(exc))
-                    st.rerun()
-                ok, _ = request_check_now(monitor.id)
-                flash("success", "Extended by 24 hours — monitoring is active again"
-                      + (" and a check is running now." if ok else "."))
-                st.rerun()
-            if b.button("Delete", key=f"m_del_{monitor.id}", use_container_width=True, icon=":material/delete:"):
-                delete_monitor(monitor.id, mirror=mirrored())
-                flash("success", "Monitor deleted.")
-                st.rerun()
+            a.button("Extend by 24 hours", key=f"m_ext_{monitor.id}", use_container_width=True,
+                     icon=":material/more_time:", on_click=do_extend_monitor, args=(monitor.id,),
+                     help="Start this monitor again for another 24 hours from now.")
+            b.button("Delete", key=f"m_del_{monitor.id}", use_container_width=True, icon=":material/delete:",
+                     on_click=do_delete_monitor, args=(monitor.id,),
+                     help="Remove this monitor for good. Its history entries are kept.")
+
+
+DELETE_ALL_KEY = "m_delete_all_open"
+
+
+def ask_delete_all() -> None:
+    """An ``on_click``: open the confirmation. Nothing is deleted here."""
+    st.session_state[DELETE_ALL_KEY] = True
+
+
+def cancel_delete_all() -> None:
+    st.session_state[DELETE_ALL_KEY] = False
+
+
+def do_delete_all() -> None:
+    """The confirmed action: every monitor the signed-in account owns —
+    active ones included — and their state, in the store, before the page
+    is drawn. Whose monitors is decided by the store's scope (the Firebase
+    UID), never by what this page listed. Then the page's own bookkeeping
+    about them goes too, so nothing on screen can refer to a monitor that
+    is no longer there."""
+    st.session_state[DELETE_ALL_KEY] = False
+    try:
+        count = state_store.delete_all_monitors(mirror=mirrored())
+    except Exception as exc:  # noqa: BLE001 - the page must say so, not crash
+        print(f"[app] delete all failed: {type(exc).__name__}", flush=True)
+        flash("error", "Couldn't delete your monitors just now. Please try again.")
+        return
+    for key in [k for k in st.session_state.keys()
+                if isinstance(k, str) and k.startswith(("show_problem_", "prob_", "retry_"))]:
+        st.session_state.pop(key, None)
+    flash("success", f"Deleted {count} monitor(s). History keeps their record."
+          if count else "There was nothing to delete.")
+
+
+def delete_all_panel(monitors: list[Monitor]) -> None:
+    """The confirmation for the one action that removes everything."""
+    if not st.session_state.get(DELETE_ALL_KEY):
+        return
+    running = sum(1 for m in monitors if m.is_running())
+    with st.container(border=True, key="trcard_delall"):
+        C.html(
+            '<div class="tr-danger">'
+            f'<div class="t">Delete all {len(monitors)} monitor(s)?</div>'
+            '<div class="s">This removes every monitor on this account'
+            + (f' — including <b>{running} active</b>, whose alerts stop immediately' if running else '')
+            + '. History keeps their record. <b>This cannot be undone.</b></div></div>'
+        )
+        a, b = st.columns(2, gap="small")
+        a.button("Cancel", key="m_delete_all_cancel", use_container_width=True, on_click=cancel_delete_all)
+        b.button(f"Delete all {len(monitors)}", key="m_delete_all_confirm", use_container_width=True,
+                 type="primary", icon=":material/delete_forever:", on_click=do_delete_all,
+                 help="Deletes every monitor on this account, active or finished.")
 
 
 def page_monitors(monitors, states) -> None:
@@ -650,6 +774,7 @@ def page_monitors(monitors, states) -> None:
            "Active alerts first, then the ones that finished.")
     drain_flash()
     if not monitors:
+        st.session_state[DELETE_ALL_KEY] = False
         C.empty_card()
         return
 
@@ -657,7 +782,16 @@ def page_monitors(monitors, states) -> None:
     finished = sorted((m for m in monitors if not m.is_running()),
                       key=lambda m: (m.stopped_at or m.created_at), reverse=True)
 
-    C.rule(f"Active · {len(active)}")
+    head, clear = st.columns([3, 1], gap="small", vertical_alignment="center")
+    with head:
+        C.rule(f"Active · {len(active)}")
+    with clear:
+        # "All" means all of this account's monitors, active and finished:
+        # the confirmation below says how many, and does the deleting.
+        st.button("Delete all", key="m_delete_all", use_container_width=True,
+                  icon=":material/delete_sweep:", on_click=ask_delete_all,
+                  help="Delete every monitor on this account — active and finished. Asks first.")
+    delete_all_panel(monitors)
     if not active:
         C.empty_card("Nothing is being watched right now. Set one up from Home.")
     for monitor in active:
@@ -667,16 +801,7 @@ def page_monitors(monitors, states) -> None:
             monitor_actions(monitor, state)
 
     if finished:
-        head, clear = st.columns([3, 1], gap="small", vertical_alignment="center")
-        with head:
-            C.rule(f"Finished · {len(finished)}")
-        with clear:
-            if st.button(f"Delete all {len(finished)} finished", key="m_clear_finished",
-                         use_container_width=True, icon=":material/delete_sweep:"):
-                for monitor in finished:
-                    delete_monitor(monitor.id, mirror=mirrored())
-                flash("success", f"Deleted {len(finished)} finished monitor(s). History keeps their record.")
-                st.rerun()
+        C.rule(f"Finished · {len(finished)}")
         for monitor in finished:
             state = states.get(monitor.id, MonitorState())
             with st.container(key=f"trcard_mon_{monitor.id}"):
@@ -709,11 +834,13 @@ def page_settings(settings) -> None:
                               label_visibility="collapsed")
         with st.container(key="trpair_settings"):
             a, b = st.columns(2, gap="small")
-        if a.button("Save", use_container_width=True, key="save_settings", type="primary", icon=":material/save:"):
+        if a.button("Save", use_container_width=True, key="save_settings", type="primary", icon=":material/save:",
+                    help="Use this address for new monitors"):
             save_settings({**settings, "notify_email": email.strip()}, mirror=mirrored())
             flash("success", "Settings saved.")
             st.rerun()
-        if b.button("Send test email", use_container_width=True, key="test_email", icon=":material/send:"):
+        if b.button("Send test email", use_container_width=True, key="test_email", icon=":material/send:",
+                    help="Send one test message to this address"):
             try:
                 send_test_email(email.strip() or settings.get("notify_email", ""))
             except NotificationError as exc:
@@ -754,7 +881,8 @@ def page_settings(settings) -> None:
             ok, msg = dispatch_workflow("catalogue-sync.yml", {"city": slug})
             flash("success" if ok else "error", msg)
             st.rerun()
-        if b.button("Run a ticket check now", use_container_width=True, key="run_now", icon=":material/bolt:"):
+        if b.button("Run a ticket check now", use_container_width=True, key="run_now", icon=":material/bolt:",
+                    help="Ask the background worker to check every active monitor now"):
             ok, msg = request_check_now()
             flash("success" if ok else "error",
                   "Check started — results land in the rail within a minute or two." if ok else msg)
