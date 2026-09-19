@@ -235,6 +235,29 @@ What Phase 3 adds is `ui/home.py`, a layer that replaces nothing:
 Everything is CSS and inline SVG over data the page already holds — no
 reads, no widgets, no script.
 
+The polish pass layered the house itself behind the interface: a large
+film reel (stroke geometry — rim, highlight arc, ring, six perforations,
+hub) turning once every 84 s at the bottom right, a smaller one turning
+the other way at the left, the film strip leaving the big reel as one
+curve drawn three times, and the PREMIUM FORMATS motif in mono on the
+ledge under the wizard — a motif, never a claim; the Formats step and the
+catalogue decide what a theatre lists. The crafts' tips on Home became
+subtitle cards — a short famous line and who said it (`ui.home.LINES`);
+the Login constellation keeps the crafts' own names. A monitor that is
+watching carries a slow green scan down its card (`:has(.tr-pill.ok)`, so
+sold out, waiting, trouble and finished never turn green). The wizard's
+steps, the answered chips and the card's metrics carry small icons drawn
+from `components.ICON_PATHS` as data URIs; the words are untouched. The
+Monitor Details dialog gained a pointer-transparent backdrop (a faint
+sweep, a scan line every 8 s, a reel in the dark), tech marks from
+numbers already on the card (LIVE MONITOR · SCANNING · CHECK #n · NEXT
+SCAN), icons on its sections and facts, a small sweep beside each target
+still being watched, and living states — green breathing while watching
+or found, amber for sold out, still when finished. Saving a monitor and
+asking the worker to retry — the two genuinely slow operations — show
+the radar over a dimmed page, held invisible for 600 ms so a quick answer
+never shows it. Everything stops under `prefers-reduced-motion`.
+
 ## 7. Performance rules (every phase)
 
 Learned the hard way and not negotiable:

@@ -102,7 +102,13 @@ def test_the_rail_keeps_its_keys_callbacks_styling_and_recent_activity(make_moni
     assert "recent_activity(monitors, history)" in inspect.getsource(app.rail)
     # the buttons keep the theme's original weights: nothing in Home's CSS touches them or the cards
     assert "st-key-detail_" not in home.CSS and "st-key-stop_" not in home.CSS
-    assert ".tr-monitor" not in home.CSS and ".tr-platform " not in home.CSS and ".tr-live" not in home.CSS
+    assert ".tr-platform " not in home.CSS and ".tr-live" not in home.CSS
+    # the card itself keeps the theme's skin: Home only clips it and lays the green wave over it while it watches
+    rules = re.findall(r'\[class\*="st-key-trrail"\] \.tr-monitor([^{]*)\{([^}]*)\}', home.CSS)
+    assert [sel.strip() for sel, _ in rules] == ["", ":has(.tr-pill.ok)::before", "> *", ":has(.tr-pill.ok)::before"]
+    assert rules[0][1].strip() == "position:relative; overflow:hidden;"
+    assert "tr-home-wave" in rules[1][1] and "pointer-events:none" in rules[1][1]
+    assert "animation:none" in rules[3][1]                                          # …and stops under reduced motion
 
 
 def test_the_page_is_keyed_containers_in_reading_order_and_no_columns():
@@ -156,7 +162,7 @@ def test_the_radar_sits_in_the_hero_and_follows_the_truth(make_monitor, at):
 
 def test_homes_stylesheet_is_an_enhancement_layer_only():
     css = home.CSS
-    assert css.startswith("<style>") and len(css) < 24000
+    assert css.startswith("<style>") and len(css) < 36000                 # radar, crafts, reel, icons as data URIs
     assert ".tr-home-ambience" in css and "conic-gradient" in css and "repeating-linear-gradient" in css
     desktop = css[css.index("@media (min-width: 1150px)"):]
     assert '[class*="st-key-trhome"] { display:grid !important;' in desktop
@@ -170,8 +176,8 @@ def test_homes_stylesheet_is_an_enhancement_layer_only():
     assert ".tr-home-zone.band, .tr-home-zone.rail, .tr-home-zone.foot { display:none; }" in phone
     assert ".tr-home-strip { display:flex;" in phone                        # the eight, as a strip
     assert "@media (prefers-reduced-motion: reduce)" in css
-    assert "http" not in css.replace("http://www.w3.org", "")                # no external assets
-    assert "base64" not in css                                              # no inline images
+    assert "http" not in css.replace("http://www.w3.org", "").replace("http%3A%2F%2Fwww.w3.org", "")   # no external assets
+    assert "base64" not in css                                              # no inline images (icons are the app's own SVG paths)
 
 
 def test_the_layer_adds_no_reads_no_fragments_no_widgets():

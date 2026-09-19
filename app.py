@@ -418,6 +418,11 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     #    workflow listens for pushes to data/monitors.json).
     if start_now:
         monitor.first_check_requested_at = now_ist()
+    # Saving, mirroring and asking the worker to start take a second or
+    # three: the radar over a dimmed page says so (it stays invisible for
+    # the first 600 ms, so a quick save never shows it). The rerun below
+    # clears it.
+    home.busy("Saving your monitor")
     try:
         upsert_monitor(monitor, mirror=mirrored())
     except MonitorLimitError as exc:
@@ -478,6 +483,7 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
 # ──────────────────────────────────────────────────────────────────────────
 def retry_check(monitor: Monitor) -> None:
     """Ask for a check again and clear a stale problem if that worked."""
+    home.busy("Asking the worker to check again")
     ok, msg = request_check_now(monitor.id)
     if ok:
         monitor.first_check_requested_at = now_ist()
@@ -630,8 +636,8 @@ def page_home(monitors, states, history, settings) -> None:
     )
 
     with st.container(key="trhome"):
+        home.ambience()                       # the room's light and reel, behind everything below
         with st.container(key="trstatus"):
-            home.ambience()
             C.hero("Movie Ticket Monitor", "Know the moment your tickets go live.",
                    "We watch the booking page for you, so you don't have to.")
             home.hero_radar(monitors, states)
@@ -670,6 +676,7 @@ def wizard(monitors, *, settings: dict) -> None:
     flow.summary(step)
 
     with st.container(border=True, key="trcard_step"):
+        home.step_icon_css(step)
         flow.back_button(step)
         if step == 1:
             flow.step_location()

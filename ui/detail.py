@@ -33,7 +33,9 @@ from config.timezone import fmt_datetime, fmt_time, now_ist
 from monitor.models import Availability, Monitor
 from monitor.state import MonitorState
 from platforms.bookmyshow import is_bookmyshow_url
+from ui import radar
 from ui import components as C
+from ui import home
 
 OPEN_KEY = "monitor_detail"
 
@@ -56,9 +58,14 @@ def open_id() -> str:
 
 
 # ── markup ───────────────────────────────────────────────────────────────
-def _fact(label: str, value: str, cls: str = "") -> str:
-    return (f'<div class="tr-det-fact"><div class="k">{C.e(label)}</div>'
+def _fact(label: str, value: str, cls: str = "", icon: str = "") -> str:
+    ic = f'{C.icon(icon, 11, "currentColor", "1.9")}' if icon else ""
+    return (f'<div class="tr-det-fact"><div class="k">{ic}{C.e(label)}</div>'
             f'<div class="v{" " + cls if cls else ""}">{C.e(value)}</div></div>')
+
+
+def _eyebrow(icon: str, text: str) -> str:
+    return f'<div class="tr-eyebrow">{C.icon(icon, 12, "currentColor", "1.9")}{text}</div>'
 
 
 def _target_block(monitor: Monitor, state: MonitorState, target, finished: bool) -> str:
@@ -83,8 +90,12 @@ def _target_block(monitor: Monitor, state: MonitorState, target, finished: bool)
         state_line = f'<span class="tr-det-state"><span class="tr-spin grey"></span>{C.e(label)}</span>'
 
     where = " · ".join(x for x in (target.area, monitor.movie.city) if x)
+    # Still being checked (not live, not finished): a small sweep beside the
+    # state says so without a word — the same radar, at 22px.
+    watching = "" if (live or finished) else radar.svg(size=22, state="scanning", label="", cls="watch")
     body = (f'<div class="tr-det-tgt-head"><div class="who"><div class="n">{C.e(target.venue_name)}</div>'
-            f'<div class="s"><b>{C.e(target.fmt)}</b>{" · " + C.e(where) if where else ""}</div></div>{state_line}</div>')
+            f'<div class="s"><b>{C.e(target.fmt)}</b>{" · " + C.e(where) if where else ""}</div></div>'
+            f'<div class="st">{watching}{state_line}</div></div>')
 
     if live and ts:
         links = {lbl: u for lbl, u in ts.time_links if is_bookmyshow_url(u)}
@@ -131,8 +142,24 @@ def markup(monitor: Monitor, state: MonitorState, *, at=None) -> str:
     tgt_sub = (f"{live_count} live · {len(monitor.targets)} watched" if live_count
                else f"{len(monitor.targets)} theatre{'s' if len(monitor.targets) != 1 else ''} × format")
 
-    return f"""{CSS}<div class="tr-det{' live' if phase.key == 'available' else ''}">
+    # The room's own marks, only from numbers already on the card: what it
+    # is doing, which check it is on, when the next sweep is due.
+    if running:
+        doing = {"available": "TICKETS FOUND", "sold_out": "WATCHING FOR A REOPEN", "waiting": "WAITING FOR FIRST CHECK",
+                 "problem": "NEEDS ATTENTION", "blocked": "RETRYING", "error": "RETRYING"}.get(phase.key, "SCANNING")
+        marks = [f"LIVE MONITOR · {doing}"]
+        if state.success_count:
+            marks.append(f"CHECK #{state.success_count}")
+        if next_class == "mono":
+            marks.append(f"NEXT SCAN {next_value}")
+    else:
+        marks = [phase.label.upper()]
+    tech = "".join(f"<span>{C.e(m)}</span>" for m in marks)
+
+    return f"""{CSS}<div class="tr-det{' live' if phase.key == 'available' else ''}" data-phase="{C.e(phase.key)}" data-running="{'1' if running else '0'}">
+      <div class="tr-det-bg" aria-hidden="true"><div class="sweep"></div><div class="line"></div>{home.reel_svg("det")}</div>
       <div class="tr-det-eyebrow"><span>Monitor control room</span><em>Created {C.e(fmt_datetime(monitor.created_at))}</em></div>
+      <div class="tr-det-tech">{tech}</div>
       <div class="tr-det-head">
         {C.thumb(monitor.movie.poster_url)}
         <div class="who">
@@ -144,25 +171,25 @@ def markup(monitor: Monitor, state: MonitorState, *, at=None) -> str:
       </div>
       <div class="tr-det-grid">
         <section class="tr-det-sec">
-          <div class="tr-eyebrow">Movie</div>
-          {_fact("Title", monitor.movie.title)}
-          {_fact("Language", monitor.movie.language or "—")}
-          {_fact("Show dates", dates)}
+          {_eyebrow("movie", "Movie")}
+          {_fact("Title", monitor.movie.title, icon="movie")}
+          {_fact("Language", monitor.movie.language or "—", icon="ticket")}
+          {_fact("Show dates", dates, icon="calendar")}
         </section>
         <section class="tr-det-sec">
-          <div class="tr-eyebrow">Monitoring</div>
+          {_eyebrow("radar", "Monitoring")}
           <div class="tr-det-facts">
-            {_fact("Status", phase.label.capitalize())}
-            {_fact("Check interval", f"Every {monitor.interval_minutes} min")}
-            {_fact("Checks completed", checks)}
-            {_fact("Last checked", fmt_time(state.last_check_at))}
-            {_fact("Next check", next_value, next_class)}
-            {_fact(until_label, until_value)}
+            {_fact("Status", phase.label.capitalize(), icon="monitor")}
+            {_fact("Check interval", f"Every {monitor.interval_minutes} min", icon="clock")}
+            {_fact("Checks completed", checks, icon="check")}
+            {_fact("Last checked", fmt_time(state.last_check_at), icon="clock")}
+            {_fact("Next check", next_value, next_class, icon="radar")}
+            {_fact(until_label, until_value, icon="calendar")}
           </div>
         </section>
       </div>
       <section class="tr-det-sec wide">
-        <div class="tr-det-sec-head"><span class="tr-eyebrow">Theatres &amp; formats</span><em>{C.e(tgt_sub)}</em></div>
+        <div class="tr-det-sec-head">{_eyebrow("theatre", "Theatres &amp; formats")}<em>{C.e(tgt_sub)}</em></div>
         {targets}
       </section>
     </div>"""
@@ -194,7 +221,7 @@ def dialog(monitors: list[Monitor], states: dict[str, MonitorState]) -> None:
 #: The dialog's own stylesheet — inside the dialog, so the page never
 #: carries it. Facts, targets and the booking action reuse the theme's
 #: pill, eyebrow, chip and ``tr-book`` mechanics.
-CSS = """<style>
+CSS = "<style>" + radar.CSS + """
 /* the box: the Login panel's charcoal, a hairline, a top light line, one pink corner light */
 [data-testid="stDialog"] > div { max-width:920px !important; border-radius:24px !important; border:1px solid rgba(255,255,255,.10) !important;
   background: radial-gradient(640px 260px at 92% -6%, rgba(255,51,85,.14), transparent 62%), radial-gradient(420px 220px at -4% 104%, rgba(255,51,85,.06), transparent 60%),
@@ -202,7 +229,51 @@ CSS = """<style>
   box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 50px 100px -40px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.05), 0 30px 90px -50px rgba(255,51,85,.45) !important; }
 [data-testid="stDialog"] > div::after { content:""; position:absolute; left:16%; right:16%; top:-1px; height:1px; pointer-events:none;
   background: linear-gradient(90deg, transparent, rgba(255,140,160,.7), transparent); }
-.tr-det { min-width:0; }
+.tr-det { min-width:0; position:relative; isolation:isolate; }
+.tr-det > * { position:relative; z-index:1; }
+/* the backdrop: a faint sweep, a scan line every eight seconds, the reel in the dark — all pointer-transparent */
+.tr-det-bg { position:absolute; inset:0; z-index:0 !important; pointer-events:none; overflow:hidden; border-radius:18px; }
+.tr-det-bg .sweep { position:absolute; right:-260px; top:-260px; width:900px; height:900px; border-radius:50%; opacity:.55;
+  background: conic-gradient(from 0deg, transparent 0deg 300deg, rgba(255,51,85,.02) 340deg, rgba(255,51,85,.06) 359deg, transparent 360deg); animation: tr-radar-sweep 9s linear infinite; }
+.tr-det-bg .line { position:absolute; left:0; right:0; top:0; height:2px; opacity:.75;
+  background: linear-gradient(90deg, transparent 8%, rgba(255,140,160,.35) 50%, transparent 92%); box-shadow: 0 0 18px 4px rgba(255,51,85,.10); animation: tr-det-scan 8s ease-in-out infinite; }
+.tr-det-bg .tr-reel { position:absolute; right:-140px; bottom:-160px; width:520px; color:#FF8CA0; transform-origin:50% 50%; animation: tr-det-reel 110s linear infinite; }
+.tr-det-bg .tr-reel .rim { opacity:.07; } .tr-det-bg .tr-reel .sheen { stroke:#FFC9D4; opacity:.14; } .tr-det-bg .tr-reel .ring { opacity:.06; }
+.tr-det-bg .tr-reel .holes { opacity:.07; } .tr-det-bg .tr-reel .hub { opacity:.08; } .tr-det-bg .tr-reel .pin { opacity:.2; }
+@keyframes tr-det-scan { 0% { transform:translateY(-10px); opacity:0; } 6% { opacity:.75; } 60% { opacity:.75; } 70% { transform:translateY(760px); opacity:0; } 100% { transform:translateY(760px); opacity:0; } }
+@keyframes tr-det-reel { to { transform:rotate(360deg); } }
+@keyframes tr-det-breathe { 0%,100% { box-shadow: 0 0 0 0 rgba(62,213,152,.0), 0 0 0 1px rgba(62,213,152,.25); } 50% { box-shadow: 0 0 0 5px rgba(62,213,152,.10), 0 0 22px 2px rgba(62,213,152,.28); } }
+@keyframes tr-det-wave { from { transform:translateY(-140%); } to { transform:translateY(1400%); } }
+/* the living states: green only while the monitor is running and not in trouble; amber for a sold-out watch; success as it was */
+.tr-det[data-running="1"][data-phase="not_released"] .tr-det-head .tr-pill,
+.tr-det[data-running="1"][data-phase="available"] .tr-det-head .tr-pill { animation: tr-det-breathe 3.2s ease-in-out infinite; }
+.tr-det[data-running="1"][data-phase="not_released"] .tr-det-bg .line,
+.tr-det[data-running="1"][data-phase="available"] .tr-det-bg .line { background: linear-gradient(90deg, transparent 8%, rgba(62,213,152,.45) 50%, transparent 92%); box-shadow: 0 0 18px 4px rgba(62,213,152,.12); }
+.tr-det[data-running="1"][data-phase="available"] .tr-det-bg .sweep { background: conic-gradient(from 0deg, transparent 0deg 300deg, rgba(62,213,152,.02) 340deg, rgba(62,213,152,.06) 359deg, transparent 360deg); }
+.tr-det[data-phase="sold_out"] .tr-det-bg .line { background: linear-gradient(90deg, transparent 8%, rgba(232,178,92,.4) 50%, transparent 92%); box-shadow: 0 0 18px 4px rgba(232,178,92,.10); }
+.tr-det[data-running="0"] .tr-det-bg .line, .tr-det[data-running="0"] .tr-det-bg .sweep { display:none; }
+/* the room's marks */
+.tr-det-tech { display:flex; flex-wrap:wrap; gap:6px 10px; margin:-4px 0 12px; }
+.tr-det-tech span { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--tr-text-3); padding:4px 9px; border-radius:6px; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.03); }
+.tr-det[data-running="1"][data-phase="not_released"] .tr-det-tech span:first-child,
+.tr-det[data-running="1"][data-phase="available"] .tr-det-tech span:first-child { color:#9FEBC9; border-color:rgba(62,213,152,.3); background:rgba(62,213,152,.07); }
+.tr-det[data-phase="sold_out"] .tr-det-tech span:first-child { color:var(--tr-warning); border-color:rgba(232,178,92,.3); }
+.tr-det[data-phase="problem"] .tr-det-tech span:first-child, .tr-det[data-phase="blocked"] .tr-det-tech span:first-child, .tr-det[data-phase="error"] .tr-det-tech span:first-child { color:var(--tr-danger); border-color:rgba(255,92,92,.3); }
+/* icons that reinforce the words */
+.tr-det-sec .tr-eyebrow .tr-ic, .tr-det-sec-head .tr-eyebrow .tr-ic { color:#FF8CA0; margin-right:-2px; }
+.tr-det-fact .k { display:flex; align-items:center; gap:6px; }
+.tr-det-fact .k .tr-ic { color:var(--tr-text-3); flex:none; }
+/* a target still being watched: the small sweep beside its state */
+.tr-det-tgt-head .st { display:inline-flex; align-items:center; gap:9px; flex:none; }
+.tr-det-tgt-head .tr-radar.watch { width:22px; flex:none; opacity:.85; filter: drop-shadow(0 0 6px rgba(255,51,85,.35)); }
+.tr-det-tgt-head .tr-radar.watch .ticks, .tr-det-tgt-head .tr-radar.watch .axis, .tr-det-tgt-head .tr-radar.watch .orbit, .tr-det-tgt-head .tr-radar.watch .blips, .tr-det-tgt-head .tr-radar.watch .dish { display:none; }
+.tr-det-tgt-head .tr-radar.watch .ring { stroke-width:8; } .tr-det-tgt-head .tr-radar.watch .r1 { display:none; }
+.tr-det-tgt-head .tr-radar.watch .edge { stroke-width:12; } .tr-det-tgt-head .tr-radar.watch .edge-glow { stroke-width:28; }
+.tr-det-tgt-head .tr-radar.watch .core { transform:scale(2.2); transform-box:fill-box; transform-origin:center; } .tr-det-tgt-head .tr-radar.watch .core .pulse { display:none; }
+.tr-det[data-running="1"] .tr-det-tgt.ok { position:relative; overflow:hidden; }
+.tr-det[data-running="1"] .tr-det-tgt.ok::before { content:""; position:absolute; left:0; right:0; top:0; height:10%; pointer-events:none; z-index:0;
+  background: linear-gradient(180deg, transparent, rgba(62,213,152,.10) 55%, rgba(62,213,152,.22) 80%, transparent); animation: tr-det-wave 7s linear infinite; }
+.tr-det-tgt.ok > * { position:relative; z-index:1; }
 .tr-det-eyebrow { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:-2px 0 12px;
   font-family:var(--tr-mono); font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:#FF8CA0; }
 .tr-det-eyebrow em { font-style:normal; letter-spacing:.1em; text-transform:none; color:var(--tr-text-4); }
@@ -278,6 +349,8 @@ CSS = """<style>
   .tr-det-head .tr-pill { order:3; }
   .tr-det-head .title { font-size:19px; }
   .tr-det-head .tr-thumb { width:58px; height:82px; }
+  .tr-det-bg .tr-reel { width:320px; right:-150px; bottom:-120px; }
+  .tr-det-bg .sweep { display:none; }
   .tr-det-grid { grid-template-columns:1fr; gap:12px; }
   .tr-det-facts { grid-template-columns:1fr 1fr; }
   .tr-det-sec { padding:14px; }
@@ -285,6 +358,10 @@ CSS = """<style>
   .tr-det-tgt-head { flex-wrap:wrap; }
   /* one line, thumb-sized: the booking action is the reason to open this on a phone */
   .tr-det-book { padding:17px 12px; font-size:14.5px; letter-spacing:.02em; white-space:nowrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tr-det-bg .sweep, .tr-det-bg .line, .tr-det-bg .tr-reel, .tr-det-head .tr-pill, .tr-det-tgt.ok::before { animation:none !important; }
+  .tr-det-bg .line { display:none; }
 }
 @media (max-width: 480px) {
   .tr-det-facts { grid-template-columns:1fr; gap:10px; }
