@@ -565,6 +565,14 @@ __NAV_ICONS__
 .tr-field-label { font-family:var(--tr-mono); font-size:10px; letter-spacing:.16em;
   text-transform:uppercase; color:var(--tr-text-4); margin:2px 0 6px; }
 .tr-rail-title { display:flex; align-items:center; gap:9px; margin-bottom:12px; font-size:14px; font-weight:700; }
+/* "View details" on the rail card: a deliberate secondary action, quiet next to Stop. */
+[class*="st-key-detail_"] .stButton button {
+  min-height:38px; font-family:var(--tr-mono); font-size:11px; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--tr-text-2); background:transparent; border:1px dashed rgba(255,255,255,.18); box-shadow:none;
+}
+[class*="st-key-detail_"] .stButton button p { font-weight:500; }
+[class*="st-key-detail_"] .stButton button [data-testid="stIconMaterial"] { font-size:15px; }
+[class*="st-key-detail_"] .stButton button:hover { color:#fff; border-style:solid; border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); transform:none; box-shadow:none; }
 
 /* Back button: small, quiet, first thing in the card. */
 [class*="st-key-trback"] { margin-bottom:2px; }

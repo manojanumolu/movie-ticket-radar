@@ -76,6 +76,7 @@ from notifications.email import NotificationError, is_configured, send_test_emai
 from platforms import PLATFORMS  # noqa: E402
 from platforms.http import HAS_CURL_CFFI  # noqa: E402
 from ui import avatar  # noqa: E402
+from ui import detail  # noqa: E402
 from ui import catalogue_view as cv  # noqa: E402
 from ui import components as C  # noqa: E402
 from ui import flow  # noqa: E402
@@ -534,6 +535,16 @@ def live_monitor_panel(monitor: Monitor, state: MonitorState) -> None:
     C.active_monitor_card(monitor, fresh)
     problem_panel(monitor, fresh)
 
+    # The rest of what this monitor knows — the film row, the whole
+    # schedule, every target's answer and a live target's booking link —
+    # sits behind one quiet action, so the card stays a card. The dialog
+    # is the page's (``detail.dialog`` in ``page_home``), drawn from the
+    # data the page already holds; from inside this fragment the callback
+    # asks for the whole app so it appears on this run.
+    st.button("View details", key=f"detail_{monitor.id}", use_container_width=True,
+              icon=":material/open_in_full:", on_click=detail.open_detail, args=(monitor.id,),
+              help="Everything this monitor knows: show dates, schedule, every theatre and format, and the booking link once tickets are live.")
+
     # The callback asks for a whole-app rerun (the rail's header, the live
     # card and My Monitors' count all change), exactly as the inline
     # ``st.rerun()`` it replaces did — but from a callback, before the script
@@ -598,6 +609,7 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
 # Pages
 # ──────────────────────────────────────────────────────────────────────────
 def page_home(monitors, states, history, settings) -> None:
+    detail.dialog(monitors, states)
     main, side = st.columns([3.3, 1.25], gap="large")
 
     with main:
