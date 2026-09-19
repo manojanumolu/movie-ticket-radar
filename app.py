@@ -470,7 +470,6 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     # Applied at the top of the next run (widget keys are on screen now), so
     # the next monitor starts from a clean step 1 with only the city kept.
     flow.request_reset()
-    home.hide_wizard()
     st.rerun()
 
 
@@ -611,21 +610,20 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
 # Pages
 # ──────────────────────────────────────────────────────────────────────────
 def page_home(monitors, states, history, settings) -> None:
-    """Home, in reading order: the room's hero, live, the command panel,
-    the wizard (or the panel that stands in for it, and then the room).
+    """Home: the original page — hero, Platform shelf, live card, the
+    wizard, the rail — with ``ui.home``'s cinematic layer around it.
 
-    Keyed containers, one after another. That order *is* the page on a
-    phone and a tablet; from 1150px ``ui.home.CSS`` turns the root into a
-    grid — the hero across, the rail down the right, the rest on the left
-    — so the rail is never a squeezed column (Phase 3B).
+    The pieces are drawn in reading order inside keyed containers; that
+    order *is* the page on a phone and a tablet, and from 1150px
+    ``ui.home.CSS`` lays the same containers out as a grid with the rail
+    at least 320px wide. Nothing about what each piece shows has changed.
     """
     detail.dialog(monitors, states)
-    active = [m for m in monitors if m.is_running()]
     city = get_location(st.session_state.get("location") or "hyderabad")
 
     # A live target is the loudest thing on screen when it happens.
     live_monitor = next(
-        (m for m in active if any(
+        (m for m in monitors if m.is_running() and any(
             ts.availability is Availability.AVAILABLE
             for ts in states.get(m.id, MonitorState()).targets.values())),
         None,
@@ -633,9 +631,15 @@ def page_home(monitors, states, history, settings) -> None:
 
     with st.container(key="trhome"):
         with st.container(key="trstatus"):
-            home.hero(monitors, states, platforms=PLATFORMS, city=city.name,
-                      theatre_count=cv.view(city.slug).theatre_count)
+            home.ambience()
+            C.hero("Movie Ticket Monitor", "Know the moment your tickets go live.",
+                   "We watch the booking page for you, so you don't have to.")
+            home.hero_radar(monitors, states)
+            home.band()
             drain_flash()
+
+            C.rule("Platform")
+            C.platform_selector(PLATFORMS, "bookmyshow", cv.view(city.slug).theatre_count, city.name)
 
         if live_monitor is not None:
             with st.container(key="trlive"):
@@ -649,29 +653,19 @@ def page_home(monitors, states, history, settings) -> None:
 
         with st.container(key="trrail"):
             rail(monitors, states, history)
+            home.rail_foot()
 
-        folded = home.wizard_collapsed(len(active))
         with st.container(key="trwizard"):
-            if folded:
-                home.new_alert_tile()
-            else:
-                wizard(monitors, settings=settings, dismissable=bool(active))
+            wizard(monitors, settings=settings)
 
-        # With the wizard put away the left column would end early on a
-        # desktop; the room fills it — the radar, the house, the crafts.
-        if folded:
-            with st.container(key="tratmo"):
-                home.atmosphere(monitors, states, city=city.name, compact=live_monitor is not None)
+        with st.container(key="trfoot"):
+            home.foot()
 
 
-def wizard(monitors, *, settings: dict, dismissable: bool) -> None:
+def wizard(monitors, *, settings: dict) -> None:
     """The Create Monitor wizard, exactly as before — its steps, rail and
-    summary are ``ui.flow``'s. ``dismissable`` adds one quiet Hide button
-    when a monitor is running and the wizard was opened on purpose."""
+    summary are ``ui.flow``'s."""
     step = st.session_state.get("step", 1)
-    if dismissable and home.wizard_is_pristine():
-        st.button("Hide", key="wizard_hide", icon=":material/close:", on_click=home.hide_wizard,
-                  help="Put the wizard away — the dashboard stays.")
     flow.step_rail(step, st.session_state.get("furthest", 1))
     flow.summary(step)
 
