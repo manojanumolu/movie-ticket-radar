@@ -183,6 +183,21 @@ CSS rides inside the dialog, so the page never carries it; the thumbnails
 are the served static files. Nothing is written on select; Save writes
 the one field, and only if it differs.
 
+### Monitor details (Phase 3 — Home)
+
+The rail card stays a card: film, phase, last/next check, the theatre
+rows. Everything else a monitor knows sits behind one quiet action,
+"View details" — a dashed, mono-labelled button under the card, deliberately
+smaller than Stop — which opens a dialog (`ui/detail.py`): the film row
+watched, the whole schedule, every theatre × format with its current
+answer and, for a live target, the showtime chips and a `tr-book`
+BOOK ON BOOKMYSHOW. The link is the stored `TargetState.booking_url` — the
+value the alert email carried — shown only when it passes the mail's own
+`is_bookmyshow_url` test; anything else is an honest "no booking link yet".
+The dialog draws the `Monitor` and `MonitorState` the page already loaded
+(no read of its own), two columns on a desktop and one on a phone, and its
+CSS rides inside it.
+
 ## 7. Performance rules (every phase)
 
 Learned the hard way and not negotiable:
@@ -206,7 +221,7 @@ Learned the hard way and not negotiable:
 | 0 | asset foundation, registry, this document | done |
 | 1 | Login / Sign-up — radar, poster hand, crafts, charcoal panel, honest wait | done |
 | 2 | Avatar system — `ui/avatar.py`, one field on `users/{uid}` | done |
-| 3 | Home | next |
+| 3 | Home | in progress — monitor details dialog |
 | 4 | My Monitors | |
 | 5 | Create Monitor wizard | |
 | 6 | History | |
