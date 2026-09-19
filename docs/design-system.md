@@ -202,6 +202,22 @@ accent bar; every target's answer is a mono pill whose colour is
 semantic — green live, amber sold out, red only for a failure, neutral for
 anything still watched. Red stays lighting, never a state.
 
+### Home skeleton (Phase 3B)
+
+Home is drawn in reading order — status line, live card, the rail's
+command panel, the wizard — as four keyed containers (`trstatus`,
+`trlive`, `trrail`, `trwizard`) inside `trhome`, with no `st.columns`.
+That order *is* the page on a phone and a tablet (769–1149px, one
+deliberate column, so the rail is never a 117px strip again); from
+1150px `ui/home.py`'s stylesheet turns `trhome` into a grid — status
+across, the rail down the right at ≥320px, live and wizard on the left.
+The hero became the status line: the product name as a mono eyebrow,
+one honest sentence built from the monitors in hand ("Watching *title*
+· 3 theatres · 1 live"), the radar mark in its `mark` form, and the
+platform strip as chips. With a monitor running, an untouched wizard
+waits behind one `pick` tile, "Set up a new alert"; a wizard in
+progress, or a page with nothing running, shows it as before.
+
 ## 7. Performance rules (every phase)
 
 Learned the hard way and not negotiable:
@@ -225,7 +241,7 @@ Learned the hard way and not negotiable:
 | 0 | asset foundation, registry, this document | done |
 | 1 | Login / Sign-up — radar, poster hand, crafts, charcoal panel, honest wait | done |
 | 2 | Avatar system — `ui/avatar.py`, one field on `users/{uid}` | done |
-| 3 | Home | in progress — monitor details dialog |
+| 3 | Home | in progress — 3B skeleton done (status line, reading-order grid, wizard tile) |
 | 4 | My Monitors | |
 | 5 | Create Monitor wizard | |
 | 6 | History | |

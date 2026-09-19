@@ -77,6 +77,7 @@ from platforms import PLATFORMS  # noqa: E402
 from platforms.http import HAS_CURL_CFFI  # noqa: E402
 from ui import avatar  # noqa: E402
 from ui import detail  # noqa: E402
+from ui import home  # noqa: E402
 from ui import catalogue_view as cv  # noqa: E402
 from ui import components as C  # noqa: E402
 from ui import flow  # noqa: E402
@@ -469,6 +470,7 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     # Applied at the top of the next run (widget keys are on screen now), so
     # the next monitor starts from a clean step 1 with only the city kept.
     flow.request_reset()
+    home.hide_wizard()
     st.rerun()
 
 
@@ -609,83 +611,104 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
 # Pages
 # ──────────────────────────────────────────────────────────────────────────
 def page_home(monitors, states, history, settings) -> None:
+    """Home, in reading order: status, live, the command panel, the wizard.
+
+    Four keyed containers, one after another. That order *is* the page on
+    a phone and a tablet; from 1150px ``ui.home.CSS`` turns the root into
+    a grid — status across, the rail down the right, live and wizard on
+    the left — so the rail is never a squeezed column (Phase 3B).
+    """
     detail.dialog(monitors, states)
-    main, side = st.columns([3.3, 1.25], gap="large")
+    active = [m for m in monitors if m.is_running()]
+    city = get_location(st.session_state.get("location") or "hyderabad")
 
-    with main:
-        C.hero("Movie Ticket Monitor", "Know the moment your tickets go live.",
-               "We watch the booking page for you, so you don't have to.")
-        drain_flash()
+    # A live target is the loudest thing on screen when it happens.
+    live_monitor = next(
+        (m for m in active if any(
+            ts.availability is Availability.AVAILABLE
+            for ts in states.get(m.id, MonitorState()).targets.values())),
+        None,
+    )
 
-        C.rule("Platform")
-        city = get_location(st.session_state.get("location") or "hyderabad")
-        C.platform_selector(PLATFORMS, "bookmyshow", cv.view(city.slug).theatre_count, city.name)
+    with st.container(key="trhome"):
+        with st.container(key="trstatus"):
+            home.status_line(monitors, states, platforms=PLATFORMS, city=city.name,
+                             theatre_count=cv.view(city.slug).theatre_count)
+            drain_flash()
 
-        # A live target is the loudest thing on screen when it happens.
-        live_monitor = next(
-            (m for m in monitors if m.is_running() and any(
-                ts.availability is Availability.AVAILABLE
-                for ts in states.get(m.id, MonitorState()).targets.values())),
-            None,
-        )
         if live_monitor is not None:
-            state = states[live_monitor.id]
-            for key, ts in state.targets.items():
-                if ts.availability is Availability.AVAILABLE:
-                    C.live_card(live_monitor, state, key)
-                    break
-            st.caption("One theatre going live doesn't stop the others — the rest keep "
-                       f"being checked until {fmt_datetime(live_monitor.monitor_until)}.")
+            with st.container(key="trlive"):
+                state = states[live_monitor.id]
+                for key, ts in state.targets.items():
+                    if ts.availability is Availability.AVAILABLE:
+                        C.live_card(live_monitor, state, key)
+                        break
+                st.caption("One theatre going live doesn't stop the others — the rest keep "
+                           f"being checked until {fmt_datetime(live_monitor.monitor_until)}.")
 
-        step = st.session_state.get("step", 1)
-        flow.step_rail(step, st.session_state.get("furthest", 1))
-        flow.summary(step)
+        with st.container(key="trrail"):
+            rail(monitors, states, history)
 
-        with st.container(border=True, key="trcard_step"):
-            flow.back_button(step)
-            if step == 1:
-                flow.step_location()
-            elif step == 2:
-                flow.step_movie()
-            elif step == 3:
-                flow.step_theatres()
-            elif step == 4:
-                slug = st.session_state.get("location", "")
-                movie_id = st.session_state.get("movie_id", "")
-                codes = st.session_state.get("theatres", [])
-                flow.step_formats(cv.selected_venues(movie_id, slug, codes),
-                                  coming=cv.coming_soon_codes(movie_id, slug, codes),
-                                  listed=cv.listed_formats(movie_id, slug, codes))
+        with st.container(key="trwizard"):
+            if home.wizard_collapsed(len(active)):
+                home.new_alert_tile()
             else:
-                # The box starts as the saved notification address or, for an
-                # account that has never set one, the address they signed in
-                # with — from Firebase's record, never from anything typed here.
-                user = auth_session.current_user()
-                default_email = settings.get("notify_email") or (user.email if user else "")
-                interval, until, email, start_now, dates = flow.step_monitoring(default_email)
-                # Ordinary accounts have a ceiling on running monitors; the
-                # store refuses past it whatever this page shows, so this is
-                # the explanation, not the enforcement. An admin account has
-                # no ceiling and never sees this.
-                at_limit = state_store.monitor_limit_reached(monitors)
-                if at_limit:
-                    st.warning(state_store.LIMIT_MESSAGE.format(limit=state_store.ACTIVE_MONITOR_LIMIT))
-                cta, helper = st.columns([2.2, 1], gap="medium")
-                with cta:
-                    if st.button("Start monitoring", type="primary", disabled=at_limit,
-                                 use_container_width=True, key="start", icon=":material/play_arrow:",
-                                 help="Save this monitor. The first check runs right away, then on the "
-                                      "schedule you chose, until the end time."):
-                        start_monitor(interval, until, email, start_now, dates,
-                                      settings=settings)
-                with helper:
-                    C.html(
-                        f'<div class="tr-cta-help">{C.icon("bolt", 15, "#E8B25C")}<span>You\'ll get an email the second '
-                        "tickets appear — and the monitor keeps running for the other theatres.</span></div>"
-                    )
+                wizard(monitors, settings=settings, dismissable=bool(active))
 
-    with side:
-        rail(monitors, states, history)
+
+def wizard(monitors, *, settings: dict, dismissable: bool) -> None:
+    """The Create Monitor wizard, exactly as before — its steps, rail and
+    summary are ``ui.flow``'s. ``dismissable`` adds one quiet Hide button
+    when a monitor is running and the wizard was opened on purpose."""
+    step = st.session_state.get("step", 1)
+    if dismissable and home.wizard_is_pristine():
+        st.button("Hide", key="wizard_hide", icon=":material/close:", on_click=home.hide_wizard,
+                  help="Put the wizard away — the dashboard stays.")
+    flow.step_rail(step, st.session_state.get("furthest", 1))
+    flow.summary(step)
+
+    with st.container(border=True, key="trcard_step"):
+        flow.back_button(step)
+        if step == 1:
+            flow.step_location()
+        elif step == 2:
+            flow.step_movie()
+        elif step == 3:
+            flow.step_theatres()
+        elif step == 4:
+            slug = st.session_state.get("location", "")
+            movie_id = st.session_state.get("movie_id", "")
+            codes = st.session_state.get("theatres", [])
+            flow.step_formats(cv.selected_venues(movie_id, slug, codes),
+                              coming=cv.coming_soon_codes(movie_id, slug, codes),
+                              listed=cv.listed_formats(movie_id, slug, codes))
+        else:
+            # The box starts as the saved notification address or, for an
+            # account that has never set one, the address they signed in
+            # with — from Firebase's record, never from anything typed here.
+            user = auth_session.current_user()
+            default_email = settings.get("notify_email") or (user.email if user else "")
+            interval, until, email, start_now, dates = flow.step_monitoring(default_email)
+            # Ordinary accounts have a ceiling on running monitors; the
+            # store refuses past it whatever this page shows, so this is
+            # the explanation, not the enforcement. An admin account has
+            # no ceiling and never sees this.
+            at_limit = state_store.monitor_limit_reached(monitors)
+            if at_limit:
+                st.warning(state_store.LIMIT_MESSAGE.format(limit=state_store.ACTIVE_MONITOR_LIMIT))
+            cta, helper = st.columns([2.2, 1], gap="medium")
+            with cta:
+                if st.button("Start monitoring", type="primary", disabled=at_limit,
+                             use_container_width=True, key="start", icon=":material/play_arrow:",
+                             help="Save this monitor. The first check runs right away, then on the "
+                                  "schedule you chose, until the end time."):
+                    start_monitor(interval, until, email, start_now, dates,
+                                  settings=settings)
+            with helper:
+                C.html(
+                    f'<div class="tr-cta-help">{C.icon("bolt", 15, "#E8B25C")}<span>You\'ll get an email the second '
+                    "tickets appear — and the monitor keeps running for the other theatres.</span></div>"
+                )
 
 
 # Card actions run as ``on_click`` callbacks: the store is written *before*
