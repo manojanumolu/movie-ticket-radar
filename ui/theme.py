@@ -227,13 +227,13 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
    over it, transparent — the same "pick" pattern as the tiles), and the
    menu holds Account settings and Sign out. The sidebar carries nav only. */
 [class*="st-key-tracct_top"] { position:relative; z-index:200; width:max-content !important; max-width:100%; margin:0 0 6px auto; gap:0 !important; }
-.tr-acct-chip { display:flex; align-items:center; gap:9px; padding:5px 10px 5px 5px; border-radius:999px; min-width:0;
+.tr-acct-chip { display:flex; align-items:center; gap:9px; padding:4px 10px 4px 4px; border-radius:999px; min-width:0;
   background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.035)); border:1px solid rgba(255,255,255,.12);
   box-shadow: var(--tr-hi), 0 10px 24px -16px rgba(0,0,0,.9);
   transition:border-color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease), transform var(--tr-fast) var(--tr-ease); }
 [class*="st-key-tracct_top"]:hover .tr-acct-chip { border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); transform:translateY(-1px); }
-.tr-acct-chip .av { width:30px; height:30px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
-  font-family:var(--tr-mono); font-size:12.5px; font-weight:500; color:#fff;
+.tr-acct-chip .av { width:38px; height:38px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+  font-family:var(--tr-mono); font-size:15px; font-weight:500; color:#fff;
   background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
 .tr-acct-chip .av.has-avatar, .tr-acct-menu .av.has-avatar { padding:0; overflow:hidden; background:#150B10; border:1px solid rgba(255,51,85,.45);
   box-shadow:0 0 0 2px rgba(255,51,85,.12), 0 8px 20px -10px rgba(255,51,85,.9); }
@@ -249,8 +249,8 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   box-shadow:0 24px 60px -20px rgba(0,0,0,.9), var(--tr-hi); }
 [data-testid="stPopoverBody"] [data-testid="stVerticalBlock"] { gap:.15rem; }
 .tr-acct-menu { display:flex; align-items:center; gap:12px; padding:8px 12px 10px; border-bottom:1px solid var(--tr-border); margin-bottom:4px; min-width:0; }
-.tr-acct-menu .av { width:40px; height:40px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
-  font-family:var(--tr-mono); font-size:15px; color:#fff; background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
+.tr-acct-menu .av { width:48px; height:48px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+  font-family:var(--tr-mono); font-size:18px; color:#fff; background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
 .tr-acct-menu .n { font-size:13.5px; font-weight:700; color:var(--tr-text); overflow-wrap:anywhere; }
 .tr-acct-menu .m { font-size:11.5px; color:var(--tr-text-3); overflow-wrap:anywhere; margin-top:2px; }
 /* the destructive action is set apart from the ordinary ones: a quiet row in
