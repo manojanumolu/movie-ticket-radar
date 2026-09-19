@@ -35,7 +35,8 @@
           "name": "AMB Cinemas",
           "area": "Gachibowli",
           "formats": [
-            "Barco Flagship Laser Dolby Atmos"
+            "Barco Flagship Laser Dolby Atmos",
+            "HDR By Barco"
           ]
         },
         {
@@ -44,7 +45,7 @@
           "area": "Nallagandla",
           "formats": [
             "4K Dolby 7.1",
-            "Vip Screen"
+            "Infinity Vision Dolby Atmos"
           ]
         },
         {
@@ -53,6 +54,7 @@
           "area": "Shamshabad",
           "formats": [
             "Barco Flat 7.1",
+            "Infinity Vision Dolby Atmos",
             "Vip Screen"
           ]
         },
@@ -67,7 +69,8 @@
           "name": "ART CINEMAS",
           "area": "Vanasthalipuram",
           "formats": [
-            "4K"
+            "4K",
+            "4K Atmos"
           ]
         },
         {
@@ -91,14 +94,48 @@
           "name": "Asian M Cube Mall",
           "area": "Attapur",
           "formats": [
+            "4K Dolby Atmos",
             "Dolby 7.1"
+          ]
+        },
+        {
+          "code": "SNKH",
+          "name": "Asian Mukta A2 Sensation Cinema",
+          "area": "Kairathabad",
+          "formats": []
+        },
+        {
+          "code": "ARMH",
+          "name": "Asian Radhika Multiplex",
+          "area": "ECIL",
+          "formats": [
+            "2K"
+          ]
+        },
+        {
+          "code": "ACHI",
+          "name": "Asian Sha & Shahensha",
+          "area": "Chintal",
+          "formats": [
+            "2K"
+          ]
+        },
+        {
+          "code": "CPMH",
+          "name": "Cinepolis",
+          "area": "Lulu Mall, Hyderabad",
+          "formats": [
+            "2K Laser Dolby 7.1",
+            "4K Laser"
           ]
         },
         {
           "code": "CTNR",
           "name": "Cinepolis",
           "area": "TNR North City, Suchitra, Hyderabad",
-          "formats": []
+          "formats": [
+            "Macro Xe"
+          ]
         },
         {
           "code": "ABCS",
@@ -129,7 +166,8 @@
           "name": "Cineverse Multiplex",
           "area": "Uppal",
           "formats": [
-            "4K 7.1 Dolby"
+            "4K 7.1 Dolby",
+            "4K 7.1 Dolby Atmos"
           ]
         },
         {
@@ -139,6 +177,12 @@
           "formats": [
             "Recliners"
           ]
+        },
+        {
+          "code": "VRKC",
+          "name": "Indra Venkataramana Padmavati Cinema",
+          "area": "Kachiguda",
+          "formats": []
         },
         {
           "code": "IGMH",
@@ -202,18 +246,18 @@
           "formats": []
         },
         {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
+          "formats": []
+        },
+        {
           "code": "MRGT",
           "name": "Miraj Cinemas",
           "area": "Geeta, Chandanagar",
           "formats": [
             "Atmos"
           ]
-        },
-        {
-          "code": "MRAD",
-          "name": "Miraj Cinemas",
-          "area": "Anand Mall and Movies, Narsingi",
-          "formats": []
         },
         {
           "code": "MRRG",
@@ -269,8 +313,7 @@
           "name": "PVR",
           "area": "Next Galleria Mall, Panjagutta",
           "formats": [
-            "Atmos",
-            "Playhouse"
+            "Atmos"
           ]
         },
         {
@@ -326,6 +369,14 @@
           "formats": []
         },
         {
+          "code": "RCNH",
+          "name": "ROONGTA CINEMAS",
+          "area": "NOVUM, NAMPALLY",
+          "formats": [
+            "Dolby Atmos"
+          ]
+        },
+        {
           "code": "SSRJ",
           "name": "Sree Sai Raja Theatre",
           "area": "Musheerabad",
@@ -355,7 +406,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -363,10 +413,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 80,
-      "resolved_at": "2026-09-19T17:25:07.941704+05:30"
+      "showtime_count": 186,
+      "resolved_at": "2026-09-20T02:55:15.457760+05:30"
     },
     {
       "movie": {
@@ -396,7 +447,8 @@
           "name": "AAA Cinemas",
           "area": "Ameerpet",
           "formats": [
-            "Laser Dolby Atmos"
+            "Laser Dolby Atmos",
+            "Laser Dolby Digital 7.1"
           ]
         },
         {
@@ -423,6 +475,22 @@
           ]
         },
         {
+          "code": "AACN",
+          "name": "Aparna Cinemas",
+          "area": "Nallagandla",
+          "formats": [
+            "Infinity Vision Dolby Atmos"
+          ]
+        },
+        {
+          "code": "APNS",
+          "name": "Aparna Cinemas",
+          "area": "Shamshabad",
+          "formats": [
+            "Barco Dolby 7.1"
+          ]
+        },
+        {
           "code": "ACEV",
           "name": "ART CINEMAS",
           "area": "Vanasthalipuram",
@@ -444,7 +512,8 @@
           "name": "Asian Cineplanet Multiplex",
           "area": "Kompally",
           "formats": [
-            "Screen 1"
+            "Screen 1",
+            "Screen 3"
           ]
         },
         {
@@ -518,6 +587,14 @@
           "formats": []
         },
         {
+          "code": "INKM",
+          "name": "Cine Town Indra Nagendra",
+          "area": "Karmanghat",
+          "formats": [
+            "2K Air Cooled"
+          ]
+        },
+        {
           "code": "CTNR",
           "name": "Cinepolis",
           "area": "TNR North City, Suchitra, Hyderabad",
@@ -541,12 +618,25 @@
           "formats": []
         },
         {
+          "code": "CMMA",
+          "name": "Cinepolis",
+          "area": "Mantra Mall, Attapur",
+          "formats": []
+        },
+        {
+          "code": "CPCL",
+          "name": "Cinepolis",
+          "area": "CCPL Mall Malkajgiri, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "CVMU",
           "name": "Cineverse Multiplex",
           "area": "Uppal",
           "formats": [
             "4K 7.1 Dolby",
-            "4K 7.1 Dolby Atmos"
+            "4K 7.1 Dolby Atmos",
+            "7.1 Dolby"
           ]
         },
         {
@@ -857,7 +947,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -865,10 +954,11 @@
         "20260924"
       ],
       "closed_dates": [
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 116,
-      "resolved_at": "2026-09-19T17:24:17.709566+05:30"
+      "showtime_count": 235,
+      "resolved_at": "2026-09-20T02:54:25.223263+05:30"
     },
     {
       "movie": {
@@ -899,6 +989,22 @@
           ]
         },
         {
+          "code": "IOMH",
+          "name": "INOX",
+          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "MMAH",
+          "name": "MovieMax",
+          "area": "AMR, ECIL Secunderabad",
+          "formats": [
+            "Laser & 7.1"
+          ]
+        },
+        {
           "code": "PVFS",
           "name": "PVR",
           "area": "Nexus Mall Kukatpally, Hyderabad",
@@ -914,7 +1020,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -922,10 +1027,11 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 4,
-      "resolved_at": "2026-09-19T17:23:52.930540+05:30"
+      "showtime_count": 11,
+      "resolved_at": "2026-09-20T02:53:59.686351+05:30"
     },
     {
       "movie": {
@@ -992,6 +1098,7 @@
           "name": "Aparna Cinemas",
           "area": "Shamshabad",
           "formats": [
+            "Barco Dolby 7.1",
             "Infinity Vision Dolby Atmos"
           ]
         },
@@ -1005,10 +1112,19 @@
           ]
         },
         {
+          "code": "ASHN",
+          "name": "Asian Cinemart",
+          "area": "RC Puram",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
+        {
           "code": "CPHY",
           "name": "Asian Cineplanet Multiplex",
           "area": "Kompally",
           "formats": [
+            "Screen 2",
             "Screen 3"
           ]
         },
@@ -1041,7 +1157,8 @@
           "name": "Cinepolis",
           "area": "Lulu Mall, Hyderabad",
           "formats": [
-            "2K Laser Dolby 7.1"
+            "2K Laser Dolby 7.1",
+            "4K Laser"
           ]
         },
         {
@@ -1061,6 +1178,14 @@
           "name": "Cinepolis",
           "area": "CCPL Mall Malkajgiri, Hyderabad",
           "formats": []
+        },
+        {
+          "code": "CVMU",
+          "name": "Cineverse Multiplex",
+          "area": "Uppal",
+          "formats": [
+            "7.1 Dolby"
+          ]
         },
         {
           "code": "IGMH",
@@ -1100,7 +1225,9 @@
           "code": "INHY",
           "name": "INOX GVK One, Banjara Hills",
           "area": "Hyderabad",
-          "formats": []
+          "formats": [
+            "Atmos"
+          ]
         },
         {
           "code": "JJPP",
@@ -1148,7 +1275,16 @@
           "area": "AMR, ECIL Secunderabad",
           "formats": [
             "Atmos",
-            "Atmos + Laser"
+            "Atmos + Laser",
+            "Laser & 7.1"
+          ]
+        },
+        {
+          "code": "PSMJ",
+          "name": "Movietime Cinemas",
+          "area": "SKY Mall, Erragadda X Road",
+          "formats": [
+            "Dolby 7.1"
           ]
         },
         {
@@ -1239,6 +1375,7 @@
           "area": "LUXE, PXL, 4DX: Cyberabad",
           "formats": [
             "4DX",
+            "LUXE",
             "Pxl"
           ]
         },
@@ -1252,7 +1389,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -1263,8 +1399,8 @@
         "20260925",
         "20260926"
       ],
-      "showtime_count": 74,
-      "resolved_at": "2026-09-19T17:24:52.595229+05:30"
+      "showtime_count": 138,
+      "resolved_at": "2026-09-20T02:54:59.606720+05:30"
     },
     {
       "movie": {
@@ -1286,11 +1422,21 @@
       },
       "venues": [
         {
+          "code": "ASHN",
+          "name": "Asian Cinemart",
+          "area": "RC Puram",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
+        {
           "code": "ACPM",
           "name": "Asian Lakshmikala Cinepride",
           "area": "Moosapet",
           "formats": [
-            "Lalitha Air Conditioned"
+            "Chandrakala Air Cooled",
+            "Lalitha Air Conditioned",
+            "Shashikala Air Conditioned"
           ]
         },
         {
@@ -1308,6 +1454,12 @@
           "formats": [
             "2K Air Cooled"
           ]
+        },
+        {
+          "code": "ABCS",
+          "name": "Cinepolis",
+          "area": "DSL Virtue Mall Uppal, Hyderabad",
+          "formats": []
         },
         {
           "code": "CVMU",
@@ -1399,7 +1551,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -1410,8 +1561,8 @@
         "20260925",
         "20260926"
       ],
-      "showtime_count": 25,
-      "resolved_at": "2026-09-19T17:23:58.228227+05:30"
+      "showtime_count": 47,
+      "resolved_at": "2026-09-20T02:54:05.019384+05:30"
     },
     {
       "movie": {
@@ -1431,6 +1582,12 @@
           "code": "SNKH",
           "name": "Asian Mukta A2 Sensation Cinema",
           "area": "Kairathabad",
+          "formats": []
+        },
+        {
+          "code": "CMMA",
+          "name": "Cinepolis",
+          "area": "Mantra Mall, Attapur",
           "formats": []
         },
         {
@@ -1460,6 +1617,12 @@
           "formats": []
         },
         {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
+          "formats": []
+        },
+        {
           "code": "PVYH",
           "name": "PVR",
           "area": "Central Mall, Panjagutta",
@@ -1481,7 +1644,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -1489,10 +1651,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 14,
-      "resolved_at": "2026-09-19T17:24:22.029545+05:30"
+      "showtime_count": 29,
+      "resolved_at": "2026-09-20T02:54:29.565795+05:30"
     },
     {
       "movie": {
@@ -1509,6 +1672,38 @@
       },
       "venues": [
         {
+          "code": "ALUC",
+          "name": "ALLU Cinemas",
+          "area": "Kokapet",
+          "formats": [
+            "Barco Laser 4K Atmos"
+          ]
+        },
+        {
+          "code": "AMBH",
+          "name": "AMB Cinemas",
+          "area": "Gachibowli",
+          "formats": [
+            "Barco Flagship Laser Dolby Atmos"
+          ]
+        },
+        {
+          "code": "AACN",
+          "name": "Aparna Cinemas",
+          "area": "Nallagandla",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
+        {
+          "code": "APNS",
+          "name": "Aparna Cinemas",
+          "area": "Shamshabad",
+          "formats": [
+            "Barco Flat 7.1"
+          ]
+        },
+        {
           "code": "ACEV",
           "name": "ART CINEMAS",
           "area": "Vanasthalipuram",
@@ -1523,18 +1718,18 @@
           "formats": []
         },
         {
-          "code": "CTNR",
-          "name": "Cinepolis",
-          "area": "TNR North City, Suchitra, Hyderabad",
-          "formats": []
-        },
-        {
           "code": "CPMH",
           "name": "Cinepolis",
           "area": "Lulu Mall, Hyderabad",
           "formats": [
             "2K Laser Dolby 7.1"
           ]
+        },
+        {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": []
         },
         {
           "code": "ABCS",
@@ -1547,6 +1742,20 @@
           "name": "Cinepolis",
           "area": "Mantra Mall, Attapur",
           "formats": []
+        },
+        {
+          "code": "CPCL",
+          "name": "Cinepolis",
+          "area": "CCPL Mall Malkajgiri, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "GPRH",
+          "name": "GPR Multiplex",
+          "area": "Nizampet, Hyderabad",
+          "formats": [
+            "Dolby Atmos"
+          ]
         },
         {
           "code": "IGMH",
@@ -1573,6 +1782,12 @@
           "formats": []
         },
         {
+          "code": "IPRS",
+          "name": "INOX",
+          "area": "Prism Mall, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "IVNM",
           "name": "INOX",
           "area": "SMR Vinay Metro Mall, Dolby ATMOS: Miyapur",
@@ -1587,10 +1802,27 @@
           ]
         },
         {
+          "code": "PRHN",
+          "name": "Prasads Multiplex",
+          "area": "Hyderabad",
+          "formats": [
+            "Barco 4K Laser/Barco 4K Smart Laser",
+            "Barco 4K Smart Laser/Barco 4K Laser"
+          ]
+        },
+        {
           "code": "PVFS",
           "name": "PVR",
           "area": "Nexus Mall Kukatpally, Hyderabad",
           "formats": []
+        },
+        {
+          "code": "PNNG",
+          "name": "PVR",
+          "area": "Next Galleria Mall, Panjagutta",
+          "formats": [
+            "Atmos"
+          ]
         },
         {
           "code": "PVTS",
@@ -1607,6 +1839,12 @@
           "formats": []
         },
         {
+          "code": "PVUM",
+          "name": "PVR",
+          "area": "Musarambagh, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "PVYH",
           "name": "PVR",
           "area": "Central Mall, Panjagutta",
@@ -1619,6 +1857,12 @@
           "formats": []
         },
         {
+          "code": "PVHM",
+          "name": "PVR ICON",
+          "area": "Hitech, Madhapur, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "ILKS",
           "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
           "area": "",
@@ -1626,7 +1870,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -1634,10 +1877,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 21,
-      "resolved_at": "2026-09-19T17:25:14.647381+05:30"
+      "showtime_count": 64,
+      "resolved_at": "2026-09-20T02:55:21.728323+05:30"
     },
     {
       "movie": {
@@ -1675,235 +1919,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
-        "20260920",
-        "20260921",
-        "20260922"
-      ],
-      "closed_dates": [
-        "20260923",
-        "20260924",
-        "20260925"
-      ],
-      "showtime_count": 5,
-      "resolved_at": "2026-09-19T17:25:16.118585+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00506465",
-        "title": "VIBE",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Hindi",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/vibe-et00506465-1789824771.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/vibe/buytickets/ET00506465",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "ACAS",
-          "name": "AAA Cinemas",
-          "area": "Ameerpet",
-          "formats": [
-            "Laser Dolby Digital 7.1"
-          ]
-        },
-        {
-          "code": "AMBH",
-          "name": "AMB Cinemas",
-          "area": "Gachibowli",
-          "formats": [
-            "Vip Screen"
-          ]
-        },
-        {
-          "code": "AACN",
-          "name": "Aparna Cinemas",
-          "area": "Nallagandla",
-          "formats": [
-            "Infinity Vision Dolby Atmos"
-          ]
-        },
-        {
-          "code": "APNS",
-          "name": "Aparna Cinemas",
-          "area": "Shamshabad",
-          "formats": [
-            "Barco Dolby 7.1",
-            "Vip Screen"
-          ]
-        },
-        {
-          "code": "AMCA",
-          "name": "Asian M Cube Mall",
-          "area": "Attapur",
-          "formats": [
-            "4K Dolby Atmos"
-          ]
-        },
-        {
-          "code": "CTNR",
-          "name": "Cinepolis",
-          "area": "TNR North City, Suchitra, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "ABCS",
-          "name": "Cinepolis",
-          "area": "DSL Virtue Mall Uppal, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "CMMA",
-          "name": "Cinepolis",
-          "area": "Mantra Mall, Attapur",
-          "formats": []
-        },
-        {
-          "code": "STHD",
-          "name": "Cinepolis",
-          "area": "Sudha Cinemas, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "CPCL",
-          "name": "Cinepolis",
-          "area": "CCPL Mall Malkajgiri, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "CPLK",
-          "name": "CONNPLEX Luxuriance Cinemas",
-          "area": "Mpm Mall, Banjara Hil",
-          "formats": [
-            "Dolby 7.1"
-          ]
-        },
-        {
-          "code": "IGMH",
-          "name": "INOX",
-          "area": "GSM Mall, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "ISTN",
-          "name": "INOX",
-          "area": "Sattva Necklace Mall, Kavadiguda",
-          "formats": []
-        },
-        {
-          "code": "IOMH",
-          "name": "INOX",
-          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
-          "formats": []
-        },
-        {
-          "code": "IPRS",
-          "name": "INOX",
-          "area": "Prism Mall, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "INMH",
-          "name": "INOX",
-          "area": "Maheshwari Parmeshwari Mall, Kachiguda",
-          "formats": []
-        },
-        {
-          "code": "IVNM",
-          "name": "INOX",
-          "area": "SMR Vinay Metro Mall, Dolby ATMOS: Miyapur",
-          "formats": []
-        },
-        {
-          "code": "MMAH",
-          "name": "MovieMax",
-          "area": "AMR, ECIL Secunderabad",
-          "formats": [
-            "Dolby 7.1"
-          ]
-        },
-        {
-          "code": "MTHY",
-          "name": "Platinum Movietime Cinema",
-          "area": "Gachibowli SLN Terminus",
-          "formats": [
-            "Recliner"
-          ]
-        },
-        {
-          "code": "PRHN",
-          "name": "Prasads Multiplex",
-          "area": "Hyderabad",
-          "formats": [
-            "Barco 4K Laser"
-          ]
-        },
-        {
-          "code": "PVFS",
-          "name": "PVR",
-          "area": "Nexus Mall Kukatpally, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "PNNG",
-          "name": "PVR",
-          "area": "Next Galleria Mall, Panjagutta",
-          "formats": []
-        },
-        {
-          "code": "PVTS",
-          "name": "PVR",
-          "area": "Atrium Gachibowli, Hyderabad",
-          "formats": [
-            "Atmos"
-          ]
-        },
-        {
-          "code": "PIMH",
-          "name": "PVR",
-          "area": "Irrum Manzil, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "PVUM",
-          "name": "PVR",
-          "area": "Musarambagh, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "PVHM",
-          "name": "PVR ICON",
-          "area": "Hitech, Madhapur, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "ILKS",
-          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
-          "area": "",
-          "formats": []
-        },
-        {
-          "code": "PIIC",
-          "name": "PVR Superplex Inorbit",
-          "area": "LUXE, PXL, 4DX: Cyberabad",
-          "formats": [
-            "LUXE"
-          ]
-        },
-        {
-          "code": "TVHY",
-          "name": "Tivoli Cinemas",
-          "area": "Secunderabad",
-          "formats": [
-            "Laser Dolby 7.1"
-          ]
-        }
-      ],
-      "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -1911,10 +1926,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 46,
-      "resolved_at": "2026-09-19T17:24:34.932002+05:30"
+      "showtime_count": 9,
+      "resolved_at": "2026-09-20T02:55:23.271735+05:30"
     },
     {
       "movie": {
@@ -1936,7 +1952,8 @@
           "area": "Ameerpet",
           "formats": [
             "Laser Dolby Atmos",
-            "Laser Dolby Digital 7.1"
+            "Laser Dolby Digital 7.1",
+            "Led Screen Dolby Atmos"
           ]
         },
         {
@@ -1952,7 +1969,8 @@
           "name": "AMB Cinemas",
           "area": "Gachibowli",
           "formats": [
-            "Barco Flagship Laser Dolby Atmos"
+            "Barco Flagship Laser Dolby Atmos",
+            "M B LUXE"
           ]
         },
         {
@@ -2198,6 +2216,12 @@
           "formats": []
         },
         {
+          "code": "PVHM",
+          "name": "PVR ICON",
+          "area": "Hitech, Madhapur, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "ILKS",
           "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
           "area": "",
@@ -2219,7 +2243,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -2227,10 +2250,11 @@
         "20260924"
       ],
       "closed_dates": [
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 50,
-      "resolved_at": "2026-09-19T17:25:22.202419+05:30"
+      "showtime_count": 79,
+      "resolved_at": "2026-09-20T02:55:29.497036+05:30"
     },
     {
       "movie": {
@@ -2255,6 +2279,14 @@
           ]
         },
         {
+          "code": "ALUC",
+          "name": "ALLU Cinemas",
+          "area": "Kokapet",
+          "formats": [
+            "Barco Laser 4K Atmos"
+          ]
+        },
+        {
           "code": "AMBH",
           "name": "AMB Cinemas",
           "area": "Gachibowli",
@@ -2268,6 +2300,7 @@
           "name": "Aparna Cinemas",
           "area": "Nallagandla",
           "formats": [
+            "4K Dolby 7.1",
             "Infinity Vision Dolby Atmos"
           ]
         },
@@ -2308,7 +2341,8 @@
           "name": "Asian Lakshmikala Cinepride",
           "area": "Moosapet",
           "formats": [
-            "Chandrakala Air Cooled"
+            "Chandrakala Air Cooled",
+            "Shashikala Air Conditioned"
           ]
         },
         {
@@ -2374,8 +2408,15 @@
           "name": "Cineverse Multiplex",
           "area": "Uppal",
           "formats": [
+            "4K 7.1 Dolby",
             "7.1 Dolby"
           ]
+        },
+        {
+          "code": "GPRH",
+          "name": "GPR Multiplex",
+          "area": "Nizampet, Hyderabad",
+          "formats": []
         },
         {
           "code": "IGMH",
@@ -2405,6 +2446,12 @@
           "code": "IPRS",
           "name": "INOX",
           "area": "Prism Mall, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "IVNM",
+          "name": "INOX",
+          "area": "SMR Vinay Metro Mall, Dolby ATMOS: Miyapur",
           "formats": []
         },
         {
@@ -2446,12 +2493,6 @@
           "formats": []
         },
         {
-          "code": "MRAD",
-          "name": "Miraj Cinemas",
-          "area": "Anand Mall and Movies, Narsingi",
-          "formats": []
-        },
-        {
           "code": "MRAA",
           "name": "Miraj Cinemas",
           "area": "A2A Central Mall, Balanagar",
@@ -2461,6 +2502,12 @@
           "code": "MRGT",
           "name": "Miraj Cinemas",
           "area": "Geeta, Chandanagar",
+          "formats": []
+        },
+        {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
           "formats": []
         },
         {
@@ -2475,6 +2522,14 @@
           "area": "AMR, ECIL Secunderabad",
           "formats": [
             "Laser & 7.1"
+          ]
+        },
+        {
+          "code": "MTHY",
+          "name": "Platinum Movietime Cinema",
+          "area": "Gachibowli SLN Terminus",
+          "formats": [
+            "Recliner"
           ]
         },
         {
@@ -2493,6 +2548,40 @@
           "code": "PNNG",
           "name": "PVR",
           "area": "Next Galleria Mall, Panjagutta",
+          "formats": []
+        },
+        {
+          "code": "PVTS",
+          "name": "PVR",
+          "area": "Atrium Gachibowli, Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "PIMH",
+          "name": "PVR",
+          "area": "Irrum Manzil, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVTP",
+          "name": "PVR",
+          "area": "Preston, Gachibowli Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "PVUM",
+          "name": "PVR",
+          "area": "Musarambagh, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVYH",
+          "name": "PVR",
+          "area": "Central Mall, Panjagutta",
           "formats": []
         },
         {
@@ -2528,10 +2617,15 @@
           "formats": [
             "4K Dolby Atmos"
           ]
+        },
+        {
+          "code": "UKCC",
+          "name": "UK Cineplex",
+          "area": "Nacharam, Hyderabad",
+          "formats": []
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -2539,10 +2633,256 @@
         "20260924"
       ],
       "closed_dates": [
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 46,
-      "resolved_at": "2026-09-19T17:24:09.718406+05:30"
+      "showtime_count": 88,
+      "resolved_at": "2026-09-20T02:54:16.206988+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00506465",
+        "title": "VIBE",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/vibe-et00506465-1789824771.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/vibe/buytickets/ET00506465",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "ACAS",
+          "name": "AAA Cinemas",
+          "area": "Ameerpet",
+          "formats": [
+            "Laser Dolby Digital 7.1"
+          ]
+        },
+        {
+          "code": "AMBH",
+          "name": "AMB Cinemas",
+          "area": "Gachibowli",
+          "formats": [
+            "Barco Flagship Laser Dolby Atmos",
+            "Vip Screen"
+          ]
+        },
+        {
+          "code": "AACN",
+          "name": "Aparna Cinemas",
+          "area": "Nallagandla",
+          "formats": [
+            "Infinity Vision Dolby Atmos"
+          ]
+        },
+        {
+          "code": "APNS",
+          "name": "Aparna Cinemas",
+          "area": "Shamshabad",
+          "formats": [
+            "Barco Dolby 7.1",
+            "Vip Screen"
+          ]
+        },
+        {
+          "code": "AMCA",
+          "name": "Asian M Cube Mall",
+          "area": "Attapur",
+          "formats": [
+            "4K Dolby Atmos",
+            "Dolby 7.1"
+          ]
+        },
+        {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "CPMH",
+          "name": "Cinepolis",
+          "area": "Lulu Mall, Hyderabad",
+          "formats": [
+            "2K Laser Dolby 7.1"
+          ]
+        },
+        {
+          "code": "ABCS",
+          "name": "Cinepolis",
+          "area": "DSL Virtue Mall Uppal, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "CMMA",
+          "name": "Cinepolis",
+          "area": "Mantra Mall, Attapur",
+          "formats": []
+        },
+        {
+          "code": "STHD",
+          "name": "Cinepolis",
+          "area": "Sudha Cinemas, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "CPCL",
+          "name": "Cinepolis",
+          "area": "CCPL Mall Malkajgiri, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "CPLK",
+          "name": "CONNPLEX Luxuriance Cinemas",
+          "area": "Mpm Mall, Banjara Hil",
+          "formats": [
+            "Dolby 7.1"
+          ]
+        },
+        {
+          "code": "IGMH",
+          "name": "INOX",
+          "area": "GSM Mall, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "ISTN",
+          "name": "INOX",
+          "area": "Sattva Necklace Mall, Kavadiguda",
+          "formats": []
+        },
+        {
+          "code": "IOMH",
+          "name": "INOX",
+          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
+          "formats": []
+        },
+        {
+          "code": "IPRS",
+          "name": "INOX",
+          "area": "Prism Mall, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "INMH",
+          "name": "INOX",
+          "area": "Maheshwari Parmeshwari Mall, Kachiguda",
+          "formats": []
+        },
+        {
+          "code": "IVNM",
+          "name": "INOX",
+          "area": "SMR Vinay Metro Mall, Dolby ATMOS: Miyapur",
+          "formats": []
+        },
+        {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
+          "formats": []
+        },
+        {
+          "code": "MMAH",
+          "name": "MovieMax",
+          "area": "AMR, ECIL Secunderabad",
+          "formats": [
+            "Dolby 7.1",
+            "Laser & 7.1"
+          ]
+        },
+        {
+          "code": "MTHY",
+          "name": "Platinum Movietime Cinema",
+          "area": "Gachibowli SLN Terminus",
+          "formats": [
+            "Recliner"
+          ]
+        },
+        {
+          "code": "PRHN",
+          "name": "Prasads Multiplex",
+          "area": "Hyderabad",
+          "formats": [
+            "Barco 4K Laser"
+          ]
+        },
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PNNG",
+          "name": "PVR",
+          "area": "Next Galleria Mall, Panjagutta",
+          "formats": []
+        },
+        {
+          "code": "PVTS",
+          "name": "PVR",
+          "area": "Atrium Gachibowli, Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "PIMH",
+          "name": "PVR",
+          "area": "Irrum Manzil, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVUM",
+          "name": "PVR",
+          "area": "Musarambagh, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVHM",
+          "name": "PVR ICON",
+          "area": "Hitech, Madhapur, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "ILKS",
+          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
+          "area": "",
+          "formats": []
+        },
+        {
+          "code": "PIIC",
+          "name": "PVR Superplex Inorbit",
+          "area": "LUXE, PXL, 4DX: Cyberabad",
+          "formats": [
+            "LUXE"
+          ]
+        },
+        {
+          "code": "TVHY",
+          "name": "Tivoli Cinemas",
+          "area": "Secunderabad",
+          "formats": [
+            "Laser Dolby 7.1"
+          ]
+        }
+      ],
+      "bookable_dates": [
+        "20260920",
+        "20260921",
+        "20260922",
+        "20260923"
+      ],
+      "closed_dates": [
+        "20260924",
+        "20260925",
+        "20260926"
+      ],
+      "showtime_count": 92,
+      "resolved_at": "2026-09-20T02:54:41.962564+05:30"
     },
     {
       "movie": {
@@ -2579,7 +2919,8 @@
           "name": "AMB Cinemas",
           "area": "Gachibowli",
           "formats": [
-            "Barco Flagship Laser Dolby Atmos"
+            "Barco Flagship Laser Dolby Atmos",
+            "M B LUXE"
           ]
         },
         {
@@ -2622,6 +2963,12 @@
           "formats": []
         },
         {
+          "code": "ABCS",
+          "name": "Cinepolis",
+          "area": "DSL Virtue Mall Uppal, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "CMMA",
           "name": "Cinepolis",
           "area": "Mantra Mall, Attapur",
@@ -2631,6 +2978,12 @@
           "code": "STHD",
           "name": "Cinepolis",
           "area": "Sudha Cinemas, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "CPCL",
+          "name": "Cinepolis",
+          "area": "CCPL Mall Malkajgiri, Hyderabad",
           "formats": []
         },
         {
@@ -2670,6 +3023,7 @@
           "name": "MovieMax",
           "area": "AMR, ECIL Secunderabad",
           "formats": [
+            "Atmos + Laser",
             "Dolby 7.1"
           ]
         },
@@ -2685,7 +3039,9 @@
           "code": "PRHN",
           "name": "Prasads Multiplex",
           "area": "Hyderabad",
-          "formats": []
+          "formats": [
+            "Barco 4K Laser"
+          ]
         },
         {
           "code": "PVFS",
@@ -2713,7 +3069,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -2721,10 +3076,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 31,
-      "resolved_at": "2026-09-19T17:24:46.360812+05:30"
+      "showtime_count": 70,
+      "resolved_at": "2026-09-20T02:54:54.143885+05:30"
     },
     {
       "movie": {
@@ -2741,26 +3097,21 @@
       },
       "venues": [
         {
-          "code": "CTNR",
-          "name": "Cinepolis",
-          "area": "TNR North City, Suchitra, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "CPCL",
-          "name": "Cinepolis",
-          "area": "CCPL Mall Malkajgiri, Hyderabad",
-          "formats": []
-        },
-        {
           "code": "PIMH",
           "name": "PVR",
           "area": "Irrum Manzil, Hyderabad",
           "formats": []
+        },
+        {
+          "code": "PVTP",
+          "name": "PVR",
+          "area": "Preston, Gachibowli Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -2768,10 +3119,11 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 3,
-      "resolved_at": "2026-09-19T17:24:23.508127+05:30"
+      "showtime_count": 2,
+      "resolved_at": "2026-09-20T02:54:31.108637+05:30"
     },
     {
       "movie": {
@@ -2808,7 +3160,8 @@
           "name": "Aparna Cinemas",
           "area": "Nallagandla",
           "formats": [
-            "Infinity Vision Dolby Atmos"
+            "Infinity Vision Dolby Atmos",
+            "Vip Screen"
           ]
         },
         {
@@ -2816,7 +3169,16 @@
           "name": "Aparna Cinemas",
           "area": "Shamshabad",
           "formats": [
-            "Barco Dolby 7.1"
+            "Barco Dolby 7.1",
+            "Vip Screen"
+          ]
+        },
+        {
+          "code": "AMCA",
+          "name": "Asian M Cube Mall",
+          "area": "Attapur",
+          "formats": [
+            "Dolby 7.1"
           ]
         },
         {
@@ -2856,6 +3218,14 @@
           "name": "Cinepolis",
           "area": "Sudha Cinemas, Hyderabad",
           "formats": []
+        },
+        {
+          "code": "CPLK",
+          "name": "CONNPLEX Luxuriance Cinemas",
+          "area": "Mpm Mall, Banjara Hil",
+          "formats": [
+            "Recliners"
+          ]
         },
         {
           "code": "VRKC",
@@ -2908,6 +3278,12 @@
           "formats": []
         },
         {
+          "code": "MRAA",
+          "name": "Miraj Cinemas",
+          "area": "A2A Central Mall, Balanagar",
+          "formats": []
+        },
+        {
           "code": "MRAD",
           "name": "Miraj Cinemas",
           "area": "Anand Mall and Movies, Narsingi",
@@ -2918,7 +3294,8 @@
           "name": "MovieMax",
           "area": "AMR, ECIL Secunderabad",
           "formats": [
-            "Atmos"
+            "Atmos",
+            "Laser & 7.1"
           ]
         },
         {
@@ -2974,6 +3351,12 @@
           "formats": []
         },
         {
+          "code": "PRCX",
+          "name": "PVR",
+          "area": "RK Cineplex, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "PVHM",
           "name": "PVR ICON",
           "area": "Hitech, Madhapur, Hyderabad",
@@ -3013,7 +3396,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -3021,10 +3403,11 @@
         "20260924"
       ],
       "closed_dates": [
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 41,
-      "resolved_at": "2026-09-19T17:25:10.916689+05:30"
+      "showtime_count": 91,
+      "resolved_at": "2026-09-20T02:55:18.636211+05:30"
     },
     {
       "movie": {
@@ -3054,7 +3437,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -3062,10 +3444,11 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 2,
-      "resolved_at": "2026-09-19T17:25:13.156235+05:30"
+      "showtime_count": 4,
+      "resolved_at": "2026-09-20T02:55:20.171157+05:30"
     },
     {
       "movie": {
@@ -3087,11 +3470,36 @@
       },
       "venues": [
         {
+          "code": "ACAS",
+          "name": "AAA Cinemas",
+          "area": "Ameerpet",
+          "formats": [
+            "Laser Dolby Digital 7.1"
+          ]
+        },
+        {
+          "code": "ALUC",
+          "name": "ALLU Cinemas",
+          "area": "Kokapet",
+          "formats": [
+            "Barco Laser 4K Atmos"
+          ]
+        },
+        {
           "code": "AMBH",
           "name": "AMB Cinemas",
           "area": "Gachibowli",
           "formats": [
-            "M B LUXE"
+            "M B LUXE",
+            "Vip Screen"
+          ]
+        },
+        {
+          "code": "AACN",
+          "name": "Aparna Cinemas",
+          "area": "Nallagandla",
+          "formats": [
+            "4K Dolby 7.1"
           ]
         },
         {
@@ -3105,6 +3513,7 @@
           "name": "ART CINEMAS",
           "area": "Vanasthalipuram",
           "formats": [
+            "4K",
             "EPIQ"
           ]
         },
@@ -3149,11 +3558,18 @@
           ]
         },
         {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "CVMU",
           "name": "Cineverse Multiplex",
           "area": "Uppal",
           "formats": [
-            "4K 7.1 Dolby"
+            "4K 7.1 Dolby",
+            "4K 7.1 Dolby Atmos"
           ]
         },
         {
@@ -3217,9 +3633,35 @@
           ]
         },
         {
+          "code": "MTHY",
+          "name": "Platinum Movietime Cinema",
+          "area": "Gachibowli SLN Terminus",
+          "formats": [
+            "Recliner"
+          ]
+        },
+        {
+          "code": "PRHN",
+          "name": "Prasads Multiplex",
+          "area": "Hyderabad",
+          "formats": []
+        },
+        {
           "code": "PVFS",
           "name": "PVR",
           "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PNNG",
+          "name": "PVR",
+          "area": "Next Galleria Mall, Panjagutta",
+          "formats": []
+        },
+        {
+          "code": "ILKS",
+          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
+          "area": "",
           "formats": []
         },
         {
@@ -3243,10 +3685,15 @@
           "formats": [
             "Dolby 7.1 Extreme"
           ]
+        },
+        {
+          "code": "UKCC",
+          "name": "UK Cineplex",
+          "area": "Nacharam, Hyderabad",
+          "formats": []
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -3254,10 +3701,11 @@
         "20260924"
       ],
       "closed_dates": [
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 30,
-      "resolved_at": "2026-09-19T17:24:20.517682+05:30"
+      "showtime_count": 68,
+      "resolved_at": "2026-09-20T02:54:28.059199+05:30"
     },
     {
       "movie": {
@@ -3278,7 +3726,7 @@
           "name": "AAA Cinemas",
           "area": "Ameerpet",
           "formats": [
-            "Led Screen Dolby Atmos"
+            "Laser Dolby Digital 7.1"
           ]
         },
         {
@@ -3295,6 +3743,44 @@
           "area": "Vanasthalipuram",
           "formats": [
             "4K Atmos"
+          ]
+        },
+        {
+          "code": "ASHN",
+          "name": "Asian Cinemart",
+          "area": "RC Puram",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
+        {
+          "code": "CPHY",
+          "name": "Asian Cineplanet Multiplex",
+          "area": "Kompally",
+          "formats": [
+            "Screen 3"
+          ]
+        },
+        {
+          "code": "ARMH",
+          "name": "Asian Radhika Multiplex",
+          "area": "ECIL",
+          "formats": [
+            "2K"
+          ]
+        },
+        {
+          "code": "AKYJ",
+          "name": "INOX",
+          "area": "Ashoka One, 4K LASER Dolby ATMOS: Kukatpally",
+          "formats": []
+        },
+        {
+          "code": "IOMH",
+          "name": "INOX",
+          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
+          "formats": [
+            "Atmos"
           ]
         },
         {
@@ -3324,21 +3810,27 @@
           "formats": []
         },
         {
+          "code": "MRAA",
+          "name": "Miraj Cinemas",
+          "area": "A2A Central Mall, Balanagar",
+          "formats": []
+        },
+        {
           "code": "MRGT",
           "name": "Miraj Cinemas",
           "area": "Geeta, Chandanagar",
           "formats": []
         },
         {
-          "code": "MRAD",
-          "name": "Miraj Cinemas",
-          "area": "Anand Mall and Movies, Narsingi",
-          "formats": []
-        },
-        {
           "code": "MRRG",
           "name": "Miraj Cinemas",
           "area": "Raghavendra, Malkajgiri",
+          "formats": []
+        },
+        {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
           "formats": []
         },
         {
@@ -3362,6 +3854,34 @@
           "name": "PVR",
           "area": "Nexus Mall Kukatpally, Hyderabad",
           "formats": []
+        },
+        {
+          "code": "PNNG",
+          "name": "PVR",
+          "area": "Next Galleria Mall, Panjagutta",
+          "formats": []
+        },
+        {
+          "code": "PVTS",
+          "name": "PVR",
+          "area": "Atrium Gachibowli, Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "PIMH",
+          "name": "PVR",
+          "area": "Irrum Manzil, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVTP",
+          "name": "PVR",
+          "area": "Preston, Gachibowli Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
         },
         {
           "code": "PRCX",
@@ -3391,7 +3911,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -3399,10 +3918,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 17,
-      "resolved_at": "2026-09-19T17:25:06.429230+05:30"
+      "showtime_count": 39,
+      "resolved_at": "2026-09-20T02:55:13.843234+05:30"
     },
     {
       "movie": {
@@ -3418,6 +3938,14 @@
         "variants": []
       },
       "venues": [
+        {
+          "code": "AMBH",
+          "name": "AMB Cinemas",
+          "area": "Gachibowli",
+          "formats": [
+            "Barco Flagship Laser Dolby Atmos"
+          ]
+        },
         {
           "code": "CTNR",
           "name": "Cinepolis",
@@ -3463,6 +3991,12 @@
           "formats": []
         },
         {
+          "code": "PIMH",
+          "name": "PVR",
+          "area": "Irrum Manzil, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "PVTP",
           "name": "PVR",
           "area": "Preston, Gachibowli Hyderabad",
@@ -3478,7 +4012,73 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
+        "20260920",
+        "20260921",
+        "20260922",
+        "20260923"
+      ],
+      "closed_dates": [
+        "20260924",
+        "20260925",
+        "20260926"
+      ],
+      "showtime_count": 17,
+      "resolved_at": "2026-09-20T02:55:24.778672+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00495643",
+        "title": "Jadi: The Untold Side of If",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Odia",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/jadi-the-untold-side-of-if-et00495643-1776326077.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/jadi-the-untold-side-of-if/buytickets/ET00495643",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "ISTN",
+          "name": "INOX",
+          "area": "Sattva Necklace Mall, Kavadiguda",
+          "formats": []
+        },
+        {
+          "code": "IPRS",
+          "name": "INOX",
+          "area": "Prism Mall, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVTP",
+          "name": "PVR",
+          "area": "Preston, Gachibowli Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "PVYH",
+          "name": "PVR",
+          "area": "Central Mall, Panjagutta",
+          "formats": []
+        }
+      ],
+      "bookable_dates": [
         "20260920",
         "20260921",
         "20260922"
@@ -3486,10 +4086,11 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 11,
-      "resolved_at": "2026-09-19T17:25:17.633175+05:30"
+      "showtime_count": 7,
+      "resolved_at": "2026-09-20T02:55:30.997862+05:30"
     },
     {
       "movie": {
@@ -3506,11 +4107,28 @@
       },
       "venues": [
         {
-          "code": "ALUC",
-          "name": "ALLU Cinemas",
-          "area": "Kokapet",
+          "code": "ACAS",
+          "name": "AAA Cinemas",
+          "area": "Ameerpet",
           "formats": [
-            "Barco Laser 4K Atmos"
+            "Laser Dolby Digital 7.1"
+          ]
+        },
+        {
+          "code": "AMBH",
+          "name": "AMB Cinemas",
+          "area": "Gachibowli",
+          "formats": [
+            "Barco Flagship Laser Dolby Atmos",
+            "Vip Screen"
+          ]
+        },
+        {
+          "code": "AACN",
+          "name": "Aparna Cinemas",
+          "area": "Nallagandla",
+          "formats": [
+            "Infinity Vision Dolby Atmos"
           ]
         },
         {
@@ -3518,7 +4136,16 @@
           "name": "Aparna Cinemas",
           "area": "Shamshabad",
           "formats": [
+            "Barco Dolby 7.1",
             "Infinity Vision Dolby Atmos"
+          ]
+        },
+        {
+          "code": "ACEV",
+          "name": "ART CINEMAS",
+          "area": "Vanasthalipuram",
+          "formats": [
+            "4K Atmos"
           ]
         },
         {
@@ -3534,6 +4161,7 @@
           "name": "Asian Cineplanet Multiplex",
           "area": "Kompally",
           "formats": [
+            "Screen 1",
             "Screen 4"
           ]
         },
@@ -3598,6 +4226,12 @@
           "formats": []
         },
         {
+          "code": "VRKC",
+          "name": "Indra Venkataramana Padmavati Cinema",
+          "area": "Kachiguda",
+          "formats": []
+        },
+        {
           "code": "JJPP",
           "name": "JP Cinemas",
           "area": "Chandanagar",
@@ -3622,7 +4256,7 @@
           "name": "MovieMax",
           "area": "AMR, ECIL Secunderabad",
           "formats": [
-            "Laser & 7.1"
+            "Dolby 7.1"
           ]
         },
         {
@@ -3642,16 +4276,35 @@
           ]
         },
         {
+          "code": "RMKN",
+          "name": "Ramakrishna 35mm",
+          "area": "Abids",
+          "formats": []
+        },
+        {
           "code": "SNDY",
           "name": "Sandhya 35mm 2k Dolby Atmos",
           "area": "RTC X Roads",
           "formats": [
             "Dolby Atmos"
           ]
+        },
+        {
+          "code": "TVHY",
+          "name": "Tivoli Cinemas",
+          "area": "Secunderabad",
+          "formats": [
+            "Dolby 7.1 Extreme"
+          ]
+        },
+        {
+          "code": "UKCC",
+          "name": "UK Cineplex",
+          "area": "Nacharam, Hyderabad",
+          "formats": []
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -3659,131 +4312,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 21,
-      "resolved_at": "2026-09-19T17:24:43.343220+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00495643",
-        "title": "Jadi: The Untold Side of If",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Odia",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/jadi-the-untold-side-of-if-et00495643-1776326077.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/jadi-the-untold-side-of-if/buytickets/ET00495643",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "CTNR",
-          "name": "Cinepolis",
-          "area": "TNR North City, Suchitra, Hyderabad",
-          "formats": [
-            "Macro Xe"
-          ]
-        },
-        {
-          "code": "ISTN",
-          "name": "INOX",
-          "area": "Sattva Necklace Mall, Kavadiguda",
-          "formats": []
-        },
-        {
-          "code": "IPRS",
-          "name": "INOX",
-          "area": "Prism Mall, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "PVFS",
-          "name": "PVR",
-          "area": "Nexus Mall Kukatpally, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "PVTP",
-          "name": "PVR",
-          "area": "Preston, Gachibowli Hyderabad",
-          "formats": [
-            "Atmos"
-          ]
-        }
-      ],
-      "bookable_dates": [
-        "20260919",
-        "20260920",
-        "20260921",
-        "20260922"
-      ],
-      "closed_dates": [
-        "20260923",
-        "20260924",
-        "20260925"
-      ],
-      "showtime_count": 6,
-      "resolved_at": "2026-09-19T17:25:23.707570+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00452034",
-        "title": "The Odyssey",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "English",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/the-odyssey-et00452034-1778421685.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/the-odyssey/buytickets/ET00452034",
-        "variants": [
-          [
-            "ET00505322",
-            "4DX"
-          ]
-        ]
-      },
-      "venues": [
-        {
-          "code": "PRHN",
-          "name": "Prasads Multiplex",
-          "area": "Hyderabad",
-          "formats": [
-            "Pcx Screen"
-          ]
-        },
-        {
-          "code": "PVFS",
-          "name": "PVR",
-          "area": "Nexus Mall Kukatpally, Hyderabad",
-          "formats": [
-            "4DX"
-          ]
-        },
-        {
-          "code": "PIIC",
-          "name": "PVR Superplex Inorbit",
-          "area": "LUXE, PXL, 4DX: Cyberabad",
-          "formats": [
-            "4DX"
-          ]
-        }
-      ],
-      "bookable_dates": [
-        "20260919",
-        "20260920",
-        "20260921",
-        "20260922"
-      ],
-      "closed_dates": [
-        "20260923",
-        "20260924",
-        "20260925"
-      ],
-      "showtime_count": 3,
-      "resolved_at": "2026-09-19T17:25:04.906573+05:30"
+      "showtime_count": 50,
+      "resolved_at": "2026-09-20T02:54:50.413964+05:30"
     },
     {
       "movie": {
@@ -3799,6 +4332,22 @@
         "variants": []
       },
       "venues": [
+        {
+          "code": "ACAS",
+          "name": "AAA Cinemas",
+          "area": "Ameerpet",
+          "formats": [
+            "Led Screen Dolby Atmos"
+          ]
+        },
+        {
+          "code": "ALUC",
+          "name": "ALLU Cinemas",
+          "area": "Kokapet",
+          "formats": [
+            "Barco Laser 4K Atmos"
+          ]
+        },
         {
           "code": "AMBH",
           "name": "AMB Cinemas",
@@ -3824,6 +4373,30 @@
           ]
         },
         {
+          "code": "ACEV",
+          "name": "ART CINEMAS",
+          "area": "Vanasthalipuram",
+          "formats": [
+            "4K"
+          ]
+        },
+        {
+          "code": "ASHN",
+          "name": "Asian Cinemart",
+          "area": "RC Puram",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
+        {
+          "code": "CPHY",
+          "name": "Asian Cineplanet Multiplex",
+          "area": "Kompally",
+          "formats": [
+            "Screen 4"
+          ]
+        },
+        {
           "code": "ACPM",
           "name": "Asian Lakshmikala Cinepride",
           "area": "Moosapet",
@@ -3832,9 +4405,33 @@
           ]
         },
         {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "ABCS",
+          "name": "Cinepolis",
+          "area": "DSL Virtue Mall Uppal, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "CMMA",
+          "name": "Cinepolis",
+          "area": "Mantra Mall, Attapur",
+          "formats": []
+        },
+        {
           "code": "GPRH",
           "name": "GPR Multiplex",
           "area": "Nizampet, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "IGMH",
+          "name": "INOX",
+          "area": "GSM Mall, Hyderabad",
           "formats": []
         },
         {
@@ -3856,6 +4453,18 @@
           "formats": []
         },
         {
+          "code": "IPRS",
+          "name": "INOX",
+          "area": "Prism Mall, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "INHY",
+          "name": "INOX GVK One, Banjara Hills",
+          "area": "Hyderabad",
+          "formats": []
+        },
+        {
           "code": "JJPP",
           "name": "JP Cinemas",
           "area": "Chandanagar",
@@ -3870,9 +4479,27 @@
           "formats": []
         },
         {
+          "code": "MRAA",
+          "name": "Miraj Cinemas",
+          "area": "A2A Central Mall, Balanagar",
+          "formats": []
+        },
+        {
           "code": "MRGT",
           "name": "Miraj Cinemas",
           "area": "Geeta, Chandanagar",
+          "formats": []
+        },
+        {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
+          "formats": []
+        },
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
           "formats": []
         },
         {
@@ -3882,9 +4509,35 @@
           "formats": []
         },
         {
+          "code": "PVTS",
+          "name": "PVR",
+          "area": "Atrium Gachibowli, Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "PIMH",
+          "name": "PVR",
+          "area": "Irrum Manzil, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVUM",
+          "name": "PVR",
+          "area": "Musarambagh, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "PVYH",
           "name": "PVR",
           "area": "Central Mall, Panjagutta",
+          "formats": []
+        },
+        {
+          "code": "ILKS",
+          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
+          "area": "",
           "formats": []
         },
         {
@@ -3897,7 +4550,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -3905,47 +4557,89 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 14,
-      "resolved_at": "2026-09-19T17:24:08.189445+05:30"
+      "showtime_count": 33,
+      "resolved_at": "2026-09-20T02:54:13.646920+05:30"
     },
     {
       "movie": {
         "platform": "bookmyshow",
-        "event_code": "ET00016237",
-        "title": "1 Nenokkadine",
+        "event_code": "ET00452034",
+        "title": "The Odyssey",
         "region_code": "HYD",
         "region_slug": "hyderabad",
         "city": "Hyderabad",
-        "language": "Telugu",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/1-nenokkadine-et00016237-1779796309.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/1-nenokkadine/buytickets/ET00016237",
-        "variants": []
+        "language": "English",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/the-odyssey-et00452034-1778421685.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/the-odyssey/buytickets/ET00452034",
+        "variants": [
+          [
+            "ET00505322",
+            "4DX"
+          ]
+        ]
       },
       "venues": [
         {
-          "code": "SUDA",
-          "name": "Sudarshan 35MM 4k Laser & Dolby Atmos",
-          "area": "RTC X Roads",
+          "code": "IOMH",
+          "name": "INOX",
+          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
+          "formats": []
+        },
+        {
+          "code": "PRHN",
+          "name": "Prasads Multiplex",
+          "area": "Hyderabad",
           "formats": [
-            "4K Dolby Atmos"
+            "Pcx Screen"
+          ]
+        },
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": [
+            "4DX"
+          ]
+        },
+        {
+          "code": "PIMH",
+          "name": "PVR",
+          "area": "Irrum Manzil, Hyderabad",
+          "formats": [
+            "4DX"
+          ]
+        },
+        {
+          "code": "ILKS",
+          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
+          "area": "",
+          "formats": []
+        },
+        {
+          "code": "PIIC",
+          "name": "PVR Superplex Inorbit",
+          "area": "LUXE, PXL, 4DX: Cyberabad",
+          "formats": [
+            "4DX"
           ]
         }
       ],
       "bookable_dates": [
-        "20260920"
+        "20260920",
+        "20260921",
+        "20260922"
       ],
       "closed_dates": [
-        "20260921",
-        "20260922",
         "20260923",
         "20260924",
         "20260925",
         "20260926"
       ],
-      "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:23:51.415286+05:30"
+      "showtime_count": 7,
+      "resolved_at": "2026-09-20T02:55:12.268113+05:30"
     },
     {
       "movie": {
@@ -4093,7 +4787,7 @@
       ],
       "closed_dates": [],
       "showtime_count": 44,
-      "resolved_at": "2026-09-19T17:24:59.185642+05:30"
+      "resolved_at": "2026-09-20T02:55:06.551649+05:30"
     },
     {
       "movie": {
@@ -4149,7 +4843,7 @@
       ],
       "closed_dates": [],
       "showtime_count": 5,
-      "resolved_at": "2026-09-19T17:25:19.156103+05:30"
+      "resolved_at": "2026-09-20T02:55:26.322127+05:30"
     },
     {
       "movie": {
@@ -4176,10 +4870,15 @@
           "name": "PVR",
           "area": "Irrum Manzil, Hyderabad",
           "formats": []
+        },
+        {
+          "code": "PVHM",
+          "name": "PVR ICON",
+          "area": "Hitech, Madhapur, Hyderabad",
+          "formats": []
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -4187,10 +4886,11 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 3,
-      "resolved_at": "2026-09-19T17:24:06.715322+05:30"
+      "showtime_count": 5,
+      "resolved_at": "2026-09-20T02:54:12.101873+05:30"
     },
     {
       "movie": {
@@ -4206,6 +4906,14 @@
         "variants": []
       },
       "venues": [
+        {
+          "code": "AMBH",
+          "name": "AMB Cinemas",
+          "area": "Gachibowli",
+          "formats": [
+            "Barco Flagship Laser Dolby Atmos"
+          ]
+        },
         {
           "code": "CTNR",
           "name": "Cinepolis",
@@ -4228,7 +4936,9 @@
           "code": "PNNG",
           "name": "PVR",
           "area": "Next Galleria Mall, Panjagutta",
-          "formats": []
+          "formats": [
+            "Atmos"
+          ]
         },
         {
           "code": "PVTS",
@@ -4252,7 +4962,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -4260,10 +4969,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 7,
-      "resolved_at": "2026-09-19T17:24:26.503547+05:30"
+      "showtime_count": 13,
+      "resolved_at": "2026-09-20T02:54:34.243137+05:30"
     },
     {
       "movie": {
@@ -4298,6 +5008,28 @@
           "area": "Kokapet",
           "formats": [
             "Dolby Cinema"
+          ]
+        },
+        {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "IGMH",
+          "name": "INOX",
+          "area": "GSM Mall, Hyderabad",
+          "formats": [
+            "3D"
+          ]
+        },
+        {
+          "code": "IOMH",
+          "name": "INOX",
+          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
+          "formats": [
+            "Atmos"
           ]
         },
         {
@@ -4356,7 +5088,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -4367,8 +5098,8 @@
         "20260925",
         "20260926"
       ],
-      "showtime_count": 8,
-      "resolved_at": "2026-09-19T17:24:03.628890+05:30"
+      "showtime_count": 11,
+      "resolved_at": "2026-09-20T02:54:10.576666+05:30"
     },
     {
       "movie": {
@@ -4436,12 +5167,12 @@
           "name": "PVR Superplex Inorbit",
           "area": "LUXE, PXL, 4DX: Cyberabad",
           "formats": [
-            "4DX"
+            "4DX",
+            "LUXE"
           ]
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -4449,184 +5180,48 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 8,
-      "resolved_at": "2026-09-19T17:25:02.044501+05:30"
+      "showtime_count": 9,
+      "resolved_at": "2026-09-20T02:55:09.404486+05:30"
     },
     {
       "movie": {
         "platform": "bookmyshow",
-        "event_code": "ET00515245",
-        "title": "It's a Medical Miracle",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Malayalam",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/it-s-a-medical-miracle-et00515245-1788349351.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/its-a-medical-miracle/buytickets/ET00515245",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "IGMH",
-          "name": "INOX",
-          "area": "GSM Mall, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "IOMH",
-          "name": "INOX",
-          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
-          "formats": [
-            "Atmos"
-          ]
-        },
-        {
-          "code": "PRHN",
-          "name": "Prasads Multiplex",
-          "area": "Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "PVFS",
-          "name": "PVR",
-          "area": "Nexus Mall Kukatpally, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "PVTP",
-          "name": "PVR",
-          "area": "Preston, Gachibowli Hyderabad",
-          "formats": [
-            "Atmos"
-          ]
-        }
-      ],
-      "bookable_dates": [
-        "20260919",
-        "20260920",
-        "20260921",
-        "20260922"
-      ],
-      "closed_dates": [
-        "20260923",
-        "20260924",
-        "20260925"
-      ],
-      "showtime_count": 5,
-      "resolved_at": "2026-09-19T17:24:36.433914+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00507706",
-        "title": "Kaagitham Padavalu",
+        "event_code": "ET00016237",
+        "title": "1 Nenokkadine",
         "region_code": "HYD",
         "region_slug": "hyderabad",
         "city": "Hyderabad",
         "language": "Telugu",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/kaagitham-padavalu-et00507706-1784097504.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/kaagitham-padavalu/buytickets/ET00507706",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/1-nenokkadine-et00016237-1779796309.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/1-nenokkadine/buytickets/ET00016237",
         "variants": []
       },
       "venues": [
         {
-          "code": "ASHN",
-          "name": "Asian Cinemart",
-          "area": "RC Puram",
+          "code": "SUDA",
+          "name": "Sudarshan 35MM 4k Laser & Dolby Atmos",
+          "area": "RTC X Roads",
           "formats": [
-            "4K Dolby 7.1"
+            "4K Dolby Atmos"
           ]
-        },
-        {
-          "code": "CVMU",
-          "name": "Cineverse Multiplex",
-          "area": "Uppal",
-          "formats": [
-            "7.1 Dolby"
-          ]
-        },
-        {
-          "code": "IOMH",
-          "name": "INOX",
-          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
-          "formats": []
-        },
-        {
-          "code": "IVNM",
-          "name": "INOX",
-          "area": "SMR Vinay Metro Mall, Dolby ATMOS: Miyapur",
-          "formats": []
-        },
-        {
-          "code": "MRAD",
-          "name": "Miraj Cinemas",
-          "area": "Anand Mall and Movies, Narsingi",
-          "formats": []
-        },
-        {
-          "code": "PSMJ",
-          "name": "Movietime Cinemas",
-          "area": "SKY Mall, Erragadda X Road",
-          "formats": [
-            "Dolby 7.1"
-          ]
-        },
-        {
-          "code": "MTHY",
-          "name": "Platinum Movietime Cinema",
-          "area": "Gachibowli SLN Terminus",
-          "formats": [
-            "Recliner"
-          ]
-        },
-        {
-          "code": "PVFS",
-          "name": "PVR",
-          "area": "Nexus Mall Kukatpally, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "PVUM",
-          "name": "PVR",
-          "area": "Musarambagh, Hyderabad",
-          "formats": []
-        },
-        {
-          "code": "PVYH",
-          "name": "PVR",
-          "area": "Central Mall, Panjagutta",
-          "formats": []
-        },
-        {
-          "code": "PRCX",
-          "name": "PVR",
-          "area": "RK Cineplex, Hyderabad",
-          "formats": [
-            "Atmos"
-          ]
-        },
-        {
-          "code": "UKCC",
-          "name": "UK Cineplex",
-          "area": "Nacharam, Hyderabad",
-          "formats": []
         }
       ],
       "bookable_dates": [
-        "20260919",
-        "20260920",
-        "20260921",
-        "20260922",
-        "20260923"
+        "20260920"
       ],
       "closed_dates": [
+        "20260921",
+        "20260922",
+        "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 12,
-      "resolved_at": "2026-09-19T17:24:41.835280+05:30"
+      "showtime_count": 1,
+      "resolved_at": "2026-09-20T02:53:58.187596+05:30"
     },
     {
       "movie": {
@@ -4662,7 +5257,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -4670,10 +5264,295 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
       "showtime_count": 4,
-      "resolved_at": "2026-09-19T17:25:25.222154+05:30"
+      "resolved_at": "2026-09-20T02:55:32.494947+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00515245",
+        "title": "It's a Medical Miracle",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Malayalam",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/it-s-a-medical-miracle-et00515245-1788349351.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/its-a-medical-miracle/buytickets/ET00515245",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "AMBH",
+          "name": "AMB Cinemas",
+          "area": "Gachibowli",
+          "formats": [
+            "Vip Screen"
+          ]
+        },
+        {
+          "code": "AACN",
+          "name": "Aparna Cinemas",
+          "area": "Nallagandla",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
+        {
+          "code": "APNS",
+          "name": "Aparna Cinemas",
+          "area": "Shamshabad",
+          "formats": [
+            "Barco Dolby 7.1"
+          ]
+        },
+        {
+          "code": "CPCL",
+          "name": "Cinepolis",
+          "area": "CCPL Mall Malkajgiri, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "IGMH",
+          "name": "INOX",
+          "area": "GSM Mall, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "IOMH",
+          "name": "INOX",
+          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "MMAH",
+          "name": "MovieMax",
+          "area": "AMR, ECIL Secunderabad",
+          "formats": [
+            "Dolby 7.1"
+          ]
+        },
+        {
+          "code": "PRHN",
+          "name": "Prasads Multiplex",
+          "area": "Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVTP",
+          "name": "PVR",
+          "area": "Preston, Gachibowli Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        }
+      ],
+      "bookable_dates": [
+        "20260920",
+        "20260921",
+        "20260922",
+        "20260923"
+      ],
+      "closed_dates": [
+        "20260924",
+        "20260925",
+        "20260926"
+      ],
+      "showtime_count": 10,
+      "resolved_at": "2026-09-20T02:54:43.458954+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00507706",
+        "title": "Kaagitham Padavalu",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/kaagitham-padavalu-et00507706-1784097504.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/kaagitham-padavalu/buytickets/ET00507706",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "APNS",
+          "name": "Aparna Cinemas",
+          "area": "Shamshabad",
+          "formats": [
+            "Barco Flat 7.1"
+          ]
+        },
+        {
+          "code": "ACEV",
+          "name": "ART CINEMAS",
+          "area": "Vanasthalipuram",
+          "formats": [
+            "4K"
+          ]
+        },
+        {
+          "code": "ASHN",
+          "name": "Asian Cinemart",
+          "area": "RC Puram",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
+        {
+          "code": "CVMU",
+          "name": "Cineverse Multiplex",
+          "area": "Uppal",
+          "formats": [
+            "7.1 Dolby"
+          ]
+        },
+        {
+          "code": "GPRH",
+          "name": "GPR Multiplex",
+          "area": "Nizampet, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "ISTN",
+          "name": "INOX",
+          "area": "Sattva Necklace Mall, Kavadiguda",
+          "formats": []
+        },
+        {
+          "code": "AKYJ",
+          "name": "INOX",
+          "area": "Ashoka One, 4K LASER Dolby ATMOS: Kukatpally",
+          "formats": []
+        },
+        {
+          "code": "IOMH",
+          "name": "INOX",
+          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
+          "formats": []
+        },
+        {
+          "code": "INMH",
+          "name": "INOX",
+          "area": "Maheshwari Parmeshwari Mall, Kachiguda",
+          "formats": []
+        },
+        {
+          "code": "IVNM",
+          "name": "INOX",
+          "area": "SMR Vinay Metro Mall, Dolby ATMOS: Miyapur",
+          "formats": []
+        },
+        {
+          "code": "JJPP",
+          "name": "JP Cinemas",
+          "area": "Chandanagar",
+          "formats": [
+            "Dolby 7.1"
+          ]
+        },
+        {
+          "code": "MMCA",
+          "name": "Miraj Cinemas",
+          "area": "CineTown, Miyapur",
+          "formats": []
+        },
+        {
+          "code": "MCSS",
+          "name": "Miraj Cinemas",
+          "area": "Shalini Shivani, Kothapet",
+          "formats": []
+        },
+        {
+          "code": "MRAA",
+          "name": "Miraj Cinemas",
+          "area": "A2A Central Mall, Balanagar",
+          "formats": []
+        },
+        {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
+          "formats": []
+        },
+        {
+          "code": "MRGT",
+          "name": "Miraj Cinemas",
+          "area": "Geeta, Chandanagar",
+          "formats": []
+        },
+        {
+          "code": "MRRG",
+          "name": "Miraj Cinemas",
+          "area": "Raghavendra, Malkajgiri",
+          "formats": []
+        },
+        {
+          "code": "PSMJ",
+          "name": "Movietime Cinemas",
+          "area": "SKY Mall, Erragadda X Road",
+          "formats": [
+            "Dolby 7.1"
+          ]
+        },
+        {
+          "code": "MTHY",
+          "name": "Platinum Movietime Cinema",
+          "area": "Gachibowli SLN Terminus",
+          "formats": [
+            "Recliner"
+          ]
+        },
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVYH",
+          "name": "PVR",
+          "area": "Central Mall, Panjagutta",
+          "formats": []
+        },
+        {
+          "code": "PRCX",
+          "name": "PVR",
+          "area": "RK Cineplex, Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "UKCC",
+          "name": "UK Cineplex",
+          "area": "Nacharam, Hyderabad",
+          "formats": []
+        }
+      ],
+      "bookable_dates": [
+        "20260920",
+        "20260921",
+        "20260922",
+        "20260923"
+      ],
+      "closed_dates": [
+        "20260924",
+        "20260925",
+        "20260926"
+      ],
+      "showtime_count": 26,
+      "resolved_at": "2026-09-20T02:54:48.909664+05:30"
     },
     {
       "movie": {
@@ -4726,6 +5605,12 @@
           "formats": []
         },
         {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "PNNG",
           "name": "PVR",
           "area": "Next Galleria Mall, Panjagutta",
@@ -4746,6 +5631,22 @@
           "formats": []
         },
         {
+          "code": "PVTP",
+          "name": "PVR",
+          "area": "Preston, Gachibowli Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
+          "code": "PVHM",
+          "name": "PVR ICON",
+          "area": "Hitech, Madhapur, Hyderabad",
+          "formats": [
+            "Atmos"
+          ]
+        },
+        {
           "code": "ILKS",
           "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
           "area": "",
@@ -4761,7 +5662,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -4769,10 +5669,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 11,
-      "resolved_at": "2026-09-19T17:24:24.994264+05:30"
+      "showtime_count": 21,
+      "resolved_at": "2026-09-20T02:54:32.666183+05:30"
     },
     {
       "movie": {
@@ -4817,42 +5718,7 @@
         "20260926"
       ],
       "showtime_count": 3,
-      "resolved_at": "2026-09-19T17:25:29.825696+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00517578",
-        "title": "Ee Paata Korinavaaru Nemalipaalem Nundi",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Telugu",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/ee-paata-korinavaaru-nemalipaalem-nundi-et00517578-1789551341.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/ee-paata-korinavaaru-nemalipaalem-nundi/buytickets/ET00517578",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "MRAA",
-          "name": "Miraj Cinemas",
-          "area": "A2A Central Mall, Balanagar",
-          "formats": []
-        }
-      ],
-      "bookable_dates": [
-        "20260919",
-        "20260920",
-        "20260921",
-        "20260922",
-        "20260923"
-      ],
-      "closed_dates": [
-        "20260924",
-        "20260925"
-      ],
-      "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:24:31.147621+05:30"
+      "resolved_at": "2026-09-20T02:55:37.121903+05:30"
     },
     {
       "movie": {
@@ -4869,11 +5735,43 @@
       },
       "venues": [
         {
+          "code": "ACAS",
+          "name": "AAA Cinemas",
+          "area": "Ameerpet",
+          "formats": [
+            "Laser Dolby Digital 7.1"
+          ]
+        },
+        {
+          "code": "APNS",
+          "name": "Aparna Cinemas",
+          "area": "Shamshabad",
+          "formats": [
+            "Barco Flat 7.1"
+          ]
+        },
+        {
           "code": "ASHN",
           "name": "Asian Cinemart",
           "area": "RC Puram",
           "formats": [
             "4K Dolby 7.1"
+          ]
+        },
+        {
+          "code": "CPHY",
+          "name": "Asian Cineplanet Multiplex",
+          "area": "Kompally",
+          "formats": [
+            "Screen 4"
+          ]
+        },
+        {
+          "code": "ACPM",
+          "name": "Asian Lakshmikala Cinepride",
+          "area": "Moosapet",
+          "formats": [
+            "Lalitha Air Conditioned"
           ]
         },
         {
@@ -4883,6 +5781,12 @@
           "formats": [
             "7.1 Dolby"
           ]
+        },
+        {
+          "code": "GPRH",
+          "name": "GPR Multiplex",
+          "area": "Nizampet, Hyderabad",
+          "formats": []
         },
         {
           "code": "IGMH",
@@ -4909,10 +5813,44 @@
           "formats": []
         },
         {
+          "code": "JJPP",
+          "name": "JP Cinemas",
+          "area": "Chandanagar",
+          "formats": [
+            "Dolby Atmos Rgb Laser"
+          ]
+        },
+        {
+          "code": "MMCA",
+          "name": "Miraj Cinemas",
+          "area": "CineTown, Miyapur",
+          "formats": []
+        },
+        {
+          "code": "MCSS",
+          "name": "Miraj Cinemas",
+          "area": "Shalini Shivani, Kothapet",
+          "formats": []
+        },
+        {
           "code": "MRAA",
           "name": "Miraj Cinemas",
           "area": "A2A Central Mall, Balanagar",
           "formats": []
+        },
+        {
+          "code": "MRGT",
+          "name": "Miraj Cinemas",
+          "area": "Geeta, Chandanagar",
+          "formats": []
+        },
+        {
+          "code": "MMAH",
+          "name": "MovieMax",
+          "area": "AMR, ECIL Secunderabad",
+          "formats": [
+            "Dolby 7.1"
+          ]
         },
         {
           "code": "PSMJ",
@@ -4931,6 +5869,18 @@
           ]
         },
         {
+          "code": "PRHN",
+          "name": "Prasads Multiplex",
+          "area": "Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": []
+        },
+        {
           "code": "PVUM",
           "name": "PVR",
           "area": "Musarambagh, Hyderabad",
@@ -4941,10 +5891,29 @@
           "name": "PVR",
           "area": "Central Mall, Panjagutta",
           "formats": []
+        },
+        {
+          "code": "PRCX",
+          "name": "PVR",
+          "area": "RK Cineplex, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "TVHY",
+          "name": "Tivoli Cinemas",
+          "area": "Secunderabad",
+          "formats": [
+            "Screen 3"
+          ]
+        },
+        {
+          "code": "UKCC",
+          "name": "UK Cineplex",
+          "area": "Nacharam, Hyderabad",
+          "formats": []
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -4952,10 +5921,92 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 11,
-      "resolved_at": "2026-09-19T17:24:40.337080+05:30"
+      "showtime_count": 29,
+      "resolved_at": "2026-09-20T02:54:47.336038+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00517578",
+        "title": "Ee Paata Korinavaaru Nemalipaalem Nundi",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/ee-paata-korinavaaru-nemalipaalem-nundi-et00517578-1789551341.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/ee-paata-korinavaaru-nemalipaalem-nundi/buytickets/ET00517578",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "ASHN",
+          "name": "Asian Cinemart",
+          "area": "RC Puram",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
+        {
+          "code": "IGMH",
+          "name": "INOX",
+          "area": "GSM Mall, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "AKYJ",
+          "name": "INOX",
+          "area": "Ashoka One, 4K LASER Dolby ATMOS: Kukatpally",
+          "formats": []
+        },
+        {
+          "code": "IOMH",
+          "name": "INOX",
+          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
+          "formats": []
+        },
+        {
+          "code": "JJPP",
+          "name": "JP Cinemas",
+          "area": "Chandanagar",
+          "formats": [
+            "Dolby Atmos Rgb Laser"
+          ]
+        },
+        {
+          "code": "MRAA",
+          "name": "Miraj Cinemas",
+          "area": "A2A Central Mall, Balanagar",
+          "formats": []
+        },
+        {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
+          "formats": []
+        },
+        {
+          "code": "PVYH",
+          "name": "PVR",
+          "area": "Central Mall, Panjagutta",
+          "formats": []
+        }
+      ],
+      "bookable_dates": [
+        "20260920",
+        "20260921",
+        "20260922",
+        "20260923"
+      ],
+      "closed_dates": [
+        "20260924",
+        "20260925",
+        "20260926"
+      ],
+      "showtime_count": 8,
+      "resolved_at": "2026-09-20T02:54:38.845372+05:30"
     },
     {
       "movie": {
@@ -4998,7 +6049,7 @@
         "20260926"
       ],
       "showtime_count": 2,
-      "resolved_at": "2026-09-19T17:25:09.416457+05:30"
+      "resolved_at": "2026-09-20T02:55:17.016285+05:30"
     },
     {
       "movie": {
@@ -5021,10 +6072,17 @@
           "formats": [
             "Playhouse"
           ]
+        },
+        {
+          "code": "ILKS",
+          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
+          "area": "",
+          "formats": [
+            "Playhouse"
+          ]
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -5032,10 +6090,64 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:25:26.720606+05:30"
+      "showtime_count": 2,
+      "resolved_at": "2026-09-20T02:55:34.041092+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00506432",
+        "title": "Haiwaan",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/haiwaan-et00506432-1788412070.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/haiwaan/buytickets/ET00506432",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "ISTN",
+          "name": "INOX",
+          "area": "Sattva Necklace Mall, Kavadiguda",
+          "formats": []
+        },
+        {
+          "code": "INMH",
+          "name": "INOX",
+          "area": "Maheshwari Parmeshwari Mall, Kachiguda",
+          "formats": []
+        },
+        {
+          "code": "PVUM",
+          "name": "PVR",
+          "area": "Musarambagh, Hyderabad",
+          "formats": []
+        },
+        {
+          "code": "PVYH",
+          "name": "PVR",
+          "area": "Central Mall, Panjagutta",
+          "formats": []
+        }
+      ],
+      "bookable_dates": [
+        "20260920",
+        "20260921",
+        "20260922"
+      ],
+      "closed_dates": [
+        "20260923",
+        "20260924",
+        "20260925",
+        "20260926"
+      ],
+      "showtime_count": 4,
+      "resolved_at": "2026-09-20T02:55:27.900798+05:30"
     },
     {
       "movie": {
@@ -5058,10 +6170,15 @@
           "formats": [
             "4K Dolby 7.1"
           ]
+        },
+        {
+          "code": "IOMH",
+          "name": "INOX",
+          "area": "Odeon 4K, LASER, ATMOS, DTS-X: RTC X Roads",
+          "formats": []
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -5069,10 +6186,11 @@
       ],
       "closed_dates": [
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:24:13.533353+05:30"
+      "showtime_count": 3,
+      "resolved_at": "2026-09-20T02:54:20.815501+05:30"
     },
     {
       "movie": {
@@ -5099,17 +6217,17 @@
       ],
       "bookable_dates": [
         "20260920",
-        "20260921"
+        "20260921",
+        "20260922"
       ],
       "closed_dates": [
-        "20260922",
         "20260923",
         "20260924",
         "20260925",
         "20260926"
       ],
       "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:25:28.309462+05:30"
+      "resolved_at": "2026-09-20T02:55:35.591755+05:30"
     },
     {
       "movie": {
@@ -5125,6 +6243,14 @@
         "variants": []
       },
       "venues": [
+        {
+          "code": "AACN",
+          "name": "Aparna Cinemas",
+          "area": "Nallagandla",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
         {
           "code": "APNS",
           "name": "Aparna Cinemas",
@@ -5147,7 +6273,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -5155,51 +6280,11 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 3,
-      "resolved_at": "2026-09-19T17:24:37.964687+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00506432",
-        "title": "Haiwaan",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Hindi",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/haiwaan-et00506432-1788412070.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/haiwaan/buytickets/ET00506432",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "INMH",
-          "name": "INOX",
-          "area": "Maheshwari Parmeshwari Mall, Kachiguda",
-          "formats": []
-        },
-        {
-          "code": "PVUM",
-          "name": "PVR",
-          "area": "Musarambagh, Hyderabad",
-          "formats": []
-        }
-      ],
-      "bookable_dates": [
-        "20260919",
-        "20260920",
-        "20260921",
-        "20260922"
-      ],
-      "closed_dates": [
-        "20260923",
-        "20260924",
-        "20260925"
-      ],
-      "showtime_count": 2,
-      "resolved_at": "2026-09-19T17:25:20.681364+05:30"
+      "showtime_count": 4,
+      "resolved_at": "2026-09-20T02:54:45.042780+05:30"
     },
     {
       "movie": {
@@ -5236,7 +6321,7 @@
         "20260926"
       ],
       "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:25:31.335331+05:30"
+      "resolved_at": "2026-09-20T02:55:38.654433+05:30"
     },
     {
       "movie": {
@@ -5271,7 +6356,7 @@
         "20260926"
       ],
       "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:24:29.568919+05:30"
+      "resolved_at": "2026-09-20T02:54:37.317922+05:30"
     },
     {
       "movie": {
@@ -5288,10 +6373,72 @@
       },
       "venues": [
         {
+          "code": "ACEV",
+          "name": "ART CINEMAS",
+          "area": "Vanasthalipuram",
+          "formats": [
+            "4K"
+          ]
+        },
+        {
+          "code": "ASHN",
+          "name": "Asian Cinemart",
+          "area": "RC Puram",
+          "formats": [
+            "4K Dolby 7.1"
+          ]
+        },
+        {
+          "code": "CPHY",
+          "name": "Asian Cineplanet Multiplex",
+          "area": "Kompally",
+          "formats": [
+            "Screen 4"
+          ]
+        },
+        {
+          "code": "ACPM",
+          "name": "Asian Lakshmikala Cinepride",
+          "area": "Moosapet",
+          "formats": [
+            "Lalitha Air Conditioned"
+          ]
+        },
+        {
+          "code": "AMCM",
+          "name": "Asian Mukund Cinema",
+          "area": "Medchal",
+          "formats": []
+        },
+        {
+          "code": "ARMH",
+          "name": "Asian Radhika Multiplex",
+          "area": "ECIL",
+          "formats": [
+            "2K"
+          ]
+        },
+        {
+          "code": "JJPP",
+          "name": "JP Cinemas",
+          "area": "Chandanagar",
+          "formats": [
+            "Dolby 7.1"
+          ]
+        },
+        {
           "code": "LKMT",
           "name": "Lakshmi Kala Mandir",
           "area": "Alwal",
           "formats": []
+        },
+        {
+          "code": "SNDY",
+          "name": "Sandhya 35mm 2k Dolby Atmos",
+          "area": "RTC X Roads",
+          "formats": [
+            "Dolby Atmos"
+          ]
         },
         {
           "code": "SKTA",
@@ -5301,7 +6448,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -5309,10 +6455,11 @@
         "20260924"
       ],
       "closed_dates": [
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 3,
-      "resolved_at": "2026-09-19T17:24:27.984437+05:30"
+      "showtime_count": 16,
+      "resolved_at": "2026-09-20T02:54:35.775278+05:30"
     },
     {
       "movie": {
@@ -5336,7 +6483,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -5344,10 +6490,11 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
       "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:24:33.423659+05:30"
+      "resolved_at": "2026-09-20T02:54:40.369960+05:30"
     },
     {
       "movie": {
@@ -5373,7 +6520,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -5381,10 +6527,11 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
       "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:25:32.839742+05:30"
+      "resolved_at": "2026-09-20T02:55:40.178227+05:30"
     },
     {
       "movie": {
@@ -5419,7 +6566,7 @@
         "20260926"
       ],
       "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:25:34.358151+05:30"
+      "resolved_at": "2026-09-20T02:55:41.781190+05:30"
     },
     {
       "movie": {
@@ -5443,7 +6590,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922"
@@ -5451,10 +6597,11 @@
       "closed_dates": [
         "20260923",
         "20260924",
-        "20260925"
+        "20260925",
+        "20260926"
       ],
       "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:24:11.214656+05:30"
+      "resolved_at": "2026-09-20T02:54:18.438052+05:30"
     },
     {
       "movie": {
@@ -5478,7 +6625,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -5486,10 +6632,11 @@
         "20260924"
       ],
       "closed_dates": [
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 1,
-      "resolved_at": "2026-09-19T17:24:44.836676+05:30"
+      "showtime_count": 4,
+      "resolved_at": "2026-09-20T02:54:52.638624+05:30"
     },
     {
       "movie": {
@@ -5513,7 +6660,6 @@
         }
       ],
       "bookable_dates": [
-        "20260919",
         "20260920",
         "20260921",
         "20260922",
@@ -5521,18 +6667,19 @@
         "20260924"
       ],
       "closed_dates": [
-        "20260925"
+        "20260925",
+        "20260926"
       ],
-      "showtime_count": 2,
-      "resolved_at": "2026-09-19T17:23:54.534554+05:30"
+      "showtime_count": 4,
+      "resolved_at": "2026-09-20T02:54:02.022401+05:30"
     }
   ],
-  "updated_at": "2026-09-19T21:51:39.715125+05:30",
+  "updated_at": "2026-09-20T02:55:41.789474+05:30",
   "sync": {
     "hyderabad": {
       "status": "OK",
       "message": "",
-      "at": "2026-09-19T21:51:39.715116+05:30",
+      "at": "2026-09-20T02:55:41.789463+05:30",
       "movie_count": 51
     }
   }
