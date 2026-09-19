@@ -339,9 +339,24 @@ CSS = "<style>" + radar.CSS + """
 .tr-det-nobook { margin-top:11px; font-size:12.5px; color:var(--tr-text-3); line-height:1.5; }
 .tr-det-tgt-foot { display:flex; gap:18px; flex-wrap:wrap; margin-top:12px; font-family:var(--tr-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--tr-text-4); }
 /* the way out: a finished secondary, quiet next to a green BOOK */
-[class*="st-key-close_detail"] { margin-top:16px; }
-[class*="st-key-close_detail"] .stButton button { min-height:46px; font-family:var(--tr-mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; font-weight:500; }
-[class*="st-key-close_detail"] .stButton button p { font-weight:500; }
+/* the way out: one of the room's own controls — a compact charcoal pill at the right, the X's twin */
+[class*="st-key-close_detail"] { margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,.08); }
+[class*="st-key-close_detail"] .stButton { display:flex; justify-content:flex-end; }
+[class*="st-key-close_detail"] .stButton [data-testid="stTooltipHoverTarget"] { width:auto; }
+[class*="st-key-close_detail"] .stButton button { width:auto !important; min-width:150px; min-height:42px; padding:.5rem 1.2rem .5rem 1rem; border-radius:999px;
+  font-family:var(--tr-sans); font-size:13px; font-weight:700; letter-spacing:-.01em; text-transform:none; color:var(--tr-text);
+  background: linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02)), linear-gradient(168deg,#17131A,#0F0D12); border:1px solid rgba(255,255,255,.14);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 14px 30px -18px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.06); }
+[class*="st-key-close_detail"] .stButton button p { font-weight:700; }
+[class*="st-key-close_detail"] .stButton button::before { content:"×"; font-size:17px; line-height:1; margin-right:8px; color:#FF8CA0; font-weight:500; }
+[class*="st-key-close_detail"] .stButton button:hover { color:#fff; border-color:rgba(255,51,85,.5); background: linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03)), linear-gradient(135deg,rgba(255,51,85,.16),rgba(255,51,85,.04)), #14101A;
+  transform:translateY(-1px); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 18px 36px -18px rgba(255,51,85,.7); }
+[class*="st-key-close_detail"] .stButton button:focus-visible { outline:2px solid var(--tr-accent); outline-offset:2px; box-shadow: 0 0 0 4px rgba(255,51,85,.14); }
+/* the room's small consistencies: pills, target heads and section heads share one baseline */
+.tr-det-head .tr-pill.lg { display:inline-flex; align-items:center; gap:8px; min-height:30px; }
+.tr-det-sec-head { align-items:center; }
+.tr-det-tgt-head .st .tr-det-state { min-height:26px; }
+.tr-det-sec .tr-eyebrow, .tr-det-sec-head .tr-eyebrow { display:inline-flex; align-items:center; gap:8px; }
 @media (max-width: 768px) {
   /* the pill drops under the title instead of squeezing it into a column */
   .tr-det-head { flex-wrap:wrap; gap:14px; }
@@ -358,6 +373,7 @@ CSS = "<style>" + radar.CSS + """
   .tr-det-tgt-head { flex-wrap:wrap; }
   /* one line, thumb-sized: the booking action is the reason to open this on a phone */
   .tr-det-book { padding:17px 12px; font-size:14.5px; letter-spacing:.02em; white-space:nowrap; }
+  [class*="st-key-close_detail"] .stButton button { width:100% !important; min-height:46px; }   /* easy to reach on a phone */
 }
 @media (prefers-reduced-motion: reduce) {
   .tr-det-bg .sweep, .tr-det-bg .line, .tr-det-bg .tr-reel, .tr-det-head .tr-pill, .tr-det-tgt.ok::before { animation:none !important; }

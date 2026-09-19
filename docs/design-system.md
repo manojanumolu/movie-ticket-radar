@@ -239,11 +239,19 @@ The polish pass layered the house itself behind the interface: a large
 film reel (stroke geometry — rim, highlight arc, ring, six perforations,
 hub) turning once every 84 s at the bottom right, a smaller one turning
 the other way at the left, the film strip leaving the big reel as one
-curve drawn three times, and the PREMIUM FORMATS motif in mono on the
-ledge under the wizard — a motif, never a claim; the Formats step and the
-catalogue decide what a theatre lists. The crafts' tips on Home became
-subtitle cards — a short famous line and who said it (`ui.home.LINES`);
-the Login constellation keeps the crafts' own names. A monitor that is
+curve drawn three times. The premium formats ride the big reel itself:
+eight badges set into its outer track, one every 45°, each with its own
+minimal pictogram (`ui.home.FORMAT_MARKS` — a wide frame, a screen with a
+wave, a moving seat, three panels, a light, a radial sound field, a beam,
+a large frame) and its name; the reel turns beneath them while a
+counter-rotation keeps each badge upright. A motif, never a claim — the
+Formats step and the catalogue decide what a theatre lists — and the
+badges are hidden on a phone, where the reel is only a cropped edge. The
+crafts' tips on Home became subtitle cards (`ui.home.LINES`): a short
+famous line, who said it, and its house — Marvel leads (9), Tollywood in
+transliteration (6), two Batman lines, the rest iconic Hollywood — spread
+across the three zones; the Login constellation keeps the crafts' own
+names. A monitor that is
 watching carries a slow green scan down its card (`:has(.tr-pill.ok)`, so
 sold out, waiting, trouble and finished never turn green). The wizard's
 steps, the answered chips and the card's metrics carry small icons drawn
@@ -256,7 +264,10 @@ still being watched, and living states — green breathing while watching
 or found, amber for sold out, still when finished. Saving a monitor and
 asking the worker to retry — the two genuinely slow operations — show
 the radar over a dimmed page, held invisible for 600 ms so a quick answer
-never shows it. Everything stops under `prefers-reduced-motion`.
+never shows it. The dialog's Close is one of the room's controls: a
+compact charcoal pill at the right with the X's pink mark, Manrope, a
+visible focus ring; full width on a phone. Everything stops under
+`prefers-reduced-motion`.
 
 ## 7. Performance rules (every phase)
 

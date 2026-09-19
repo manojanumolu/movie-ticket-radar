@@ -42,38 +42,64 @@ def test_the_reel_is_geometry_behind_the_page_and_never_in_the_way():
     assert '[class*="st-key-trhome"] > [data-testid="stLayoutWrapper"] { position:relative; z-index:1; }' in css
 
 
-def test_premium_formats_are_a_motif_and_never_a_claim():
-    body = home.formats_markup()
-    assert 'class="tr-formats" aria-hidden="true"' in body and "Premium formats" in body
-    for name in home.PREMIUM_FORMATS:
-        assert f"<span>{name}</span>" in body
-    assert len(home.PREMIUM_FORMATS) == 8
+def test_premium_formats_ride_the_reel_each_with_its_own_mark_and_never_as_a_shelf():
+    reel = home.reel_svg("big", formats=True)
+    assert reel.count('<g class="fmt">') == 8 and reel.count('class="ic"') == 8 and reel.count('<text class="t"') == 8
+    for i, name in enumerate(home.PREMIUM_FORMATS):
+        assert f'rotate({i * 45} 200 200) translate(200 28)' in reel                 # one every 45°, on the outer track
+        assert f">{name.upper()}</text>" in reel                                     # name…
+        assert home.FORMAT_MARKS[name] in reel                                       # …and its pictogram
+    assert len(home.PREMIUM_FORMATS) == 8 and set(home.FORMAT_MARKS) == set(home.PREMIUM_FORMATS)
+    assert all(m.startswith("<") and "http" not in m and "<image" not in m for m in home.FORMAT_MARKS.values())   # drawn marks, no logos loaded
+    assert "fmt" not in home.reel_svg("small")                                       # only the big reel carries them
+    assert 'reel_svg("big", formats=True)' in inspect.getsource(home.ambience)
+    # the reel is the one presentation: no standalone shelf anywhere
+    assert not hasattr(home, "formats_markup") and ".tr-formats" not in home.CSS
+    assert "Premium formats" not in home.crafts_zone("foot") and "tr-formats" not in home.crafts_zone("foot")
     for word in ("available", "Available", "theatre", "Connected", "tracked"):
-        assert word not in body                                              # decoration says nothing about availability
-    assert ".tr-formats { position:absolute;" in home.CSS and "pointer-events:none" in home.CSS.split(".tr-formats {")[1].split("}")[0]
-    phone = home.CSS[home.CSS.index("@media (max-width: 768px)"):]
-    assert ".tr-formats { display:none; }" in phone
+        assert word not in reel                                                      # decoration says nothing about availability
+    css = home.CSS
+    assert ".tr-home-ambience .tr-reel .fmt { transform-box:fill-box; transform-origin:center; animation: tr-home-reel-back 84s linear infinite; }" in css   # upright while the reel turns
+    phone = css[css.index("@media (max-width: 768px)"):]
+    assert ".tr-home-ambience .tr-reel .fmts { display:none; }" in phone            # a cropped reel carries no badges
 
 
 # ──────────────────────────────────────────────────────────────────────────
 # The crafts' subtitle cards — Home only
 # ──────────────────────────────────────────────────────────────────────────
 def test_every_craft_has_a_short_line_with_an_attribution_and_login_keeps_its_names():
+    from collections import Counter
+
     assert set(home.LINES) == set(crafts.BY_KEY)
-    for key, (quote, by) in home.LINES.items():
-        assert 3 <= len(quote) <= 60 and by, key                              # a fragment, never a passage
-    assert home.LINES["acting"] == ("I can do this all day.", "Captain America")
-    assert home.LINES["stunts"][0] == "With great power comes great responsibility."
+    for key, (quote, by, house) in home.LINES.items():
+        assert 3 <= len(quote) <= 60 and by and house, key                          # a fragment, never a passage
+    houses = Counter(house for _, _, house in home.LINES.values())
+    assert set(houses) == {"Marvel", "Tollywood", "DC", "Hollywood"}                 # four houses
+    assert houses.most_common(1)[0][0] == "Marvel" and houses["Marvel"] >= 8          # Marvel leads
+    assert houses["Tollywood"] == 6 and houses["DC"] == 2
+    assert home.LINES["acting"][:2] == ("I can do this all day.", "Captain America")
+    assert home.LINES["makeup"][0] == "I am Iron Man." and home.LINES["stunts"][0] == "With great power comes great responsibility."
+    assert home.LINES["distribution"][0] == "Thokkukuntu povale."
+    telugu = [q for q, _, h in home.LINES.values() if h == "Tollywood"]
+    assert all(q.isascii() for q in telugu)                                          # transliterated, not Telugu script
+    batman = [(q, by) for q, by, h in home.LINES.values() if h == "DC"]
+    assert all("Batman" in by or "Dark Knight" in by for _, by in batman)            # both clearly Batman
+    # the Telugu lines are spread over the zones, not grouped
+    zones = {home.HOME_LAYOUT[k][0] for k, (_, _, h) in home.LINES.items() if h == "Tollywood"}
+    assert zones == {"band", "rail", "foot"}
     mark = home._mark(crafts.BY_KEY["acting"], 50, 50)
     assert '<span class="tr-sub" aria-hidden="true"><span class="q">“I can do this all day.”</span><span class="by">— Captain America</span></span>' in mark
     assert 'tabindex="0"' in mark and 'aria-label="Acting — “I can do this all day.” — Captain America"' in mark
     # the Login constellation is untouched: the crafts' own tips, no subtitle cards
     login = crafts.constellation()
     assert "tr-sub" not in login and 'data-tip="Acting — The people you believe in for two hours."' in login
+    assert "I can do this all day" not in login and "Thokkukuntu" not in login
     assert crafts.BY_KEY["acting"].tip == "Acting — The people you believe in for two hours."
     css = home.CSS
     assert ".tr-craft:hover .tr-sub, .tr-craft:focus-visible .tr-sub, .tr-craft:focus .tr-sub { opacity:1; visibility:visible;" in css
     assert ".tr-home-zone .tr-craft::after, .tr-home-zone .tr-craft::before, .tr-home-strip .tr-craft::after, .tr-home-strip .tr-craft::before { display:none; }" in css
+    assert ".tr-craft .tr-sub .q { font-family:var(--tr-sans);" in css and ".tr-craft .tr-sub .by { font-family:var(--tr-mono);" in css
+    assert "transition:none" in css[css.index("@media (prefers-reduced-motion: reduce)"):]
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -158,6 +184,20 @@ def test_the_dialog_keeps_every_fact_and_gains_its_living_layer(make_monitor, at
     stopped.stop(at)
     ended = detail.markup(stopped, watching, at=at)
     assert 'data-running="0"' in ended and "<span>STOPPED</span>" in ended and "tr-radar watch" not in ended
+
+
+def test_the_close_control_belongs_to_the_room_and_stays_reachable():
+    css = detail.CSS
+    close = css[css.index('[class*="st-key-close_detail"] .stButton button {'):].split("}")[0]
+    assert "border-radius:999px" in close and "font-family:var(--tr-sans)" in close and "text-transform:none" in close
+    assert "linear-gradient(168deg,#17131A,#0F0D12)" in close and "rgba(255,51,85,.06)" in close       # the room's charcoal and a trace of red
+    assert "min-width:150px" in close and "min-height:42px" in close and "width:auto !important" in close   # compact, not huge
+    assert '[class*="st-key-close_detail"] .stButton { display:flex; justify-content:flex-end; }' in css
+    assert '[class*="st-key-close_detail"] .stButton button:focus-visible { outline:2px solid var(--tr-accent);' in css
+    assert '[class*="st-key-close_detail"] .stButton button:hover {' in css
+    phone = css[css.index("@media (max-width: 768px)"):]
+    assert '[class*="st-key-close_detail"] .stButton button { width:100% !important; min-height:46px; }' in phone
+    assert 'st.button("Close", key="close_detail", use_container_width=True)' in inspect.getsource(detail.dialog)   # the control itself unchanged
 
 
 def test_the_dialogs_movement_follows_the_state_and_reduced_motion():

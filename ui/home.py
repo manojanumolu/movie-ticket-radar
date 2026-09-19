@@ -42,41 +42,57 @@ RAIL_MIN = 320
 #: Where Home stops being a single column and becomes the dashboard grid.
 DESKTOP_MIN = 1150
 
-#: One line of cinema per craft — a short, famous fragment and who said
-#: it — shown as a subtitle card when a mark is hovered or focused. Home
-#: only: the Login constellation keeps the crafts' own names and blurbs
-#: (``Craft.tip``). Deterministic: the same mark always says the same thing.
-LINES: dict[str, tuple[str, str]] = {
-    "direction": ("And… action.", "the director's call"),
-    "cinematography": ("Here's looking at you, kid.", "Casablanca"),
-    "screenwriting": ("Carpe diem. Seize the day.", "Dead Poets Society"),
-    "producing": ("Show me the money!", "Jerry Maguire"),
-    "acting": ("I can do this all day.", "Captain America"),
-    "editing": ("Roads? Where we're going, we don't need roads.", "Back to the Future"),
-    "production_design": ("There's no place like home.", "The Wizard of Oz"),
-    "art_direction": ("Why so serious?", "The Dark Knight"),
-    "costume_design": ("Bond. James Bond.", "Dr. No"),
-    "makeup": ("I am Iron Man.", "Iron Man"),
-    "hair": ("Nobody puts Baby in a corner.", "Dirty Dancing"),
-    "sound": ("Just keep swimming.", "Finding Nemo"),
-    "music": ("May the Force be with you.", "Star Wars"),
-    "sound_mixing": ("You had me at hello.", "Jerry Maguire"),
-    "lighting": ("Keep your friends close.", "The Godfather Part II"),
-    "set_design": ("To infinity and beyond!", "Toy Story"),
-    "visual_effects": ("I'll be back.", "The Terminator"),
-    "special_effects": ("Houston, we have a problem.", "Apollo 13"),
-    "choreography": ("Hakuna Matata.", "The Lion King"),
-    "stunts": ("With great power comes great responsibility.", "Spider-Man"),
-    "casting": ("You talking to me?", "Taxi Driver"),
-    "color_grading": ("Hasta la vista, baby.", "Terminator 2"),
-    "projection": ("Lights. Camera. Tickets.", "TicketRadar"),
-    "distribution": ("Be first in line.", "TicketRadar"),
+#: One line of cinema per craft — a short, famous fragment, who said it,
+#: and which house it comes from — shown as a subtitle card when a mark is
+#: hovered or focused. Home only: the Login constellation keeps the crafts'
+#: own names and blurbs (``Craft.tip``). Telugu lines are transliterated.
+#: Deterministic: the same mark always says the same thing.
+LINES: dict[str, tuple[str, str, str]] = {
+    "direction": ("Avengers, assemble.", "Captain America", "Marvel"),
+    "cinematography": ("Here's looking at you, kid.", "Casablanca", "Hollywood"),
+    "screenwriting": ("Evadu kodithe dimma tirigi mind block.", "Pokiri", "Tollywood"),
+    "producing": ("Whatever it takes.", "Avengers: Endgame", "Marvel"),
+    "acting": ("I can do this all day.", "Captain America", "Marvel"),
+    "editing": ("Roads? Where we're going, we don't need roads.", "Back to the Future", "Hollywood"),
+    "production_design": ("Wakanda forever.", "Black Panther", "Marvel"),
+    "art_direction": ("Why so serious?", "The Joker · The Dark Knight", "DC"),
+    "costume_design": ("Bond. James Bond.", "Dr. No", "Hollywood"),
+    "makeup": ("I am Iron Man.", "Tony Stark", "Marvel"),
+    "hair": ("Thaggedhe le.", "Pushpa", "Tollywood"),
+    "sound": ("I am Groot.", "Groot", "Marvel"),
+    "music": ("May the Force be with you.", "Star Wars", "Hollywood"),
+    "sound_mixing": ("Hulk smash!", "Hulk", "Marvel"),
+    "lighting": ("I'm Batman.", "Batman", "DC"),
+    "set_design": ("Baahubali ni Kattappa enduku champadu?", "Baahubali", "Tollywood"),
+    "visual_effects": ("I'll be back.", "The Terminator", "Hollywood"),
+    "special_effects": ("Houston, we have a problem.", "Apollo 13", "Hollywood"),
+    "choreography": ("Nuvvu naaku nachav.", "Nuvvu Naaku Nachav", "Tollywood"),
+    "stunts": ("With great power comes great responsibility.", "Spider-Man", "Marvel"),
+    "casting": ("Naa peru Surya, naa illu India.", "Naa Peru Surya", "Tollywood"),
+    "color_grading": ("I love you 3000.", "Iron Man", "Marvel"),
+    "projection": ("To infinity and beyond!", "Toy Story", "Hollywood"),
+    "distribution": ("Thokkukuntu povale.", "Tollywood", "Tollywood"),
 }
 
 #: The cinema technologies named in the dark behind the reel. A motif, not
 #: a claim: which formats a theatre actually lists comes from the catalogue
 #: and the wizard's Formats step, never from here.
 PREMIUM_FORMATS = ("IMAX", "Dolby Cinema", "4DX", "ScreenX", "HDR by Barco", "Dolby Atmos", "Laser 4K", "PCX")
+
+#: A minimal pictogram for each format — our own marks in the crafts' icon
+#: language (24-unit grid, round caps), not anyone's trademark: a wide
+#: frame, a screen with a wave, a moving seat, three panels, a light, a
+#: radial sound field, a projector beam, a large frame with corners.
+FORMAT_MARKS: dict[str, str] = {
+    "IMAX": "<rect x='2' y='6' width='20' height='12' rx='1.5'/><path d='M6.5 10v4M17.5 10v4'/>",
+    "Dolby Cinema": "<rect x='3' y='4.5' width='18' height='11' rx='1.5'/><path d='M5.5 19.5c2.2-2.6 4.3 2.6 6.5 0s4.3-2.6 6.5 0'/>",
+    "4DX": "<path d='M7 6.5v6.5a2 2 0 0 0 2 2h7.5'/><path d='M9 13h7.5l1.5-5'/><path d='M3 8.5l2 1.5M3 12h2.5M21.5 4l-2 2M21 8.5h-2.5'/>",
+    "ScreenX": "<path d='M2 8.5l5-2.5v12l-5-2.5z'/><rect x='8' y='5' width='8' height='14' rx='1'/><path d='M22 8.5l-5-2.5v12l5-2.5z'/>",
+    "HDR by Barco": "<circle cx='12' cy='12' r='3.5'/><path d='M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.2 2.2M16.2 16.2l2.2 2.2M18.4 5.6l-2.2 2.2M7.8 16.2l-2.2 2.2'/>",
+    "Dolby Atmos": "<circle cx='12' cy='12' r='2'/><path d='M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14'/>",
+    "Laser 4K": "<rect x='2' y='9' width='7' height='6' rx='1.5'/><path d='M9 12l12.5-5.5v11z'/>",
+    "PCX": "<path d='M3 8V5h3M21 8V5h-3M3 16v3h3M21 16v3h-3'/><rect x='7' y='8' width='10' height='8' rx='1'/>",
+}
 
 #: Where each of the twenty-four sits: zone, then (left %, top %) of that
 #: zone. The zones are the page's genuine negative space — the band above
@@ -90,9 +106,9 @@ HOME_LAYOUT: dict[str, tuple[str, float, float]] = {
     "production_design": ("rail", 8, 30), "art_direction": ("rail", 22, 70), "costume_design": ("rail", 36, 26),
     "makeup": ("rail", 50, 68), "hair": ("rail", 64, 30), "set_design": ("rail", 78, 70),
     "casting": ("rail", 92, 32), "color_grading": ("rail", 15, 90),
-    "sound": ("foot", 50, 26), "music": ("foot", 57, 66), "sound_mixing": ("foot", 64, 22),
-    "lighting": ("foot", 71, 62), "visual_effects": ("foot", 78, 24), "special_effects": ("foot", 85, 66),
-    "choreography": ("foot", 91, 22), "stunts": ("foot", 96.5, 60),
+    "sound": ("foot", 5, 34), "music": ("foot", 17, 70), "sound_mixing": ("foot", 30, 30),
+    "lighting": ("foot", 43, 68), "visual_effects": ("foot", 57, 32), "special_effects": ("foot", 70, 70),
+    "choreography": ("foot", 83, 30), "stunts": ("foot", 95, 66),
 }
 assert set(HOME_LAYOUT) == set(crafts.BY_KEY), "every craft has a home"
 
@@ -104,7 +120,7 @@ def _mark(craft: crafts.Craft, x: float, y: float, *, positioned: bool = True) -
     """One craft mark carrying its subtitle card: the line, then who said
     it, in the constellation's own hover/focus mechanics (the card is a
     real child element, so the two lines can be set differently)."""
-    quote, by = LINES.get(craft.key, (craft.blurb, craft.label))
+    quote, by, _house = LINES.get(craft.key, (craft.blurb, craft.label, ""))
     tip = f"{craft.label} — “{quote}” — {by}"
     side = ("tip-l" if x > 84 else "tip-r" if x < 10 else "") + (" tip-b" if y < 40 and positioned else "")
     style = f' style="left:{x}%;top:{y}%"' if positioned else ""
@@ -118,11 +134,8 @@ def crafts_zone(zone: str) -> str:
     """The marks that live in ``zone`` (``band`` / ``rail`` / ``foot``), in
     the constellation's own tooltip mechanics."""
     marks = "".join(_mark(crafts.BY_KEY[k], x, y) for k, (z, x, y) in HOME_LAYOUT.items() if z == zone)
-    # the ledge under the wizard also names the premium formats, on its left;
-    # its eight crafts keep to the right half, so the two never meet
-    extra = formats_markup() if zone == "foot" else ""
     return (f'<div class="tr-home-zone {zone}" aria-label="The crafts of filmmaking">'
-            f'{extra}<div class="tr-crafts">{marks}</div></div>')
+            f'<div class="tr-crafts">{marks}</div></div>')
 
 
 def crafts_strip() -> str:
@@ -148,10 +161,30 @@ def hero_radar_markup(monitors: list[Monitor], states: dict[str, MonitorState]) 
             f'<div class="scan"></div>{radar.svg(size=120, state=state, label="", cls="home")}</div>')
 
 
-def reel_svg(cls: str) -> str:
+def format_badges() -> str:
+    """The eight premium formats as badges set into the reel's outer track,
+    one every 45°, each with its pictogram and its name. Every badge sits in
+    its own group with no transform of its own, so a counter-rotation in CSS
+    (``.fmt``) keeps it upright while the reel turns beneath it."""
+    out = []
+    for i, name in enumerate(PREMIUM_FORMATS):
+        angle = i * 45
+        label = name.upper()
+        w = 30 + 4.6 * len(label)                      # the pill grows with its word
+        out.append(
+            f'<g transform="rotate({angle} 200 200) translate(200 28)"><g class="fmt"><g transform="rotate({-angle})">'
+            f'<rect class="bg" x="{-w / 2:.1f}" y="-10" width="{w:.1f}" height="20" rx="10"/>'
+            f'<g class="ic" transform="translate({-w / 2 + 5:.1f} -6.5) scale(0.54)">{FORMAT_MARKS[name]}</g>'
+            f'<text class="t" x="{-w / 2 + 20:.1f}" y="2.6">{C.e(label)}</text>'
+            f'</g></g></g>')
+    return f'<g class="fmts">{"".join(out)}</g>'
+
+
+def reel_svg(cls: str, *, formats: bool = False) -> str:
     """A cinema film reel as geometry: the rim with a highlight arc, the
-    inner ring, six perforations, the hub. Stroke-only, so it reads as a
-    real object in the dark and costs nothing to load."""
+    inner ring, six perforations, the hub — and, on the big reel, the
+    premium formats set into its outer track. Stroke-only, so it reads as
+    a real object in the dark and costs nothing to load."""
     holes = "".join(f'<circle cx="{200 + 118 * math.cos(k * math.pi / 3):.1f}" '
                     f'cy="{200 + 118 * math.sin(k * math.pi / 3):.1f}" r="34"/>' for k in range(6))
     return (f'<svg class="tr-reel {cls}" viewBox="0 0 400 400" fill="none" stroke="currentColor" aria-hidden="true">'
@@ -160,7 +193,8 @@ def reel_svg(cls: str) -> str:
             '<circle class="ring" cx="200" cy="200" r="160" stroke-width="1.5"/>'
             f'<g class="holes" stroke-width="10">{holes}</g>'
             '<circle class="hub" cx="200" cy="200" r="30" stroke-width="12"/>'
-            '<circle class="pin" cx="200" cy="200" r="6" fill="currentColor" stroke="none"/></svg>')
+            '<circle class="pin" cx="200" cy="200" r="6" fill="currentColor" stroke="none"/>'
+            f'{format_badges() if formats else ""}</svg>')
 
 
 def strip_svg() -> str:
@@ -172,18 +206,12 @@ def strip_svg() -> str:
             f'<path class="film" d="{d}"/><path class="frames" d="{d}"/></svg>')
 
 
-def formats_markup() -> str:
-    labels = "".join(f"<span>{C.e(f)}</span>" for f in PREMIUM_FORMATS)
-    return ('<div class="tr-formats" aria-hidden="true"><div class="h">Premium formats</div>'
-            f'<div class="g">{labels}</div></div>')
-
-
 # ── drawing ──────────────────────────────────────────────────────────────
 def ambience() -> None:
     """Home's stylesheet and its background layers — the reels, the strip,
     the formats in the dark, the light — drawn once, first, behind it all."""
     C.html(CSS + '<div class="tr-home-ambience" aria-hidden="true">'
-           + reel_svg("big") + reel_svg("small") + strip_svg() + '</div>')
+           + reel_svg("big", formats=True) + reel_svg("small") + strip_svg() + '</div>')
 
 
 def busy(text: str) -> None:
@@ -298,12 +326,13 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 .tr-home-ambience .tr-strip .holes {{ stroke:rgba(255,120,145,.10); stroke-width:54; stroke-dasharray:6 13; }}
 .tr-home-ambience .tr-strip .film {{ stroke:#0F0B11; stroke-width:40; }}
 .tr-home-ambience .tr-strip .frames {{ stroke:rgba(255,255,255,.045); stroke-width:40; stroke-dasharray:1 96; }}
-.tr-formats {{ position:absolute; left:2%; bottom:0; width:270px; pointer-events:none; font-family:var(--tr-mono); text-transform:uppercase; }}
-.tr-home-zone.foot {{ min-height:132px; }}
-.tr-formats .h {{ font-size:10px; letter-spacing:.34em; color:rgba(255,140,160,.55); padding-bottom:9px; margin-bottom:11px; border-bottom:1px solid rgba(255,140,160,.16); }}
-.tr-formats .g {{ display:grid; grid-template-columns:1fr 1fr; gap:9px 14px; font-size:10.5px; letter-spacing:.18em; color:rgba(255,255,255,.22); }}
-.tr-formats .g span {{ white-space:nowrap; text-shadow:0 0 14px rgba(255,51,85,.25); }}
-.tr-formats .g span:nth-child(1), .tr-formats .g span:nth-child(4), .tr-formats .g span:nth-child(7) {{ color:rgba(255,200,210,.36); }}
+/* the formats, set into the reel's outer track: the pill turns with the reel, its face stays upright */
+.tr-home-ambience .tr-reel .fmts {{ opacity:.78; }}
+.tr-home-ambience .tr-reel .fmt {{ transform-box:fill-box; transform-origin:center; animation: tr-home-reel-back 84s linear infinite; }}
+.tr-home-ambience .tr-reel .fmt .bg {{ fill:rgba(22,13,19,.92); stroke:rgba(255,140,160,.34); stroke-width:1; }}
+.tr-home-ambience .tr-reel .fmt .ic {{ stroke:#FF8CA0; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; fill:none; }}
+.tr-home-ambience .tr-reel .fmt .t {{ font-family:var(--tr-mono); font-size:6.2px; letter-spacing:.9px; fill:rgba(255,224,230,.9); stroke:none; }}
+.tr-home-ambience .tr-reel .fmts .fmt:nth-child(odd) .bg {{ stroke:rgba(255,140,160,.5); }}
 /* ── the subtitle card: the crafts' line, then who said it ─────────────── */
 .tr-home-zone .tr-craft::after, .tr-home-zone .tr-craft::before, .tr-home-strip .tr-craft::after, .tr-home-strip .tr-craft::before {{ display:none; }}
 .tr-craft .tr-sub {{ position:absolute; bottom:calc(100% + 12px); left:50%; transform:translate(-50%, 4px); z-index:6; display:flex; flex-direction:column; gap:4px;
@@ -324,6 +353,8 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 [class*="st-key-trrail"] .tr-monitor:has(.tr-pill.ok)::before {{ content:""; position:absolute; left:0; right:0; top:0; height:11%; z-index:0; pointer-events:none;
   background: linear-gradient(180deg, transparent, rgba(62,213,152,.13) 55%, rgba(62,213,152,.28) 80%, transparent); animation: tr-home-wave 7s linear infinite; }}
 [class*="st-key-trrail"] .tr-monitor > * {{ position:relative; z-index:1; }}
+/* the rail's controls keep the theme's faces but stand on charcoal, so the reel never shows through a button */
+[class*="st-key-trrail"] .stButton button {{ background-color: var(--tr-surface); }}
 /* ── icons that reinforce the words: the wizard's steps, the answers, the metrics ─ */
 .tr-step-pip .l::before, .tr-summary-strip .k::before, [class*="st-key-trrail"] .tr-metric .k::before, [class*="st-key-trcard_step"] .tr-step-head .tr-step-num:not(.ic)::after {{
   content:""; display:inline-block; width:13px; height:13px; margin-right:6px; vertical-align:-2px; background-size:contain; background-repeat:no-repeat; background-position:center; }}
@@ -374,8 +405,7 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
   .tr-home-ambience .tr-reel.big {{ width:min(58vw, 560px); right:-16%; bottom:-120px; opacity:.75; }}
   .tr-home-ambience .tr-reel.small {{ display:none; }}
   .tr-home-ambience .tr-strip {{ opacity:.6; }}
-  .tr-formats {{ left:2%; width:220px; }}
-  .tr-formats .g span:nth-child(n+5) {{ display:none; }}
+  .tr-home-ambience .tr-reel .fmts {{ opacity:.7; }}
 }}
 /* ── desktop (≥{DESKTOP_MIN}px): the dashboard grid ─────────────────────
    Rows placed by hand, gaps as margins: a row with nothing in it (no live
@@ -403,7 +433,7 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
   .tr-hero-radar .tr-radar.home {{ width:56px !important; right:16px; top:18px; }}
   .tr-home-zone.band, .tr-home-zone.rail, .tr-home-zone.foot {{ display:none; }}
   .tr-home-ambience .tr-reel.big {{ width:380px; right:-190px; bottom:-150px; opacity:.6; animation-duration:140s; }}
-  .tr-home-ambience .tr-reel.small, .tr-home-ambience .tr-strip, .tr-formats {{ display:none; }}
+  .tr-home-ambience .tr-reel.small, .tr-home-ambience .tr-strip, .tr-home-ambience .tr-reel .fmts {{ display:none; }}   /* a cropped reel carries no legible badges */
   .tr-craft .tr-sub {{ white-space:normal; max-width:230px; }}
   .tr-home-strip {{ position:relative; }}
   .tr-home-strip .tr-craft {{ position:static; }}   /* the card anchors to the strip's right edge, never off-screen */
@@ -416,13 +446,13 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 }}
 @media (prefers-reduced-motion: reduce) {{
   .tr-home-ambience::after, .tr-hero-radar .scan {{ animation:none; }}
-  .tr-home-ambience .tr-reel, [class*="st-key-trrail"] .tr-monitor:has(.tr-pill.ok)::before {{ animation:none; }}
+  .tr-home-ambience .tr-reel, .tr-home-ambience .tr-reel .fmt, [class*="st-key-trrail"] .tr-monitor:has(.tr-pill.ok)::before {{ animation:none; }}
   .tr-home-veil {{ animation:none; opacity:1; }}
   .tr-craft .tr-sub {{ transition:none; }}
   .tr-hero, .tr-platforms, .tr-hero-radar .tr-radar.home {{ animation:none; }}
 }}
 </style>"""
 
-__all__ = ["CSS", "DESKTOP_MIN", "HOME_LAYOUT", "LINES", "PREMIUM_FORMATS", "RAIL_MIN", "STEP_ICONS", "STRIP", "ambience",
-           "band", "busy", "crafts_strip", "crafts_zone", "foot", "formats_markup", "hero_radar", "hero_radar_markup",
+__all__ = ["CSS", "DESKTOP_MIN", "FORMAT_MARKS", "HOME_LAYOUT", "LINES", "PREMIUM_FORMATS", "RAIL_MIN", "STEP_ICONS", "STRIP",
+           "ambience", "band", "busy", "crafts_strip", "crafts_zone", "foot", "format_badges", "hero_radar", "hero_radar_markup",
            "radar_state", "rail_foot", "reel_svg", "step_icon_css", "strip_svg"]
