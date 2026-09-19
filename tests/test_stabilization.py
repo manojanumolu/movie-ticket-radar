@@ -71,8 +71,14 @@ def test_starting_a_monitor_leaves_a_clean_wizard_for_the_next_one(seeded):
     for key in flow.WIDGET_KEYS:
         assert key not in app.session_state, key
     assert not [k for k in app.session_state if str(k).startswith(("fmt_", "theatre_query_"))]
-    # Step 1, no summary strip, nothing selected: the rail still shows the
-    # monitor that was just made — that is the monitor, not the wizard.
+    # Nothing selected, no summary strip: the rail shows the monitor that
+    # was just made — that is the monitor, not the wizard — and the clean
+    # wizard waits behind the "Set up a new alert" tile (Phase 3B). Opening
+    # it lands on step 1 with nothing of A in it.
+    keys = [b.key for b in app.button]
+    assert "new_alert" in keys and "loc_continue" not in keys and "start" not in keys
+    assert "a@example.com" not in text(app)
+    app.button(key="new_alert").click().run()
     keys = [b.key for b in app.button]
     assert "loc_continue" in keys and "movie_continue" not in keys and "start" not in keys
     assert "a@example.com" not in text(app)
