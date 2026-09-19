@@ -209,11 +209,11 @@ CSS = """<style>
 .tr-avp-cat em { font-style:normal; font-size:11.5px; color:var(--tr-text-4); }
 .tr-avt { display:flex; flex-direction:column; align-items:center; gap:7px; padding:10px 4px 9px; border-radius:14px; border:1px solid transparent;
   transition: transform var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease), border-color var(--tr-fast) var(--tr-ease); }
-.tr-avt .ring { position:relative; width:74px; height:74px; border-radius:50%; overflow:hidden; background:#150B10; border:2px solid rgba(255,255,255,.12);
+.tr-avt .ring { position:relative; width:84px; height:84px; border-radius:50%; overflow:hidden; background:#150B10; border:2px solid rgba(255,255,255,.12);
   box-shadow: 0 12px 26px -16px rgba(0,0,0,1); display:flex; align-items:center; justify-content:center;
   transition: border-color var(--tr-fast) var(--tr-ease), box-shadow var(--tr-fast) var(--tr-ease), transform var(--tr-fast) var(--tr-ease); }
 .tr-avt .ring img { width:100%; height:100%; object-fit:cover; display:block; }
-.tr-avt .ring .initial { font-size:26px; }
+.tr-avt .ring .initial { font-size:29px; }
 .tr-avt .n { font-size:11.5px; font-weight:600; color:var(--tr-text-2); text-align:center; line-height:1.2; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .tr-avt .ok { position:absolute; right:2px; bottom:2px; width:20px; height:20px; border-radius:50%; display:none; align-items:center; justify-content:center;
   background:linear-gradient(180deg,#FF6E88,#D6133F); border:2px solid #14101A; box-shadow:0 4px 10px -4px rgba(255,51,85,.9); }
@@ -225,11 +225,16 @@ CSS = """<style>
 .tr-avt.selected .n { color:#fff; }
 [class*="st-key-pick_av_"]:has(button:focus-visible) { outline:2px solid var(--tr-accent); outline-offset:2px; border-radius:14px; }
 [class*="st-key-trpair_avatar_foot"] { margin-top:14px; }
+@media (min-width: 769px) and (max-width: 819px) {
+  /* seven 84px faces need a 92px column; a small tablet has ~85px, so the face gives a little */
+  .tr-avt { padding-left:2px; padding-right:2px; }
+  .tr-avt .ring { width:78px; height:78px; }
+}
 @media (max-width: 768px) {
   .tr-avp-head .big { width:72px; height:72px; }
   .tr-avp-head .big .initial { font-size:30px; }
   .tr-avp-head .who { font-size:18px; }
-  .tr-avt .ring { width:64px; height:64px; }
+  .tr-avt .ring { width:70px; height:70px; }
   [class*="st-key-trgrid_av_"] [data-testid="stColumn"] { --tr-cols: 3; }
 }
 @media (prefers-reduced-motion: reduce) { .tr-avt, .tr-avt .ring { transition:none; } }
