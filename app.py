@@ -611,12 +611,13 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
 # Pages
 # ──────────────────────────────────────────────────────────────────────────
 def page_home(monitors, states, history, settings) -> None:
-    """Home, in reading order: status, live, the command panel, the wizard.
+    """Home, in reading order: the room's hero, live, the command panel,
+    the wizard (or the panel that stands in for it, and then the room).
 
-    Four keyed containers, one after another. That order *is* the page on
-    a phone and a tablet; from 1150px ``ui.home.CSS`` turns the root into
-    a grid — status across, the rail down the right, live and wizard on
-    the left — so the rail is never a squeezed column (Phase 3B).
+    Keyed containers, one after another. That order *is* the page on a
+    phone and a tablet; from 1150px ``ui.home.CSS`` turns the root into a
+    grid — the hero across, the rail down the right, the rest on the left
+    — so the rail is never a squeezed column (Phase 3B).
     """
     detail.dialog(monitors, states)
     active = [m for m in monitors if m.is_running()]
@@ -632,8 +633,8 @@ def page_home(monitors, states, history, settings) -> None:
 
     with st.container(key="trhome"):
         with st.container(key="trstatus"):
-            home.status_line(monitors, states, platforms=PLATFORMS, city=city.name,
-                             theatre_count=cv.view(city.slug).theatre_count)
+            home.hero(monitors, states, platforms=PLATFORMS, city=city.name,
+                      theatre_count=cv.view(city.slug).theatre_count)
             drain_flash()
 
         if live_monitor is not None:
@@ -649,11 +650,18 @@ def page_home(monitors, states, history, settings) -> None:
         with st.container(key="trrail"):
             rail(monitors, states, history)
 
+        folded = home.wizard_collapsed(len(active))
         with st.container(key="trwizard"):
-            if home.wizard_collapsed(len(active)):
+            if folded:
                 home.new_alert_tile()
             else:
                 wizard(monitors, settings=settings, dismissable=bool(active))
+
+        # With the wizard put away the left column would end early on a
+        # desktop; the room fills it — the radar, the house, the crafts.
+        if folded:
+            with st.container(key="tratmo"):
+                home.atmosphere(monitors, states, city=city.name, compact=live_monitor is not None)
 
 
 def wizard(monitors, *, settings: dict, dismissable: bool) -> None:

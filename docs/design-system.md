@@ -202,21 +202,34 @@ accent bar; every target's answer is a mono pill whose colour is
 semantic — green live, amber sold out, red only for a failure, neutral for
 anything still watched. Red stays lighting, never a state.
 
-### Home skeleton (Phase 3B)
+### Home — the cinema control room (Phase 3B)
 
-Home is drawn in reading order — status line, live card, the rail's
-command panel, the wizard — as four keyed containers (`trstatus`,
-`trlive`, `trrail`, `trwizard`) inside `trhome`, with no `st.columns`.
-That order *is* the page on a phone and a tablet (769–1149px, one
-deliberate column, so the rail is never a 117px strip again); from
-1150px `ui/home.py`'s stylesheet turns `trhome` into a grid — status
-across, the rail down the right at ≥320px, live and wizard on the left.
-The hero became the status line: the product name as a mono eyebrow,
-one honest sentence built from the monitors in hand ("Watching *title*
-· 3 theatres · 1 live"), the radar mark in its `mark` form, and the
-platform strip as chips. With a monitor running, an untouched wizard
-waits behind one `pick` tile, "Set up a new alert"; a wizard in
-progress, or a page with nothing running, shows it as before.
+Home is drawn in reading order — the room's hero, the live card, the
+rail's command panel, the wizard (or the panel that stands in for it,
+then the atmosphere panel) — as keyed containers (`trstatus`, `trlive`,
+`trrail`, `trwizard`, `tratmo`) inside `trhome`, with no `st.columns`.
+That order *is* the page on a phone and a tablet (769–1149px: one
+deliberate column, so the rail is never a 117px strip again); from 1150px
+`ui/home.py`'s stylesheet turns `trhome` into a grid — hero across, the
+rail down the right at ≥320px, the rest on the left, the atmosphere panel
+stretching to the rail's bottom so the column never ends early.
+
+The look is the Login room's, quieter. The hero *is* a room: charcoal
+gradient with the top light line, the projector beam, the breathing glow,
+film grain, the radar (132px, `scanning`/`success`/`idle` by truth) with
+its sweep continuing across the panel, the headline "Watching *title*"
+built from the monitors in hand, one line of cinema, the platform pills,
+and eight crafts in the right-hand dark, each with a short line as its
+tooltip. The rail's card is a console: green-edged charcoal with a slow
+scan line, mono metadata, a framed poster; View details is the lit
+primary action, Stop an outlined red one. "Set up a new alert" is a
+compact control (glowing bolt, eyebrow, title, arrow) that opens the
+untouched wizard at step 1. While the wizard is folded, the atmosphere
+panel fills the left column — the house: copy, the radar in the dark, a
+lit screen band, two rows of seats fading into the floor, twelve more
+crafts — or, when the live card already fills the column, a compact
+strip with the line and a small radar. Everything is CSS and inline SVG;
+Home's stylesheet rides inside the hero's markdown.
 
 ## 7. Performance rules (every phase)
 
@@ -241,7 +254,7 @@ Learned the hard way and not negotiable:
 | 0 | asset foundation, registry, this document | done |
 | 1 | Login / Sign-up — radar, poster hand, crafts, charcoal panel, honest wait | done |
 | 2 | Avatar system — `ui/avatar.py`, one field on `users/{uid}` | done |
-| 3 | Home | in progress — 3B skeleton done (status line, reading-order grid, wizard tile) |
+| 3 | Home | in progress — 3B: the room (hero, console card, create panel, atmosphere) on the reading-order grid |
 | 4 | My Monitors | |
 | 5 | Create Monitor wizard | |
 | 6 | History | |
