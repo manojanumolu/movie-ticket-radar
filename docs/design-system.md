@@ -196,7 +196,11 @@ value the alert email carried — shown only when it passes the mail's own
 `is_bookmyshow_url` test; anything else is an honest "no booking link yet".
 The dialog draws the `Monitor` and `MonitorState` the page already loaded
 (no read of its own), two columns on a desktop and one on a phone, and its
-CSS rides inside it.
+CSS rides inside it. The box is the Login panel's charcoal with its top
+light line and one pink corner light; each panel eyebrow carries a 3 px
+accent bar; every target's answer is a mono pill whose colour is
+semantic — green live, amber sold out, red only for a failure, neutral for
+anything still watched. Red stays lighting, never a state.
 
 ## 7. Performance rules (every phase)
 
