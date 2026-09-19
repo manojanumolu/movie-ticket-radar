@@ -20,6 +20,7 @@ from monitor.state import MonitorState, record_history, save_state, upsert_monit
 from platforms import PLATFORMS
 from tests.test_app import run, seeded, text  # noqa: F401 - seeded is a fixture
 from ui import home
+from ui.home import STATE_LINES
 
 pytestmark = pytest.mark.usefixtures("signed_in")
 
@@ -51,12 +52,13 @@ def _order(body: str, *needles: str) -> list[int]:
 # ──────────────────────────────────────────────────────────────────────────
 def test_the_status_line_says_what_is_watched_from_the_data_in_hand(make_monitor, at):
     monitor = make_monitor()
-    body = home.status_markup([monitor], {monitor.id: _live_state(at)},
+    body = home.hero_markup([monitor], {monitor.id: _live_state(at)},
                               platforms=PLATFORMS, city="Hyderabad", theatre_count=97)
-    assert '<div class="tr-hero">' in body and "<h1>Movie Ticket Monitor</h1>" in body   # the app's own marker, kept
-    assert "Watching <b>Avengers: Endgame Encore</b>" in body
-    assert "2 theatres" in body and "1 live" in body                                     # counted, not typed
-    assert 'data-state="success"' in body                                               # the radar mark follows the truth
+    assert '<div class="tr-hero">' in body and "<h1>Watching <em>Avengers: Endgame Encore</em></h1>" in body   # the app's own marker, kept
+    assert "Movie Ticket Monitor<span class=\"city\"> · Hyderabad</span>" in body
+    assert "2 theatres" in body and "1 theatre live" in body                             # counted, not typed
+    assert 'data-state="success"' in body and STATE_LINES["success"] in body           # the radar and the room follow the truth
+    assert body.count('class="tr-craft ') == len(home.HERO_MARKS) and "And… action." in body   # the crafts, each with a line
     assert "BookMyShow · Connected · Hyderabad · 97 theatres" in body
     assert body.count("Coming soon") == 2 and "District" in body and "PVR Cinemas" in body
     assert "logo-" not in body and "base64" not in body                                  # no inline images
@@ -65,13 +67,13 @@ def test_the_status_line_says_what_is_watched_from_the_data_in_hand(make_monitor
 def test_several_monitors_are_counted_honestly_and_none_reads_as_idle(make_monitor):
     a, b, c = make_monitor(), make_monitor(), make_monitor()
     c.stop()
-    body = home.status_markup([a, b, c], {}, platforms=PLATFORMS, city="Hyderabad", theatre_count=0)
-    assert "+1 more" in body and "4 theatres" in body and "live" not in body.split("tr-status-line")[1].split("</div>")[0]
-    assert 'data-state="scanning"' in body
+    body = home.hero_markup([a, b, c], {}, platforms=PLATFORMS, city="Hyderabad", theatre_count=0)
+    assert "+1 more" in body and "4 theatres" in body and 'class="live"' not in body
+    assert 'data-state="scanning"' in body and STATE_LINES["scanning"] in body
     assert "theatres appear once a movie is synced" in body
 
-    idle = home.status_markup([c], {}, platforms=PLATFORMS, city="Hyderabad", theatre_count=97)
-    assert "Nothing is being watched right now" in idle and 'data-state="idle"' in idle
+    idle = home.hero_markup([c], {}, platforms=PLATFORMS, city="Hyderabad", theatre_count=97)
+    assert "Nothing on the radar <em>yet</em>" in idle and 'data-state="idle"' in idle
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -96,19 +98,21 @@ def test_the_page_is_four_keyed_containers_and_no_columns():
 
     src = inspect.getsource(app.page_home)
     keys = re.findall(r'st\.container\(key="(tr\w+)"\)', src)
-    assert keys == ["trhome", "trstatus", "trlive", "trrail", "trwizard"]
+    assert keys == ["trhome", "trstatus", "trlive", "trrail", "trwizard", "tratmo"]
     assert "st.columns(" not in src                                                # the squeeze is gone
     assert "detail.dialog(monitors, states)" in src and "rail(monitors, states, history)" in src
 
 
 def test_the_desktop_grid_and_the_tablet_column_are_in_homes_own_stylesheet():
     css = home.CSS
-    assert css.startswith("<style>") and len(css) < 16000
+    assert css.startswith("<style>") and len(css) < 32000                          # radar + crafts + the room, Home only
     desktop = css[css.index("@media (min-width: 1150px)"):]
     assert '[class*="st-key-trhome"] { display:grid !important;' in desktop
     assert f"minmax({home.RAIL_MIN}px, 1.4fr)" in desktop and home.RAIL_MIN >= 320
-    assert ':has(> [class*="st-key-trrail"]) { grid-column: 2; grid-row: 2 / span 2; }' in desktop
-    assert ':has(> [class*="st-key-trstatus"]) { grid-column: 1 / -1; }' in desktop
+    assert ':has(> [class*="st-key-trrail"]) { grid-column: 2; grid-row: 2 / span 3; margin-bottom:0; }' in desktop
+    assert ':has(> [class*="st-key-tratmo"]) { grid-column: 1; grid-row: 4; align-self: stretch; margin-bottom:0; }' in desktop
+    assert "grid-template-rows: auto auto auto 1fr" in desktop
+    assert ':has(> [class*="st-key-trstatus"]) { grid-column: 1 / -1; grid-row: 1; }' in desktop
     assert "@media (min-width: 769px) and (max-width: 1149px)" in css        # the tablet is its own tier
     assert "@media (max-width: 768px)" in css
     assert "@media (prefers-reduced-motion: reduce)" in css
@@ -149,7 +153,8 @@ def test_with_nothing_running_the_wizard_is_the_page(seeded):
     app = run()
     assert not app.exception
     body = text(app)
-    assert "Nothing is being watched right now" in body and "No active monitors" in body
+    assert "Nothing on the radar" in body and "No active monitors" in body
+    assert "tr-atmo" not in body.replace(".tr-atmo", "")                     # the room only fills a folded column
     assert any(b.key == "loc_hyderabad" for b in app.button)
     assert not any(b.key in ("new_alert", "wizard_hide") for b in app.button)
     assert not home.wizard_collapsed(0)
