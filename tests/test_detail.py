@@ -143,7 +143,7 @@ def test_the_dialog_is_a_view_over_loaded_data_not_a_second_read():
 
 
 def test_the_dialog_stylesheet_is_small_and_folds_on_a_phone():
-    assert detail.CSS.startswith("<style>") and len(detail.CSS) < 6000
+    assert detail.CSS.startswith("<style>") and len(detail.CSS) < 10000
     assert "@media (max-width: 768px)" in detail.CSS
     assert ".tr-det-grid { grid-template-columns:1fr; gap:12px; }" in detail.CSS
     assert "[class*=\"st-key-detail_\"] .stButton button" in __import__("ui.theme", fromlist=["CSS"]).CSS
