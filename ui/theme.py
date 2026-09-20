@@ -188,60 +188,65 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 /* ── sidebar: an application rail ─────────────────────────────────── */
 [data-testid="stSidebar"] {
   background:
-    radial-gradient(300px 300px at 50% calc(100% - 128px), rgba(255,51,85,.12), transparent 70%),
+    radial-gradient(320px 420px at 60% 60%, rgba(255,51,85,.10), transparent 70%),
     linear-gradient(180deg,rgba(24,24,32,.92) 0%,rgba(14,14,20,.96) 100%) !important;
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-right: 1px solid rgba(255,255,255,.08); box-shadow: 12px 0 40px -30px rgba(0,0,0,.9);
   min-width: 244px !important; width: 244px !important;
   position: relative; isolation: isolate;
 }
-/* Sidebar ambience — one film reel, slowly turning behind the rail.
+/* Sidebar ambience — two reels and the film between them, behind the rail.
 
-   A single pseudo-element, no elements, no script, no image. The reel is
-   a translucent pink-charcoal disc with a brighter rim; its six holes and
-   the hub's centre are cut out with a mask (``mask-composite: exclude``),
-   so the rail shows through them like a real reel's. It sits low in the
-   rail, centred, and is sized so that its box stays inside the rail at
-   every angle of its turn (a 168px square's corners reach 119px from its
-   centre; the rail is 244px wide) — a rotating box that ran past the edge
-   would add scrollable width, whatever clipped its paint. The only motion
-   is a 40-second rotation about its own centre: transform only,
-   compositor work, no layout. The glow is the radial layer in the rail's
-   own background, centred on the reel. Pointer-transparent, at z-index 0
-   under the content (lifted to 1 below), at an opacity that leaves the
-   navigation dominant. */
-@keyframes tr-reel-spin { to { transform: rotate(360deg); } }
-[data-testid="stSidebar"]::before {
-  content: ""; position: absolute; z-index: 0; pointer-events: none;
-  width: 168px; height: 168px; left: calc(50% - 84px); bottom: 44px; border-radius: 50%;
-  opacity: .15; will-change: transform;
-  background:
-    radial-gradient(circle, transparent 0 46.5%, rgba(255,235,240,.95) 47% 50%),
-    radial-gradient(circle, rgba(255,130,155,.9) 0 6.5%, rgba(255,255,255,.55) 6.8% 7.4%, rgba(255,110,140,.85) 7.8% 100%);
-  -webkit-mask-image:
-    radial-gradient(circle at 50% 21%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 75.1% 35.5%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 75.1% 64.5%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 50% 79%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 24.9% 64.5%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 24.9% 35.5%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle, #000 0 2.2%, transparent 2.6%),
-    radial-gradient(circle, #000 0 49.6%, transparent 50%);
-  mask-image:
-    radial-gradient(circle at 50% 21%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 75.1% 35.5%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 75.1% 64.5%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 50% 79%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 24.9% 64.5%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle at 24.9% 35.5%, #000 0 11.5%, transparent 12%),
-    radial-gradient(circle, #000 0 2.2%, transparent 2.6%),
-    radial-gradient(circle, #000 0 49.6%, transparent 50%);
-  -webkit-mask-composite: xor, xor, xor, xor, xor, xor, xor, source-over;
-  mask-composite: exclude, exclude, exclude, exclude, exclude, exclude, exclude, add;
-  animation: tr-reel-spin 40s linear infinite;
+   The reels are Home's own drawing (``ui.home.reel_svg``: rim, sheen arc,
+   ring, six perforations, hub, pin) in Home's colours and opacities, so
+   the rail and the page carry one reel. The markup rides in the footer's
+   html block (``app.sidebar``) and is fixed here: ``position: fixed``
+   inside the rail — whose backdrop-filter makes it the containing block —
+   is the rail's box, so it never adds scrollable width to the rail's
+   scroll container, and ``overflow: hidden`` clips whatever runs past the
+   edge. The top reel sits behind the first three navigation buttons, the
+   smaller one low in the rail, and a strip of film runs down the left rim
+   of both with its sprocket holes moving. Transform-only motion, no
+   script, no asset; pointer-transparent at z-index 0 under the content
+   (lifted to 1 below). */
+@keyframes tr-side-reel { to { transform: rotate(360deg); } }
+@keyframes tr-side-film { to { transform: translate3d(0, 36px, 0); } }
+.tr-side-ambience {
+  position: fixed; left: 0; top: 0; width: 100%; height: 100%; z-index: 0;
+  pointer-events: none; overflow: hidden; color: #FF8CA0;
 }
-/* off-canvas (a phone's collapsed rail) there is nothing to see: no reel, no turning */
-[data-testid="stSidebar"][aria-expanded="false"]::before { display: none; }
+.tr-side-ambience .tr-reel { position: absolute; transform-origin: 50% 50%; will-change: transform; }
+.tr-side-ambience .tr-reel .rim { opacity: .13; }
+.tr-side-ambience .tr-reel .sheen { stroke: #FFC9D4; opacity: .24; }
+.tr-side-ambience .tr-reel .ring { opacity: .11; }
+.tr-side-ambience .tr-reel .holes { opacity: .13; }
+.tr-side-ambience .tr-reel .hub { opacity: .14; }
+.tr-side-ambience .tr-reel .pin { opacity: .35; }
+.tr-side-ambience .tr-reel.top {
+  left: 40px; top: 65px; width: 300px; height: 300px;
+  filter: drop-shadow(0 0 28px rgba(255,51,85,.16)); animation: tr-side-reel 60s linear infinite;
+}
+.tr-side-ambience .tr-reel.bottom {
+  left: 40px; bottom: 40px; width: 220px; height: 220px;
+  animation: tr-side-reel 44s linear infinite;
+}
+/* the film: a band down the reels' left rim, its sprocket holes running */
+.tr-side-film {
+  position: absolute; left: 40px; width: 26px; top: 215px; bottom: 150px; overflow: hidden;
+  background: linear-gradient(90deg, rgba(255,140,160,.04), rgba(255,140,160,.11) 30%, rgba(255,140,160,.11) 70%, rgba(255,140,160,.04));
+  box-shadow: inset 2px 0 0 rgba(255,140,160,.12), inset -2px 0 0 rgba(255,140,160,.12);
+}
+.tr-side-film::before {
+  content: ""; position: absolute; left: 4px; right: 4px; top: -36px; bottom: 0; will-change: transform;
+  background:
+    linear-gradient(90deg, rgba(255,201,212,.30) 0 5px, transparent 5px calc(100% - 5px), rgba(255,201,212,.30) calc(100% - 5px)) 0 0 / 100% 36px repeat-y;
+  -webkit-mask-image: linear-gradient(180deg, #000 0 10px, transparent 10px 36px);
+  mask-image: linear-gradient(180deg, #000 0 10px, transparent 10px 36px);
+  -webkit-mask-size: 100% 36px; mask-size: 100% 36px;
+  animation: tr-side-film 1.6s linear infinite;
+}
+/* off-canvas (a phone's collapsed rail) there is nothing to see */
+[data-testid="stSidebar"][aria-expanded="false"] .tr-side-ambience { display: none; }
 /* the rail's own content stays above the room, and readable */
 [data-testid="stSidebar"] > div,
 [data-testid="stSidebarUserContent"],
@@ -572,9 +577,9 @@ __NAV_ICONS__
 @keyframes tr-spin  { to { transform:rotate(360deg) } }
 @keyframes tr-sweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
 
-/* Asked for stillness, the reel stays — it just stops turning. */
+/* Asked for stillness, the reels and the film stay — they just stop moving. */
 @media (prefers-reduced-motion: reduce) {
-  [data-testid="stSidebar"]::before {
+  .tr-side-ambience .tr-reel.top, .tr-side-ambience .tr-reel.bottom, .tr-side-film::before {
     animation: none;
     transform: none;
   }
