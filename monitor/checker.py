@@ -15,9 +15,17 @@ Order of operations, and why:
    or format (``monitor.discovery``) — rate-limited, one request per city —
    so a sibling event BookMyShow created *after* the monitor was saved is
    swept in this very tick, not after the next catalogue sync.
-4. Fetch. A failure here becomes an ERROR record, never an availability.
-5. Evaluate each theatre+format target independently.
-6. Detect changes, send mail, and only then mark as notified.
+4. Collapse the due monitors into the listing reads they actually need
+   (``monitor.sharing``) and fetch each one once. Several people waiting on
+   the same film, city, dates and event share one read of BookMyShow — the
+   venue and the format never reached the network in the first place, they
+   filter the answer. A failure here becomes an ERROR record for every
+   monitor waiting on it, never an availability.
+5. Evaluate each theatre+format target independently, per monitor, against
+   that read. Sharing the read changes no verdict.
+6. Detect changes, send mail, and only then mark as notified — per monitor
+   and per owner, so two accounts waiting on one read each get their own
+   email, their own state and their own history.
 7. Persist.
 """
 
@@ -39,6 +47,7 @@ from monitor.models import (
     TargetResult,
     TheatreTarget,
 )
+from monitor.sharing import SharingReport, describe, group_for_fetch
 from monitor.state import (
     MonitorState,
     expire_due_monitors,
@@ -66,6 +75,11 @@ class RunReport:
     email_errors: list[str] = field(default_factory=list)
     #: What sibling-event discovery did before the checks (see ``monitor.discovery``).
     discovery: DiscoveryReport = field(default_factory=DiscoveryReport)
+    #: How the due monitors collapsed into listing reads (``monitor.sharing``).
+    sharing: SharingReport = field(default_factory=SharingReport)
+    #: Listing reads this tick actually made — one per unique target, not one
+    #: per monitor. ``len(checked) - fetches`` is the duplication avoided.
+    fetches: int = 0
     #: The monitors and observed state this tick read and, where it changed
     #: them, wrote back — handed to the segment so deciding when to wake next
     #: does not read the same two collections a second time. Valid for this
@@ -82,6 +96,10 @@ class RunReport:
             f"expired={len(self.expired)} failed={len(self.failed)} "
             f"changes={len(self.changes)} emails={self.emails_sent}"
         )
+        if self.fetches:
+            text += f" fetches={self.fetches}"
+        if self.sharing.saved:
+            text += f" saved={self.sharing.saved}"
         if self.discovery.ran:
             text += f" discovery[{self.discovery.summary()}]"
         return text
@@ -278,31 +296,73 @@ def _booking_url(monitor: Monitor, snapshot: Snapshot, date_code: str,
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Checking one monitor
+# Reading the listing, and reading a monitor out of it
 # ──────────────────────────────────────────────────────────────────────────
-def check_monitor(monitor: Monitor, *, at: datetime | None = None) -> CheckOutcome:
-    """Read the platform once and evaluate every target. Never raises."""
-    at = at or now_ist()
+@dataclass
+class Listing:
+    """One read of a platform listing — or the reason there isn't one.
+
+    Separated from the monitor it was read for so that several monitors
+    waiting on the same listing can share it (``monitor.sharing``). A
+    failure is carried here rather than raised, so every monitor in a shared
+    group records the same honest ERROR instead of one of them swallowing it.
+    """
+
+    snapshot: Snapshot | None = None
+    error: str = ""
+    blocked: bool = False
+
+    @property
+    def ok(self) -> bool:
+        return self.snapshot is not None
+
+
+def fetch_listing(movie: MovieRef, date_codes: list[str] | None = None) -> Listing:
+    """Read one platform listing. Never raises.
+
+    ``movie`` is taken as given — already resolved through the catalogue by
+    the caller — so a shared read is made once with one reference rather than
+    re-resolved per subscriber.
+    """
     try:
-        provider = get_provider(monitor.movie.platform)
-        # A theatre often releases a film under a *new* premium-format event
-        # (a "Dolby Cinema 2D" sibling that did not exist when the monitor
-        # was saved). The catalogue sync learns of such siblings; take them
-        # from there so the sweep is the whole film as of now, not as of the
-        # day the monitor was created.
-        snapshot = provider.fetch(with_current_variants(monitor.movie), monitor.date_codes or None)
+        provider = get_provider(movie.platform)
+        snapshot = provider.fetch(movie, date_codes or None)
     except PlatformBlocked as exc:
-        return CheckOutcome(monitor.id, at, ok=False, error=str(exc), blocked=True)
+        return Listing(error=str(exc), blocked=True)
     except PlatformError as exc:
-        return CheckOutcome(monitor.id, at, ok=False, error=str(exc))
+        return Listing(error=str(exc))
     except Exception as exc:  # noqa: BLE001 - a parser bug must not kill the run
-        return CheckOutcome(
-            monitor.id, at, ok=False,
+        return Listing(
             error=f"Unexpected failure while reading the listing: {type(exc).__name__}: {exc}",
         )
+    return Listing(snapshot=snapshot)
 
-    results = [evaluate_target(monitor, t, snapshot) for t in monitor.targets]
+
+def outcome_for(monitor: Monitor, listing: Listing, *, at: datetime | None = None) -> CheckOutcome:
+    """Evaluate one monitor's targets against a listing already read.
+
+    Pure with respect to the network: every monitor sharing a listing is
+    evaluated independently here, against its own targets, its own dates and
+    its own format rules, so sharing the read changes no verdict.
+    """
+    at = at or now_ist()
+    if not listing.ok:
+        return CheckOutcome(monitor.id, at, ok=False, error=listing.error, blocked=listing.blocked)
+    results = [evaluate_target(monitor, t, listing.snapshot) for t in monitor.targets]
     return CheckOutcome(monitor.id, at, ok=True, results=results)
+
+
+def check_monitor(monitor: Monitor, *, at: datetime | None = None) -> CheckOutcome:
+    """Read the platform once and evaluate every target. Never raises.
+
+    The single-monitor path, unchanged in behaviour: a theatre often releases
+    a film under a *new* premium-format event (a "Dolby Cinema 2D" sibling
+    that did not exist when the monitor was saved), so the sweep is the film
+    as the catalogue knows it now, not as of the day the monitor was created.
+    """
+    at = at or now_ist()
+    listing = fetch_listing(with_current_variants(monitor.movie), monitor.date_codes)
+    return outcome_for(monitor, listing, at=at)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -373,49 +433,68 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     if report.discovery.updated:
         save_monitors(monitors, mirror=mirror)
 
-    for monitor in due:
-        ms = state[monitor.id]
-        print(f"[checker] {short_id(monitor.id)} — {monitor.movie.title} ({len(monitor.targets)} target(s))")
-        outcome = check_monitor(monitor, at=at)
-        changes = detect_changes(monitor, outcome, ms)
-        apply_outcome(outcome, ms)
-        dirty = True
+    # Several people wanting the same seat want the same answer. Collapse the
+    # due monitors into the listing reads they actually need, read each one
+    # once, and hand the same snapshot to every monitor waiting on it. The
+    # grouping is on what reaches the network only (``monitor.sharing``);
+    # everything below — evaluation, state, notification, history — stays
+    # per monitor and per owner, exactly as it was.
+    groups = group_for_fetch(due, resolve=with_current_variants)
+    report.sharing = describe(groups)
+    if report.sharing.saved:
+        print(f"[checker] sharing: {report.sharing.summary()}")
 
-        if outcome.ok:
-            report.checked.append(monitor.id)
-            for result in outcome.results:
-                print(f"    {result.venue_name} · {result.fmt} -> {result.availability.value}"
-                      f"{' — ' + result.detail if result.detail else ''}")
-                if result.availability is Availability.THEATRE_NOT_AVAILABLE:
-                    _hint_other_rows(monitor, monitor.target(result.target_key))
-        else:
-            report.failed.append(monitor.id)
-            print(f"    check failed: {outcome.error}")
-            record_history(
-                monitor, "ERROR",
-                "Couldn't check BookMyShow — connection problem, not a 'no tickets' answer.",
-                mirror=mirror, at=at,
-            )
+    for group in groups:
+        if group.shared:
+            print(f"[checker] one read for {len(group.monitors)} monitors "
+                  f"({len(group.subscribers)} account(s)) — {group.key.label}")
+        listing = fetch_listing(group.movie, group.date_codes)
+        report.fetches += 1
 
-        for change in changes:
-            report.changes.append(change)
-            try:
-                notifier(monitor, change)
-            except Exception as exc:  # noqa: BLE001 - retried on the next tick
-                report.email_errors.append(f"{short_id(monitor.id)}: {exc}")
-                ms.last_email_error = f"{type(exc).__name__}: {exc}"[:300]
-                print(f"    email failed ({exc}) — will retry next check")
-                continue
-            report.emails_sent += 1
-            ms.last_email_error = ""
-            mark_notified(change, ms, at)
-            record_history(
-                monitor,
-                change.kind.value,
-                f"{change.venue_name} · {change.fmt} — {change.kind.value.replace('_', ' ').title()}",
-                mirror=mirror, at=at,
-                extra={"booking_url": change.booking_url},
-            )
+        for monitor in group.monitors:
+            ms = state[monitor.id]
+            print(f"[checker] {short_id(monitor.id)} — {monitor.movie.title} "
+                  f"({len(monitor.targets)} target(s))")
+            outcome = outcome_for(monitor, listing, at=at)
+            changes = detect_changes(monitor, outcome, ms)
+            apply_outcome(outcome, ms)
+            dirty = True
+
+            if outcome.ok:
+                report.checked.append(monitor.id)
+                for result in outcome.results:
+                    print(f"    {result.venue_name} · {result.fmt} -> {result.availability.value}"
+                          f"{' — ' + result.detail if result.detail else ''}")
+                    if result.availability is Availability.THEATRE_NOT_AVAILABLE:
+                        _hint_other_rows(monitor, monitor.target(result.target_key))
+            else:
+                report.failed.append(monitor.id)
+                print(f"    check failed: {outcome.error}")
+                record_history(
+                    monitor, "ERROR",
+                    "Couldn't check BookMyShow — connection problem, not a 'no tickets' answer.",
+                    mirror=mirror, at=at,
+                )
+
+            for change in changes:
+                report.changes.append(change)
+                try:
+                    notifier(monitor, change)
+                except Exception as exc:  # noqa: BLE001 - retried on the next tick
+                    report.email_errors.append(f"{short_id(monitor.id)}: {exc}")
+                    ms.last_email_error = f"{type(exc).__name__}: {exc}"[:300]
+                    print(f"    email failed ({exc}) — will retry next check")
+                    continue
+                report.emails_sent += 1
+                ms.last_email_error = ""
+                mark_notified(change, ms, at)
+                record_history(
+                    monitor,
+                    change.kind.value,
+                    f"{change.venue_name} · {change.fmt} — {change.kind.value.replace('_', ' ').title()}",
+                    mirror=mirror, at=at,
+                    extra={"booking_url": change.booking_url},
+                )
 
     if dirty:
         save_state(state, mirror=mirror)
@@ -426,4 +505,5 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     return report
 
 
-__all__ = ["RunReport", "check_monitor", "evaluate_target", "run_once", "short_id"]
+__all__ = ["Listing", "RunReport", "check_monitor", "evaluate_target", "fetch_listing",
+           "outcome_for", "run_once", "short_id"]

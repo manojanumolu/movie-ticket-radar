@@ -30,8 +30,10 @@ from config import firestore as fs
 from config.timezone import now_ist
 from monitor import state as state_mod
 from monitor import worker as worker_mod
+from monitor import checker
 from monitor.checker import run_once
-from monitor.models import ANY_FORMAT, CheckOutcome, Monitor, MovieRef, TheatreTarget
+from monitor.models import (ANY_FORMAT, CheckOutcome, Monitor, MovieRef, Snapshot,
+                            TheatreTarget)
 from tests.test_isolation import MemoryFirestore, PROJECT
 
 #: Shaped like a real key, with none of the substance. Nothing here is a
@@ -367,16 +369,18 @@ def test_the_forced_first_check_actually_checks_the_dispatched_monitor(cutover, 
 
     checked: list = []
 
-    def fake_check(monitor, at=None):
-        checked.append(monitor.id)
-        return CheckOutcome(monitor_id=monitor.id, checked_at=at or now_ist(),
-                            ok=True, results=[])
+    def fake_listing(movie, date_codes=None):
+        # One listing read per due monitor's target here: recording it proves
+        # the dispatched monitor — and only it — reached the platform at all.
+        checked.append(movie.event_code)
+        return checker.Listing(snapshot=Snapshot(movie=movie, venues=[], showtimes=[]))
 
-    monkeypatch.setattr("monitor.checker.check_monitor", fake_check)
+    monkeypatch.setattr("monitor.checker.fetch_listing", fake_listing)
     report = run_once(force=True, monitor_id=created.id, mirror=False,
                       notifier=lambda *a, **k: True)
 
-    assert checked == [created.id], f"the dispatched monitor was not checked: {report.skipped}"
+    assert report.checked == [created.id], f"the dispatched monitor was not checked: {report.skipped}"
+    assert len(checked) == 1, "the dispatched monitor cost exactly one listing read"
     assert created.id in report.checked
 
 

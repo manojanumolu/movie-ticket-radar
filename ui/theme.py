@@ -191,7 +191,47 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-right: 1px solid rgba(255,255,255,.08); box-shadow: 12px 0 40px -30px rgba(0,0,0,.9);
   min-width: 244px !important; width: 244px !important;
+  position: relative; isolation: isolate;
 }
+/* The projection room behind the rail: two pseudo-layers on the sidebar
+   itself, no extra elements, no script and nothing to load. One is a slow
+   warm light that drifts down the column the way a projector's spill moves;
+   the other is a static grain, drawn as a repeating gradient rather than an
+   image. Both are pointer-transparent and sit at z-index 0 under the
+   content (which the rules below lift to 1), so nothing here can cover a
+   label, intercept a click or move anything on the page.
+
+   Opacity is deliberately near the floor: this should read as the room
+   being lit, not as an animation. The movement is transform and opacity
+   only, which the compositor handles without laying the page out again, so
+   it costs Home's reruns nothing. */
+@keyframes tr-side-beam {
+  0%   { transform: translate3d(0, -16%, 0); opacity: .50; }
+  50%  { transform: translate3d(0,  24%, 0); opacity: .95; }
+  100% { transform: translate3d(0, -16%, 0); opacity: .50; }
+}
+/* Kept strictly inside the rail's box — left and right pinned to 0 — because
+   anything wider adds scrollable width and the sidebar grows a horizontal
+   scrollbar of its own. The gradients fade out well before the edges, so the
+   light is off-centre without the layer being. */
+[data-testid="stSidebar"]::before {
+  content: ""; position: absolute; left: 8px; right: 8px; top: -12%; height: 62%; z-index: 0;
+  pointer-events: none; will-change: transform, opacity; filter: blur(26px);
+  background:
+    radial-gradient(58% 44% at 26% 20%, rgba(255,51,85,.15), transparent 70%),
+    radial-gradient(46% 36% at 78% 64%, rgba(255,140,160,.08), transparent 72%);
+  animation: tr-side-beam 26s ease-in-out infinite;
+}
+[data-testid="stSidebar"]::after {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.014) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, transparent 0%, rgba(255,51,85,.035) 68%, transparent 100%);
+}
+/* the rail's own content stays above the room, and readable */
+[data-testid="stSidebar"] > div,
+[data-testid="stSidebarUserContent"],
+[data-testid="stSidebarHeader"] { position: relative; z-index: 1; }
 [data-testid="stSidebar"] .block-container,
 [data-testid="stSidebarUserContent"] { padding: 1.35rem 1rem 1.1rem !important; }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 1rem; }
@@ -517,6 +557,17 @@ __NAV_ICONS__
 @keyframes tr-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.82)} }
 @keyframes tr-spin  { to { transform:rotate(360deg) } }
 @keyframes tr-sweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
+
+/* Asked for stillness, the room stays lit but stops moving: the beam holds
+   its mid position instead of drifting, and the grain — which never moved —
+   is left alone. The sidebar looks the same, it simply does not breathe. */
+@media (prefers-reduced-motion: reduce) {
+  [data-testid="stSidebar"]::before {
+    animation: none;
+    transform: translate3d(0, 2%, 0) scale(1.06);
+    opacity: .75;
+  }
+}
 
 /* ── step rail: a journey, with a connector between pips ───────────── */
 .tr-steps { display:flex; gap:8px; margin:4px 0 6px; flex-wrap:wrap; }

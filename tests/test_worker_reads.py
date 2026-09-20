@@ -32,7 +32,8 @@ from monitor import checker
 from monitor import state as state_mod
 from monitor import worker
 from monitor.discovery import DiscoveryReport
-from monitor.models import ANY_FORMAT, CheckOutcome, Monitor, MonitorStatus, MovieRef, TheatreTarget
+from monitor.models import (ANY_FORMAT, CheckOutcome, Monitor, MonitorStatus, MovieRef, Snapshot,
+                            TheatreTarget)
 from monitor.state import MonitorState, Scope
 from tests.test_isolation import MemoryFirestore, PROJECT
 from tests.test_scheduling import Clock
@@ -79,8 +80,12 @@ def firestore_worker(monkeypatch):
 
     # No BookMyShow and no city listing: the platform answers at once, so the
     # only network in these tests is Firestore's.
-    monkeypatch.setattr(checker, "check_monitor",
-                        lambda monitor, at=None: CheckOutcome(monitor.id, at or now_ist(), ok=True, results=[]))
+    # The listing read is the only thing here that would touch BookMyShow;
+    # it answers at once, with nothing on. Everything the worker does with
+    # that answer — evaluate, record, notify — runs for real.
+    monkeypatch.setattr(checker, "fetch_listing",
+                        lambda movie, date_codes=None: checker.Listing(
+                            snapshot=Snapshot(movie=movie, venues=[], showtimes=[])))
     monkeypatch.setattr(checker, "discover_siblings", lambda *a, **k: DiscoveryReport())
 
     at = now_ist().replace(microsecond=0)
@@ -458,8 +463,12 @@ def test_the_json_worker_still_reads_and_writes_the_whole_file(monkeypatch, isol
     stopped.stop(at - timedelta(hours=1))
     overdue = _monitor("Overdue", until=at - timedelta(minutes=1), owner="")
     state_mod.save_monitors([stopped, overdue], mirror=False)
-    monkeypatch.setattr(checker, "check_monitor",
-                        lambda monitor, at=None: CheckOutcome(monitor.id, at or now_ist(), ok=True, results=[]))
+    # The listing read is the only thing here that would touch BookMyShow;
+    # it answers at once, with nothing on. Everything the worker does with
+    # that answer — evaluate, record, notify — runs for real.
+    monkeypatch.setattr(checker, "fetch_listing",
+                        lambda movie, date_codes=None: checker.Listing(
+                            snapshot=Snapshot(movie=movie, venues=[], showtimes=[])))
     monkeypatch.setattr(checker, "discover_siblings", lambda *a, **k: DiscoveryReport())
 
     assert [m.id for m in state_mod.load_monitors_for_checking()] == [stopped.id, overdue.id]

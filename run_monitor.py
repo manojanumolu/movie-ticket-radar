@@ -99,6 +99,11 @@ def main(argv: list[str] | None = None) -> int:
         f"failed:   {ids(report.failed)}",
         f"changes:  {len(report.changes)}",
         f"emails:   {report.emails_sent}",
+        # One listing read can serve several people watching the same film,
+        # city and dates (monitor.sharing); say how many it saved.
+        f"fetches:  {report.fetches}"
+        + (f" (one read for {report.sharing.monitors} monitors; "
+           f"{report.sharing.saved} avoided)" if report.sharing.saved else ""),
     ):
         print(f"  {line}")
 
