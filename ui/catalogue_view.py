@@ -78,13 +78,33 @@ class CatalogueView:
 # ──────────────────────────────────────────────────────────────────────────
 # Cache keyed on the file's content
 # ──────────────────────────────────────────────────────────────────────────
+#: The last digest computed, against the file's stat that produced it.
+#: ``view()`` is called a dozen times per rerun (every lookup goes through
+#: it) and each call was reading and hashing the whole catalogue — 140 KB,
+#: twelve times, for a key that had not changed. The file is only ever
+#: rewritten when its content differs (``store.sync_from_github``,
+#: ``catalogue.sync_region``), so an unchanged ``(mtime_ns, size)`` means an
+#: unchanged digest; the content is hashed again only when the stat moves.
+_last_stat: tuple[str, int, int] | None = None
+_last_digest: str = ""
+
+
 def _signature() -> tuple[str, str]:
+    global _last_stat, _last_digest
     path = store.CATALOGUE_FILE
     try:
-        digest = hashlib.blake2b(path.read_bytes(), digest_size=16).hexdigest()
+        st_ = path.stat()
+        stat = (str(path), st_.st_mtime_ns, st_.st_size)
     except OSError:
-        digest = ""
-    return str(path), digest
+        _last_stat, _last_digest = None, ""
+        return str(path), ""
+    if stat != _last_stat:
+        try:
+            _last_digest = hashlib.blake2b(path.read_bytes(), digest_size=16).hexdigest()
+        except OSError:
+            _last_digest = ""
+        _last_stat = stat
+    return str(path), _last_digest
 
 
 @st.cache_resource(show_spinner=False)

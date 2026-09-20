@@ -236,14 +236,15 @@ def test_sidebar_ambience_is_inert_to_movie_selection(seeded):
     it on the page."""
     ambience = theme.CSS[theme.CSS.index("Sidebar ambience"):]
     ambience = ambience[:ambience.index("the rail's own content stays above the room")]
-    assert ambience.count("pointer-events: none") == 2      # both layers
+    assert ambience.count("pointer-events: none") == 1      # the one layer: the reel
     assert "<script" not in theme.CSS.lower()
     # Every rule in the block is a pseudo-element rooted at the sidebar, and
     # the reduced-motion override still holds the layer still.
     stripped = re.sub(r"/\*.*?\*/", "", ambience, flags=re.S)
     rules = [m.group(1).strip() for m in re.finditer(r"([^{}@]+)\{[^{}]*\}", stripped)]
-    rules = [r for r in rules if r and not r.startswith(("0%", "50%", "100%"))]
-    assert rules == ['[data-testid="stSidebar"]::before', '[data-testid="stSidebar"]::after'], rules
+    rules = [r for r in rules if r and not r.startswith(("0%", "50%", "100%", "from", "to"))]
+    assert rules == ['[data-testid="stSidebar"]::before',
+                     '[data-testid="stSidebar"][aria-expanded="false"]::before'], rules
     reduced = theme.CSS[theme.CSS.index("@media (prefers-reduced-motion: reduce)"):]
     reduced = reduced[:reduced.index("}\n}") + 3]
     assert '[data-testid="stSidebar"]::before' in reduced and "animation: none" in reduced

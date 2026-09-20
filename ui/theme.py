@@ -187,79 +187,61 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 
 /* ── sidebar: an application rail ─────────────────────────────────── */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg,rgba(24,24,32,.92) 0%,rgba(14,14,20,.96) 100%) !important;
+  background:
+    radial-gradient(300px 300px at 50% calc(100% - 128px), rgba(255,51,85,.12), transparent 70%),
+    linear-gradient(180deg,rgba(24,24,32,.92) 0%,rgba(14,14,20,.96) 100%) !important;
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-right: 1px solid rgba(255,255,255,.08); box-shadow: 12px 0 40px -30px rgba(0,0,0,.9);
   min-width: 244px !important; width: 244px !important;
   position: relative; isolation: isolate;
 }
-/* Sidebar ambience — a projector running quietly behind the rail.
+/* Sidebar ambience — one film reel, slowly turning behind the rail.
 
-   Two pseudo-layers on the sidebar itself: no elements, no script, no
-   image, nothing loaded. ``::after`` is the still room: a projector drawn
-   as shapes — two reels, a body, a lens — in light so faint it reads as a
-   silhouette, a warm bloom around the lens, and a vignette that keeps the
-   edges charcoal. ``::before`` is the beam: one wedge of a conic gradient
-   from the lens, blurred, that breathes and sways over half a minute. Both
-   are pointer-transparent and sit at z-index 0 under the content (which
-   the rules below lift to 1), so nothing here can cover a label, intercept
-   a click or move anything on the page.
-
-   No repeating gradients: an earlier grain, drawn as hairlines on two
-   axes, read as a grid. Everything here is a disc, a bar or a glow. The
-   movement is transform and opacity only — compositor work, no layout. */
-@keyframes tr-side-beam {
-  0%   { opacity: .55; transform: rotate(-2.5deg); }
-  50%  { opacity: 1;   transform: rotate( 2.5deg); }
-  100% { opacity: .55; transform: rotate(-2.5deg); }
-}
-/* The beam. Kept inside the rail's box (inset, never translated sideways)
-   because anything wider adds scrollable width and the sidebar grows a
-   horizontal scrollbar of its own; the rotation pivots on the lens and the
-   wedge is clipped by the layer's own edge, which costs no layout. */
+   A single pseudo-element, no elements, no script, no image. The reel is
+   a translucent pink-charcoal disc with a brighter rim; its six holes and
+   the hub's centre are cut out with a mask (``mask-composite: exclude``),
+   so the rail shows through them like a real reel's. It sits low in the
+   rail, centred, and is sized so that its box stays inside the rail at
+   every angle of its turn (a 168px square's corners reach 119px from its
+   centre; the rail is 244px wide) — a rotating box that ran past the edge
+   would add scrollable width, whatever clipped its paint. The only motion
+   is a 40-second rotation about its own centre: transform only,
+   compositor work, no layout. The glow is the radial layer in the rail's
+   own background, centred on the reel. Pointer-transparent, at z-index 0
+   under the content (lifted to 1 below), at an opacity that leaves the
+   navigation dominant. */
+@keyframes tr-reel-spin { to { transform: rotate(360deg); } }
 [data-testid="stSidebar"]::before {
-  content: ""; position: absolute; inset: 0 12px; z-index: 0; pointer-events: none;
-  transform-origin: calc(50% + 60px) calc(100% - 138px); will-change: transform, opacity; filter: blur(16px);
+  content: ""; position: absolute; z-index: 0; pointer-events: none;
+  width: 168px; height: 168px; left: calc(50% - 84px); bottom: 44px; border-radius: 50%;
+  opacity: .15; will-change: transform;
   background:
-    conic-gradient(from 292deg at calc(50% + 60px) calc(100% - 138px),
-      transparent 0deg, rgba(255,150,165,.10) 8deg, rgba(255,125,145,.30) 22deg,
-      rgba(255,150,165,.10) 40deg, transparent 50deg);
-  animation: tr-side-beam 26s ease-in-out infinite;
+    radial-gradient(circle, transparent 0 46.5%, rgba(255,235,240,.95) 47% 50%),
+    radial-gradient(circle, rgba(255,130,155,.9) 0 6.5%, rgba(255,255,255,.55) 6.8% 7.4%, rgba(255,110,140,.85) 7.8% 100%);
+  -webkit-mask-image:
+    radial-gradient(circle at 50% 21%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 75.1% 35.5%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 75.1% 64.5%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 50% 79%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 24.9% 64.5%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 24.9% 35.5%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle, #000 0 2.2%, transparent 2.6%),
+    radial-gradient(circle, #000 0 49.6%, transparent 50%);
+  mask-image:
+    radial-gradient(circle at 50% 21%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 75.1% 35.5%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 75.1% 64.5%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 50% 79%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 24.9% 64.5%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle at 24.9% 35.5%, #000 0 11.5%, transparent 12%),
+    radial-gradient(circle, #000 0 2.2%, transparent 2.6%),
+    radial-gradient(circle, #000 0 49.6%, transparent 50%);
+  -webkit-mask-composite: xor, xor, xor, xor, xor, xor, xor, source-over;
+  mask-composite: exclude, exclude, exclude, exclude, exclude, exclude, exclude, add;
+  animation: tr-reel-spin 40s linear infinite;
 }
-/* The room. Shapes are background-images with a size and a position,
-   anchored to the bottom edge in pixels, so the projector sits under the
-   navigation whatever the viewport's height — never behind a label. */
-[data-testid="stSidebar"]::after {
-  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background-repeat: no-repeat;
-  background-image:
-    /* lens: a hot core, a soft halo */
-    radial-gradient(circle, rgba(255,205,212,.78) 0 3px, rgba(255,120,140,.45) 5px 9px, rgba(255,51,85,.16) 11px 22px, transparent 30px),
-    radial-gradient(circle, rgba(255,120,140,.22) 0, rgba(255,80,110,.08) 40%, transparent 70%),
-    /* reels: a lighter disc with a faint rim and a dark hub — big at the back, small in front */
-    radial-gradient(circle, rgba(8,8,10,.34) 0 6px, transparent 7px),
-    radial-gradient(circle, rgba(255,255,255,.045) 0 40px, rgba(255,255,255,.085) 41px 43px, transparent 44px),
-    radial-gradient(circle, rgba(8,8,10,.34) 0 5px, transparent 6px),
-    radial-gradient(circle, rgba(255,255,255,.04) 0 27px, rgba(255,255,255,.08) 28px 30px, transparent 31px),
-    /* body: a bar with rounded ends */
-    radial-gradient(circle, rgba(255,255,255,.055) 0 25px, transparent 26px),
-    radial-gradient(circle, rgba(255,255,255,.055) 0 25px, transparent 26px),
-    linear-gradient(rgba(255,255,255,.055), rgba(255,255,255,.055)),
-    /* a warm floor bloom, and the vignette that keeps the rail charcoal */
-    radial-gradient(70% 30% at 60% 100%, rgba(255,51,85,.14), transparent 70%),
-    radial-gradient(130% 100% at 50% 40%, transparent 50%, rgba(0,0,0,.45) 100%);
-  background-size:
-    60px 60px, 340px 340px,
-    14px 14px, 88px 88px, 12px 12px, 62px 62px,
-    52px 52px, 52px 52px, 124px 50px,
-    100% 100%, 100% 100%;
-  background-position:
-    calc(50% + 60px) calc(100% - 138px), calc(50% + 100px) calc(100% - 180px),
-    calc(50% - 30px) calc(100% - 226px), calc(50% - 30px) calc(100% - 226px),
-    calc(50% + 44px) calc(100% - 232px), calc(50% + 44px) calc(100% - 232px),
-    calc(50% - 62px) calc(100% - 138px), calc(50% + 62px) calc(100% - 138px), 50% calc(100% - 138px),
-    0 0, 0 0;
-}
+/* off-canvas (a phone's collapsed rail) there is nothing to see: no reel, no turning */
+[data-testid="stSidebar"][aria-expanded="false"]::before { display: none; }
 /* the rail's own content stays above the room, and readable */
 [data-testid="stSidebar"] > div,
 [data-testid="stSidebarUserContent"],
@@ -590,14 +572,11 @@ __NAV_ICONS__
 @keyframes tr-spin  { to { transform:rotate(360deg) } }
 @keyframes tr-sweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
 
-/* Asked for stillness, the room stays lit but stops moving: the beam holds
-   its mid position instead of drifting, and the grain — which never moved —
-   is left alone. The sidebar looks the same, it simply does not breathe. */
+/* Asked for stillness, the reel stays — it just stops turning. */
 @media (prefers-reduced-motion: reduce) {
   [data-testid="stSidebar"]::before {
     animation: none;
     transform: none;
-    opacity: .8;
   }
 }
 

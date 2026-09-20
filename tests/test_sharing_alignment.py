@@ -326,3 +326,65 @@ def test_monitor_limits_stay_per_account(users):
     assert state_mod.monitor_limit_reached(seen) is True
     with pytest.raises(state_mod.MonitorLimitError):
         state_mod.upsert_monitor(users("uid-a", ALLU_DOLBY), mirror=False)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 12 · 13 · 14 — isolation, no shared record, the production monitor as-is
+# ──────────────────────────────────────────────────────────────────────────
+def test_alignment_writes_only_each_monitors_own_state(users, recording):
+    """Alignment is derived in memory from the monitors the tick already
+    read. The state store holds one record per monitor and nothing else —
+    no group, no shared document, nothing for the rules to guard."""
+    from monitor import sharing
+    from pathlib import Path
+
+    a = users("uid-a", ALLU_DOLBY)
+    b = users("uid-b", ALLU_DOLBY)
+    seed([a, b], {a.id: t(-9), b.id: t(-3)})
+    tick(t(1))
+    assert set(load_state()) == {a.id, b.id}
+    assert not hasattr(sharing, "_SHARED") and not hasattr(sharing, "CACHE")
+    rules = Path("firestore.rules").read_text(encoding="utf-8")
+    assert "shared" not in rules.lower() and "owner_uid == request.auth.uid" in rules
+
+
+def test_one_owner_still_sees_only_their_own_monitor_after_alignment(users, recording):
+    from monitor import state as state_mod
+
+    a = users("uid-a", ALLU_DOLBY)
+    b = users("uid-b", ALLU_DOLBY)
+    seed([a, b], {a.id: t(-9), b.id: t(-3)})
+    tick(t(1))                                     # B rode A's read
+    scope = state_mod.Scope("", "uid-b", lambda: "tok", firestore_enabled=False, admin=False)
+    state_mod.set_scope_provider(lambda: scope)
+    state_mod.invalidate_cache()
+    mine = state_mod.load_monitors()
+    assert [m.id for m in mine] == [b.id]
+    assert mine[0].owner_uid == "uid-b" and mine[0].notify_email == "uid-b@example.com"
+
+
+def test_the_production_monitor_shape_rides_and_leads_unchanged(make_monitor, recording):
+    """A document written by earlier code — two targets, no new keys — is
+    grouped, led and ridden exactly as one written today; nothing about it
+    is rewritten by alignment except its own ``last_check_at``."""
+    from dataclasses import replace
+    from monitor.models import Monitor
+
+    production = make_monitor(targets=[ALLU_DOLBY, AMB_HDR], owner_uid="uid-owner")
+    production.movie = replace(production.movie, event_code="ET00514163")
+    production.date_codes = ["20260925"]
+    restored = Monitor.from_dict(production.to_dict())      # round-trip, as the store does
+    newcomer = make_monitor(targets=[ALLU_DOLBY], owner_uid="uid-other")
+    newcomer.movie = replace(newcomer.movie, event_code="ET00514163")
+    newcomer.date_codes = ["20260925"]
+    newcomer.id = "newcomer-" + newcomer.id
+    seed([restored, newcomer], {restored.id: t(-9), newcomer.id: t(-3)})
+
+    before = restored.to_dict()
+    report = tick(t(1))
+    assert recording.count == 1 and sorted(report.checked) == sorted([restored.id, newcomer.id])
+    assert report.sharing.aligned == 1
+    from monitor.state import load_monitors_for_checking
+    after = next(m for m in load_monitors_for_checking() if m.id == restored.id).to_dict()
+    assert after == before, "the monitor document itself is untouched"
+    assert len(after["targets"]) == 2 and after["interval_minutes"] == 10

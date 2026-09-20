@@ -1,18 +1,19 @@
-"""The projector behind the rail — cinematic, not technical.
+"""One film reel behind the rail — and nothing else.
 
-The first ambience (21 Sep 2026) drew its grain as hairlines on two axes —
-two ``repeating-linear-gradient`` layers — and on the deployed site that
-read as a graph grid behind the navigation. It is gone. What is there now is
-drawn only with discs, bars and glows: a projector silhouette (two reels, a
-body, a lit lens), a warm bloom, a vignette, and one blurred conic wedge for
-the beam, which is the only thing that moves. These tests pin that contract
-in the stylesheet; ``tools``-style browser checks (overflow, z-order, the
-animation actually running, reduced motion) were run by hand at nine widths
-and are described in the change's report.
+Two earlier ambiences were rejected on the deployed site: a grain drawn as
+hairlines on two axes read as a graph grid, and a gradient-built projector
+read as random translucent shapes. What is there now is a single object: a
+large faint film reel — a disc with a brighter rim, six holes and a hub cut
+out with a mask so the rail shows through — turning once every forty
+seconds, with the rail's own background carrying a soft glow centred on it.
+These tests pin that contract in the stylesheet; the browser checks
+(overflow, z-order, the rotation actually running, reduced motion) were run
+at nine widths and are described in the change's report.
 """
 
 from __future__ import annotations
 
+import math
 import re
 
 from ui import theme
@@ -42,105 +43,115 @@ def rules(css: str) -> dict[str, str]:
     return out
 
 
-# ──────────────────────────────────────────────────────────────────────────
-# 1 · No graph, no grid
-# ──────────────────────────────────────────────────────────────────────────
-def test_no_repeating_gradient_anywhere_in_the_sidebar_ambience():
-    block = ambience_block()
-    assert "repeating-" not in block
-    # …and no hairline: nothing in the block is a 1px stripe of any kind.
-    assert not re.search(r"\b0(?:px)? 1px, transparent 1px", block)
-    # Nor anywhere else in the theme: the sidebar is the only ambience the
-    # theme draws, and it draws no stripes at all.
-    assert "repeating-linear-gradient" not in theme.CSS
+def reel() -> str:
+    return rules(ambience_block())['[data-testid="stSidebar"]::before']
 
 
-def test_the_ambience_is_only_discs_bars_and_glows():
-    block = ambience_block()
-    kinds = set(re.findall(r"\b(?:repeating-)?(?:linear|radial|conic)-gradient", block))
-    assert kinds == {"radial-gradient", "linear-gradient", "conic-gradient"}
-    # exactly one linear gradient — the projector's body bar — and no more
-    assert block.count("linear-gradient(") == 1
+def base_rule() -> str:
+    """The rail's own rule (``[data-testid="stSidebar"] { … }``)."""
+    css = theme.CSS
+    start = css.index('[data-testid="stSidebar"] {')
+    return css[start:css.index("}", start)]
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 2 · A projector is there
+# 1 · No graph, no grid, no projector — one object
 # ──────────────────────────────────────────────────────────────────────────
-def test_the_projector_silhouette_lens_and_beam_are_drawn():
+def test_no_repeating_gradient_or_hairline_anywhere_in_the_theme():
+    assert "repeating-" not in theme.CSS
+    assert not re.search(r"\b0(?:px)? 1px, transparent 1px", ambience_block())
+
+
+def test_the_ambience_is_exactly_one_pseudo_element():
     block = rules(ambience_block())
-    after = block['[data-testid="stSidebar"]::after']
-    before = block['[data-testid="stSidebar"]::before']
-    # the lens: a hot core and a halo, warm
-    assert "rgba(255,205,212,.78) 0 3px" in after and "rgba(255,120,140,.22) 0" in after
-    # the reels: two discs with a rim and a hub, one larger than the other
-    assert "0 40px, rgba(255,255,255,.085) 41px 43px" in after
-    assert "0 27px, rgba(255,255,255,.08) 28px 30px" in after
-    assert after.count("rgba(8,8,10,.34)") == 2
-    # the body: a bar with rounded ends
-    assert "124px 50px" in after and after.count("0 25px, transparent 26px") == 2
-    # anchored to the bottom edge, under the navigation, whatever the height
-    assert "calc(100% - 138px)" in after and "calc(100% - 226px)" in after
-    # the beam: one conic wedge from the lens
-    assert "conic-gradient(from 292deg at calc(50% + 60px) calc(100% - 138px)" in before
-    assert "transform-origin: calc(50% + 60px) calc(100% - 138px)" in before
-    # the room stays charcoal: a vignette darkens the edges
-    assert "rgba(0,0,0,.45) 100%" in after
+    assert list(block) == ['[data-testid="stSidebar"]::before',
+                           '[data-testid="stSidebar"][aria-expanded="false"]::before']
+    assert block['[data-testid="stSidebar"][aria-expanded="false"]::before'].strip() == "display: none;"
+    assert "::after" not in ambience_block()
+    for word in ("conic-gradient", "lens", "beam", "projector", "body", "grain"):
+        assert word not in ambience_block(), word
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 3 · CSS only
+# 2 · It is a film reel
 # ──────────────────────────────────────────────────────────────────────────
-def test_the_animation_is_css_only_and_moves_nothing_that_lays_out():
+def test_the_reel_is_a_disc_with_a_rim_six_holes_and_a_hub():
+    decl = reel()
+    assert "border-radius: 50%" in decl and "width: 168px; height: 168px" in decl
+    # the disc and its rim
+    assert "transparent 0 46.5%, rgba(255,235,240,.95) 47% 50%" in decl
+    assert "rgba(255,110,140,.85) 7.8% 100%" in decl
+    # the holes: six, cut out by the mask, evenly spaced around the hub
+    mask = decl[decl.index("\n  mask-image:"):decl.index("-webkit-mask-composite")]
+    holes = re.findall(r"circle at ([\d.]+)% ([\d.]+)%, #000 0 11\.5%", mask)
+    assert len(holes) == 6
+    angles = sorted(math.degrees(math.atan2(float(y) - 50, float(x) - 50)) % 360 for x, y in holes)
+    gaps = [round(b - a) for a, b in zip(angles, angles[1:])]
+    assert gaps == [60] * 5, angles
+    # the hub's centre, and the disc itself as the base layer
+    assert "radial-gradient(circle, #000 0 2.2%, transparent 2.6%)" in mask
+    assert "radial-gradient(circle, #000 0 49.6%, transparent 50%)" in mask
+    assert "mask-composite: exclude, exclude, exclude, exclude, exclude, exclude, exclude, add" in decl
+    assert "-webkit-mask-composite: xor, xor, xor, xor, xor, xor, xor, source-over" in decl
+
+
+def test_the_reel_is_faint_and_the_glow_is_the_rails_own_background():
+    decl = reel()
+    opacity = float(re.search(r"opacity: (\.\d+)", decl).group(1))
+    assert 0.08 <= opacity <= 0.16
+    base = base_rule()
+    assert "radial-gradient(300px 300px at 50% calc(100% - 128px), rgba(255,51,85,.12), transparent 70%)" in base
+    assert "linear-gradient(180deg,rgba(24,24,32,.92) 0%,rgba(14,14,20,.96) 100%)" in base, "the charcoal stays"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 3 · CSS only, transform only, slow
+# ──────────────────────────────────────────────────────────────────────────
+def test_the_rotation_is_css_only_and_slow():
     css = theme.CSS
     assert "<script" not in css.lower() and "javascript" not in css.lower()
     assert "url(" not in ambience_block(), "no image, no asset"
-    frames = re.search(r"@keyframes tr-side-beam \{(.*?)\n\}", css, flags=re.S).group(1)
-    # opacity and a rotation about the lens — compositor work, no layout
-    props = set(re.findall(r"([a-z-]+):", frames))
-    assert props == {"opacity", "transform"}
-    assert "translate" not in frames and "rotate(" in frames
-    before = rules(ambience_block())['[data-testid="stSidebar"]::before']
-    assert "animation: tr-side-beam 26s ease-in-out infinite" in before
-    assert 15 <= 26 <= 30
+    frames = re.search(r"@keyframes tr-reel-spin \{(.*?)\} \}", css).group(1)
+    assert frames.strip() == "to { transform: rotate(360deg);"
+    seconds = int(re.search(r"animation: tr-reel-spin (\d+)s linear infinite", reel()).group(1))
+    assert 25 <= seconds <= 45
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 4 · Reduced motion: still, and still lit
+# 4 · Reduced motion: the reel stays, still
 # ──────────────────────────────────────────────────────────────────────────
-def test_reduced_motion_stops_the_beam_but_keeps_the_room():
+def test_reduced_motion_stops_the_turn_and_keeps_the_reel():
     block = reduced_motion_block()
     assert '[data-testid="stSidebar"]::before' in block
     assert "animation: none" in block and "transform: none" in block
-    assert "opacity: .8" in block
-    assert "display" not in block and "content" not in block, "the atmosphere stays"
-    assert "::after" not in block, "the projector, lens and bloom never moved; untouched"
+    for word in ("display", "content", "opacity", "visibility"):
+        assert word not in block, "the reel stays visible"
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 5 · No horizontal overflow
+# 5 · No horizontal overflow, no layout
 # ──────────────────────────────────────────────────────────────────────────
-def test_the_layers_stay_inside_the_rail():
-    block = rules(ambience_block())
-    before = block['[data-testid="stSidebar"]::before']
-    after = block['[data-testid="stSidebar"]::after']
-    assert "inset: 0 12px" in before, "the beam layer is inset, never wider than the rail"
-    assert "inset: 0" in after
-    frames = re.search(r"@keyframes tr-side-beam \{(.*?)\n\}", theme.CSS, flags=re.S).group(1)
-    assert "translate" not in frames, "the beam pivots in place; it never slides sideways"
-    assert "background-repeat: no-repeat" in after
+def test_the_turning_reel_stays_inside_the_rail():
+    """A rotating square reaches side·√2/2 from its centre at 45°; centred
+    in a 244px rail that must stay under 122px, and it does."""
+    decl = reel()
+    side = int(re.search(r"width: (\d+)px", decl).group(1))
+    assert "left: calc(50% - 84px)" in decl and side == 168
+    assert side * math.sqrt(2) / 2 < 122
+    assert "position: absolute" in decl and "translate" not in theme.CSS[theme.CSS.index("@keyframes tr-reel-spin"):
+                                                                          theme.CSS.index("@keyframes tr-reel-spin") + 80]
+    assert "overflow" not in base_rule(), "the rail is not made a clipper"
 
 
 # ──────────────────────────────────────────────────────────────────────────
 # 6 · Navigation above, and untouchable through it
 # ──────────────────────────────────────────────────────────────────────────
-def test_navigation_sits_above_the_ambience_and_clicks_pass_through():
-    block = rules(ambience_block())
-    for pseudo in ("::before", "::after"):
-        decl = block[f'[data-testid="stSidebar"]{pseudo}']
-        assert "z-index: 0" in decl and "pointer-events: none" in decl
+def test_navigation_sits_above_the_reel_and_clicks_pass_through():
+    decl = reel()
+    assert "z-index: 0" in decl and "pointer-events: none" in decl
     css = theme.CSS
     lifted = css[css.index("/* the rail's own content stays above the room"):]
     lifted = lifted[:lifted.index("}") + 1]
     assert '[data-testid="stSidebarUserContent"]' in lifted and "z-index: 1" in lifted
-    assert 'isolation: isolate' in css[css.index('[data-testid="stSidebar"] {'):
-                                       css.index('[data-testid="stSidebar"] {') + 600]
+    base = css[css.index('[data-testid="stSidebar"] {'):]
+    assert "isolation: isolate" in base[:base.index("}")]
