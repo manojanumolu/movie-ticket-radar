@@ -47,32 +47,46 @@ DESKTOP_MIN = 1150
 #: hovered or focused. Home only: the Login constellation keeps the crafts'
 #: own names and blurbs (``Craft.tip``). Telugu lines are transliterated.
 #: Deterministic: the same mark always says the same thing.
+#:
+#: The six Telugu lines open the page: they belong to the first six marks
+#: of :data:`HOME_LAYOUT`'s ``band``, which is the first zone drawn and
+#: reads left to right, and to the first six of the phone's :data:`STRIP`,
+#: so the order is the same at every width. Each names its hero *and* the
+#: film, and none of those six heroes says anything anywhere else — the
+#: other eighteen are Marvel, Hollywood and two Batman lines.
 LINES: dict[str, tuple[str, str, str]] = {
-    "direction": ("Avengers, assemble.", "Captain America", "Marvel"),
-    "cinematography": ("Here's looking at you, kid.", "Casablanca", "Hollywood"),
-    "screenwriting": ("Evadu kodithe dimma tirigi mind block.", "Pokiri", "Tollywood"),
-    "producing": ("Whatever it takes.", "Avengers: Endgame", "Marvel"),
-    "acting": ("I can do this all day.", "Captain America", "Marvel"),
-    "editing": ("Roads? Where we're going, we don't need roads.", "Back to the Future", "Hollywood"),
+    # ── the band: the six heroes, in order ──────────────────────────────
+    "direction": ("Thokkukuntu povaale!", "Jr NTR · RRR", "Tollywood"),
+    "cinematography": ("vandha mandhini okesari Ramannu!", "Ram Charan · Magadheera", "Tollywood"),
+    "screenwriting": ("Please... I kindly request!", "Prabhas · Salaar", "Tollywood"),
+    "producing": ("Pushpa... Pushpa Raj... Thaggede Le!", "Allu Arjun · Pushpa: The Rise", "Tollywood"),
+    "acting": ("Okka sari commit aithe... naa maata nene vinanu!", "Mahesh Babu · Pokiri", "Tollywood"),
+    "editing": ("Naakkonchem thikka undi... kaani daaniko lekkundi!", "Pawan Kalyan · Gabbar Singh", "Tollywood"),
+    "projection": ("To infinity and beyond!", "Toy Story", "Hollywood"),
+    "distribution": ("There's no place like home.", "The Wizard of Oz", "Hollywood"),
+    # ── the rail ────────────────────────────────────────────────────────
     "production_design": ("Wakanda forever.", "Black Panther", "Marvel"),
     "art_direction": ("Why so serious?", "The Joker · The Dark Knight", "DC"),
     "costume_design": ("Bond. James Bond.", "Dr. No", "Hollywood"),
     "makeup": ("I am Iron Man.", "Tony Stark", "Marvel"),
-    "hair": ("Thaggedhe le.", "Pushpa", "Tollywood"),
+    "hair": ("That's my secret, Cap. I'm always angry.", "Bruce Banner · The Avengers", "Marvel"),
+    "set_design": ("On your left.", "Captain America · The Winter Soldier", "Marvel"),
+    "casting": ("You're gonna need a bigger boat.", "Jaws", "Hollywood"),
+    "color_grading": ("I love you 3000.", "Iron Man", "Marvel"),
+    # ── the foot ────────────────────────────────────────────────────────
     "sound": ("I am Groot.", "Groot", "Marvel"),
     "music": ("May the Force be with you.", "Star Wars", "Hollywood"),
     "sound_mixing": ("Hulk smash!", "Hulk", "Marvel"),
     "lighting": ("I'm Batman.", "Batman", "DC"),
-    "set_design": ("Baahubali ni Kattappa enduku champadu?", "Baahubali", "Tollywood"),
     "visual_effects": ("I'll be back.", "The Terminator", "Hollywood"),
     "special_effects": ("Houston, we have a problem.", "Apollo 13", "Hollywood"),
-    "choreography": ("Nuvvu naaku nachav.", "Nuvvu Naaku Nachav", "Tollywood"),
+    "choreography": ("Dread it. Run from it. Destiny arrives.", "Thanos · Infinity War", "Marvel"),
     "stunts": ("With great power comes great responsibility.", "Spider-Man", "Marvel"),
-    "casting": ("Naa peru Surya, naa illu India.", "Naa Peru Surya", "Tollywood"),
-    "color_grading": ("I love you 3000.", "Iron Man", "Marvel"),
-    "projection": ("To infinity and beyond!", "Toy Story", "Hollywood"),
-    "distribution": ("Thokkukuntu povale.", "Tollywood", "Tollywood"),
 }
+
+#: The six marks that carry the Telugu lines, in the order they are drawn.
+TELUGU_SIX: tuple[str, ...] = ("direction", "cinematography", "screenwriting",
+                               "producing", "acting", "editing")
 
 #: The cinema technologies named in the dark behind the reel. A motif, not
 #: a claim: which formats a theatre actually lists comes from the catalogue
@@ -112,20 +126,65 @@ HOME_LAYOUT: dict[str, tuple[str, float, float]] = {
 }
 assert set(HOME_LAYOUT) == set(crafts.BY_KEY), "every craft has a home"
 
-#: The eight the phone strip shows (the Login page's own selection).
-STRIP = ("direction", "cinematography", "sound", "editing", "music", "visual_effects", "lighting", "projection")
+#: The eight the phone strip shows: the band's own eight, in the band's
+#: order, so a phone reads the same first six lines as a desktop does.
+STRIP = tuple(k for k, (z, _x, _y) in HOME_LAYOUT.items() if z == "band")
+assert STRIP[:6] == TELUGU_SIX, "the phone strip opens with the six too"
 
 
-def _mark(craft: crafts.Craft, x: float, y: float, *, positioned: bool = True) -> str:
+def _icon(craft: crafts.Craft) -> str:
+    """The craft's mark for Home. The six presentation attributes that are
+    identical on all thirty-two marks live in the stylesheet instead
+    (``.tr-craft .tr-ic``), so each rerun carries the paths and nothing
+    else; ``ui.crafts.icon`` still writes them out for the Login page,
+    which has no stylesheet of Home's."""
+    return f'<svg class="tr-ic" viewBox="0 0 24 24" aria-hidden="true">{craft.paths}</svg>'
+
+
+def _side(x: float, y: float, zone: str, *, positioned: bool) -> str:
+    """Which way a mark's subtitle card opens, so it is never cut off.
+
+    The zone decides, because each one sits differently on the page.
+
+    *Across.* The ``band`` and the ``foot`` run the width of their column,
+    so a mark in the middle centres its card and only one within 22% of
+    either end anchors the card to its own edge. The ``rail`` is a narrow
+    column against the right edge of the window — a card centred on a mark
+    there reaches past the page — so every rail card opens leftward, into
+    the room the page already has. The card is capped at the window's own
+    width in CSS as well, so a long line wraps instead of overflowing.
+
+    *Down.* Each zone opens the way it has room to. The ``band`` hangs
+    *above* the hero, at the very top of the document: a card opening
+    upward from there is cut off by the top of the browser window, which
+    is the bug this fixes, so every band card opens downward over the
+    hero. The ``foot`` is the opposite — it is the last thing on the page,
+    with the version line right under it and nothing else below — so every
+    foot card opens upward, into the room the page has. The ``rail`` sits
+    in normal flow in between, where opening upward is right and only a
+    mark near its own zone's top edge drops its card below.
+    """
+    side = "tip-l" if (zone == "rail" or x > 78) else "tip-r" if x < 22 else ""
+    if positioned and zone != "foot" and (zone == "band" or y < 40):
+        side = f"{side} tip-b".strip()
+    return side
+
+
+def _mark(craft: crafts.Craft, x: float, y: float, *, zone: str = "", positioned: bool = True) -> str:
     """One craft mark carrying its subtitle card: the line, then who said
     it, in the constellation's own hover/focus mechanics (the card is a
-    real child element, so the two lines can be set differently)."""
+    real child element, so the two lines can be set differently).
+
+    The line is carried once, by ``aria-label``: Home turns the
+    constellation's ``data-tip`` pseudo-element off, so a second copy of
+    the same sentence would be markup nobody ever reads.
+    """
     quote, by, _house = LINES.get(craft.key, (craft.blurb, craft.label, ""))
     tip = f"{craft.label} — “{quote}” — {by}"
-    side = ("tip-l" if x > 84 else "tip-r" if x < 10 else "") + (" tip-b" if y < 40 and positioned else "")
+    cls = f"tr-craft {_side(x, y, zone, positioned=positioned)}".strip()
     style = f' style="left:{x}%;top:{y}%"' if positioned else ""
-    return (f'<span class="tr-craft {side.strip()}"{style} tabindex="0" role="img" '
-            f'aria-label="{escape(tip)}" data-tip="{escape(tip)}">{crafts.icon(craft, 17)}'
+    return (f'<span class="{cls}"{style} tabindex="0" role="img" '
+            f'aria-label="{escape(tip)}">{_icon(craft)}'
             f'<span class="tr-sub" aria-hidden="true"><span class="q">“{escape(quote)}”</span>'
             f'<span class="by">— {escape(by)}</span></span></span>')
 
@@ -133,7 +192,8 @@ def _mark(craft: crafts.Craft, x: float, y: float, *, positioned: bool = True) -
 def crafts_zone(zone: str) -> str:
     """The marks that live in ``zone`` (``band`` / ``rail`` / ``foot``), in
     the constellation's own tooltip mechanics."""
-    marks = "".join(_mark(crafts.BY_KEY[k], x, y) for k, (z, x, y) in HOME_LAYOUT.items() if z == zone)
+    marks = "".join(_mark(crafts.BY_KEY[k], x, y, zone=zone)
+                    for k, (z, x, y) in HOME_LAYOUT.items() if z == zone)
     return (f'<div class="tr-home-zone {zone}" aria-label="The crafts of filmmaking">'
             f'<div class="tr-crafts">{marks}</div></div>')
 
@@ -141,7 +201,7 @@ def crafts_zone(zone: str) -> str:
 def crafts_strip() -> str:
     """The phone's eight, in a row: the same marks and tips, so a tap or a
     focus reveals the line where there is nothing to hover."""
-    marks = "".join(_mark(crafts.BY_KEY[k], 0, 0, positioned=False) for k in STRIP)
+    marks = "".join(_mark(crafts.BY_KEY[k], 0, 0, zone="strip", positioned=False) for k in STRIP)
     return f'<div class="tr-home-strip" aria-label="The crafts of filmmaking">{marks}</div>'
 
 
@@ -335,8 +395,12 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 .tr-home-ambience .tr-reel .fmts .fmt:nth-child(odd) .bg {{ stroke:rgba(255,140,160,.5); }}
 /* ── the subtitle card: the crafts' line, then who said it ─────────────── */
 .tr-home-zone .tr-craft::after, .tr-home-zone .tr-craft::before, .tr-home-strip .tr-craft::after, .tr-home-strip .tr-craft::before {{ display:none; }}
+/* the six attributes every mark's icon shares, written once instead of thirty-two times */
+.tr-craft .tr-ic {{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }}
+/* max-content keeps a short line on one line, as it always was; the cap is
+   what makes a long one wrap rather than reach past the edge of the page */
 .tr-craft .tr-sub {{ position:absolute; bottom:calc(100% + 12px); left:50%; transform:translate(-50%, 4px); z-index:6; display:flex; flex-direction:column; gap:4px;
-  padding:10px 14px 9px; border-radius:11px; white-space:nowrap; text-align:left; pointer-events:none; opacity:0; visibility:hidden;
+  padding:10px 14px 9px; border-radius:11px; white-space:normal; width:max-content; max-width:min(380px, calc(100vw - 32px)); text-align:left; pointer-events:none; opacity:0; visibility:hidden;
   background: linear-gradient(168deg, rgba(23,19,26,.98), rgba(15,13,18,.99)); border:1px solid rgba(255,255,255,.12);
   box-shadow: 0 18px 40px -16px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.10), 0 10px 30px -18px rgba(255,51,85,.6);
   transition: opacity .18s var(--tr-ease), transform .18s var(--tr-ease), visibility .18s; }}
@@ -402,6 +466,17 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
   .tr-hero-radar .scan {{ right:-518px; top:-522px; }}
   .tr-home-zone.rail {{ display:none; }}
   .tr-home-zone.band {{ right:240px; }}   /* one column here: the account chip is above the hero's right end */
+  /* …which leaves the band about 340px wide, narrower than a card. A centred card
+     would reach left of the page's own content and sit under the sidebar, so here
+     a band card anchors to its mark and is capped to the room in front of it.
+     The cap is the drawn width divided by the 1.18 the mark grows to on hover,
+     which the card inherits: 200px of text is 236px on screen, which still
+     clears the account chip at the narrow end of this range. */
+  .tr-home-zone.band .tr-sub {{ max-width:200px; }}
+  .tr-home-zone.band .tr-craft:not(.tip-l) .tr-sub {{ left:0; right:auto; transform:translate(0, 4px); }}
+  .tr-home-zone.band .tr-craft:not(.tip-l):hover .tr-sub,
+  .tr-home-zone.band .tr-craft:not(.tip-l):focus .tr-sub,
+  .tr-home-zone.band .tr-craft:not(.tip-l):focus-visible .tr-sub {{ transform:translate(0, 0); }}
   .tr-home-ambience .tr-reel.big {{ width:min(58vw, 560px); right:-16%; bottom:-120px; opacity:.75; }}
   .tr-home-ambience .tr-reel.small {{ display:none; }}
   .tr-home-ambience .tr-strip {{ opacity:.6; }}
@@ -434,13 +509,17 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
   .tr-home-zone.band, .tr-home-zone.rail, .tr-home-zone.foot {{ display:none; }}
   .tr-home-ambience .tr-reel.big {{ width:380px; right:-190px; bottom:-150px; opacity:.6; animation-duration:140s; }}
   .tr-home-ambience .tr-reel.small, .tr-home-ambience .tr-strip, .tr-home-ambience .tr-reel .fmts {{ display:none; }}   /* a cropped reel carries no legible badges */
-  .tr-craft .tr-sub {{ white-space:normal; max-width:230px; }}
+  .tr-craft .tr-sub {{ max-width:min(300px, calc(100vw - 28px)); }}
   .tr-home-strip {{ position:relative; }}
   .tr-home-strip .tr-craft {{ position:static; }}   /* the card anchors to the strip's right edge, never off-screen */
   .tr-home-strip .tr-craft:hover, .tr-home-strip .tr-craft:focus, .tr-home-strip .tr-craft:focus-visible {{ transform:none; }}   /* a transform would re-anchor the card to the mark */
-  .tr-home-strip .tr-craft .tr-sub {{ left:auto !important; right:0 !important; bottom:calc(100% + 8px); transform:translate(0, 4px) !important; }}
+  /* the strip rides just under the hero, near the top of the scroll: the card drops
+     below it, because opening upward is what the top of the window cuts off */
+  .tr-home-strip .tr-craft .tr-sub {{ left:auto !important; right:0 !important; bottom:auto !important; top:calc(100% + 8px); transform:translate(0, -4px) !important; }}
   .tr-home-strip .tr-craft:hover .tr-sub, .tr-home-strip .tr-craft:focus .tr-sub, .tr-home-strip .tr-craft:focus-visible .tr-sub {{ transform:none !important; }}
-  [class*="st-key-trstatus"] > [data-testid="stElementContainer"]:has(> .stMarkdown .tr-home-zone.band) {{ position:static; height:auto; width:auto; }}
+  /* back in the flow, but still above what follows it: the card drops over the
+     Platform shelf, and the shelf comes later in the document */
+  [class*="st-key-trstatus"] > [data-testid="stElementContainer"]:has(> .stMarkdown .tr-home-zone.band) {{ position:relative; inset:auto; z-index:7; height:auto; width:auto; }}
   .tr-home-strip {{ display:flex; justify-content:flex-end; gap:4px; padding:2px 2px 0; margin-top:-8px; }}
   .tr-home-strip .tr-craft {{ margin:0; width:32px; height:32px; opacity:.55; }}
 }}

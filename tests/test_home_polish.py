@@ -77,23 +77,25 @@ def test_every_craft_has_a_short_line_with_an_attribution_and_login_keeps_its_na
     assert set(houses) == {"Marvel", "Tollywood", "DC", "Hollywood"}                 # four houses
     assert houses.most_common(1)[0][0] == "Marvel" and houses["Marvel"] >= 8          # Marvel leads
     assert houses["Tollywood"] == 6 and houses["DC"] == 2
-    assert home.LINES["acting"][:2] == ("I can do this all day.", "Captain America")
+    assert home.LINES["acting"][:2] == ("Okka sari commit aithe... naa maata nene vinanu!", "Mahesh Babu · Pokiri")
     assert home.LINES["makeup"][0] == "I am Iron Man." and home.LINES["stunts"][0] == "With great power comes great responsibility."
-    assert home.LINES["distribution"][0] == "Thokkukuntu povale."
+    assert home.LINES["direction"] == ("Thokkukuntu povaale!", "Jr NTR · RRR", "Tollywood")
     telugu = [q for q, _, h in home.LINES.values() if h == "Tollywood"]
     assert all(q.isascii() for q in telugu)                                          # transliterated, not Telugu script
     batman = [(q, by) for q, by, h in home.LINES.values() if h == "DC"]
     assert all("Batman" in by or "Dark Knight" in by for _, by in batman)            # both clearly Batman
-    # the Telugu lines are spread over the zones, not grouped
+    # the Telugu lines open the page: the band's first six, and the phone's
     zones = {home.HOME_LAYOUT[k][0] for k, (_, _, h) in home.LINES.items() if h == "Tollywood"}
-    assert zones == {"band", "rail", "foot"}
-    mark = home._mark(crafts.BY_KEY["acting"], 50, 50)
-    assert '<span class="tr-sub" aria-hidden="true"><span class="q">“I can do this all day.”</span><span class="by">— Captain America</span></span>' in mark
-    assert 'tabindex="0"' in mark and 'aria-label="Acting — “I can do this all day.” — Captain America"' in mark
+    assert zones == {"band"} and home.STRIP[:6] == home.TELUGU_SIX
+    mark = home._mark(crafts.BY_KEY["acting"], 50, 50, zone="band")
+    assert ('<span class="tr-sub" aria-hidden="true"><span class="q">“Okka sari commit aithe... naa maata nene vinanu!”</span>'
+            '<span class="by">— Mahesh Babu · Pokiri</span></span>') in mark
+    assert 'tabindex="0"' in mark
+    assert 'aria-label="Acting — “Okka sari commit aithe... naa maata nene vinanu!” — Mahesh Babu · Pokiri"' in mark
     # the Login constellation is untouched: the crafts' own tips, no subtitle cards
     login = crafts.constellation()
     assert "tr-sub" not in login and 'data-tip="Acting — The people you believe in for two hours."' in login
-    assert "I can do this all day" not in login and "Thokkukuntu" not in login
+    assert "Okka sari commit" not in login and "Thokkukuntu" not in login
     assert crafts.BY_KEY["acting"].tip == "Acting — The people you believe in for two hours."
     css = home.CSS
     assert ".tr-craft:hover .tr-sub, .tr-craft:focus-visible .tr-sub, .tr-craft:focus .tr-sub { opacity:1; visibility:visible;" in css

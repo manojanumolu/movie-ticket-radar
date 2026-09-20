@@ -132,14 +132,16 @@ def test_all_twenty_four_crafts_are_on_home_each_with_a_line(make_monitor):
     upsert_monitor(make_monitor(), mirror=False)
     app = run()
     body = _markup(app)
-    tips = re.findall(r'class="tr-craft[^"]*"[^>]*data-tip="([^"]+)"', body)
+    # the line rides the mark's aria-label — Home draws no data-tip, because
+    # it turns the constellation's tooltip pseudo-element off
+    tips = re.findall(r'class="tr-craft[^"]*"[^>]*aria-label="([^"]+)"', body)
     # the three desktop zones hold all 24; the phone strip repeats eight of them
     assert len(tips) == 24 + len(home.STRIP)
     labels = {t.split(" — ")[0] for t in tips}
     assert labels == {c.label for c in crafts.CRAFTS}                      # every craft, by its own name
     assert set(home.HOME_LAYOUT) == set(crafts.BY_KEY) and set(home.LINES) == set(crafts.BY_KEY)
     assert all(len(line) <= 48 for line in home.LINES.values())           # short, a line each
-    assert "I can do this all day." in body and "Thokkukuntu povale." in body and "Why so serious?" in body
+    assert "Thokkukuntu povaale!" in body and "I am Iron Man." in body and "Why so serious?" in body
     assert 'tabindex="0"' in body                                          # reachable by keyboard
     assert re.findall(r'class="tr-home-zone (\w+)"', body) == ["band", "rail", "foot"]
     for zone in ("band", "rail", "foot"):
