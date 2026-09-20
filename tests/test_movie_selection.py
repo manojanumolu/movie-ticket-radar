@@ -296,3 +296,89 @@ def test_ui_does_not_import_worker_sharing():
         assert "monitor.sharing" not in src and "from monitor import sharing" not in src, name
     app_src = (UI_DIR.parent / "app.py").read_text(encoding="utf-8")
     assert "monitor.sharing" not in app_src and "import sharing" not in app_src
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The lag (21 Sep 2026, second pass): "Browse all" is drawn only when asked
+# ──────────────────────────────────────────────────────────────────────────
+# Measured in the browser with the real 52-film Hyderabad catalogue: the
+# movie step was 322 deltas / 89 KB per run and 230–1086 ms of main-thread
+# work, three quarters of it the 52 poster tiles inside a *collapsed*
+# expander, which Streamlit renders in full. Behind a toggle it is 98 deltas
+# / 40 KB, and opening the step or coming back to it takes ~0.5 s instead
+# of ~1.2 s. The tests below use the small fixture catalogue with the
+# threshold lowered, so the collapsed state is exercised in-process.
+
+@pytest.fixture
+def big_catalogue(monkeypatch):
+    """Make the three-film fixture count as a large city."""
+    monkeypatch.setattr(flow, "BROWSE_ALL_THRESHOLD", 2)
+
+
+def test_a_large_catalogue_draws_the_full_grid_only_when_asked(seeded, big_catalogue):
+    app = run(step=2, location="hyderabad")
+    ks = keys(app)
+    assert "browse_all_movies" in ks and "hide_all_movies" not in ks
+    assert not any(k.startswith("movie_bookmyshow:") for k in ks), "no hidden poster grid"
+    assert any(k.startswith("pop_") for k in ks), "the shelf is still the first screen"
+    app.button(key="browse_all_movies").click().run()
+    ks = keys(app)
+    assert "hide_all_movies" in ks and "browse_all_movies" not in ks
+    assert {k for k in ks if k.startswith("movie_bookmyshow:")} == {
+        f"movie_{seeded}", "movie_bookmyshow:ET00442702", "movie_bookmyshow:ET00507738"}
+    app.button(key="hide_all_movies").click().run()
+    assert not any(k.startswith("movie_bookmyshow:") for k in keys(app))
+
+
+def test_a_poster_from_the_opened_grid_selects_in_one_run(seeded, big_catalogue):
+    app = run(step=2, location="hyderabad")
+    app.button(key="browse_all_movies").click().run()
+    app.button(key=f"movie_{HANUMAN_ID}").click().run()
+    assert app.session_state["movie_id"] == HANUMAN_ID
+    assert app.session_state["step"] == 3 and on_theatre_step(app)
+    # coming back, the grid stays open — the person opened it
+    app.button(key="back").click().run()
+    assert "hide_all_movies" in keys(app)
+    assert app.session_state["show_all_movies"] is True
+
+
+def test_search_and_the_shelf_never_need_the_grid(seeded, big_catalogue):
+    """The primary paths — the search box and the shelf — work with the grid
+    collapsed, and the free-text filter shows its matches regardless."""
+    app = run(step=2, location="hyderabad")
+    assert "browse_all_movies" in keys(app)
+    app.selectbox(key="movie_query").select(HANUMAN).run()
+    assert app.session_state["step"] == 3 and on_theatre_step(app)
+    app = run(step=2, location="hyderabad", movie_query="mand")
+    assert "2 movie(s) matching" in text(app)
+    assert "browse_all_movies" not in keys(app), "the filter replaces the grid, as before"
+
+
+def test_changing_the_city_collapses_the_grid_again(seeded, big_catalogue):
+    import streamlit as st
+
+    app = run(step=2, location="hyderabad", show_all_movies=True)
+    assert "hide_all_movies" in keys(app)
+    # ``reset_from(1)`` is what a city change calls; in bare mode it acts on
+    # the process-wide session state, which is what is asserted here.
+    st.session_state["show_all_movies"] = True
+    flow.reset_from(1)
+    assert st.session_state["show_all_movies"] is False
+    assert "show_all_movies" in flow.DEFAULTS and flow.DEFAULTS["show_all_movies"] is False
+
+
+def test_a_small_catalogue_still_shows_every_poster_at_once(seeded):
+    """Twelve films or fewer: nothing to hide, nothing to click."""
+    app = run(step=2, location="hyderabad")
+    ks = keys(app)
+    assert "browse_all_movies" not in ks and "hide_all_movies" not in ks
+    assert any(k.startswith("movie_bookmyshow:") for k in ks)
+
+
+def test_the_browse_row_is_styled_like_the_expander_it_replaces():
+    css = theme.CSS
+    assert "st-key-trbrowseall" in css
+    row = css[css.index('[class*="st-key-trbrowseall"] .stButton button {'):]
+    row = row[:row.index("/* Alerts")]
+    assert "content:'BROWSE ALL'" in row and "content:'COLLAPSE'" in row
+    assert "min-height:54px" in row and "border-radius:14px" in row

@@ -193,46 +193,72 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   min-width: 244px !important; width: 244px !important;
   position: relative; isolation: isolate;
 }
-/* Sidebar ambience — the projection room behind the rail: two pseudo-layers
-   on the sidebar itself, no extra elements, no script and nothing to load.
-   One is a slow warm light that drifts diagonally down the column the way
-   a projector's spill moves; the other is static — a faint projector glow
-   from the top corner and a grain drawn as two repeating gradients rather
-   than an image. Both are pointer-transparent and sit at z-index 0 under
-   the content (which the rules below lift to 1), so nothing here can cover
-   a label, intercept a click or move anything on the page.
+/* Sidebar ambience — a projector running quietly behind the rail.
 
-   Amplitude: the first version put the red channel about 5/255 over the
-   charcoal, which no display shows. This one lands around 25–35/255 at the
-   beam's centre and fades to nothing at the edges — the room reads as lit,
-   the rail stays charcoal. The movement is transform and opacity only,
-   which the compositor handles without laying the page out again, so it
-   costs Home's reruns nothing. */
+   Two pseudo-layers on the sidebar itself: no elements, no script, no
+   image, nothing loaded. ``::after`` is the still room: a projector drawn
+   as shapes — two reels, a body, a lens — in light so faint it reads as a
+   silhouette, a warm bloom around the lens, and a vignette that keeps the
+   edges charcoal. ``::before`` is the beam: one wedge of a conic gradient
+   from the lens, blurred, that breathes and sways over half a minute. Both
+   are pointer-transparent and sit at z-index 0 under the content (which
+   the rules below lift to 1), so nothing here can cover a label, intercept
+   a click or move anything on the page.
+
+   No repeating gradients: an earlier grain, drawn as hairlines on two
+   axes, read as a grid. Everything here is a disc, a bar or a glow. The
+   movement is transform and opacity only — compositor work, no layout. */
 @keyframes tr-side-beam {
-  0%   { transform: translate3d(-3%, -14%, 0); opacity: .55; }
-  50%  { transform: translate3d( 3%,  22%, 0); opacity: 1; }
-  100% { transform: translate3d(-3%, -14%, 0); opacity: .55; }
+  0%   { opacity: .55; transform: rotate(-2.5deg); }
+  50%  { opacity: 1;   transform: rotate( 2.5deg); }
+  100% { opacity: .55; transform: rotate(-2.5deg); }
 }
-/* Kept strictly inside the rail's box — left and right inset by more than
-   the drift ever moves it — because anything wider adds scrollable width
-   and the sidebar grows a horizontal scrollbar of its own. The gradients
-   fade out well before the edges, so the light is off-centre without the
-   layer being. */
+/* The beam. Kept inside the rail's box (inset, never translated sideways)
+   because anything wider adds scrollable width and the sidebar grows a
+   horizontal scrollbar of its own; the rotation pivots on the lens and the
+   wedge is clipped by the layer's own edge, which costs no layout. */
 [data-testid="stSidebar"]::before {
-  content: ""; position: absolute; left: 14px; right: 14px; top: -10%; height: 66%; z-index: 0;
-  pointer-events: none; will-change: transform, opacity; filter: blur(28px);
+  content: ""; position: absolute; inset: 0 12px; z-index: 0; pointer-events: none;
+  transform-origin: calc(50% + 60px) calc(100% - 138px); will-change: transform, opacity; filter: blur(16px);
   background:
-    radial-gradient(60% 46% at 28% 22%, rgba(255,51,85,.36), transparent 70%),
-    radial-gradient(48% 38% at 76% 66%, rgba(255,140,160,.18), transparent 72%);
-  animation: tr-side-beam 28s ease-in-out infinite;
+    conic-gradient(from 292deg at calc(50% + 60px) calc(100% - 138px),
+      transparent 0deg, rgba(255,150,165,.10) 8deg, rgba(255,125,145,.30) 22deg,
+      rgba(255,150,165,.10) 40deg, transparent 50deg);
+  animation: tr-side-beam 26s ease-in-out infinite;
 }
+/* The room. Shapes are background-images with a size and a position,
+   anchored to the bottom edge in pixels, so the projector sits under the
+   navigation whatever the viewport's height — never behind a label. */
 [data-testid="stSidebar"]::after {
-  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: .85;
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-repeat: no-repeat;
   background-image:
-    repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 1px, transparent 1px 4px),
-    linear-gradient(158deg, rgba(255,110,135,.12) 0%, rgba(255,110,135,.04) 22%, transparent 46%),
-    linear-gradient(180deg, transparent 0%, rgba(255,51,85,.07) 72%, rgba(255,51,85,.03) 100%);
+    /* lens: a hot core, a soft halo */
+    radial-gradient(circle, rgba(255,205,212,.78) 0 3px, rgba(255,120,140,.45) 5px 9px, rgba(255,51,85,.16) 11px 22px, transparent 30px),
+    radial-gradient(circle, rgba(255,120,140,.22) 0, rgba(255,80,110,.08) 40%, transparent 70%),
+    /* reels: a lighter disc with a faint rim and a dark hub — big at the back, small in front */
+    radial-gradient(circle, rgba(8,8,10,.34) 0 6px, transparent 7px),
+    radial-gradient(circle, rgba(255,255,255,.045) 0 40px, rgba(255,255,255,.085) 41px 43px, transparent 44px),
+    radial-gradient(circle, rgba(8,8,10,.34) 0 5px, transparent 6px),
+    radial-gradient(circle, rgba(255,255,255,.04) 0 27px, rgba(255,255,255,.08) 28px 30px, transparent 31px),
+    /* body: a bar with rounded ends */
+    radial-gradient(circle, rgba(255,255,255,.055) 0 25px, transparent 26px),
+    radial-gradient(circle, rgba(255,255,255,.055) 0 25px, transparent 26px),
+    linear-gradient(rgba(255,255,255,.055), rgba(255,255,255,.055)),
+    /* a warm floor bloom, and the vignette that keeps the rail charcoal */
+    radial-gradient(70% 30% at 60% 100%, rgba(255,51,85,.14), transparent 70%),
+    radial-gradient(130% 100% at 50% 40%, transparent 50%, rgba(0,0,0,.45) 100%);
+  background-size:
+    60px 60px, 340px 340px,
+    14px 14px, 88px 88px, 12px 12px, 62px 62px,
+    52px 52px, 52px 52px, 124px 50px,
+    100% 100%, 100% 100%;
+  background-position:
+    calc(50% + 60px) calc(100% - 138px), calc(50% + 100px) calc(100% - 180px),
+    calc(50% - 30px) calc(100% - 226px), calc(50% - 30px) calc(100% - 226px),
+    calc(50% + 44px) calc(100% - 232px), calc(50% + 44px) calc(100% - 232px),
+    calc(50% - 62px) calc(100% - 138px), calc(50% + 62px) calc(100% - 138px), 50% calc(100% - 138px),
+    0 0, 0 0;
 }
 /* the rail's own content stays above the room, and readable */
 [data-testid="stSidebar"] > div,
@@ -570,7 +596,7 @@ __NAV_ICONS__
 @media (prefers-reduced-motion: reduce) {
   [data-testid="stSidebar"]::before {
     animation: none;
-    transform: translate3d(0, 4%, 0);
+    transform: none;
     opacity: .8;
   }
 }
@@ -1066,6 +1092,23 @@ __NAV_ICONS__
 [data-testid="stExpander"] summary::after { content:'BROWSE ALL'; margin-left:auto; white-space:nowrap; flex:none; font-family:var(--tr-mono) !important; font-size:9.5px; letter-spacing:.18em;
   color:var(--tr-text-3); padding:3px 8px; border:1px solid var(--tr-border); border-radius:6px; }
 [data-testid="stExpander"] details[open] summary::after { content:'COLLAPSE'; }
+
+/* "Browse all" on the movie step: the same row as the expander above, but
+   a button, so the grid underneath is drawn only once it is asked for. */
+[class*="st-key-trbrowseall"] .stButton button {
+  justify-content:flex-start; min-height:54px; padding:14px 16px; font-size:14px; font-weight:700;
+  color:var(--tr-text); background: linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.03));
+  border:1px solid rgba(255,255,255,.16); border-radius:14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 12px 26px -18px rgba(0,0,0,.95);
+  transition: transform var(--tr-fast) var(--tr-ease), border-color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease);
+}
+[class*="st-key-trbrowseall"] .stButton button > div { flex:1 1 auto; justify-content:flex-start; }
+[class*="st-key-trbrowseall"] .stButton button > div > span { justify-content:flex-start; gap:10px; }
+[class*="st-key-trbrowseall"] .stButton button:hover { color:#fff; border-color:rgba(255,255,255,.26); background: linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.045)); transform:translateY(-2px); }
+[class*="st-key-trbrowseall"] .stButton button [data-testid="stIconMaterial"] { color:var(--tr-accent-soft); font-size:22px; }
+[class*="st-key-trbrowseall"] .stButton button::after { content:'BROWSE ALL'; margin-left:auto; white-space:nowrap; flex:none; font-family:var(--tr-mono) !important; font-size:9.5px; letter-spacing:.18em;
+  color:var(--tr-text-3); padding:3px 8px; border:1px solid var(--tr-border); border-radius:6px; }
+[class*="st-key-trbrowseall"]:has([class*="st-key-hide_all_movies"]) .stButton button::after { content:'COLLAPSE'; }
 
 /* Alerts — the palette's meanings, not Streamlit's */
 [data-testid="stAlert"] { border-radius:12px; border:1px solid var(--tr-border); font-size:13.5px; }

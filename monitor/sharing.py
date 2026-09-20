@@ -34,6 +34,23 @@ different URL is kept in its own group rather than silently handed someone
 else's links. The key is deliberately conservative: sharing must never
 change what a person is told.
 
+When the clocks differ
+----------------------
+Grouping only what is *due in the same tick* is not enough. Two 10-minute
+monitors on one listing, one created six minutes after the other, are due
+at :01 and :07 and never meet — in production (21 Sep 2026) that was two
+reads of the same page every ten minutes, one each. :func:`select_for_fetch`
+therefore groups every *running* monitor on a listing, and a group is read
+as soon as any member is due; the members that were not due yet are
+evaluated against the same read and their ``last_check_at`` moves to now.
+They were checked a few minutes early, once. From then on the group is due
+together and stays that way. This is not a cache: no listing outlives the
+tick it was read in, so nobody is ever handed an answer older than their
+own interval promised, and no gap between two checks of a monitor can grow
+— it can only shorten, once, when it joins. A 30-minute monitor sharing a
+read with a 10-minute one is evaluated every ten minutes, at no extra cost
+to anyone.
+
 What stays private
 ------------------
 Everything. This module groups monitors for the duration of one fetch and
@@ -189,6 +206,10 @@ class SharedFetch:
     movie: MovieRef
     date_codes: list[str]
     monitors: list[Monitor] = field(default_factory=list)
+    #: Members that were not due on their own clock but are evaluated
+    #: against this read anyway (``select_for_fetch``), so that from the
+    #: next interval on they are due together with the rest.
+    riders: list[str] = field(default_factory=list)
 
     @property
     def subscribers(self) -> tuple[str, ...]:
@@ -249,6 +270,26 @@ def group_for_fetch(monitors: Sequence[Monitor], *,
     return list(groups.values())
 
 
+def select_for_fetch(running: Sequence[Monitor], due_ids: Iterable[str], *,
+                     resolve: Callable[[MovieRef], MovieRef] | None = None,
+                     ) -> list[SharedFetch]:
+    """The listing reads this tick makes: every group with a member due.
+
+    ``running`` is every monitor that may be checked at all; ``due_ids`` are
+    the ones whose own interval has elapsed. A group is selected when any
+    of its monitors is due, and comes back *whole* — the members that were
+    not due ride the same read (:attr:`SharedFetch.riders`). Groups with
+    nobody due are not returned, and their monitors are not touched.
+    """
+    wanted = set(due_ids)
+    selected: list[SharedFetch] = []
+    for group in group_for_fetch(running, resolve=resolve):
+        if any(m.id in wanted for m in group.monitors):
+            group.riders = [m.id for m in group.monitors if m.id not in wanted]
+            selected.append(group)
+    return selected
+
+
 @dataclass
 class SharingReport:
     """What one tick saved by sharing. Printed, and asserted in tests."""
@@ -257,6 +298,9 @@ class SharingReport:
     fetches: int = 0
     requests: int = 0
     shared_fetches: int = 0
+    #: Monitors evaluated this tick ahead of their own clock, because a read
+    #: they share was due for someone else (``select_for_fetch``).
+    aligned: int = 0
     #: ``(label, monitor count, account count)`` for each read that more than
     #: one monitor waited on.
     shared: list[tuple[str, int, int]] = field(default_factory=list)
@@ -270,6 +314,8 @@ class SharingReport:
         text = f"monitors={self.monitors} fetches={self.fetches} saved={self.saved}"
         if self.shared_fetches:
             text += f" shared={self.shared_fetches}"
+        if self.aligned:
+            text += f" aligned={self.aligned}"
         return text
 
 
@@ -279,6 +325,7 @@ def describe(groups: Sequence[SharedFetch]) -> SharingReport:
         fetches=len(groups),
         requests=sum(g.key.request_count for g in groups),
         shared_fetches=sum(1 for g in groups if g.shared),
+        aligned=sum(len(g.riders) for g in groups),
     )
     report.shared = [(g.key.label, len(g.monitors), len(g.subscribers))
                      for g in groups if g.shared]
@@ -314,6 +361,7 @@ __all__ = [
     "fetch_identity",
     "group_for_fetch",
     "monitor_targets",
+    "select_for_fetch",
     "shared_target_counts",
     "target_identity",
 ]

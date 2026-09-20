@@ -265,11 +265,39 @@ def test_segment_serves_each_monitor_at_its_own_interval(make_monitor, provider_
                         lambda slug: _endless_provider(provider_factory, NOT_ON_SALE))
 
     clock = Clock(at)
-    worker.run_loop(max_minutes=61, poll_seconds=30, use_git=False, chain=False,
-                    clock=clock, sleeper=clock.sleep, notifier=lambda m, c: None)
+    loop = worker.run_loop(max_minutes=61, poll_seconds=30, use_git=False, chain=False,
+                           clock=clock, sleeper=clock.sleep, notifier=lambda m, c: None)
+    state = load_state()
+    assert state[fast.id].check_count == 7   # 0,10,…,60
+    # Both watch the same listing, so the slow one rides the fast one's read
+    # (``sharing.select_for_fetch``): evaluated every ten minutes, at no
+    # extra read — never less often than its own thirty.
+    assert state[slow.id].check_count == 7
+    assert sum(r.fetches for r in loop.reports) == 7, "one read per tick, not one per monitor"
+
+
+def test_segment_serves_a_monitor_on_another_listing_at_its_own_interval(
+        make_monitor, provider_factory, monkeypatch, at):
+    """The interval is the monitor's own when nothing is shared: a slow
+    monitor on a different film is not dragged along by a fast one."""
+    from dataclasses import replace
+
+    fast = make_monitor(interval=10, until=at + timedelta(hours=6))
+    slow = make_monitor(interval=30, until=at + timedelta(hours=6))
+    slow.id = "slow" + slow.id
+    slow.movie = replace(slow.movie, event_code="ET00999999")
+    upsert_monitor(fast, mirror=False)
+    upsert_monitor(slow, mirror=False)
+    monkeypatch.setattr("monitor.checker.get_provider",
+                        lambda slug: _endless_provider(provider_factory, NOT_ON_SALE))
+
+    clock = Clock(at)
+    loop = worker.run_loop(max_minutes=61, poll_seconds=30, use_git=False, chain=False,
+                           clock=clock, sleeper=clock.sleep, notifier=lambda m, c: None)
     state = load_state()
     assert state[fast.id].check_count == 7   # 0,10,…,60
     assert state[slow.id].check_count == 3   # 0,30,60
+    assert sum(r.fetches for r in loop.reports) == 10
 
 
 def test_force_and_monitor_filter_apply_to_the_first_tick_only(make_monitor, provider_factory,
@@ -290,10 +318,15 @@ def test_force_and_monitor_filter_apply_to_the_first_tick_only(make_monitor, pro
                            use_git=False, chain=False, clock=clock, sleeper=clock.sleep,
                            notifier=lambda m, c: None)
     first = loop.reports[0]
-    assert first.checked == [new.id]                 # the dispatch's monitor, right away
+    assert new.id in first.checked                   # the dispatch's monitor, right away
+    # Both watch the same listing: the old one rides the dispatch's read
+    # (checked 8 minutes early, once) and the two are due together from
+    # then on — one read per ten minutes for both, not two.
+    assert sorted(first.checked) == sorted([new.id, old.id]) and first.fetches == 1
     state = load_state()
-    assert state[old.id].check_count == 3            # 1 before + at +8 and +18 min
+    assert state[old.id].check_count == 4            # 1 before + 0, +10, +20
     assert state[new.id].check_count == 3            # 0, +10, +20
+    assert sum(r.fetches for r in loop.reports) == 3
 
 
 def test_segment_stops_when_nothing_is_running(make_monitor, at):

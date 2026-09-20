@@ -50,6 +50,13 @@ GRID_COLUMNS = 6
 #: A movie's full theatre list stays behind "View all" once it is longer than
 #: this — the six featured tiles are the first screen.
 VIEW_ALL_THRESHOLD = 6
+#: The city's full poster grid stays behind "Browse all" once it is longer
+#: than this (two rows). Every tile is a container, an HTML block, a button
+#: and a column — a 52-film city is ~220 deltas and most of the movie step's
+#: render time in the browser, for posters nobody has asked to see yet. The
+#: shelf and the search box are the first screen; the grid is drawn when
+#: opened, exactly as the theatre step's "View all" is.
+BROWSE_ALL_THRESHOLD = 12
 
 #: Session keys the wizard owns, and what they reset to.
 DEFAULTS = {
@@ -63,6 +70,7 @@ DEFAULTS = {
     "movie_query": None,    # the search box: a catalogue label, free text, or nothing
     "theatre_nonce": 0,     # bumps to clear the theatre search box after a pick
     "show_all_theatres": False,   # the full movie-specific list, behind "View all"
+    "show_all_movies": False,     # the city's full poster grid, behind "Browse all"
     "start_now": True,
     "date_mode": "any",     # any · single · range — which show dates count
     "show_dates": [],       # YYYYMMDD codes; [] = every date BookMyShow offers
@@ -151,6 +159,7 @@ def reset_from(step: int) -> None:
     """
     if step <= 1:
         st.session_state["movie_id"] = ""
+        st.session_state["show_all_movies"] = False
     if step <= 2:
         st.session_state["theatres"] = []
         st.session_state["formats"] = {}
@@ -295,6 +304,10 @@ def _pick_from_movie_search() -> None:
         _select_movie(chosen_id)
 
 
+def _set_show_all_movies(value: bool) -> None:
+    st.session_state["show_all_movies"] = value
+
+
 def _poster_grid(cards: list[cv.MovieCard], selected: str, *, compact: bool = False,
                  prefix: str = "movie_") -> None:
     """``prefix`` keeps the shelf's buttons distinct from the full grid's —
@@ -358,7 +371,22 @@ def step_movie() -> bool:
             _poster_grid(shelf, selected, prefix="pop_")
         rest = catalogue.movies
         st.caption(f"{len(rest)} movie(s) · tap a poster to select it")
-        with st.expander(f"Browse all {len(rest)} movies in {location.name}", expanded=not shelf):
+        # The full grid is drawn only once asked for. A collapsed expander
+        # still renders every tile underneath — for a 52-film city that was
+        # three quarters of the step's elements, hidden.
+        show_all = (st.session_state.get("show_all_movies", False)
+                    or not shelf or len(rest) <= BROWSE_ALL_THRESHOLD)
+        if not show_all:
+            with st.container(key="trbrowseall"):
+                st.button(f"Browse all {len(rest)} movies in {location.name}", key="browse_all_movies",
+                          use_container_width=True, icon=":material/expand_more:",
+                          on_click=_set_show_all_movies, args=(True,))
+        else:
+            if shelf and len(rest) > BROWSE_ALL_THRESHOLD:
+                with st.container(key="trbrowseall"):
+                    st.button(f"All {len(rest)} movies in {location.name}", key="hide_all_movies",
+                              use_container_width=True, icon=":material/expand_less:",
+                              on_click=_set_show_all_movies, args=(False,))
             _poster_grid(rest, selected, compact=True)
 
     if selected:

@@ -15,12 +15,14 @@ Order of operations, and why:
    or format (``monitor.discovery``) — rate-limited, one request per city —
    so a sibling event BookMyShow created *after* the monitor was saved is
    swept in this very tick, not after the next catalogue sync.
-4. Collapse the due monitors into the listing reads they actually need
-   (``monitor.sharing``) and fetch each one once. Several people waiting on
-   the same film, city, dates and event share one read of BookMyShow — the
-   venue and the format never reached the network in the first place, they
-   filter the answer. A failure here becomes an ERROR record for every
-   monitor waiting on it, never an availability.
+4. Collapse the running monitors into the listing reads they actually need
+   (``monitor.sharing``) and fetch every read that anyone is due for, once.
+   Several people waiting on the same film, city, dates and event share one
+   read of BookMyShow — the venue and the format never reached the network
+   in the first place, they filter the answer — and a monitor whose own
+   clock was a few minutes behind the others' is evaluated against that
+   read too, so their clocks agree from then on. A failure here becomes an
+   ERROR record for every monitor waiting on it, never an availability.
 5. Evaluate each theatre+format target independently, per monitor, against
    that read. Sharing the read changes no verdict.
 6. Detect changes, send mail, and only then mark as notified — per monitor
@@ -47,7 +49,7 @@ from monitor.models import (
     TargetResult,
     TheatreTarget,
 )
-from monitor.sharing import SharingReport, describe, group_for_fetch
+from monitor.sharing import SharingReport, describe, select_for_fetch
 from monitor.state import (
     MonitorState,
     expire_due_monitors,
@@ -413,18 +415,19 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
         state = load_state()
     dirty = bool(newly_expired)
 
+    running: list[Monitor] = []
     due: list[Monitor] = []
     for monitor in monitors:
-        if monitor_id and monitor.id != monitor_id:
-            continue
         if not monitor.is_running(at):
-            report.skipped.append(f"{short_id(monitor.id)} ({monitor.status.value.lower()})")
+            if not monitor_id or monitor.id == monitor_id:
+                report.skipped.append(f"{short_id(monitor.id)} ({monitor.status.value.lower()})")
             continue
         ms: MonitorState = state.setdefault(monitor.id, MonitorState())
-        if not force and not ms.is_due(monitor.interval_minutes, at):
-            report.skipped.append(f"{short_id(monitor.id)} (not due)")
+        running.append(monitor)
+        if monitor_id and monitor.id != monitor_id:
             continue
-        due.append(monitor)
+        if force or ms.is_due(monitor.interval_minutes, at):
+            due.append(monitor)
 
     # A theatre that is "not listed yet" may be listed under a sibling event
     # BookMyShow created after the monitor was saved. Learn of such events
@@ -434,20 +437,30 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
         save_monitors(monitors, mirror=mirror)
 
     # Several people wanting the same seat want the same answer. Collapse the
-    # due monitors into the listing reads they actually need, read each one
-    # once, and hand the same snapshot to every monitor waiting on it. The
-    # grouping is on what reaches the network only (``monitor.sharing``);
-    # everything below — evaluation, state, notification, history — stays
-    # per monitor and per owner, exactly as it was.
-    groups = group_for_fetch(due, resolve=with_current_variants)
+    # running monitors into the listing reads they actually need, read every
+    # read that someone is due for once, and hand the same snapshot to every
+    # monitor waiting on it — including the ones whose own clock was a few
+    # minutes behind, which are checked early this once and are due with the
+    # others from now on. The grouping is on what reaches the network only
+    # (``monitor.sharing``); everything below — evaluation, state,
+    # notification, history — stays per monitor and per owner, exactly as
+    # it was.
+    groups = select_for_fetch(running, (m.id for m in due), resolve=with_current_variants)
+    checked_ids = {m.id for g in groups for m in g.monitors}
+    for monitor in running:
+        if monitor.id not in checked_ids and (not monitor_id or monitor.id == monitor_id):
+            report.skipped.append(f"{short_id(monitor.id)} (not due)")
     report.sharing = describe(groups)
-    if report.sharing.saved:
+    if report.sharing.saved or report.sharing.aligned:
         print(f"[checker] sharing: {report.sharing.summary()}")
 
     for group in groups:
         if group.shared:
             print(f"[checker] one read for {len(group.monitors)} monitors "
                   f"({len(group.subscribers)} account(s)) — {group.key.label}")
+        if group.riders:
+            print(f"[checker] aligned {', '.join(short_id(r) for r in group.riders)} "
+                  f"to this read; due together from now on")
         listing = fetch_listing(group.movie, group.date_codes)
         report.fetches += 1
 
