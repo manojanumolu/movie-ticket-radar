@@ -193,40 +193,46 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   min-width: 244px !important; width: 244px !important;
   position: relative; isolation: isolate;
 }
-/* The projection room behind the rail: two pseudo-layers on the sidebar
-   itself, no extra elements, no script and nothing to load. One is a slow
-   warm light that drifts down the column the way a projector's spill moves;
-   the other is a static grain, drawn as a repeating gradient rather than an
-   image. Both are pointer-transparent and sit at z-index 0 under the
-   content (which the rules below lift to 1), so nothing here can cover a
-   label, intercept a click or move anything on the page.
+/* Sidebar ambience — the projection room behind the rail: two pseudo-layers
+   on the sidebar itself, no extra elements, no script and nothing to load.
+   One is a slow warm light that drifts diagonally down the column the way
+   a projector's spill moves; the other is static — a faint projector glow
+   from the top corner and a grain drawn as two repeating gradients rather
+   than an image. Both are pointer-transparent and sit at z-index 0 under
+   the content (which the rules below lift to 1), so nothing here can cover
+   a label, intercept a click or move anything on the page.
 
-   Opacity is deliberately near the floor: this should read as the room
-   being lit, not as an animation. The movement is transform and opacity
-   only, which the compositor handles without laying the page out again, so
-   it costs Home's reruns nothing. */
+   Amplitude: the first version put the red channel about 5/255 over the
+   charcoal, which no display shows. This one lands around 25–35/255 at the
+   beam's centre and fades to nothing at the edges — the room reads as lit,
+   the rail stays charcoal. The movement is transform and opacity only,
+   which the compositor handles without laying the page out again, so it
+   costs Home's reruns nothing. */
 @keyframes tr-side-beam {
-  0%   { transform: translate3d(0, -16%, 0); opacity: .50; }
-  50%  { transform: translate3d(0,  24%, 0); opacity: .95; }
-  100% { transform: translate3d(0, -16%, 0); opacity: .50; }
+  0%   { transform: translate3d(-3%, -14%, 0); opacity: .55; }
+  50%  { transform: translate3d( 3%,  22%, 0); opacity: 1; }
+  100% { transform: translate3d(-3%, -14%, 0); opacity: .55; }
 }
-/* Kept strictly inside the rail's box — left and right pinned to 0 — because
-   anything wider adds scrollable width and the sidebar grows a horizontal
-   scrollbar of its own. The gradients fade out well before the edges, so the
-   light is off-centre without the layer being. */
+/* Kept strictly inside the rail's box — left and right inset by more than
+   the drift ever moves it — because anything wider adds scrollable width
+   and the sidebar grows a horizontal scrollbar of its own. The gradients
+   fade out well before the edges, so the light is off-centre without the
+   layer being. */
 [data-testid="stSidebar"]::before {
-  content: ""; position: absolute; left: 8px; right: 8px; top: -12%; height: 62%; z-index: 0;
-  pointer-events: none; will-change: transform, opacity; filter: blur(26px);
+  content: ""; position: absolute; left: 14px; right: 14px; top: -10%; height: 66%; z-index: 0;
+  pointer-events: none; will-change: transform, opacity; filter: blur(28px);
   background:
-    radial-gradient(58% 44% at 26% 20%, rgba(255,51,85,.15), transparent 70%),
-    radial-gradient(46% 36% at 78% 64%, rgba(255,140,160,.08), transparent 72%);
-  animation: tr-side-beam 26s ease-in-out infinite;
+    radial-gradient(60% 46% at 28% 22%, rgba(255,51,85,.36), transparent 70%),
+    radial-gradient(48% 38% at 76% 66%, rgba(255,140,160,.18), transparent 72%);
+  animation: tr-side-beam 28s ease-in-out infinite;
 }
 [data-testid="stSidebar"]::after {
-  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: .85;
   background-image:
-    repeating-linear-gradient(0deg, rgba(255,255,255,.014) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, transparent 0%, rgba(255,51,85,.035) 68%, transparent 100%);
+    repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 1px, transparent 1px 4px),
+    linear-gradient(158deg, rgba(255,110,135,.12) 0%, rgba(255,110,135,.04) 22%, transparent 46%),
+    linear-gradient(180deg, transparent 0%, rgba(255,51,85,.07) 72%, rgba(255,51,85,.03) 100%);
 }
 /* the rail's own content stays above the room, and readable */
 [data-testid="stSidebar"] > div,
@@ -564,8 +570,8 @@ __NAV_ICONS__
 @media (prefers-reduced-motion: reduce) {
   [data-testid="stSidebar"]::before {
     animation: none;
-    transform: translate3d(0, 2%, 0) scale(1.06);
-    opacity: .75;
+    transform: translate3d(0, 4%, 0);
+    opacity: .8;
   }
 }
 

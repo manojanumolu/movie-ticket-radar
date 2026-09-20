@@ -61,7 +61,6 @@ DEFAULTS = {
     "formats": {},
     "interval": 10,
     "movie_query": None,    # the search box: a catalogue label, free text, or nothing
-    "movie_query_seen": None,
     "theatre_nonce": 0,     # bumps to clear the theatre search box after a pick
     "show_all_theatres": False,   # the full movie-specific list, behind "View all"
     "start_now": True,
@@ -271,10 +270,29 @@ def step_location() -> None:
 # 2 · Movie
 # ──────────────────────────────────────────────────────────────────────────
 def _select_movie(movie_id: str) -> None:
+    """A tile's ``on_click`` / the search box's ``on_change``: pick the movie
+    and move on. Callback-only — ``goto(..., rerun=False)`` relies on the
+    run that follows the callback drawing the theatre step; called from the
+    script body it would set ``step`` after the page had already chosen
+    which step to draw, and the click would look like it did nothing."""
     if movie_id != st.session_state.get("movie_id", ""):
         st.session_state["movie_id"] = movie_id
         reset_from(2)
     goto(3, rerun=False)
+
+
+def _pick_from_movie_search() -> None:
+    """The search box's ``on_change``.
+
+    A catalogue label selects that movie; free text (``accept_new_options``)
+    or a cleared box changes nothing — the grid below filters on it. This
+    has to be a callback, not a check in the script: the choice lands before
+    the page reads ``step``, so the same run draws the theatre step.
+    """
+    choice = st.session_state.get("movie_query") or ""
+    chosen_id = cv.movie_for_label(choice, st.session_state.get("location", ""))
+    if chosen_id:
+        _select_movie(chosen_id)
 
 
 def _poster_grid(cards: list[cv.MovieCard], selected: str, *, compact: bool = False,
@@ -315,20 +333,16 @@ def step_movie() -> bool:
     # ── search: the whole catalogue, filtered in the browser as you type ──
     # A selectbox filters its options client-side on every keystroke, so
     # "av" shows "Avengers Endgame: Encore" immediately with no round trip.
-    # Choosing a suggestion selects the movie; pressing Enter on free text
-    # (accept_new_options) filters the grid below instead.
+    # Choosing a suggestion selects the movie (``on_change``, so the run
+    # that follows already shows the theatre step); pressing Enter on free
+    # text (accept_new_options) filters the grid below instead.
     C.html('<div class="tr-field-label">Search movies</div>')
     choice = st.selectbox(
         "Search movies", [m.label for m in catalogue.movies], index=None, key="movie_query",
         placeholder=f"Search movies playing in {location.name}…", label_visibility="collapsed",
-        accept_new_options=True, filter_mode="contains",
+        accept_new_options=True, filter_mode="contains", on_change=_pick_from_movie_search,
     )
-    chosen_id = cv.movie_for_label(choice or "", location.slug)
-    if chosen_id and choice != st.session_state.get("movie_query_seen"):
-        st.session_state["movie_query_seen"] = choice
-        _select_movie(chosen_id)
-    st.session_state["movie_query_seen"] = choice
-    query = "" if chosen_id else (choice or "")
+    query = "" if cv.movie_for_label(choice or "", location.slug) else (choice or "")
 
     if query:
         matches = cv.search_movies(query, location.slug)
