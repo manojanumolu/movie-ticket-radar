@@ -458,8 +458,8 @@ def format_panel_head(name: str, area: str, badge: str = "", coming: bool = Fals
     elif when:
         lines.append(f"Listed for this movie here {when}.")
     if expected:
-        lines.append(f"Premium screens here: {' · '.join(expected)} — not listed for this movie here"
-                     + (f" {when}" if when else "") + ".")
+        lines.append(f"Premium screens here: {' · '.join(expected)} — not yet listed for this movie here"
+                     + (f" {when}" if when else "") + "; pick to watch.")
     note = "".join(f'<div class="w">{e(line)}</div>' for line in lines)
     html(
         f'<div class="tr-fmt-head"><div class="n">{e(name)}</div>'

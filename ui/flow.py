@@ -35,7 +35,7 @@ from datetime import datetime, time as dtime, timedelta
 import streamlit as st
 
 from config.locations import LOCATIONS, enabled_locations, get_location
-from config.theatre_capabilities import premium_formats
+from config.theatre_capabilities import format_aliases, premium_formats
 from config.timezone import IST, now_ist
 from monitor.models import (ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes, is_infinity_vision,
                             is_marvel_title, normalise_format, short_date)
@@ -652,14 +652,28 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
     for venue in venues:
         premium = list(capable.get(venue.code, ()))
         listed = dedupe(venue.formats)
-        here = {normalise_format(f) for f in listed}
         is_coming = venue.code in coming or not listed
-        # Listed: the options are the movie's own formats here. Not listed:
-        # the theatre's verified premium screens, to wait for.
-        options = listed if not is_coming else premium
-        # a premium screen is covered when the movie is listed in it, under any longer label ("4DX 3D")
-        expected = ([f for f in premium if not any(normalise_format(f) in h for h in here)]
-                    if not is_coming else [])
+
+        def covered(fmt: str) -> bool:
+            """Is this premium screen what the movie is listed in here, under
+            its own name or BookMyShow's other name for it ("Led Screen
+            Dolby Atmos" is AAA's EPIQ)?"""
+            names = [fmt, *format_aliases(venue.code, fmt)]
+            return any(normalise_format(n) in normalise_format(label) for n in names for label in listed)
+
+        def is_alias_label(label: str) -> bool:
+            """A listed label that only names a premium screen by its other
+            name folds into that screen's option."""
+            return any(normalise_format(a) in normalise_format(label)
+                       for f in premium for a in format_aliases(venue.code, f))
+
+        # The options: every verified premium screen — a permanent watch
+        # target, listed or not — then whatever else BookMyShow lists the
+        # movie in here (the ordinary formats). Nothing else.
+        options = dedupe([*premium, *[f for f in listed if not is_alias_label(f)
+                                      and not any(normalise_format(q) == normalise_format(f) for q in premium)]])
+        current = {f for f in options if (f in premium and covered(f)) or (f not in premium)}
+        waiting = [f for f in premium if not covered(f)]
         listed_on = dates_by_venue.get(venue.code, {})
         when = ""
         if dates and is_coming:
@@ -670,7 +684,7 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
             left, right = st.columns([1, 1.6], gap="medium")
             with left:
                 C.format_panel_head(venue.name, venue.area, listed[0] if listed else "",
-                                    coming=is_coming, expected=expected, when=when,
+                                    coming=is_coming, expected=waiting if not is_coming else [], when=when,
                                     premium=premium if is_coming else [])
             with right:
                 if not options:
@@ -687,18 +701,19 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                                      value=ANY_FORMAT in formats.get(venue.code, []),
                                      help="Watch every format this theatre runs — alerts on the first to open.")
                 for fmt in options:
-                    # Said at the box itself: the dates this movie is listed
-                    # in this format here, from BookMyShow's own showtimes —
-                    # or, for a theatre not listing it, that this is one of
-                    # its premium screens, to be told about when it opens.
+                    # Said at the box itself: CURRENTLY LISTED — the dates
+                    # BookMyShow lists this movie in this format here — or
+                    # a premium screen the movie is not in yet, watched
+                    # until it opens.
+                    names = [fmt, *format_aliases(venue.code, fmt)]
                     on = sorted(d for d, fmts in listed_on.items()
-                                if any(normalise_format(f) == normalise_format(fmt) for f in fmts))
-                    if is_coming:
-                        hint = (f"{venue.name}'s {fmt} screen (HyderabadTheatres). Not listed for this movie yet — "
-                                "you'll be emailed when it opens here in this format.")
+                                if any(normalise_format(n) in normalise_format(f) for n in names for f in fmts))
+                    if fmt in current:
+                        hint = ("Currently listed for this movie here on " + ", ".join(short_date(d) for d in on) + "."
+                                if on else "Currently listed for this movie at this theatre.")
                     else:
-                        hint = ("Listed for this movie here on " + ", ".join(short_date(d) for d in on) + "."
-                                if on else "Listed for this movie at this theatre now.")
+                        hint = (f"{venue.name}'s {fmt} screen (HyderabadTheatres). Not yet listed for this movie — "
+                                "watching until it opens here in this format.")
                     if st.checkbox(fmt, key=f"fmt_{venue.code}_{fmt}",
                                    value=fmt in formats.get(venue.code, []), help=hint):
                         chosen.append(fmt)
