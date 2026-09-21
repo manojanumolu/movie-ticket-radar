@@ -364,7 +364,9 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     # worker matches on the venue code either way, and a theatre that isn't
     # listed yet simply reads THEATRE_NOT_AVAILABLE until the day it is.
     venues = {v.code: v for v in cv.selected_venues(movie_id, slug, st.session_state.get("theatres", []))}
-    capable = cv.capabilities(slug, st.session_state.get("theatres", []))
+    codes_chosen = st.session_state.get("theatres", [])
+    capable = {code: (*cv.capabilities(slug, [code])[code], *cv.seen_formats(slug, [code])[code])
+               for code in codes_chosen}
     formats: dict[str, list[str]] = st.session_state.get("formats", {})
 
     problems = []

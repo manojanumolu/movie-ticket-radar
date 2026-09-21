@@ -24,6 +24,7 @@ from typing import Any
 import streamlit as st
 
 from config import store
+from config.theatre_capabilities import premium_formats
 from monitor import catalogue
 from monitor.models import MovieRef, Venue, dedupe, normalise_format
 
@@ -231,9 +232,17 @@ def listed_dates(movie_id: str, slug: str, code: str) -> dict[str, tuple[str, ..
 
 
 def capabilities(slug: str, codes: list[str]) -> dict[str, tuple[str, ...]]:
-    """code -> every format the city directory has seen the theatre run, for
-    any film. Shown as what the theatre *can* do; never offered as a format
-    this movie is in."""
+    """code -> the theatre's verified premium screens (PXL, PCX, EPIQ, Dolby
+    Cinema, 4DX…) from ``config.theatre_capabilities`` — what the theatre
+    *has*, offered as formats to wait for when it has not listed the movie,
+    and never as a format the movie is playing in."""
+    return {code: premium_formats(code) for code in codes}
+
+
+def seen_formats(slug: str, codes: list[str]) -> dict[str, tuple[str, ...]]:
+    """code -> every format string BookMyShow has been seen to use at the
+    theatre, for any film (the city directory). Background only: it is what
+    the start guard checks a chosen format against, beside the capability."""
     directory = view(slug).directory
     return {code: (tuple(sorted(directory[code].formats)) if code in directory else ()) for code in codes}
 
@@ -409,6 +418,7 @@ __all__ = [
     "card",
     "capabilities",
     "coming_soon_codes",
+    "seen_formats",
     "listed_dates",
     "listed_formats",
     "listings",

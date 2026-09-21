@@ -443,7 +443,7 @@ def clean_format(raw: str) -> str:
     if infinity:
         dim = (infinity.group(1) or "").replace(" ", "").upper() or "2D"
         return f"{INFINITY_VISION} {dim}"
-    keep_upper = {"2D", "3D", "4DX", "IMAX", "ICE", "HDR", "4K", "MX4D", "EPIQ", "LUXE"}
+    keep_upper = {"2D", "3D", "4DX", "IMAX", "ICE", "HDR", "4K", "MX4D", "EPIQ", "LUXE", "PXL", "PCX"}
     words = [w for w in re.split(r"\s+", (raw or "").strip()) if w]
     out = []
     for w in words:

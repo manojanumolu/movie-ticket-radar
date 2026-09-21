@@ -35,6 +35,7 @@ from datetime import datetime, time as dtime, timedelta
 import streamlit as st
 
 from config.locations import LOCATIONS, enabled_locations, get_location
+from config.theatre_capabilities import premium_formats
 from config.timezone import IST, now_ist
 from monitor.models import (ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes, is_infinity_vision,
                             is_marvel_title, normalise_format, short_date)
@@ -451,8 +452,9 @@ def _theatre_label(venue: Venue, city: str, listed: bool) -> str:
     parts = [venue.name, venue.area or city]
     if not listed:
         parts.append("Coming soon")
-    if venue.formats:
-        parts.append(venue.formats[0])
+    shown = venue.formats if listed else premium_formats(venue.code)
+    if shown:
+        parts.append(shown[0])
     return " · ".join(parts)
 
 
@@ -569,7 +571,7 @@ def step_theatres() -> list[Venue]:
         for column, venue in grid(watching, 2, "watch"):
             with column:
                 pick(f"th_{venue.code}", "Selected ✓",
-                     lambda v=venue: C.theatre_row(v.name, v.area, list(v.formats), True, v.abbr,
+                     lambda v=venue: C.theatre_row(v.name, v.area, list(premium_formats(v.code)), True, v.abbr,
                                                    featured=v.code in featured_codes, coming=True),
                      on_click=_toggle_theatre, args=(venue.code, venues))
 
@@ -607,7 +609,8 @@ def unknown_formats(venue: Venue, chosen: list[str], capable: tuple[str, ...] = 
     """The chosen formats this theatre is not known to run at all.
 
     ``venue.formats`` is what this movie lists at the theatre and ``capable``
-    what the theatre runs for any film. A format outside both is not
+    the theatre's verified premium screens plus every format BookMyShow has
+    been seen to use there. A format outside all of that is not
     "unreleased" — it has no basis — and is the one thing the monitoring
     step refuses. Any format always passes, and a theatre with no known
     formats has nothing reliable to check against, so everything passes for
@@ -636,9 +639,9 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
     dates_by_venue = dates_by_venue or {}
     dates = [d for d in (dates or []) if d]
     C.step_header(4, "Formats, per theatre",
-                  "Only the formats BookMyShow lists this movie in at that theatre"
+                  "The formats BookMyShow lists this movie in at that theatre"
                   + (f" on {describe_date_codes(dates)}" if dates else "") + ". A theatre that hasn't "
-                  "listed the movie yet is watched in every format until it does.")
+                  "listed the movie yet offers its premium screens to wait for, or every format.")
 
     if not venues:
         st.caption("Pick a theatre first.")
@@ -647,23 +650,32 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
     infinity_vision_note(venues)
     formats: dict[str, list[str]] = dict(st.session_state.get("formats", {}))
     for venue in venues:
-        options = dedupe(venue.formats)
-        here = {normalise_format(f) for f in options}
-        expected = [f for f in capable.get(venue.code, ()) if normalise_format(f) not in here]
+        premium = list(capable.get(venue.code, ()))
+        listed = dedupe(venue.formats)
+        here = {normalise_format(f) for f in listed}
+        is_coming = venue.code in coming or not listed
+        # Listed: the options are the movie's own formats here. Not listed:
+        # the theatre's verified premium screens, to wait for.
+        options = listed if not is_coming else premium
+        # a premium screen is covered when the movie is listed in it, under any longer label ("4DX 3D")
+        expected = ([f for f in premium if not any(normalise_format(f) in h for h in here)]
+                    if not is_coming else [])
         listed_on = dates_by_venue.get(venue.code, {})
         when = ""
-        if dates and venue.code in coming:
+        if dates and is_coming:
             when = describe_date_codes(dates)
-        elif listed_on:
+        elif listed_on and not is_coming:
             when = "on " + ", ".join(short_date(d) for d in sorted(listed_on))
         with st.container(key=f"trpanel_{venue.code}"):
             left, right = st.columns([1, 1.6], gap="medium")
             with left:
-                C.format_panel_head(venue.name, venue.area, options[0] if options else "",
-                                    coming=venue.code in coming, expected=expected, when=when)
+                C.format_panel_head(venue.name, venue.area, listed[0] if listed else "",
+                                    coming=is_coming, expected=expected, when=when,
+                                    premium=premium if is_coming else [])
             with right:
                 if not options:
-                    st.caption("Not listed for this movie here yet — watching every format until it opens.")
+                    st.caption("Not listed for this movie here yet, and no premium screen to wait for — "
+                               "watching every format until it opens.")
                     formats[venue.code] = [ANY_FORMAT]
                     continue
 
@@ -676,11 +688,17 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                                      help="Watch every format this theatre runs — alerts on the first to open.")
                 for fmt in options:
                     # Said at the box itself: the dates this movie is listed
-                    # in this format here, from BookMyShow's own showtimes.
+                    # in this format here, from BookMyShow's own showtimes —
+                    # or, for a theatre not listing it, that this is one of
+                    # its premium screens, to be told about when it opens.
                     on = sorted(d for d, fmts in listed_on.items()
                                 if any(normalise_format(f) == normalise_format(fmt) for f in fmts))
-                    hint = ("Listed for this movie here on " + ", ".join(short_date(d) for d in on) + "."
-                            if on else "Listed for this movie at this theatre now.")
+                    if is_coming:
+                        hint = (f"{venue.name}'s {fmt} screen (HyderabadTheatres). Not listed for this movie yet — "
+                                "you'll be emailed when it opens here in this format.")
+                    else:
+                        hint = ("Listed for this movie here on " + ", ".join(short_date(d) for d in on) + "."
+                                if on else "Listed for this movie at this theatre now.")
                     if st.checkbox(fmt, key=f"fmt_{venue.code}_{fmt}",
                                    value=fmt in formats.get(venue.code, []), help=hint):
                         chosen.append(fmt)

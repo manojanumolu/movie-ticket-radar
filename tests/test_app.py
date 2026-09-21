@@ -640,7 +640,7 @@ def test_a_theatre_known_from_other_films_is_offered_as_coming_soon(release_watc
     app = run(step=3, location="hyderabad", movie_id=release_watch)
     body = text(app)
     assert "feat_PRHN" in {b.key for b in app.button}
-    assert "Coming soon" in body and "Expected: Pcx Screen" in body
+    assert "Coming soon" in body and "Premium screens: PCX · HDR By Barco" in body
     assert "watch this theatre until BookMyShow releases tickets" in body
     # The listed set is untouched — Prasads is not pretended into it.
     assert section(body, "All theatres") == "2"
@@ -659,21 +659,21 @@ def test_theatre_search_offers_the_whole_city_with_coming_soon_marked(release_wa
     box = next(s for s in app.selectbox if s.key.startswith("theatre_query_"))
     assert box.options == ["Allu Cinemas · Attapur, Hyderabad · Dolby Cinema",
                            "AMB Cinemas · Gachibowli, Hyderabad · HDR By Barco",
-                           "Prasads Multiplex · Hyderabad · Coming soon · Pcx Screen"]
+                           "Prasads Multiplex · Hyderabad · Coming soon · PCX"]
     assert "example" not in (box.placeholder or "").lower() and "e.g." not in (box.placeholder or "")
-    box.select("Prasads Multiplex · Hyderabad · Coming soon · Pcx Screen").run()
+    box.select("Prasads Multiplex · Hyderabad · Coming soon · PCX").run()
     assert app.session_state["theatres"] == ["PRHN"]
 
 
-def test_formats_for_a_coming_soon_theatre_are_every_format_until_it_lists_the_film(release_watch):
+def test_formats_for_a_coming_soon_theatre_are_its_premium_screens_until_it_lists_the_film(release_watch):
     app = run(step=4, location="hyderabad", movie_id=release_watch, theatres=["ALLU", "PRHN"])
     assert not app.exception
     keys = {c.key for c in app.checkbox}
-    assert "fmt_PRHN_Pcx Screen" not in keys and "fmt_PRHN_any" not in keys     # PRHN's own formats are not the movie's
-    assert app.session_state["formats"]["PRHN"] == [ANY_FORMAT]
-    assert "fmt_ALLU_Dolby Cinema" in keys                                       # the movie lists Dolby at ALLU
+    assert "fmt_PRHN_Pcx Screen" not in keys                                      # BookMyShow's string for another film
+    assert {"fmt_PRHN_any", "fmt_PRHN_PCX", "fmt_PRHN_HDR By Barco"} <= keys      # Prasads' verified premium screens
+    assert "fmt_ALLU_Dolby Cinema" in keys                                        # the movie lists Dolby at ALLU
     body = text(app)
-    assert "Not listed for this movie" in body and "also runs Pcx Screen for other films" in body
+    assert "Not listed for this movie" in body and "Premium screens here: PCX · HDR By Barco." in body
 
 
 def test_release_watch_monitor_is_saved_and_fires_when_the_theatre_appears(

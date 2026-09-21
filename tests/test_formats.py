@@ -78,51 +78,56 @@ def markup(app) -> str:
 # The exact regression
 # ──────────────────────────────────────────────────────────────────────────
 def test_the_formats_offered_are_the_movies_own_listing_and_capability_is_said_apart(provider_factory):
-    """ALLU lists Avengers in Barco; ALLU runs Dolby Cinema for other films.
-    The picker offers Barco — what BookMyShow lists *this* movie in — and
-    says the theatre runs Dolby for other films; it does not offer Dolby."""
+    """ALLU lists Avengers in Barco; ALLU's verified premium screen is Dolby
+    Cinema. The picker offers Barco — what BookMyShow lists *this* movie in
+    — and says Dolby Cinema is a premium screen here not listed for it; it
+    does not offer Dolby as a current format."""
     seed(provider_factory, avengers_at_allu=[ALLU_BARCO_LIVE])
     [allu] = cv.selected_venues(AVENGERS, "hyderabad", ["ALUC"])
     assert allu.formats == ("Barco Laser 4K Atmos",)
     assert cv.listed_formats(AVENGERS, "hyderabad", ["ALUC"]) == {"ALUC": ("Barco Laser 4K Atmos",)}
-    assert cv.capabilities("hyderabad", ["ALUC"]) == {"ALUC": ("Barco Laser 4K Atmos", "Dolby Cinema")}
+    assert cv.capabilities("hyderabad", ["ALUC"]) == {"ALUC": ("Dolby Cinema",)}           # HyderabadTheatres
+    assert cv.seen_formats("hyderabad", ["ALUC"]) == {"ALUC": ("Barco Laser 4K Atmos", "Dolby Cinema")}
     assert cv.coming_soon_codes(AVENGERS, "hyderabad", ["ALUC"]) == set()
 
     app = run(step=4, furthest=4, location="hyderabad", movie_id=AVENGERS, theatres=["ALUC"])
     assert not app.exception
     assert {c.key for c in app.checkbox} == {"fmt_ALUC_any", "fmt_ALUC_Barco Laser 4K Atmos"}
-    assert "also runs Dolby Cinema for other films" in markup(app)
+    assert "Premium screens here: Dolby Cinema — not listed for this movie here" in markup(app)
     assert "Listed for this movie here on 25 Sep" in markup(app)
     app.checkbox(key="fmt_ALUC_Barco Laser 4K Atmos").check().run()
     assert app.session_state["formats"] == {"ALUC": ["Barco Laser 4K Atmos"]}
 
 
-def test_a_theatre_not_listing_the_film_is_watched_in_every_format_not_in_its_capability(provider_factory):
-    """Coming soon: no format of the movie's to pick; the theatre's own
-    formats are said, and the watch is for every format until it opens."""
+def test_a_theatre_not_listing_the_film_offers_its_premium_screens_to_wait_for(provider_factory):
+    """Coming soon: no format of the movie's — so the theatre's verified
+    premium screen (ALLU: Dolby Cinema) is offered to wait for, beside
+    every format; BookMyShow's strings for other films are not."""
     seed(provider_factory, avengers_at_allu=None)
     [allu] = cv.selected_venues(AVENGERS, "hyderabad", ["ALUC"])
     assert allu.formats == ()
     assert cv.coming_soon_codes(AVENGERS, "hyderabad", ["ALUC"]) == {"ALUC"}
     app = run(step=4, furthest=4, location="hyderabad", movie_id=AVENGERS, theatres=["ALUC"])
     assert not app.exception
-    assert {c.key for c in app.checkbox} == set()                            # nothing of the movie's to pick
-    assert app.session_state["formats"] == {"ALUC": [ANY_FORMAT]}
+    assert {c.key for c in app.checkbox} == {"fmt_ALUC_any", "fmt_ALUC_Dolby Cinema"}
     body = markup(app)
-    assert "Coming soon" in body and "Not listed for this movie" in body
-    assert "also runs Barco Laser 4K Atmos · Dolby Cinema for other films" in body
+    assert "Coming soon" in body and "Premium screens here: Dolby Cinema." in body
+    assert "Barco Laser 4K Atmos" not in body                                  # seen for other films: not a capability
+    app.checkbox(key="fmt_ALUC_Dolby Cinema").check().run()
+    assert app.session_state["formats"] == {"ALUC": ["Dolby Cinema"]}
 
 
 def test_every_theatre_gets_the_films_formats_not_its_own(provider_factory):
     seed(provider_factory, avengers_at_allu=[ALLU_BARCO_LIVE])
     by_code = {v.code: v for v in cv.selected_venues(AVENGERS, "hyderabad", ["PVFS", "AMBH", "ALUC"])}
-    assert by_code["PVFS"].formats == ("3D",)                     # Avengers lists 3D; IMAX/4DX are PVR's, for other films
+    assert by_code["PVFS"].formats == ("3D",)                     # Avengers lists 3D; IMAX/4DX are seen for other films
     assert by_code["AMBH"].formats == ("2D",)
     assert by_code["ALUC"].formats == ("Barco Laser 4K Atmos",)
-    assert cv.capabilities("hyderabad", ["PVFS"])["PVFS"] == ("3D", "4DX 3D", "IMAX")
+    assert cv.capabilities("hyderabad", ["PVFS"])["PVFS"] == ("4DX",)          # PVR Nexus: Audi 5 (4DX)
     app = run(step=4, furthest=4, location="hyderabad", movie_id=AVENGERS, theatres=["PVFS", "ALUC"])
     keys = {c.key for c in app.checkbox}
     assert keys == {"fmt_PVFS_any", "fmt_PVFS_3D", "fmt_ALUC_any", "fmt_ALUC_Barco Laser 4K Atmos"}
+    assert "Premium screens here: 4DX — not listed for this movie here" in markup(app)
 
 
 def test_formats_are_deduplicated_on_the_checkers_own_key():
@@ -216,17 +221,20 @@ def test_B_marvel_theatre_capable_but_bms_does_not_list_it_for_this_movie_offers
     store(provider_factory, MARVEL, build_payload([dated(PRASADS, "2D", "20260925")]))
     [prasads] = cv.selected_venues(MARVEL.id, "hyderabad", ["PRHN"])
     assert prasads.formats == ("2D",)
-    assert cv.capabilities("hyderabad", ["PRHN"])["PRHN"] == ("2D", "Infinity Vision 2D")
+    # Infinity Vision is not a verified capability of Prasads (HyderabadTheatres names PCX and HDR by Barco)
+    assert cv.capabilities("hyderabad", ["PRHN"])["PRHN"] == ("PCX", "HDR By Barco")
+    assert cv.seen_formats("hyderabad", ["PRHN"])["PRHN"] == ("2D", "Infinity Vision 2D")
     app = run(step=4, furthest=4, location="hyderabad", movie_id=MARVEL.id, theatres=["PRHN"])
     assert {c.key for c in app.checkbox} == {"fmt_PRHN_any", "fmt_PRHN_2D"}
     body = markup(app)
-    assert "also runs Infinity Vision 2D for other films" in body
-    assert "Prasads Multiplex (2D" not in body                              # no Marvel note: it is not listed for the film
+    assert "Premium screens here: PCX · HDR By Barco — not listed for this movie here" in body
+    assert "Infinity Vision" not in body                                     # neither a listing nor a verified capability
 
 
 def test_C_same_theatre_no_listing_on_the_25th_infinity_vision_on_the_26th(provider_factory):
     """The catalogue reads the default date and the next bookable dates; the
-    wizard answers per date: nothing on the 25th, Infinity Vision on the 26th."""
+    wizard answers per date: on the 25th Prasads is coming soon (its
+    premium screens to wait for), on the 26th its actual Infinity Vision."""
     default = build_payload([dated(ALLU, "DOLBY CINEMA", "20260925")], bookable_dates=("20260925", "20260926"), closed_dates=())
     twenty_sixth = build_payload([dated(PRASADS, "MS - Infinity Vision", "20260926"),
                                   dated(PRASADS, "MS-Infinity Vision 3D", "20260926", time="10:30 PM", code="2230"),
@@ -241,22 +249,24 @@ def test_C_same_theatre_no_listing_on_the_25th_infinity_vision_on_the_26th(provi
     assert cv.coming_soon_codes(MARVEL.id, "hyderabad", ["PRHN", "ALUC"], ["20260926"]) == set()
     assert cv.listed_formats(MARVEL.id, "hyderabad", ["PRHN"], ["20260925"]) == {"PRHN": ()}
     assert cv.listed_formats(MARVEL.id, "hyderabad", ["PRHN"], ["20260926"]) == {"PRHN": ("Infinity Vision 2D", "Infinity Vision 3D")}
-    # …and with no date chosen, every date the catalogue read
     assert cv.listed_formats(MARVEL.id, "hyderabad", ["PRHN"]) == {"PRHN": ("Infinity Vision 2D", "Infinity Vision 3D")}
 
     on_25 = run(step=4, furthest=5, location="hyderabad", movie_id=MARVEL.id, theatres=["PRHN", "ALUC"], show_dates=["20260925"])
-    assert {c.key for c in on_25.checkbox} == {"fmt_ALUC_any", "fmt_ALUC_Dolby Cinema"}
-    assert on_25.session_state["formats"]["PRHN"] == [ANY_FORMAT]
-    assert "Not listed for this movie on 25 Sep 2026" in markup(on_25) and "Prasads Multiplex (2D" not in markup(on_25)
+    assert {c.key for c in on_25.checkbox} == {"fmt_ALUC_any", "fmt_ALUC_Dolby Cinema", "fmt_PRHN_any", "fmt_PRHN_PCX", "fmt_PRHN_HDR By Barco"}
+    assert on_25.session_state["formats"]["PRHN"] == []                          # nothing chosen yet, nothing assumed
+    body = markup(on_25)
+    assert "Not listed for this movie on 25 Sep 2026 yet" in body and "Premium screens here: PCX · HDR By Barco." in body
+    assert "Infinity Vision" not in body                                        # no leak from the 26th
     on_26 = run(step=4, furthest=5, location="hyderabad", movie_id=MARVEL.id, theatres=["PRHN", "ALUC"], show_dates=["20260926"])
     assert {"fmt_PRHN_Infinity Vision 2D", "fmt_PRHN_Infinity Vision 3D", "fmt_ALUC_Dolby Cinema"} <= {c.key for c in on_26.checkbox}
+    assert "fmt_PRHN_PCX" not in {c.key for c in on_26.checkbox}                # listed: the movie's own formats only
     assert "Prasads Multiplex (2D, 3D)" in markup(on_26)
     # the theatre step is date-aware the same way
     theatres_25 = run(step=3, furthest=5, location="hyderabad", movie_id=MARVEL.id, show_dates=["20260925"])
     assert "th_PRHN" not in {b.key for b in theatres_25.button if not (b.key or "").startswith("feat_")}
 
 
-def test_D_non_marvel_at_an_infinity_vision_capable_theatre_offers_only_what_bms_lists(provider_factory):
+def test_D_non_marvel_at_a_premium_theatre_offers_only_what_bms_lists(provider_factory):
     store(provider_factory, MARVEL, build_payload([dated(PRASADS, "MS - Infinity Vision", "20260925")]))
     store(provider_factory, OTHER, build_payload([dated(PRASADS, "2D", "20260925"),
                                                   dated(PRASADS, "DOLBY CINEMA 2D", "20260925", time="10:30 PM", code="2230")]))
@@ -265,8 +275,9 @@ def test_D_non_marvel_at_an_infinity_vision_capable_theatre_offers_only_what_bms
     app = run(step=4, furthest=4, location="hyderabad", movie_id=OTHER.id, theatres=["PRHN"])
     assert {c.key for c in app.checkbox} == {"fmt_PRHN_any", "fmt_PRHN_2D", "fmt_PRHN_Dolby Cinema 2D"}
     body = markup(app)
-    assert "Infinity Vision" in body and "also runs Infinity Vision 2D for other films" in body
-    assert "Pick it below to watch that screen" not in body               # the Marvel note is not drawn for The Paradise
+    assert "Premium screens here: PCX · HDR By Barco — not listed for this movie here" in body
+    assert "Infinity Vision" not in body                                       # seen for Avengers: not this movie, not a capability
+    assert "Pick it below to watch that screen" not in body                   # the Marvel note is not drawn for The Paradise
 
 
 def test_E_non_marvel_offers_exactly_the_bms_formats(provider_factory):
@@ -286,11 +297,11 @@ def test_F_capability_never_stands_in_for_a_listing_but_still_guards_the_start(p
     store(provider_factory, MARVEL, build_payload([dated(PRASADS, "MS - Infinity Vision", "20260925")]))
     store(provider_factory, OTHER, build_payload([dated(PRASADS, "2D", "20260925")]))
     [prasads] = cv.selected_venues(OTHER.id, "hyderabad", ["PRHN"])
-    capable = cv.capabilities("hyderabad", ["PRHN"])["PRHN"]
-    assert "Infinity Vision 2D" not in prasads.formats and "Infinity Vision 2D" in capable
+    capable = (*cv.capabilities("hyderabad", ["PRHN"])["PRHN"], *cv.seen_formats("hyderabad", ["PRHN"])["PRHN"])
+    assert "PCX" not in prasads.formats and "PCX" in capable
     # the start guard still refuses a format nobody has ever seen the theatre run, and nothing else
     assert flow.unknown_formats(prasads, ["IMAX"], capable) == ["IMAX"]
-    assert flow.unknown_formats(prasads, ["2D", "Infinity Vision 2D", ANY_FORMAT], capable) == []
+    assert flow.unknown_formats(prasads, ["2D", "PCX", "Infinity Vision 2D", ANY_FORMAT], capable) == []
 
 
 def test_the_monitoring_step_says_what_is_not_listed_on_the_chosen_date(provider_factory):
@@ -317,3 +328,93 @@ def test_old_rows_without_listings_fall_back_to_their_undated_formats(provider_f
     assert cv.listings(OTHER.id, "hyderabad") == {"": {"PRHN": ("2D",)}}
     assert cv.listed_formats(OTHER.id, "hyderabad", ["PRHN"], ["20260926"]) == {"PRHN": ("2D",)}
     assert cv.coming_soon_codes(OTHER.id, "hyderabad", ["PRHN"], ["20260926"]) == set()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Premium capability (HyderabadTheatres) vs BookMyShow listing — the PXL class of bug
+# ──────────────────────────────────────────────────────────────────────────
+LAKESHORE = TheatreTarget("ILKS", "PVR Lakeshore Mall", "Y Junction", ANY_FORMAT)
+SUPERPLEX = TheatreTarget("PIIC", "PVR Superplex Inorbit", "Cyberabad", ANY_FORMAT)
+
+
+def test_1_lakeshore_has_pxl_and_offers_it_before_the_movie_is_listed(provider_factory):
+    from config.theatre_capabilities import premium_formats, source_page
+
+    assert premium_formats("ILKS") == ("PXL",) and "pvr-lakeshore-mall-y-junction" in source_page("ILKS")
+    store(provider_factory, OTHER, build_payload([dated(LAKESHORE, "PLAYHOUSE", "20260925")]))   # Lakeshore known to BMS via another film
+    store(provider_factory, MARVEL, build_payload([dated(ALLU, "DOLBY CINEMA", "20260925")]))
+    assert cv.coming_soon_codes(MARVEL.id, "hyderabad", ["ILKS"]) == {"ILKS"}
+    app = run(step=4, furthest=4, location="hyderabad", movie_id=MARVEL.id, theatres=["ILKS"])
+    assert not app.exception
+    assert {c.key for c in app.checkbox} == {"fmt_ILKS_any", "fmt_ILKS_PXL"}
+    body = markup(app)
+    assert "Coming soon" in body and "Premium screens here: PXL." in body and "Playhouse" not in body
+    app.checkbox(key="fmt_ILKS_PXL").check().run()
+    assert app.session_state["formats"] == {"ILKS": ["PXL"]}
+    # …and the monitor starts with PXL at Lakeshore
+    app = run(step=5, furthest=5, location="hyderabad", movie_id=MARVEL.id, theatres=["ILKS"], formats={"ILKS": ["PXL"]})
+    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.button(key="start").click().run()
+    assert not app.exception, [str(e) for e in app.exception]
+    [monitor] = load_monitors()
+    assert [t.key for t in monitor.targets] == ["ILKS::PXL"]
+
+
+def test_2_a_theatre_with_several_premium_screens_offers_them_all_when_not_listed(provider_factory):
+    store(provider_factory, MARVEL, build_payload([dated(ALLU, "DOLBY CINEMA", "20260925")]))
+    store(provider_factory, OTHER, build_payload([dated(SUPERPLEX, "2D", "20260925")]))
+    app = run(step=4, furthest=4, location="hyderabad", movie_id=MARVEL.id, theatres=["PIIC"])
+    assert {c.key for c in app.checkbox} == {"fmt_PIIC_any", "fmt_PIIC_PXL", "fmt_PIIC_LUXE", "fmt_PIIC_4DX"}
+    assert "Premium screens here: PXL · LUXE · 4DX." in markup(app)
+
+
+def test_3_listed_only_in_2d_the_premium_screen_is_not_claimed(provider_factory):
+    store(provider_factory, MARVEL, build_payload([dated(LAKESHORE, "2D", "20260925")]))
+    [lakeshore] = cv.selected_venues(MARVEL.id, "hyderabad", ["ILKS"])
+    assert lakeshore.formats == ("2D",)
+    app = run(step=4, furthest=4, location="hyderabad", movie_id=MARVEL.id, theatres=["ILKS"])
+    assert {c.key for c in app.checkbox} == {"fmt_ILKS_any", "fmt_ILKS_2D"}
+    assert "Premium screens here: PXL — not listed for this movie here" in markup(app)
+
+
+def test_4_and_5_pxl_is_a_movie_format_only_when_bms_lists_it(provider_factory):
+    default = build_payload([dated(LAKESHORE, "2D", "20260925")], bookable_dates=("20260925", "20260926"), closed_dates=())
+    twenty_sixth = build_payload([dated(LAKESHORE, "2D", "20260926"), dated(LAKESHORE, "PXL", "20260926", time="10:30 PM", code="2230")],
+                                 bookable_dates=("20260925", "20260926"), closed_dates=())
+    store(provider_factory, MARVEL, default, twenty_sixth)
+    assert cv.listed_formats(MARVEL.id, "hyderabad", ["ILKS"], ["20260925"]) == {"ILKS": ("2D",)}
+    assert cv.listed_formats(MARVEL.id, "hyderabad", ["ILKS"], ["20260926"]) == {"ILKS": ("2D", "PXL")}
+    on_26 = run(step=4, furthest=5, location="hyderabad", movie_id=MARVEL.id, theatres=["ILKS"], show_dates=["20260926"])
+    assert {c.key for c in on_26.checkbox} == {"fmt_ILKS_any", "fmt_ILKS_2D", "fmt_ILKS_PXL"}     # 4: actual movie format
+    on_25 = run(step=4, furthest=5, location="hyderabad", movie_id=MARVEL.id, theatres=["ILKS"], show_dates=["20260925"])
+    assert {c.key for c in on_25.checkbox} == {"fmt_ILKS_any", "fmt_ILKS_2D"}                     # 5: not claimed
+    assert "Premium screens here: PXL — not listed for this movie here on 25 Sep" in markup(on_25)
+
+
+def test_9_10_11_only_named_premium_formats_are_capabilities():
+    from config.theatre_capabilities import NOT_FORMATS, PREMIUM_SCREENS, premium_formats
+
+    every = {f for _, screens in PREMIUM_SCREENS.values() for f in screens}
+    for generic in ("4K", "4K Laser", "Dolby Atmos", "Atmos", "DTS:X", "Recliner Seats", "Luxury Seating", "Play House", "Playhouse"):
+        assert generic not in every and generic in NOT_FORMATS
+    assert {"PCX", "PXL", "EPIQ", "Dolby Cinema", "4DX", "HDR By Barco", "Macro XE", "LUXE"} <= every
+    assert premium_formats("PRHN") == ("PCX", "HDR By Barco") and premium_formats("ALUC") == ("Dolby Cinema",)
+    assert premium_formats("ACEV") == ("EPIQ",) and premium_formats("ACAS") == ("EPIQ",)
+    assert premium_formats("CTNR") == ("Macro XE",) and premium_formats("PVFS") == ("4DX",)
+    assert premium_formats("ZZZZ") == ()
+    assert not any("Infinity Vision" in f for f in every)      # not verified by the source for any theatre
+
+
+def test_a_premium_watch_matches_the_screen_under_bookmyshows_own_name():
+    from platforms.bookmyshow import clean_format
+
+    # PVR writes its PXL screen "Pxl"; AAA's EPIQ screen is sold as "Led Screen Dolby Atmos"
+    assert TheatreTarget("ILKS", "PVR Lakeshore", "", "PXL").matches_format(clean_format("PXL 4K LASER ATMOS"))
+    assert TheatreTarget("PIIC", "PVR Superplex", "", "PXL").matches_format(clean_format("pxl"))
+    assert TheatreTarget("ACAS", "AAA Cinemas", "", "EPIQ").matches_format(clean_format("LED SCREEN DOLBY ATMOS"))
+    assert not TheatreTarget("ACAS", "AAA Cinemas", "", "EPIQ").matches_format(clean_format("LASER DOLBY ATMOS"))
+    assert TheatreTarget("AMBH", "AMB", "", "MB LUXE").matches_format(clean_format("M B LUXE"))
+    assert TheatreTarget("CTNR", "Cinepolis", "", "Macro XE").matches_format(clean_format("MACRO XE"))
+    # ordinary matching is untouched
+    assert TheatreTarget("ALUC", "ALLU", "", "Dolby Cinema").matches_format("Dolby Cinema 3D")
+    assert not TheatreTarget("ALUC", "ALLU", "", "IMAX").matches_format("Dolby Cinema 3D")

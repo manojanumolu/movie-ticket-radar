@@ -325,9 +325,19 @@ class TheatreTarget:
         return f"{self.venue_name} · {self.fmt}"
 
     def matches_format(self, showtime_format: str) -> bool:
+        """The chosen format is in the show's label — or the show's label is
+        one of BookMyShow's other names for that premium screen at this
+        theatre (``config.theatre_capabilities``: AAA's EPIQ is sold as
+        "Led Screen Dolby Atmos"). Ordinary formats match as they always
+        have."""
         if self.fmt == ANY_FORMAT or not self.fmt.strip():
             return True
-        return normalise_format(self.fmt) in normalise_format(showtime_format)
+        listed = normalise_format(showtime_format)
+        if normalise_format(self.fmt) in listed:
+            return True
+        from config.theatre_capabilities import format_aliases
+
+        return any(normalise_format(alias) in listed for alias in format_aliases(self.venue_code, self.fmt))
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
