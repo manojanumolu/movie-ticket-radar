@@ -267,39 +267,43 @@ def strip_svg() -> str:
 
 
 #: Where the rail's film leaves the first reel and meets the second, in
-#: degrees clockwise from three o'clock; and how far it stays wound on each
-#: rim before it fades into the spool. Both reels turn clockwise, so their
-#: right-hand rims run downward — which is the way the film goes.
-RAIL_FILM = {"wound": -80, "leave": 35, "meet": -10, "spool": 110, "fade": 30}
+#: degrees clockwise from three o'clock (so 180 is the left rim, 270 the
+#: top); how far it stays wound on each rim before it fades into the spool;
+#: and how far down the rail's left margin it runs before it sweeps right —
+#: below the footer, so it crosses nothing. Both reels turn counter-
+#: clockwise, so their left rims run downward, which is the way it goes.
+RAIL_FILM = {"wound": 250, "leave": 180, "run": 520, "meet": 195, "spool": 100, "fade": 30}
 
 
 def rail_film_svg() -> str:
     """The strip of film between the rail's two reels, as one path: an arc
-    on the first reel's rim, off it on a tangent, one curve down, onto the
-    second reel's rim on a tangent, and an arc round that. The reels'
-    centres and radii come from ``theme.RAIL_RIG`` — the numbers the theme
-    places them by — so the film sits on the rims wherever the rail is
-    drawn. Drawn as Home's strip is, five strokes over one path, with each
-    wound end faded so the film seems to disappear into the spool."""
+    on the first reel's rim, off its left side on a tangent, straight down
+    the rail's margin, one curve right onto the second reel's rim on a
+    tangent, and an arc round that. The reels' centres and radii come from
+    ``theme.RAIL_RIG`` — the numbers the theme places them by — so the film
+    sits on the rims wherever the rail is drawn. Drawn as Home's strip is,
+    five strokes over one path, with each wound end faded so the film
+    seems to disappear into the spool."""
     top, bottom = rail_reel("top"), rail_reel("bottom")
 
     def on(reel, deg):
         cx, cy, r = reel
         return cx + r * math.cos(math.radians(deg)), cy + r * math.sin(math.radians(deg))
 
-    def along(deg):   # the direction of clockwise travel on a rim at ``deg``
-        return -math.sin(math.radians(deg)), math.cos(math.radians(deg))
+    def along(deg):   # the direction of counter-clockwise travel on a rim at ``deg``
+        return math.sin(math.radians(deg)), -math.cos(math.radians(deg))
 
     f = RAIL_FILM
     a0, p1 = on(top, f["wound"]), on(top, f["leave"])
     p2, a3 = on(bottom, f["meet"]), on(bottom, f["spool"])
-    reach = 0.4 * math.dist(p1, p2)
+    run = (p1[0], float(f["run"]))                     # the margin run ends here, below the footer
+    reach = 0.6 * math.dist(run, p2)
     d1, d2 = along(f["leave"]), along(f["meet"])
-    c1 = (p1[0] + reach * d1[0], p1[1] + reach * d1[1])
+    c1 = (run[0] + reach * d1[0], run[1] + reach * d1[1])
     c2 = (p2[0] - reach * d2[0], p2[1] - reach * d2[1])
     pt = lambda q: f"{q[0]:.1f} {q[1]:.1f}"
-    d = (f"M{pt(a0)} A{top[2]:.1f} {top[2]:.1f} 0 0 1 {pt(p1)} "
-         f"C{pt(c1)}, {pt(c2)}, {pt(p2)} A{bottom[2]:.1f} {bottom[2]:.1f} 0 0 1 {pt(a3)}")
+    d = (f"M{pt(a0)} A{top[2]:.1f} {top[2]:.1f} 0 0 0 {pt(p1)} L{pt(run)} "
+         f"C{pt(c1)}, {pt(c2)}, {pt(p2)} A{bottom[2]:.1f} {bottom[2]:.1f} 0 0 0 {pt(a3)}")
 
     def fade(k, reel, end, toward):
         """A mask patch that dims the film from its wound end ``end`` to
@@ -313,8 +317,8 @@ def rail_film_svg() -> str:
                 '<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>'
                 '</linearGradient>',
                 f'<rect x="{x0:.0f}" y="{y0:.0f}" width="{x1 - x0:.0f}" height="{y1 - y0:.0f}" fill="url(#tr-side-fade{k})"/>')
-    g1, r1 = fade(1, top, f["wound"], f["wound"] + f["fade"])
-    g2, r2 = fade(2, bottom, f["spool"], f["spool"] - f["fade"])
+    g1, r1 = fade(1, top, f["wound"], f["wound"] - f["fade"])
+    g2, r2 = fade(2, bottom, f["spool"], f["spool"] + f["fade"])
     w, h = RAIL_RIG["width"], RAIL_RIG["height"]
     return (f'<svg class="tr-side-film" viewBox="0 0 {w} {h}" width="{w}" height="{h}" fill="none" aria-hidden="true">'
             f'<defs>{g1}{g2}<mask id="tr-side-spool" maskUnits="userSpaceOnUse" x="0" y="0" width="{w}" height="{h}">'

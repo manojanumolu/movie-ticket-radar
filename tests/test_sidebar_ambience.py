@@ -2,13 +2,14 @@
 film wound off one onto the other.
 
 The rail's decoration is Home's reel drawing (``ui.home.reel_svg``) twice —
-one behind the navigation, a smaller one lower and to the left — and a
-strip of film (``ui.home.rail_film_svg``) that hugs the first reel's rim,
-leaves it on a tangent, curves down and meets the second reel's rim on a
-tangent. Both are placed from one set of numbers (``ui.theme.RAIL_RIG``),
-so the film sits on the rims wherever the rail is drawn; both reels turn
-clockwise, the smaller faster, as one length of film would turn them; the
-film itself does not move. The markup rides in the footer's html block (no
+one behind the navigation, a smaller one below everything, to the right —
+and a thin strip of film (``ui.home.rail_film_svg``) that hugs the first
+reel's rim, leaves its left side on a tangent, runs down the rail's margin
+clear of every word in the rail, and below the footer sweeps right onto
+the second reel's rim on a tangent. Both are placed from one set of
+numbers (``ui.theme.RAIL_RIG``), so the film sits on the rims wherever the
+rail is drawn; both reels turn counter-clockwise, the smaller faster, as
+one length of film would turn them; the film itself does not move. The markup rides in the footer's html block (no
 extra element, no gap) and the theme fixes it behind the navigation and
 clips it to the rail. These tests pin the markup, the geometry, the
 stylesheet contract and the reduced-motion behaviour; the browser checks
@@ -109,12 +110,13 @@ def test_reels_are_placed_from_the_rig_and_the_bottom_one_is_smaller_and_offset(
             in block[".tr-side-ambience .tr-reel.top"])
     assert (f"left: {bottom['left']}px; top: {bottom['top']}px; width: {bottom['size']}px; height: {bottom['size']}px"
             in block[".tr-side-ambience .tr-reel.bottom"])
-    assert bottom["size"] < top["size"] <= 200                              # smaller than the wheels they replace
+    assert bottom["size"] < top["size"] <= 180                              # small
     assert top["left"] + top["size"] <= theme.RAIL_RIG["width"]             # inside the rail: nothing to clip
     assert bottom["left"] + bottom["size"] <= theme.RAIL_RIG["width"]
     cx_top, cy_top, _ = theme.rail_reel("top")
     cx_bottom, cy_bottom, _ = theme.rail_reel("bottom")
-    assert cy_bottom > cy_top + top["size"] / 2 and cx_bottom < cx_top - 40   # lower, and off the same axis
+    assert cy_bottom > cy_top + top["size"] / 2 and cx_bottom > cx_top + 40   # lower, and off the same axis
+    assert bottom["top"] >= 515                                             # below the version line, at every width
     film = block[".tr-side-film"]
     assert (f"position: absolute; left: 0; top: 0; width: {theme.RAIL_RIG['width']}px; "
             f"height: {theme.RAIL_RIG['height']}px" in film)
@@ -124,27 +126,48 @@ def test_reels_are_placed_from_the_rig_and_the_bottom_one_is_smaller_and_offset(
 def test_the_film_is_wound_on_both_rims_and_leaves_and_meets_them_on_a_tangent():
     top, bottom = theme.rail_reel("top"), theme.rail_reel("bottom")
     segs = film_path()
-    assert [c for c, _ in segs] == ["M", "A", "C", "A"], "arc on the first rim, one curve, arc on the second"
+    assert [c for c, _ in segs] == ["M", "A", "L", "C", "A"],         "arc on the first rim, straight down the margin, one curve, arc on the second"
     start = tuple(segs[0][1])
-    arc1, curve, arc2 = segs[1][1], segs[2][1], segs[3][1]
+    arc1, run, curve, arc2 = segs[1][1], segs[2][1], segs[3][1], segs[4][1]
     leave, meet, end = tuple(arc1[-2:]), tuple(curve[-2:]), tuple(arc2[-2:])
-    # wound on the first reel's rim, from its top round its right side
+    # wound on the first reel's rim, from near its top round its left side
     assert on_rim(start, top) and on_rim(leave, top)
-    assert abs(arc1[0] - top[2]) < 0.1 and arc1[4] == 1 and leave[0] > top[0]
-    # wound on the second reel's rim, from its right side round to its bottom
+    assert abs(arc1[0] - top[2]) < 0.1 and arc1[4] == 0 and leave[0] < top[0]       # counter-clockwise
+    # off it straight down: the run is the tangent at the left rim, and stays there
+    assert abs(leave[1] - top[1]) < 0.1 and run[0] == leave[0] and run[1] > leave[1]
+    # wound on the second reel's rim, from its left side round to its bottom
     assert on_rim(meet, bottom) and on_rim(end, bottom)
-    assert abs(arc2[0] - bottom[2]) < 0.1 and arc2[4] == 1 and meet[0] > bottom[0] and end[1] > bottom[1]
-    # tangent continuity: each control leg lies along the rim, not across it,
-    # and runs downward on the right-hand rim — the way a clockwise reel turns
+    assert abs(arc2[0] - bottom[2]) < 0.1 and arc2[4] == 0 and meet[0] < bottom[0] and end[1] > bottom[1]
+    # tangent continuity into and out of the curve: the first control leg
+    # continues the run straight down, the second lies along the rim
     c1, c2 = curve[0:2], curve[2:4]
-    for control, point, reel, sign in ((c1, leave, top, 1), (c2, meet, bottom, -1)):
-        radial = (point[0] - reel[0], point[1] - reel[1])
-        leg = (control[0] - point[0], control[1] - point[1])
-        cos = (radial[0] * leg[0] + radial[1] * leg[1]) / (math.hypot(*radial) * math.hypot(*leg))
-        assert abs(cos) < 0.02, cos
-        assert sign * leg[1] > 0
-    # the film goes down: it leaves high on the first reel and meets the second lower
-    assert leave[1] < meet[1] < end[1]
+    assert c1[0] == run[0] and c1[1] > run[1]
+    radial = (meet[0] - bottom[0], meet[1] - bottom[1])
+    leg = (c2[0] - meet[0], c2[1] - meet[1])
+    cos = (radial[0] * leg[0] + radial[1] * leg[1]) / (math.hypot(*radial) * math.hypot(*leg))
+    assert abs(cos) < 0.02 and leg[1] < 0, "arriving from above, moving down the left rim"
+
+
+def test_the_film_crosses_nothing_in_the_rail():
+    """The rail's words live in a column that starts at x=46 on a desktop
+    and x=36 on a phone, and end at the version line (y≈512). The film's
+    run keeps to the margin left of that column, and the film is right of
+    it only below the footer."""
+    segs = film_path()
+    arc1, run, curve = segs[1][1], segs[2][1], segs[3][1]
+    half = 8 / 2 + 1                                       # the widest stroke, and a pixel
+    assert run[0] + half < 36, "the margin run clears a phone's content column"
+    # the wound arc on the first reel sits behind the navigation, which is fine —
+    # the reel does too — but its wound end fades before the logo's line
+    assert min(tuple(segs[0][1])[1], arc1[-1]) > 150
+    p0 = (run[0], run[1])
+    c1, c2, p3 = curve[0:2], curve[2:4], curve[4:6]
+    for i in range(101):
+        t = i / 100
+        x = (1 - t) ** 3 * p0[0] + 3 * (1 - t) ** 2 * t * c1[0] + 3 * (1 - t) * t ** 2 * c2[0] + t ** 3 * p3[0]
+        y = (1 - t) ** 3 * p0[1] + 3 * (1 - t) ** 2 * t * c1[1] + 3 * (1 - t) * t ** 2 * c2[1] + t ** 3 * p3[1]
+        if x + half >= 36:
+            assert y - half > 515, (x, y)
 
 
 def test_the_film_is_drawn_as_homes_strip_with_faded_wound_ends():
@@ -155,8 +178,9 @@ def test_the_film_is_drawn_as_homes_strip_with_faded_wound_ends():
     assert svg.count("<linearGradient") == 2 and svg.count('fill="url(#tr-side-fade') == 2
     assert 'mask="url(#tr-side-spool)"' in svg
     block = rules(ambience_block())
-    assert "stroke-dasharray: 2.2 4.4" in block[".tr-side-film .holes"]    # the sprocket ticks
-    assert "stroke-width: 14" in block[".tr-side-film .band"] and "stroke-width: 9" in block[".tr-side-film .film"]
+    assert "stroke-dasharray: 1.5 3" in block[".tr-side-film .holes"]      # the sprocket ticks
+    assert "stroke-width: 7" in block[".tr-side-film .band"] and "stroke-width: 4" in block[".tr-side-film .film"]
+    assert "stroke-width: 8" in block[".tr-side-film .edges"]               # very thin: 8px edge to edge
     assert "rgba(255,140,160" in block[".tr-side-film .edges"] and "rgba(255,140,160" in block[".tr-side-film .holes"]
     assert "color: #FF8CA0" in block[".tr-side-ambience"]
     assert "stroke: #FFC9D4" in block[".tr-side-ambience .tr-reel .sheen"]
@@ -165,10 +189,11 @@ def test_the_film_is_drawn_as_homes_strip_with_faded_wound_ends():
 # ──────────────────────────────────────────────────────────────────────────
 # 3 · CSS only, transform only, slow, the same way round; the film still
 # ──────────────────────────────────────────────────────────────────────────
-def test_the_motion_is_css_only_slow_and_clockwise_on_both_reels():
+def test_the_motion_is_css_only_slow_and_the_same_way_on_both_reels():
     css = theme.CSS
     assert "<script" not in css.lower() and "<script" not in home.rail_film_svg().lower()
-    assert re.search(r"@keyframes tr-side-reel \{ to \{ transform: rotate\(360deg\); \} \}", css)
+    # one keyframe, counter-clockwise: the left rims run downward, as the film does
+    assert re.search(r"@keyframes tr-side-reel \{ to \{ transform: rotate\(-360deg\); \} \}", css)
     assert "@keyframes tr-side-film" not in css
     block = rules(ambience_block())
     top = int(re.search(r"tr-side-reel (\d+)s", block[".tr-side-ambience .tr-reel.top"]).group(1))

@@ -96,8 +96,8 @@ def _nav_css() -> str:
 #: the rig never scales: a phone's wider rail shows the same picture.
 RAIL_RIG = {
     "width": 244, "height": 700,
-    "top": {"left": 42, "top": 152, "size": 196},      # behind the navigation
-    "bottom": {"left": 10, "top": 492, "size": 136},   # lower, and to the left
+    "top": {"left": 22, "top": 160, "size": 180},      # behind the navigation; its left rim in the margin
+    "bottom": {"left": 96, "top": 588, "size": 128},   # below everything, to the right
 }
 
 
@@ -231,13 +231,15 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 /* Sidebar ambience — one piece of film equipment behind the rail.
 
    Two of Home's reels (``ui.home.reel_svg``: rim, sheen arc, ring, six
-   perforations, hub, pin, in Home's colours) with a strip of film wound
-   off the first onto the second: the film hugs the first reel's rim, leaves
-   it on a tangent, curves down and meets the second reel's rim on a
-   tangent — ``ui.home.rail_film_svg`` draws it from the same numbers
-   (``RAIL_RIG``) that place the reels here, so there is no gap at either
-   end and both turn the same way, the smaller one faster, as one length of
-   film would have them. The markup rides in the footer's html block
+   perforations, hub, pin, in Home's colours) with a thin strip of film
+   wound off the first onto the second: the film hugs the first reel's rim,
+   leaves its left side on a tangent, runs down the rail's left margin —
+   clear of the navigation, the quote and the footer at every width — and
+   below them sweeps right onto the second reel's rim on a tangent.
+   ``ui.home.rail_film_svg`` draws it from the same numbers (``RAIL_RIG``)
+   that place the reels here, so there is no gap at either end; both turn
+   counter-clockwise (a left rim running downward), the smaller one faster,
+   as one length of film would have them. The markup rides in the footer's html block
    (``app.sidebar``) and is fixed here: ``position: fixed`` inside the rail
    — whose backdrop-filter makes it the containing block — is the rail's
    box, so it never adds scrollable width to the rail's scroll container,
@@ -245,7 +247,7 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
    itself does not move; the reels' rotation is the motion. Transform-only,
    no script, no asset; pointer-transparent at z-index 0 under the content
    (lifted to 1 below). */
-@keyframes tr-side-reel { to { transform: rotate(360deg); } }
+@keyframes tr-side-reel { to { transform: rotate(-360deg); } }
 .tr-side-ambience {
   position: fixed; left: 0; top: 0; width: 100%; height: 100%; z-index: 0;
   pointer-events: none; overflow: hidden; color: #FF8CA0;
@@ -262,12 +264,12 @@ __RAIL_RIG__
 /* the film, drawn as Home's strip is: a halo, the two edges, the band, the
    sprocket ticks across it, the darker centre that leaves them only at the
    margins, and the frame lines */
-.tr-side-film .halo { stroke: rgba(255,51,85,.05); stroke-width: 30; }
-.tr-side-film .edges { stroke: rgba(255,140,160,.18); stroke-width: 16; }
-.tr-side-film .band { stroke: rgba(26,18,25,.55); stroke-width: 14; }
-.tr-side-film .holes { stroke: rgba(255,140,160,.20); stroke-width: 14; stroke-dasharray: 2.2 4.4; }
-.tr-side-film .film { stroke: rgba(15,11,17,.5); stroke-width: 9; }
-.tr-side-film .frames { stroke: rgba(255,255,255,.05); stroke-width: 9; stroke-dasharray: 1 20; }
+.tr-side-film .halo { stroke: rgba(255,51,85,.05); stroke-width: 16; }
+.tr-side-film .edges { stroke: rgba(255,140,160,.16); stroke-width: 8; }
+.tr-side-film .band { stroke: rgba(26,18,25,.5); stroke-width: 7; }
+.tr-side-film .holes { stroke: rgba(255,140,160,.18); stroke-width: 7; stroke-dasharray: 1.5 3; }
+.tr-side-film .film { stroke: rgba(15,11,17,.45); stroke-width: 4; }
+.tr-side-film .frames { stroke: rgba(255,255,255,.04); stroke-width: 4; stroke-dasharray: 1 12; }
 /* off-canvas (a phone's collapsed rail) there is nothing to see */
 [data-testid="stSidebar"][aria-expanded="false"] .tr-side-ambience { display: none; }
 /* the rail's own content stays above the room, and readable */
