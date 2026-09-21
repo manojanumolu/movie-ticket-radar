@@ -36,8 +36,10 @@ PREMIUM_SCREENS: dict[str, tuple[str, dict[str, tuple[str, ...]]]] = {
              {"Dolby Cinema": ()}),                                              # Dolby Cinema (Screen 1)
     "AMBH": ("https://www.hyderabadtheatres.com/theaters/amb-cinemas/",
              {"HDR By Barco": (), "MB LUXE": ("M B LUXE",), "VIP": ("Vip Screen",)}),   # Screens 1, 8, 5
+    # AAA: Screen 2 is "Screen 2 (EPIQ LED)" on a Luxon LED wall — BookMyShow sells it as "Led Screen
+    # Dolby Atmos". Screen 1 (4K laser, Dolby Atmos, large format) carries no premium name and is not EPIQ.
     "ACAS": ("https://www.hyderabadtheatres.com/theaters/aaa-cinemas/",
-             {"EPIQ": ("Led Screen Dolby Atmos", "EPIQ LED")}),                 # Screen 2 (EPIQ LED), Luxon LED
+             {"EPIQ": ("Led Screen Dolby Atmos", "EPIQ LED")}),
     "ACEV": ("https://www.hyderabadtheatres.com/theaters/art-cinemas/",
              {"EPIQ": ()}),                                                      # Screen 6 (EPIQ)
     "ILKS": ("https://www.hyderabadtheatres.com/theaters/pvr-lakeshore-mall-y-junction/",

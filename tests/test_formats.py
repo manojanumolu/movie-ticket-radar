@@ -491,3 +491,59 @@ def test_prasads_premium_screens_stay_selectable_when_the_movie_is_not_listed(pr
     assert {c.key for c in app.checkbox} == {"fmt_PRHN_any", "fmt_PRHN_PCX", "fmt_PRHN_HDR By Barco"}
     app.checkbox(key="fmt_PRHN_PCX").check().run()
     assert app.session_state["formats"] == {"PRHN": ["PCX"]}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Sources kept apart: AAA's screens, and Infinity Vision from BookMyShow only
+# ──────────────────────────────────────────────────────────────────────────
+CINEPOLIS_TNR = TheatreTarget("CTNR", "Cinepolis", "TNR North City", ANY_FORMAT)
+
+
+def test_aaa_screen_1_is_not_epiq_and_screen_2_is(provider_factory):
+    """HyderabadTheatres: Screen 1 = 4K laser + Atmos, large format (no
+    premium name); Screen 2 = EPIQ LED, which BookMyShow sells as "Led
+    Screen Dolby Atmos"."""
+    from config.theatre_capabilities import format_aliases, premium_formats
+
+    assert premium_formats("ACAS") == ("EPIQ",) and "Laser Dolby Atmos" not in format_aliases("ACAS", "EPIQ")
+    # Avengers on Screen 1 only: EPIQ is a watch target, not "currently listed"
+    store(provider_factory, MARVEL, build_payload([dated(AAA, "LASER DOLBY ATMOS", "20260925")]))
+    app = run(step=4, furthest=4, location="hyderabad", movie_id=MARVEL.id, theatres=["ACAS"])
+    boxes = {c.key: c for c in app.checkbox}
+    assert set(boxes) == {"fmt_ACAS_any", "fmt_ACAS_EPIQ", "fmt_ACAS_Laser Dolby Atmos"}
+    assert boxes["fmt_ACAS_Laser Dolby Atmos"].proto.help.startswith("Currently listed")
+    assert boxes["fmt_ACAS_EPIQ"].proto.help.startswith("AAA Cinemas's EPIQ screen")            # Screen 1 is not EPIQ
+    # Avengers on Screen 2: EPIQ is currently listed, and the box says under which BookMyShow name
+    store(provider_factory, MARVEL, build_payload([dated(AAA, "LED SCREEN DOLBY ATMOS", "20260925")]))
+    app = run(step=4, furthest=4, location="hyderabad", movie_id=MARVEL.id, theatres=["ACAS"])
+    boxes = {c.key: c for c in app.checkbox}
+    assert set(boxes) == {"fmt_ACAS_any", "fmt_ACAS_EPIQ"}
+    assert boxes["fmt_ACAS_EPIQ"].proto.help == 'Currently listed for this movie here on 25 Sep as “Led Screen Dolby Atmos” on BookMyShow.'
+
+
+def test_infinity_vision_comes_from_bookmyshow_only_cinepolis_on_the_25th_prasads_on_the_26th(provider_factory):
+    from config.theatre_capabilities import PREMIUM_SCREENS
+
+    assert not any("infinity" in f.lower() for _, screens in PREMIUM_SCREENS.values() for f in screens)
+    default = build_payload([dated(CINEPOLIS_TNR, "MS-Infinity Vsn 3d", "20260925")],
+                            bookable_dates=("20260925", "20260926"), closed_dates=())
+    twenty_sixth = build_payload([dated(CINEPOLIS_TNR, "MS-Infinity Vsn 3d", "20260926"),
+                                  dated(PRASADS, "MS - Infinity Vision", "20260926"),
+                                  dated(PRASADS, "MS-Infinity Vsn 3D", "20260926", time="10:30 PM", code="2230")],
+                                 bookable_dates=("20260925", "20260926"), closed_dates=())
+    store(provider_factory, MARVEL, default, twenty_sixth)
+    on_25 = run(step=4, furthest=5, location="hyderabad", movie_id=MARVEL.id, theatres=["CTNR", "PRHN"], show_dates=["20260925"])
+    b25 = {c.key: c for c in on_25.checkbox}
+    assert b25["fmt_CTNR_Infinity Vision 3D"].proto.help.startswith("Currently listed for this movie here on 25 Sep")
+    assert "fmt_PRHN_Infinity Vision 2D" not in b25 and "fmt_PRHN_Infinity Vision 3D" not in b25   # not on the 25th
+    assert {"fmt_PRHN_PCX", "fmt_PRHN_HDR By Barco", "fmt_CTNR_Macro XE"} <= set(b25)            # capability, still watchable
+    on_26 = run(step=4, furthest=5, location="hyderabad", movie_id=MARVEL.id, theatres=["CTNR", "PRHN"], show_dates=["20260926"])
+    b26 = {c.key: c for c in on_26.checkbox}
+    assert b26["fmt_PRHN_Infinity Vision 2D"].proto.help.startswith("Currently listed for this movie here on 26 Sep")
+    assert b26["fmt_PRHN_Infinity Vision 3D"].proto.help.startswith("Currently listed for this movie here on 26 Sep")
+    assert "Cinepolis (3D)" in markup(on_26) and "Prasads Multiplex (2D, 3D)" in markup(on_26)   # the Marvel note, from listings
+    # a non-Marvel film at the same theatres, same dates: no Infinity Vision anywhere
+    store(provider_factory, OTHER, build_payload([dated(PRASADS, "2D", "20260926"), dated(CINEPOLIS_TNR, "2D", "20260926")],
+                                                 bookable_dates=("20260926",), closed_dates=()))
+    other = run(step=4, furthest=5, location="hyderabad", movie_id=OTHER.id, theatres=["CTNR", "PRHN"], show_dates=["20260926"])
+    assert not any("Infinity" in k for k in {c.key for c in other.checkbox}) and "Infinity Vision" not in markup(other)

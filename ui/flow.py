@@ -709,8 +709,13 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                     on = sorted(d for d, fmts in listed_on.items()
                                 if any(normalise_format(n) in normalise_format(f) for n in names for f in fmts))
                     if fmt in current:
-                        hint = ("Currently listed for this movie here on " + ", ".join(short_date(d) for d in on) + "."
-                                if on else "Currently listed for this movie at this theatre.")
+                        # BookMyShow's own label for it, when that differs — the listing is the source
+                        under = dedupe(f for fmts in listed_on.values() for f in fmts
+                                       if any(normalise_format(n) in normalise_format(f) for n in names)
+                                       and normalise_format(f) != normalise_format(fmt))
+                        as_named = f" as “{under[0]}” on BookMyShow" if under else ""
+                        hint = ("Currently listed for this movie here on " + ", ".join(short_date(d) for d in on)
+                                + as_named + "." if on else f"Currently listed for this movie at this theatre{as_named}.")
                     else:
                         hint = (f"{venue.name}'s {fmt} screen (HyderabadTheatres). Not yet listed for this movie — "
                                 "watching until it opens here in this format.")
