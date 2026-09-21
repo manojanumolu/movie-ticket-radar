@@ -21,7 +21,7 @@ import pytest
 from monitor.changes import detect_changes
 from monitor.checker import evaluate_target, run_once
 from monitor.models import (ANY_FORMAT, Availability, Monitor, MovieRef, SeatCategory, Showtime,
-                            TheatreTarget, Venue, normalise_category)
+                            TheatreTarget, Venue, category_display, category_matches, normalise_category)
 from monitor.state import get_monitor_state as get_state, load_monitors, upsert_monitor
 from platforms.bookmyshow import parse_seat_categories
 from tests.conftest import ALLU_LIVE, NOT_ON_SALE, SOLD_OUT, FakeResponse, build_payload
@@ -38,6 +38,17 @@ REAL_CATEGORIES = [
 ]
 
 
+#: ALLU Cinemas, Dolby Cinema, Avengers 3D (11:35 AM, session 5315) — exactly as
+#: the runner printed it on 21 Sep 2026: two GOLDs, told apart by the platform
+#: only by a trailing dot in the name and by their price/area codes.
+TWO_GOLDS = [
+    {"additionalData": "0", "areaCatCode": "0000000002", "availStatus": "0", "curPrice": "450.00", "priceCode": "0005", "priceDesc": "3D PLATINUM", "seatLayout": True},
+    {"additionalData": "0", "areaCatCode": "0000000003", "availStatus": "2", "categoryRange": "1|2|3|4|5|6", "curPrice": "395.00", "priceCode": "0006", "priceDesc": "3D GOLD", "seatLayout": True},
+    {"additionalData": "0", "areaCatCode": "0000000004", "availStatus": "0", "curPrice": "450.00", "priceCode": "0007", "priceDesc": "3D DIRECTOR CHOICE", "seatLayout": True},
+    {"additionalData": "0", "areaCatCode": "0000000005", "availStatus": "3", "categoryRange": "1|2|3|4|5|6", "curPrice": "395.00", "priceCode": "0008", "priceDesc": "3D GOLD.", "seatLayout": True},
+]
+
+
 def payload(shows, categories):
     """A showtimes payload whose every show carries ``categories``."""
     p = build_payload(shows)
@@ -47,6 +58,10 @@ def payload(shows, categories):
                 for show in card.get("showtimes", []):
                     show["additionalData"]["categories"] = json.loads(json.dumps(categories))
     return p
+
+
+def cat(name, status=Availability.AVAILABLE, code="") -> SeatCategory:
+    return SeatCategory(code=code or name[:2], name=name, availability=status)
 
 
 def cats(**status):
@@ -93,10 +108,11 @@ def test_missing_or_malformed_categories_yield_nothing(show_data):
     assert parse_seat_categories(show_data) == ()
 
 
-def test_normalisation_follows_the_format_convention():
-    assert normalise_category(" Gold Class ") == "goldclass" == normalise_category("GOLD-CLASS")
+def test_normalisation_ignores_case_and_spacing_but_keeps_punctuation():
+    assert normalise_category(" Gold  Class ") == "gold class" == normalise_category("GOLD CLASS")
+    assert normalise_category("3D GOLD") != normalise_category("3D GOLD.")       # two sections at ALLU
     m = Monitor(movie=MovieRef("bookmyshow", "ET1", "x", "HYD", "hyderabad"), targets=[], categories=["gold", "Platinum"])
-    assert m.watches_category("GOLD") and m.watches_category("PLATINUM ") and not m.watches_category("LOUNGER")
+    assert m.watches_category(cat("GOLD")) and m.watches_category(cat("PLATINUM ")) and not m.watches_category(cat("LOUNGER"))
     show = Showtime("ALLU", "Allu", "S1", "20260925", "07:15 PM", "1915", "Dolby Cinema", Availability.AVAILABLE)
     for wanted in ("07:15 PM", "7:15 PM", "1915", "7:15pm", ""):
         assert Monitor(movie=m.movie, targets=[], show_time=wanted).matches_show_time(show), wanted
@@ -131,7 +147,7 @@ def test_verdict_is_available_only_when_a_watched_category_is(make_monitor, prov
 
     watch.categories = ["gold"]
     result = evaluate_target(watch, watch.targets[0], snap)
-    assert result.availability is Availability.AVAILABLE and result.detail.startswith("GOLD bookable")
+    assert result.availability is Availability.AVAILABLE and result.detail.startswith("GOLD · ₹295 · area 2 bookable")
     assert result.showtimes and result.booking_url.startswith("https://in.bookmyshow.com/")
 
 
@@ -186,8 +202,8 @@ def test_unavailable_to_available_is_one_email_then_silence(make_monitor, provid
     _run(provider_factory([payload(ALLU_LIVE, cats(PLATINUM="3", GOLD="3"))]), monkeypatch, later(20), sent)
     assert len(sent) == 1
     change = sent[0][1]
-    assert change.categories == ["PLATINUM"] and change.previous is Availability.SOLD_OUT
-    assert change.headline == "PLATINUM AVAILABLE — Avengers: Endgame Encore"
+    assert change.categories == ["PLATINUM · ₹295"] and change.previous is Availability.SOLD_OUT
+    assert change.headline == "PLATINUM · ₹295 AVAILABLE — Avengers: Endgame Encore"
     for step in (30, 40, 50):
         _run(provider_factory([payload(ALLU_LIVE, cats(PLATINUM="3", GOLD="3"))]), monkeypatch, later(step), sent)
     assert len(sent) == 1
@@ -218,7 +234,7 @@ def test_a_failed_email_is_retried_not_lost(make_monitor, provider_factory, monk
     sent = []
     monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider_factory([payload(ALLU_LIVE, cats(PLATINUM="3"))]))
     run_once(at=later(20), force=True, mirror=False, notifier=lambda m, c: sent.append(c))
-    assert len(sent) == 1 and sent[0].categories == ["PLATINUM"]     # the same transition, delivered
+    assert len(sent) == 1 and sent[0].categories == ["PLATINUM · ₹295"]     # the same transition, delivered
     run_once(at=later(30), force=True, mirror=False, notifier=lambda m, c: sent.append(c))
     assert len(sent) == 1
 
@@ -284,7 +300,8 @@ def test_the_catalogue_remembers_which_categories_a_theatre_lists(seeded_with_ca
     from ui import catalogue_view as cv
 
     venue = next(v for v in cv.selected_venues(seeded_with_categories, "hyderabad", ["ALLU"]))
-    assert venue.categories == ("PLATINUM", "GOLD", "LOUNGER")
+    assert [c.name for c in venue.categories] == ["PLATINUM", "GOLD", "LOUNGER"]
+    assert [c.key for c in venue.categories] == ["0000000001|PLATINUM", "0000000002|GOLD", "0000000003|LOUNGER"]
     assert isinstance(venue, Venue) and venue.formats                # the rest of the venue is as before
 
 
@@ -314,9 +331,9 @@ def test_the_admin_sees_the_block_and_creates_a_category_watch(seeded_with_categ
     assert not app.exception, [str(e) for e in app.exception]
     assert CATEGORY_WATCH_TITLE in text(app)
     picker = next(m for m in app.multiselect if m.key == CATEGORY_WATCH_KEY)
-    assert list(picker.options) == ["PLATINUM", "GOLD", "LOUNGER"]      # only what BookMyShow listed there
+    assert list(picker.options) == ["PLATINUM · ₹350 · area 1", "GOLD · ₹295 · area 2", "LOUNGER · ₹295 · area 3"]
     assert not any(w for w in app.checkbox if "row" in (w.label or "").lower() or "seat" in (w.label or "").lower())
-    app = picker.select("GOLD").select("PLATINUM").run()
+    app = picker.select("GOLD · ₹295 · area 2").select("PLATINUM · ₹350 · area 1").run()
     app.text_input(key="catwatch_show_time").set_value("07:30 PM").run()
     app.text_input(key="notify_email").set_value("admin@example.com").run()
     app.button(key="start").click().run()
@@ -324,12 +341,12 @@ def test_the_admin_sees_the_block_and_creates_a_category_watch(seeded_with_categ
     monitors = load_monitors()
     assert len(monitors) == 1
     watch = monitors[0]
-    assert watch.categories == ["GOLD", "PLATINUM"] and watch.show_time == "07:30 PM"
+    assert watch.categories == ["0000000002|GOLD", "0000000001|PLATINUM"] and watch.show_time == "07:30 PM"
     assert watch.owner_uid == signed_in.uid and watch.interval_minutes == 10
     assert [t.key for t in watch.targets] == ["ALLU::Dolby Cinema"]
     # it is listed as any monitor is, with its categories on the card
     page = run("My Monitors")
-    assert "GOLD, PLATINUM · 07:30 PM" in text(page).upper() and "EVERY 10 MIN" in text(page)
+    assert "GOLD · AREA 2, PLATINUM · AREA 1 · 07:30 PM" in text(page).upper() and "EVERY 10 MIN" in text(page)
 
 
 def test_a_category_watch_is_its_owners_only(make_monitor, monkeypatch):
@@ -377,3 +394,136 @@ def test_the_admin_block_is_empty_handed_without_categories_and_offers_no_seat_c
     labels = " ".join((w.label or "") for w in [*app.checkbox, *app.multiselect, *app.text_input, *app.selectbox]).lower()
     for banned in ("row", "seat map", "layout", "encrypted"):
         assert banned not in labels and banned not in " ".join(b.label.lower() for b in app.button)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 5 · Two GOLDs at one theatre: distinct identities, never merged
+# ──────────────────────────────────────────────────────────────────────────
+def test_two_golds_are_two_categories_with_telling_labels(provider_factory, listing_url):
+    snap = _snapshot(provider_factory, listing_url, ALLU_LIVE, TWO_GOLDS)
+    show = snap.shows_for("ALLU")[0]
+    golds = [c for c in show.categories if "GOLD" in c.name]
+    assert [c.name for c in golds] == ["3D GOLD", "3D GOLD."]
+    assert [c.key for c in golds] == ["0000000003|3D GOLD", "0000000005|3D GOLD."]
+    assert [c.label for c in golds] == ["3D GOLD · ₹395 · area 3", "3D GOLD. · ₹395 · area 5"]
+    assert [c.availability for c in golds] == [Availability.AVAILABLE, Availability.AVAILABLE]   # "2" filling fast, "3"
+    # the theatre keeps both, and the picker offers both
+    venue = snap.venue("ALLU")
+    assert [c.label for c in venue.categories] == [
+        "3D PLATINUM · ₹450 · area 2", "3D GOLD · ₹395 · area 3", "3D DIRECTOR CHOICE · ₹450 · area 4", "3D GOLD. · ₹395 · area 5"]
+    # a key names one of them only; a plain legacy name matches by name only
+    assert category_matches("0000000005|3D GOLD.", golds[1]) and not category_matches("0000000005|3D GOLD.", golds[0])
+    assert category_matches("3d gold", golds[0]) and not category_matches("3d gold", golds[1])
+    assert category_display("0000000005|3D GOLD.") == "3D GOLD. · area 5" and category_display("GOLD") == "GOLD"
+
+
+def test_watching_one_gold_does_not_match_the_other(make_monitor, provider_factory, listing_url):
+    watch = make_monitor(targets=[TheatreTarget("ALLU", "Allu Cinemas", "", "Dolby Cinema")])
+    watch.categories = ["0000000005|3D GOLD."]
+    only_first_open = [dict(c, availStatus="3" if c["priceCode"] == "0006" else "0") for c in TWO_GOLDS]
+    snap = _snapshot(provider_factory, listing_url, ALLU_LIVE, only_first_open)
+    result = evaluate_target(watch, watch.targets[0], snap)
+    assert result.availability is Availability.SOLD_OUT and "3D GOLD. · area 5" in result.detail
+    only_second_open = [dict(c, availStatus="3" if c["priceCode"] == "0008" else "0") for c in TWO_GOLDS]
+    snap = _snapshot(provider_factory, listing_url, ALLU_LIVE, only_second_open)
+    result = evaluate_target(watch, watch.targets[0], snap)
+    assert result.availability is Availability.AVAILABLE and result.detail.startswith("3D GOLD. · ₹395 · area 5 bookable")
+
+
+def test_the_email_names_the_gold_that_opened(make_monitor, provider_factory, monkeypatch, later):
+    watch = make_monitor(targets=[TheatreTarget("ALLU", "Allu Cinemas", "", "Dolby Cinema")])
+    watch.categories = ["0000000005|3D GOLD."]
+    upsert_monitor(watch, mirror=False)
+    sent = []
+    closed = [dict(c, availStatus="0") for c in TWO_GOLDS]
+    _run(provider_factory([payload(ALLU_LIVE, closed)]), monkeypatch, later(0), sent)
+    first_gold_open = [dict(c, availStatus="3" if c["priceCode"] == "0006" else "0") for c in TWO_GOLDS]
+    _run(provider_factory([payload(ALLU_LIVE, first_gold_open)]), monkeypatch, later(10), sent)
+    assert sent == []                                                  # the other GOLD is not ours
+    _run(provider_factory([payload(ALLU_LIVE, TWO_GOLDS)]), monkeypatch, later(20), sent)
+    assert len(sent) == 1 and sent[0][1].categories == ["3D GOLD. · ₹395 · area 5"]
+    from notifications.email import render_change
+    subject, html, text = render_change(watch, sent[0][1])
+    assert subject.startswith("3D GOLD. · ₹395 · area 5 AVAILABLE") and "area 5" in text and "area 3" not in text
+
+
+def test_a_watch_saved_with_plain_names_still_works(make_monitor, provider_factory, listing_url):
+    """Documents from before keys hold names; they match by name, and a
+    name shared by two sections matches either — which is what they meant."""
+    watch = Monitor.from_dict({**make_monitor().to_dict(), "categories": ["gold"]})
+    watch.targets = [TheatreTarget("ALLU", "Allu Cinemas", "", ANY_FORMAT)]
+    snap = _snapshot(provider_factory, listing_url, ALLU_LIVE, REAL_CATEGORIES)
+    assert evaluate_target(watch, watch.targets[0], snap).availability is Availability.AVAILABLE
+    assert watch.category_label == "gold"
+
+
+def test_old_catalogue_rows_with_plain_category_names_still_load():
+    from monitor.catalogue import categories_from_entry, venues_from_entry
+
+    venues = venues_from_entry({"venues": [{"code": "ALLU", "name": "Allu", "formats": [], "categories": ["GOLD", "GOLD", "PLATINUM"]}]})
+    assert [c.label for c in venues[0].categories] == ["GOLD", "PLATINUM"]
+    assert categories_from_entry([{"code": "0006", "name": "3D GOLD", "area_code": "0000000003", "price": "395.00", "availability": "AVAILABLE"},
+                                  {"code": "0008", "name": "3D GOLD.", "area_code": "0000000005", "price": "395.00"}, "junk", 3])[1].label == "3D GOLD. · ₹395 · area 5"
+    assert categories_from_entry("GOLD") == () and categories_from_entry(None) == ()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 6 · The page tells sent, failed, baseline and pending apart
+# ──────────────────────────────────────────────────────────────────────────
+def test_email_status_line_is_truthful(make_monitor):
+    from datetime import datetime
+
+    from config.timezone import IST
+    from monitor.state import MonitorState, TargetState
+    from ui.components import email_status
+
+    when = datetime(2026, 9, 21, 21, 20, tzinfo=IST)
+    plain, watch = make_monitor(), make_monitor()
+    watch.categories = ["0000000002|GOLD"]
+    live = TargetState(availability=Availability.AVAILABLE)
+    # an ordinary monitor found live and not yet mailed: pending (the worker mails it this tick)
+    assert email_status(plain, MonitorState(), live)[0] == "◷ Email pending"
+    # a category watch's baseline: announced without an email, and the page says so
+    baseline = TargetState(availability=Availability.AVAILABLE, notified_availability=Availability.AVAILABLE)
+    assert email_status(watch, MonitorState(), baseline)[0].startswith("— No email · already open")
+    assert email_status(plain, MonitorState(), baseline)[0] == "◷ Email pending"      # never claimed for a normal monitor
+    # sent
+    sent = TargetState(availability=Availability.AVAILABLE, notified_availability=Availability.AVAILABLE, notified_at=when)
+    assert email_status(watch, MonitorState(), sent)[0] == "✓ Email sent · 9:20 PM"
+    # failed, being retried
+    failing = MonitorState(); failing.last_email_error = "SMTPAuthenticationError: bad password"
+    assert email_status(plain, failing, live)[0].startswith("✗ Email failed")
+    assert email_status(watch, failing, live)[0].startswith("✗ Email failed")
+
+
+def test_baseline_watch_reads_no_email_on_the_details_page(seeded_with_categories, signed_in, provider_factory, monkeypatch, later):
+    from tests.test_app import run, text
+
+    signed_in.admin = True
+    watch = Monitor.from_dict({**_make_watch_dict(seeded_with_categories)})
+    upsert_monitor(watch, mirror=False)
+    monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider_factory([payload(ALLU_LIVE, REAL_CATEGORIES)] * 8))
+    run_once(at=later(0), force=True, mirror=False, notifier=lambda m, c: (_ for _ in ()).throw(AssertionError("no email on a baseline")))
+    from ui import detail
+
+    page = run()                                                   # Home's live card
+    body = text(page)
+    assert "already open when the watch began" in body and "Email pending" not in body
+    assert "GOLD · AREA 2 AVAILABLE" in body and "TICKETS ARE LIVE" not in body
+    page = run(**{detail.OPEN_KEY: watch.id})                      # the Details dialog
+    assert "already open when the watch began" in text(page) and "Email pending" not in text(page)
+
+
+def _make_watch_dict(movie_id):
+    from monitor import catalogue
+
+    movie = next(catalogue.movie_from_entry(e) for e in catalogue.list_entries("hyderabad")
+                 if catalogue.movie_from_entry(e).id == movie_id)
+    from datetime import datetime
+
+    from config.timezone import IST
+
+    m = Monitor(movie=movie, targets=[TheatreTarget("ALLU", "Allu Cinemas", "Attapur, Hyderabad", "Dolby Cinema")],
+                notify_email="admin@example.com", owner_uid="uid-test-1", categories=["0000000002|GOLD"],
+                monitor_until=datetime(2026, 9, 30, 23, 59, tzinfo=IST))
+    return m.to_dict()

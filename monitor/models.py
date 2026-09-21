@@ -90,9 +90,15 @@ class MonitorStatus(str, Enum):
 # Seat categories — the grain of the admin-only category watch
 # ──────────────────────────────────────────────────────────────────────────
 def normalise_category(value: str) -> str:
-    """Comparison key for a category name (and a show time): BookMyShow
-    writes them in capitals with stray spacing, so compare squashed,
-    lower-case alphanumerics — the format convention, ``normalise_format``."""
+    """Comparison key for a category *name*: case and spacing do not
+    matter, punctuation does — BookMyShow tells two sections of one
+    theatre apart by a trailing dot ("3D GOLD" and "3D GOLD.", ALLU
+    Cinemas, Sept 2026), so squashing it would merge two categories."""
+    return " ".join((value or "").lower().split())
+
+
+def _squash(value: str) -> str:
+    """Alphanumerics only, lower-case — for show times ("07:15 PM" / "1915")."""
     return "".join(ch for ch in (value or "").lower() if ch.isalnum())
 
 
@@ -121,7 +127,24 @@ class SeatCategory:
 
     @property
     def key(self) -> str:
-        return f"{self.code}|{self.name}"
+        """The platform's identity of this section: its area code (or
+        price code) and its exact name. Two categories that share a name
+        keep separate keys, which is what a watch is stored against."""
+        return f"{self.area_code or self.code}|{self.name}"
+
+    @property
+    def label(self) -> str:
+        """What an administrator sees: the exact name, the price, and the
+        area when the platform gave one — "3D GOLD. · ₹395 · area 5"."""
+        parts = [self.name]
+        if self.price:
+            try:
+                parts.append(f"₹{float(self.price):g}")
+            except ValueError:
+                parts.append(f"₹{self.price}")
+        if self.area_code:
+            parts.append(f"area {self.area_code.lstrip('0') or '0'}")
+        return " · ".join(parts)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -171,10 +194,28 @@ class Showtime:
         """Stable identity of a screening, used for new-showtime detection."""
         return f"{self.venue_code}|{self.date_code}|{self.session_id or self.time_code}"
 
-    def category(self, name: str) -> SeatCategory | None:
-        """This show's category by loose name (``normalise_category``)."""
-        wanted = normalise_category(name)
-        return next((c for c in self.categories if normalise_category(c.name) == wanted), None)
+    def category(self, wanted: str) -> SeatCategory | None:
+        """This show's category by key ("0000000005|3D GOLD.") or, for a
+        plain name, by name (``normalise_category``)."""
+        return next((c for c in self.categories if category_matches(wanted, c)), None)
+
+
+def category_matches(wanted: str, category: SeatCategory) -> bool:
+    """Does a stored watch entry name this category? An entry with a ``|``
+    is a :attr:`SeatCategory.key` and must match exactly; a plain name — how
+    watches were stored before keys — matches by name alone."""
+    if "|" in wanted:
+        return wanted == category.key
+    return normalise_category(wanted) == normalise_category(category.name)
+
+
+def category_display(entry: str) -> str:
+    """A stored entry for people: the name, plus the area for a key —
+    "3D GOLD. · area 5"; a plain name stays a plain name."""
+    if "|" not in entry:
+        return entry
+    area, _, name = entry.partition("|")
+    return f"{name} · area {area.lstrip('0') or '0'}" if area else name
 
 
 @dataclass(frozen=True)
@@ -183,9 +224,10 @@ class Venue:
     name: str
     area: str = ""
     formats: tuple[str, ...] = ()
-    #: Seat categories this theatre has been seen to list (GOLD, PLATINUM…),
-    #: from its showtimes — what the category watch may pick from.
-    categories: tuple[str, ...] = ()
+    #: Seat categories this theatre has been seen to list, from its
+    #: showtimes, each with the platform's identity — what the category
+    #: watch may pick from. Status is not meaningful here.
+    categories: tuple[SeatCategory, ...] = ()
 
     @property
     def abbr(self) -> str:
@@ -377,20 +419,21 @@ class Monitor:
 
     @property
     def category_label(self) -> str:
-        return ", ".join(self.categories)
+        return ", ".join(category_display(c) for c in self.categories)
 
-    def watches_category(self, name: str) -> bool:
-        wanted = normalise_category(name)
-        return any(normalise_category(c) == wanted for c in self.categories)
+    def watches_category(self, category: SeatCategory) -> bool:
+        """Entries are keys (``area|name``) or, for watches saved before
+        keys, plain names — see ``category_matches``."""
+        return any(category_matches(entry, category) for entry in self.categories)
 
     def matches_show_time(self, show: Showtime) -> bool:
         """``show_time`` compared loosely to the show's label and its code:
         "7:15 PM", "07:15 PM" and "1915" all name the same show."""
-        wanted = normalise_category(self.show_time)
+        wanted = _squash(self.show_time)
         if not wanted:
             return True
-        return wanted in (normalise_category(show.time_label).lstrip("0"), normalise_category(show.time_code)) \
-            or wanted.lstrip("0") == normalise_category(show.time_label).lstrip("0")
+        return wanted in (_squash(show.time_label).lstrip("0"), _squash(show.time_code)) \
+            or wanted.lstrip("0") == _squash(show.time_label).lstrip("0")
 
     def set_problem(self, kind: str, message: str, at: datetime | None = None) -> None:
         self.problem = {"kind": kind, "message": message, "at": to_iso(at or now_ist())}
@@ -586,6 +629,8 @@ __all__ = [
     "NOTIFIABLE_FROM",
     "SeatCategory",
     "Showtime",
+    "category_display",
+    "category_matches",
     "Snapshot",
     "TargetResult",
     "TheatreTarget",

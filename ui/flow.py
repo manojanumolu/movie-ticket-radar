@@ -798,7 +798,7 @@ def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple
     C.step_header("ticket", "Watch specific seat categories?",
                   "Leave empty for a normal monitor. With categories chosen, you're emailed only when one "
                   "of them opens up — not on the first check, and not again while it stays open.")
-    seen = dedupe(name for v in venues for name in v.categories)
+    seen = {c.label: c.key for v in venues for c in v.categories}
     if not seen:
         st.caption("The catalogue hasn't seen seat categories at these theatres yet — the next sync "
                    "will list them. A normal monitor is still available.")
@@ -806,7 +806,7 @@ def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple
         return [], st.session_state.get(SHOW_TIME_KEY, "").strip()
     with st.container(key="trpair_catwatch"):
         left, right = st.columns([1.6, 1], gap="small")
-    chosen = left.multiselect("Seat categories", seen, key=CATEGORY_WATCH_KEY,
+    chosen = left.multiselect("Seat categories", list(seen), key=CATEGORY_WATCH_KEY,
                               placeholder="Choose categories…", label_visibility="collapsed",
                               help="Only the categories BookMyShow lists at the chosen theatres")
     show_time = right.text_input("Show time", key=SHOW_TIME_KEY, placeholder="Show time, e.g. 07:15 PM",
@@ -816,7 +816,7 @@ def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple
         st.caption(f"Category watch: {', '.join(chosen)}"
                    + (f" at {show_time.strip()}" if show_time.strip() else " at every show")
                    + " — for the theatres, format and dates above.")
-    return list(chosen), show_time.strip()
+    return [seen[label] for label in chosen if label in seen], show_time.strip()
 
 
 # ──────────────────────────────────────────────────────────────────────────

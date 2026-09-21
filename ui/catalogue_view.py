@@ -137,7 +137,7 @@ def _build(signature: tuple[str, str], slug: str) -> CatalogueView:
                 directory[v.code] = Venue(
                     code=v.code, name=known.name or v.name, area=known.area or v.area,
                     formats=tuple(dict.fromkeys((*known.formats, *v.formats))),
-                    categories=tuple(dict.fromkeys((*known.categories, *v.categories))),
+                    categories=tuple({c.key: c for c in (*known.categories, *v.categories)}.values()),
                 )
     return CatalogueView(
         slug=slug, entries=entries, movies=movies, by_id=by_id, venues_by_id=venues_by_id,
@@ -215,7 +215,8 @@ def selected_venues(movie_id: str, slug: str, codes: list[str]) -> list[Venue]:
         if venue is None:
             continue
         formats = merge_formats(own.formats if own else (), known.formats if known else ())
-        categories = tuple(dedupe([*(own.categories if own else ()), *(known.categories if known else ())]))
+        categories = tuple({c.key: c for c in (*(own.categories if own else ()),
+                                               *(known.categories if known else ()))}.values())
         out.append(Venue(code=venue.code, name=venue.name, area=venue.area, formats=formats,
                          categories=categories))
     return out

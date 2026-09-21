@@ -27,7 +27,7 @@ from typing import Any, Callable
 
 from config.store import load_catalogue, save_catalogue
 from config.timezone import now_ist, parse_iso, to_iso
-from monitor.models import MovieRef, Snapshot, Venue, dedupe
+from monitor.models import Availability, MovieRef, SeatCategory, Snapshot, Venue, dedupe
 from platforms import get_provider
 from platforms.base import PlatformBlocked, PlatformError
 
@@ -73,7 +73,7 @@ def entry_from_snapshot(snapshot: Snapshot) -> dict[str, Any]:
         "movie": asdict(snapshot.movie),
         "venues": [
             {"code": v.code, "name": v.name, "area": v.area, "formats": list(v.formats),
-             "categories": list(v.categories)}
+             "categories": [c.to_dict() for c in v.categories]}
             for v in snapshot.venues
         ],
         "bookable_dates": list(snapshot.bookable_dates),
@@ -108,11 +108,27 @@ def venues_from_entry(entry: dict[str, Any]) -> list[Venue]:
             name=v.get("name", v.get("code", "")),
             area=v.get("area", ""),
             formats=tuple(dedupe(v.get("formats", []))),
-            categories=tuple(dedupe(v.get("categories", []) or [])),
+            categories=categories_from_entry(v.get("categories", []) or []),
         )
         for v in entry.get("venues", [])
         if isinstance(v, dict) and (v.get("code") or v.get("name"))
     ]
+
+
+def categories_from_entry(raw: Any) -> tuple[SeatCategory, ...]:
+    """A venue's stored categories: dicts (with identity) or, from a sync
+    before keys, plain names — one per key, first seen first."""
+    out: dict[str, SeatCategory] = {}
+    for item in raw if isinstance(raw, list) else []:
+        if isinstance(item, dict):
+            cat = SeatCategory.from_dict(item)
+        elif isinstance(item, str) and item.strip():
+            cat = SeatCategory(code="", name=item.strip(), availability=Availability.UNKNOWN)
+        else:
+            continue
+        if cat.name:
+            out.setdefault(cat.key, cat)
+    return tuple(out.values())
 
 
 def is_detailed(entry: dict[str, Any]) -> bool:

@@ -44,6 +44,7 @@ from monitor.models import (
     CheckOutcome,
     Monitor,
     MovieRef,
+    SeatCategory,
     Showtime,
     Snapshot,
     TargetResult,
@@ -236,15 +237,13 @@ def _evaluate_categories(monitor: Monitor, target: TheatreTarget, snapshot: Snap
             booking_url=_booking_url(monitor, snapshot, "", target),
         )
 
-    def watched(show: Showtime) -> list[str]:
-        return [c.name for c in show.categories if monitor.watches_category(c.name)]
+    def watched(show: Showtime) -> list[SeatCategory]:
+        return [c for c in show.categories if monitor.watches_category(c)]
 
-    live = [s for s in shows if any(c.availability is Availability.AVAILABLE for c in s.categories
-                                    if monitor.watches_category(c.name))]
+    live = [s for s in shows if any(c.availability is Availability.AVAILABLE for c in watched(s))]
     if live:
         date_code = _earliest_date(live)
-        names = sorted({c.name for s in live for c in s.categories
-                        if monitor.watches_category(c.name) and c.availability is Availability.AVAILABLE})
+        names = sorted({c.label for s in live for c in watched(s) if c.availability is Availability.AVAILABLE})
         return TargetResult(
             target_key=target.key, venue_name=target.venue_name, fmt=target.fmt,
             availability=Availability.AVAILABLE, showtimes=live, date_code=date_code,
@@ -261,7 +260,7 @@ def _evaluate_categories(monitor: Monitor, target: TheatreTarget, snapshot: Snap
             booking_url=_booking_url(monitor, snapshot, date_code, target),
             detail=f"{monitor.category_label}: no seats left at the shows listed.",
         )
-    seen = sorted({c.name for s in shows for c in s.categories})
+    seen = sorted({c.label for s in shows for c in s.categories})
     return TargetResult(
         target_key=target.key, venue_name=target.venue_name, fmt=target.fmt,
         availability=Availability.NOT_BOOKABLE, showtimes=shows, date_code=date_code,

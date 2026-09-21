@@ -103,7 +103,7 @@ def _target_block(monitor: Monitor, state: MonitorState, target, finished: bool)
         times = (f'<div class="tr-det-times"><div class="tr-eyebrow">Showtimes</div>'
                  f'<div class="tr-chips">{chips}</div></div>') if chips else ""
         found = f"Found {fmt_time(ts.since)}" if ts.since else ""
-        mailed = f"✓ Email sent {fmt_time(ts.notified_at)}" if ts.notified_at else "◷ Email pending"
+        mailed, _ = C.email_status(monitor, state, ts)
         book = (f'<a class="tr-book tr-det-book" href="{escape(url, quote=True)}" target="_blank" '
                 f'rel="noopener">BOOK ON BOOKMYSHOW ↗</a>' if url else
                 '<div class="tr-det-nobook">Booking link not available yet — open BookMyShow to book.</div>')

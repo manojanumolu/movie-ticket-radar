@@ -1209,14 +1209,16 @@ class BookMyShowProvider:
         whatever this movie is screening at that theatre today.
         """
         by_code: dict[str, list[str]] = {}
-        cats: dict[str, list[str]] = {}
+        cats: dict[str, dict[str, SeatCategory]] = {}
         for s in showtimes:
             if s.format_label:
                 by_code.setdefault(s.venue_code, []).append(s.format_label)
-            cats.setdefault(s.venue_code, []).extend(c.name for c in s.categories)
+            for c in s.categories:
+                # one entry per platform identity — two "GOLD"s stay two
+                cats.setdefault(s.venue_code, {}).setdefault(c.key, c)
         return [
             Venue(code=v.code, name=v.name, area=v.area, formats=tuple(sorted(dedupe(by_code.get(v.code, [])))),
-                  categories=tuple(dedupe(cats.get(v.code, []))))
+                  categories=tuple(cats.get(v.code, {}).values()))
             for v in sorted(venues, key=lambda v: v.name.lower())
         ]
 

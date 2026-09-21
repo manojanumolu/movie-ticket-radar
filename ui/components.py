@@ -930,6 +930,23 @@ def _chip(label: str, url: str) -> str:
     return f'<span class="tr-chip">{e(label)}</span>'
 
 
+def email_status(monitor: Monitor, state: MonitorState, ts) -> tuple[str, str]:
+    """What happened to the alert for a live target: (label, colour).
+
+    Sent, failed and being retried, held back because the category was
+    already open when the watch began (its baseline — no email by design),
+    or genuinely pending. Read from the state the worker wrote, so the page
+    never says "pending" about an email that was never going to be sent."""
+    if ts is not None and ts.notified_at:
+        return f"✓ Email sent · {fmt_time(ts.notified_at)}", "#3ED598"
+    if state.last_email_error:
+        return "✗ Email failed · retried on the next check", "#FF8A8A"
+    if (monitor.is_category_watch and ts is not None
+            and ts.notified_availability is Availability.AVAILABLE and ts.notified_at is None):
+        return "— No email · already open when the watch began", "#A9A9B5"
+    return "◷ Email pending", "#E8B25C"
+
+
 def live_card(monitor: Monitor, state: MonitorState, target_key: str) -> None:
     """The loudest thing on screen when a theatre goes bookable."""
     target = monitor.target(target_key)
@@ -961,20 +978,20 @@ def live_card(monitor: Monitor, state: MonitorState, target_key: str) -> None:
         if others and monitor.is_running() else ""
     )
 
+    mail_label, mail_colour = email_status(monitor, state, ts)
     html(
         f"""<div class="tr-live">
           <div class="top">
             <div>
               <span class="tr-pill ok" style="font-family:'JetBrains Mono',monospace;letter-spacing:.2em;padding:6px 12px;">
-                <span class="tr-dot ok live"></span>TICKETS ARE LIVE</span>
+                <span class="tr-dot ok live"></span>{e(monitor.category_label.upper() + " AVAILABLE") if monitor.is_category_watch else "TICKETS ARE LIVE"}</span>
               <h2>{e(monitor.movie.title)}</h2>
               <div class="where">{e(target.venue_name)} · {e(target.fmt)} · {e(target.area or monitor.movie.city)}</div>
             </div>
             <div class="detected">
               <div class="tr-eyebrow">Detected at</div>
               <div class="v">{e(fmt_time(ts.since))}</div>
-              <div style="font-size:12px;color:{'#3ED598' if ts.notified_at else '#E8B25C'};margin-top:6px;">
-                {'✓ Email sent · ' + e(fmt_time(ts.notified_at)) if ts.notified_at else '◷ Email pending'}</div>
+              <div style="font-size:12px;color:{mail_colour};margin-top:6px;">{e(mail_label)}</div>
             </div>
           </div>
           <div class="split">
