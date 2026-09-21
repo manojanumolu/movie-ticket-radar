@@ -364,6 +364,7 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     # worker matches on the venue code either way, and a theatre that isn't
     # listed yet simply reads THEATRE_NOT_AVAILABLE until the day it is.
     venues = {v.code: v for v in cv.selected_venues(movie_id, slug, st.session_state.get("theatres", []))}
+    capable = cv.capabilities(slug, st.session_state.get("theatres", []))
     formats: dict[str, list[str]] = st.session_state.get("formats", {})
 
     problems = []
@@ -386,7 +387,7 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
         venue = venues.get(code)
         if venue is None:
             continue
-        unknown = flow.unknown_formats(venue, formats.get(code) or [ANY_FORMAT])
+        unknown = flow.unknown_formats(venue, formats.get(code) or [ANY_FORMAT], capable.get(code, ()))
         if unknown:
             problems.append(f"{venue.name} isn't known to run {', '.join(unknown)} — pick a format it lists")
     if problems:
@@ -701,9 +702,12 @@ def wizard(monitors, *, settings: dict) -> None:
             slug = st.session_state.get("location", "")
             movie_id = st.session_state.get("movie_id", "")
             codes = st.session_state.get("theatres", [])
-            flow.step_formats(cv.selected_venues(movie_id, slug, codes),
-                              coming=cv.coming_soon_codes(movie_id, slug, codes),
-                              listed=cv.listed_formats(movie_id, slug, codes))
+            dates = list(st.session_state.get("show_dates", []))
+            flow.step_formats(cv.selected_venues(movie_id, slug, codes, dates),
+                              coming=cv.coming_soon_codes(movie_id, slug, codes, dates),
+                              capable=cv.capabilities(slug, codes),
+                              dates_by_venue={c: cv.listed_dates(movie_id, slug, c) for c in codes},
+                              dates=dates)
         else:
             # The box starts as the saved notification address or, for an
             # account that has never set one, the address they signed in

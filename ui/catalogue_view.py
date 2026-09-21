@@ -194,47 +194,83 @@ def merge_formats(listed: tuple[str, ...] | list[str], known: tuple[str, ...] | 
     return tuple(out.values())
 
 
-def selected_venues(movie_id: str, slug: str, codes: list[str]) -> list[Venue]:
-    """The Venue for each chosen code, carrying *every* format the theatre is
-    known to run — not only the ones this movie lists there right now.
+def listings(movie_id: str, slug: str = "") -> dict[str, dict[str, tuple[str, ...]]]:
+    """``{date_code: {venue_code: formats}}`` — what BookMyShow lists for this
+    movie, per date, per theatre, as the catalogue read it. A row detailed
+    before listings were kept has none; its venues' formats then stand in,
+    undated (key ``""``)."""
+    found = entry(movie_id, slug)
+    if not found:
+        return {}
+    dated = catalogue.listings_from_entry(found)
+    if dated:
+        return dated
+    undated = {v.code: v.formats for v in catalogue.venues_from_entry(found)}
+    return {"": undated} if undated else {}
 
-    A theatre's row in the movie's own listing names the formats its current
-    showtimes carry; the city directory names every format the catalogue has
-    ever seen that theatre run, for any film. Both matter on the Formats
-    step: a premium screen the movie hasn't opened yet at that theatre is
-    exactly what a release monitor is for, and it must not vanish the day
-    the theatre lists the film in one of its other formats. Listed formats
-    come first; name and area are the movie's own when it lists the theatre.
-    """
-    listed = {v.code: v for v in venues(movie_id, slug)}
-    directory = view(slug).directory
-    out: list[Venue] = []
+
+def listed_formats(movie_id: str, slug: str, codes: list[str],
+                   dates: list[str] | None = None) -> dict[str, tuple[str, ...]]:
+    """code -> the formats this movie *actually lists* at that theatre — on
+    the given show dates, or across every date the catalogue read when no
+    date is chosen. Never a theatre's general capability."""
+    by_date = listings(movie_id, slug)
+    wanted = [d for d in (dates or []) if d]
+    picked = [by_date[d] for d in wanted if d in by_date] if wanted else list(by_date.values())
+    if wanted and not picked and "" in by_date:
+        picked = [by_date[""]]                       # an old row: undated formats are all it knows
+    out: dict[str, tuple[str, ...]] = {}
     for code in codes:
-        own, known = listed.get(code), directory.get(code)
-        venue = own or known
-        if venue is None:
-            continue
-        formats = merge_formats(own.formats if own else (), known.formats if known else ())
-        categories = tuple({c.key: c for c in (*(own.categories if own else ()),
-                                               *(known.categories if known else ()))}.values())
-        out.append(Venue(code=venue.code, name=venue.name, area=venue.area, formats=formats,
-                         categories=categories))
+        out[code] = tuple(sorted(dedupe(f for day in picked for f in day.get(code, ()))))
     return out
 
 
-def listed_formats(movie_id: str, slug: str, codes: list[str]) -> dict[str, tuple[str, ...]]:
-    """code -> the formats this movie currently lists at that theatre.
-
-    The complement of what :func:`selected_venues` adds from the directory:
-    the Formats step uses it to say which options are not listed yet.
-    """
-    listed = {v.code: v.formats for v in venues(movie_id, slug)}
-    return {code: listed.get(code, ()) for code in codes}
+def listed_dates(movie_id: str, slug: str, code: str) -> dict[str, tuple[str, ...]]:
+    """date_code -> formats this movie lists at one theatre on that date."""
+    return {d: day[code] for d, day in listings(movie_id, slug).items() if d and code in day}
 
 
-def coming_soon_codes(movie_id: str, slug: str, codes: list[str]) -> set[str]:
-    """Which of the chosen codes are *not* listed for this movie yet."""
-    listed = {v.code for v in venues(movie_id, slug)}
+def capabilities(slug: str, codes: list[str]) -> dict[str, tuple[str, ...]]:
+    """code -> every format the city directory has seen the theatre run, for
+    any film. Shown as what the theatre *can* do; never offered as a format
+    this movie is in."""
+    directory = view(slug).directory
+    return {code: (tuple(sorted(directory[code].formats)) if code in directory else ()) for code in codes}
+
+
+def selected_venues(movie_id: str, slug: str, codes: list[str],
+                    dates: list[str] | None = None) -> list[Venue]:
+    """The Venue for each chosen code, its ``formats`` being exactly what
+    this movie lists there — on the chosen dates when given, else on any
+    date the catalogue read — and its categories the union of what the
+    movie's own listing and the city directory know. Name and area are the
+    movie's own when it lists the theatre, the directory's otherwise."""
+    own_by_code = {v.code: v for v in venues(movie_id, slug)}
+    directory = view(slug).directory
+    listed = listed_formats(movie_id, slug, codes, dates)
+    out: list[Venue] = []
+    for code in codes:
+        own, known = own_by_code.get(code), directory.get(code)
+        venue = own or known
+        if venue is None:
+            continue
+        categories = tuple({c.key: c for c in (*(own.categories if own else ()),
+                                               *(known.categories if known else ()))}.values())
+        out.append(Venue(code=venue.code, name=venue.name, area=venue.area,
+                         formats=listed.get(code, ()), categories=categories))
+    return out
+
+
+def coming_soon_codes(movie_id: str, slug: str, codes: list[str],
+                      dates: list[str] | None = None) -> set[str]:
+    """Which of the chosen codes this movie does *not* list — on the chosen
+    dates when given, else on any date the catalogue read."""
+    by_date = listings(movie_id, slug)
+    wanted = [d for d in (dates or []) if d]
+    days = [by_date[d] for d in wanted if d in by_date] if wanted else list(by_date.values())
+    if wanted and not days and "" in by_date:
+        days = [by_date[""]]
+    listed = {code for day in days for code in day}
     return {c for c in codes if c not in listed}
 
 
@@ -371,8 +407,11 @@ __all__ = [
     "FeaturedMatch",
     "MovieCard",
     "card",
+    "capabilities",
     "coming_soon_codes",
+    "listed_dates",
     "listed_formats",
+    "listings",
     "merge_formats",
     "entry",
     "featured",

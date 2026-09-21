@@ -665,14 +665,15 @@ def test_theatre_search_offers_the_whole_city_with_coming_soon_marked(release_wa
     assert app.session_state["theatres"] == ["PRHN"]
 
 
-def test_formats_for_a_coming_soon_theatre_are_the_ones_it_is_known_to_run(release_watch):
+def test_formats_for_a_coming_soon_theatre_are_every_format_until_it_lists_the_film(release_watch):
     app = run(step=4, location="hyderabad", movie_id=release_watch, theatres=["ALLU", "PRHN"])
     assert not app.exception
     keys = {c.key for c in app.checkbox}
-    assert "fmt_PRHN_Pcx Screen" in keys and "fmt_PRHN_any" in keys
-    assert "fmt_ALLU_Dolby Cinema" in keys
+    assert "fmt_PRHN_Pcx Screen" not in keys and "fmt_PRHN_any" not in keys     # PRHN's own formats are not the movie's
+    assert app.session_state["formats"]["PRHN"] == [ANY_FORMAT]
+    assert "fmt_ALLU_Dolby Cinema" in keys                                       # the movie lists Dolby at ALLU
     body = text(app)
-    assert "Not listed for this movie yet" in body
+    assert "Not listed for this movie" in body and "also runs Pcx Screen for other films" in body
 
 
 def test_release_watch_monitor_is_saved_and_fires_when_the_theatre_appears(

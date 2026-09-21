@@ -37,7 +37,7 @@ import streamlit as st
 from config.locations import LOCATIONS, enabled_locations, get_location
 from config.timezone import IST, now_ist
 from monitor.models import (ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes, is_infinity_vision,
-                            is_marvel_title, normalise_format)
+                            is_marvel_title, normalise_format, short_date)
 from ui import catalogue_view as cv
 from ui import components as C
 
@@ -464,8 +464,12 @@ def step_theatres() -> list[Venue]:
         return []
 
     # Every theatre the catalogue holds for *this* movie — the whole film,
-    # every format, nothing added and nothing left out.
+    # every format, nothing added and nothing left out. When show dates were
+    # chosen (a return from the last step), "listed" means listed on them.
+    dates = list(st.session_state.get("show_dates", []))
     venues = cv.venues(movie.id, slug)
+    not_on_dates = cv.coming_soon_codes(movie.id, slug, [v.code for v in venues], dates) if dates else set()
+    venues = [v for v in venues if v.code not in not_on_dates]
     directory = cv.view(slug).directory
 
     head, action = st.columns([3.2, 1], vertical_alignment="center")
@@ -599,34 +603,42 @@ def infinity_vision_note(venues: list[Venue]) -> None:
            f"BookMyShow lists it at {C.e(listed)}. Pick it below to watch that screen.</span></div>")
 
 
-def unknown_formats(venue: Venue, chosen: list[str]) -> list[str]:
+def unknown_formats(venue: Venue, chosen: list[str], capable: tuple[str, ...] = ()) -> list[str]:
     """The chosen formats this theatre is not known to run at all.
 
-    ``venue.formats`` is what the catalogue has ever seen the theatre run,
-    for any film (see ``catalogue_view.selected_venues``). A format outside
-    that set is not "unreleased" — it has no basis — and is the one thing
-    the monitoring step refuses. Any format always passes, and a theatre
-    with no known formats has nothing reliable to check against, so
-    everything passes for it: the existing behaviour, unchanged.
+    ``venue.formats`` is what this movie lists at the theatre and ``capable``
+    what the theatre runs for any film. A format outside both is not
+    "unreleased" — it has no basis — and is the one thing the monitoring
+    step refuses. Any format always passes, and a theatre with no known
+    formats has nothing reliable to check against, so everything passes for
+    it: the existing behaviour, unchanged.
     """
-    known = {normalise_format(f) for f in venue.formats}
+    known = {normalise_format(f) for f in (*venue.formats, *capable)}
     if not known:
         return []
     return [f for f in chosen if f != ANY_FORMAT and normalise_format(f) not in known]
 
 
 def step_formats(venues: list[Venue], coming: set[str] | None = None,
-                 listed: dict[str, tuple[str, ...]] | None = None) -> dict[str, list[str]]:
-    """``venues`` carry every format each theatre is known to run (see
-    ``catalogue_view.selected_venues``). ``coming`` names the theatres not
-    listed for this movie at all; ``listed`` maps a theatre to the formats
-    the movie *does* list there, so the rest can be marked as not yet
-    released — still selectable, because waiting for them is the point."""
+                 listed: dict[str, tuple[str, ...]] | None = None,
+                 capable: dict[str, tuple[str, ...]] | None = None,
+                 dates_by_venue: dict[str, dict[str, tuple[str, ...]]] | None = None,
+                 dates: list[str] | None = None) -> dict[str, list[str]]:
+    """``venues`` carry exactly the formats BookMyShow lists *this movie* in
+    at each theatre — on the chosen show dates when there are any, else on
+    the dates the catalogue read (see ``catalogue_view.selected_venues``);
+    those are the options. ``coming`` names the theatres the movie is not
+    listed at (on those dates); ``capable`` is what each theatre runs for
+    other films, shown as such and never offered; ``dates_by_venue`` is
+    date -> formats per theatre, for the hints."""
     coming = coming or set()
-    listed = listed or {}
+    capable = capable or {}
+    dates_by_venue = dates_by_venue or {}
+    dates = [d for d in (dates or []) if d]
     C.step_header(4, "Formats, per theatre",
-                  "Only formats that theatre actually runs. For a theatre that hasn't released "
-                  "this movie yet, the formats it is known to run.")
+                  "Only the formats BookMyShow lists this movie in at that theatre"
+                  + (f" on {describe_date_codes(dates)}" if dates else "") + ". A theatre that hasn't "
+                  "listed the movie yet is watched in every format until it does.")
 
     if not venues:
         st.caption("Pick a theatre first.")
@@ -636,16 +648,22 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
     formats: dict[str, list[str]] = dict(st.session_state.get("formats", {}))
     for venue in venues:
         options = dedupe(venue.formats)
-        here = {normalise_format(f) for f in listed.get(venue.code, ())}
-        expected = [f for f in options if here and normalise_format(f) not in here]
+        here = {normalise_format(f) for f in options}
+        expected = [f for f in capable.get(venue.code, ()) if normalise_format(f) not in here]
+        listed_on = dates_by_venue.get(venue.code, {})
+        when = ""
+        if dates and venue.code in coming:
+            when = describe_date_codes(dates)
+        elif listed_on:
+            when = "on " + ", ".join(short_date(d) for d in sorted(listed_on))
         with st.container(key=f"trpanel_{venue.code}"):
             left, right = st.columns([1, 1.6], gap="medium")
             with left:
                 C.format_panel_head(venue.name, venue.area, options[0] if options else "",
-                                    coming=venue.code in coming, expected=expected)
+                                    coming=venue.code in coming, expected=expected, when=when)
             with right:
                 if not options:
-                    st.caption("No format published for this theatre yet — watching every show.")
+                    st.caption("Not listed for this movie here yet — watching every format until it opens.")
                     formats[venue.code] = [ANY_FORMAT]
                     continue
 
@@ -657,17 +675,12 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                                      value=ANY_FORMAT in formats.get(venue.code, []),
                                      help="Watch every format this theatre runs — alerts on the first to open.")
                 for fmt in options:
-                    # Said at the box itself, not only in the panel head: which
-                    # formats this movie lists here today, and which the
-                    # theatre runs but has not listed for it yet.
-                    if venue.code in coming:
-                        hint = "This theatre hasn't listed the movie yet — you'll be told when it opens in this format."
-                    elif here and normalise_format(fmt) not in here:
-                        hint = "Not listed for this movie at this theatre yet — pick it to be told if it's added."
-                    elif here:
-                        hint = "Listed for this movie at this theatre now."
-                    else:
-                        hint = None
+                    # Said at the box itself: the dates this movie is listed
+                    # in this format here, from BookMyShow's own showtimes.
+                    on = sorted(d for d, fmts in listed_on.items()
+                                if any(normalise_format(f) == normalise_format(fmt) for f in fmts))
+                    hint = ("Listed for this movie here on " + ", ".join(short_date(d) for d in on) + "."
+                            if on else "Listed for this movie at this theatre now.")
                     if st.checkbox(fmt, key=f"fmt_{venue.code}_{fmt}",
                                    value=fmt in formats.get(venue.code, []), help=hint):
                         chosen.append(fmt)
@@ -769,6 +782,7 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
     if show_dates:
         st.caption(f"Watching shows on {describe_date_codes(show_dates)} "
                    f"({len(show_dates)} day{'s' if len(show_dates) != 1 else ''}).")
+        date_listing_note(show_dates)
     else:
         st.caption("Watching every date BookMyShow has on sale.")
 
@@ -785,6 +799,36 @@ def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[
                           key="notify_email", on_change=_remember_email,
                           help="Where the alert is sent. Prefilled with your account's email — change it if you like.")
     return interval, until, email.strip(), bool(start_now), show_dates
+
+
+def date_listing_note(show_dates: list[str]) -> None:
+    """For the chosen show dates, which chosen theatre/format pairs BookMyShow
+    does not list this movie in yet — from the catalogue's per-date
+    listings; nothing is fetched. The monitor watches for them; the person
+    is told, not blocked."""
+    slug = st.session_state.get("location", "")
+    movie_id = st.session_state.get("movie_id", "")
+    codes = list(st.session_state.get("theatres", []))
+    formats: dict[str, list[str]] = st.session_state.get("formats", {})
+    if not (movie_id and codes):
+        return
+    known = cv.listings(movie_id, slug)
+    if not any(d in known for d in show_dates):
+        return                                   # the catalogue has not read these dates: nothing to say
+    listed = cv.listed_formats(movie_id, slug, codes, show_dates)
+    names = {v.code: v.name for v in cv.selected_venues(movie_id, slug, codes)}
+    missing = []
+    for code in codes:
+        here = {normalise_format(f) for f in listed.get(code, ())}
+        for fmt in formats.get(code) or [ANY_FORMAT]:
+            if fmt == ANY_FORMAT:
+                if not here:
+                    missing.append(names.get(code, code))
+            elif normalise_format(fmt) not in here:
+                missing.append(f"{names.get(code, code)} · {fmt}")
+    if missing:
+        st.caption(f"Not listed on {describe_date_codes(show_dates)} yet: " + "; ".join(dedupe(missing))
+                   + " — you'll be emailed when it is.")
 
 
 def _remember_email() -> None:
@@ -885,6 +929,7 @@ __all__ = [
     "ago",
     "back_button",
     "boot",
+    "date_listing_note",
     "goto",
     "grid",
     "infinity_vision_note",

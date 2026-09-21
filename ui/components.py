@@ -434,19 +434,23 @@ def featured_tile(name: str, area: str, venue, selected: bool, *, released: bool
 
 
 def format_panel_head(name: str, area: str, badge: str = "", coming: bool = False,
-                      expected: tuple[str, ...] | list[str] = ()) -> None:
-    """``expected`` names formats the theatre is known to run that this movie
-    has not listed there yet — selectable, and said so, never hidden."""
+                      expected: tuple[str, ...] | list[str] = (), when: str = "") -> None:
+    """``expected`` names formats the theatre runs for *other* films that this
+    movie is not listed in here — said, so the theatre's capability is not
+    mistaken for the movie's listing; never offered. ``when`` is the dates
+    the movie is listed here, or the date it is not, in words."""
     badges = ('<span class="tr-badge soon">Coming soon</span>' if coming else "") + (
         f'<span class="tr-badge">{e(badge)}</span>' if badge else "")
     badge_html = f'<div class="b">{badges}</div>' if badges else ""
+    lines = []
     if coming:
-        note = '<div class="w">Not listed for this movie yet — pick the format to wait for.</div>'
-    elif expected:
-        note = (f'<div class="w">{e(" · ".join(expected))}: not listed for this movie here yet — '
-                'pick it to wait for it.</div>')
-    else:
-        note = ""
+        lines.append(f"Not listed for this movie{(' on ' + when) if when else ''} yet — watching every format "
+                     "until it opens here.")
+    elif when:
+        lines.append(f"Listed for this movie here {when}.")
+    if expected:
+        lines.append(f"This theatre also runs {' · '.join(expected)} for other films — not this movie here.")
+    note = "".join(f'<div class="w">{e(line)}</div>' for line in lines)
     html(
         f'<div class="tr-fmt-head"><div class="n">{e(name)}</div>'
         f'<div class="a">{e(area or "Hyderabad")}</div>{badge_html}{note}</div>'

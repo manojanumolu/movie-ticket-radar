@@ -328,7 +328,7 @@ def test_the_format_step_says_which_options_are_not_listed_yet(seeded):
     app = run(step=4, location="hyderabad", movie_id=seeded, theatres=["ALLU"])
     boxes = {c.key: c for c in app.checkbox}
     assert "fmt_ALLU_Dolby Cinema" in boxes
-    assert boxes["fmt_ALLU_Dolby Cinema"].proto.help == "Listed for this movie at this theatre now."
+    assert boxes["fmt_ALLU_Dolby Cinema"].proto.help == "Listed for this movie here on 25 Sep."
     assert boxes["fmt_ALLU_any"].proto.help.startswith("Watch every format")
 
 

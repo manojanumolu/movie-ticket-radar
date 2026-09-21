@@ -45,6 +45,14 @@ DETAIL_DELAY = 1.2
 #: both directions. Six hours, with four syncs a day, keeps it current.
 DETAIL_TTL = timedelta(hours=6)
 
+#: How many of a film's bookable dates the detail read covers, starting with
+#: the platform's default date. Formats are per show, and a theatre that
+#: lists a film on Friday in Infinity Vision may not list it on Thursday at
+#: all — so the catalogue records what is listed *per date*, for the first
+#: few dates on sale, and the wizard answers "this movie, this theatre,
+#: this date" from that rather than from what the theatre runs in general.
+DATE_SWEEP = 3
+
 
 class SyncStatus(str, Enum):
     """Why the catalogue looks the way it does.
@@ -68,6 +76,20 @@ class SyncStatus(str, Enum):
 # ──────────────────────────────────────────────────────────────────────────
 # Entry shape
 # ──────────────────────────────────────────────────────────────────────────
+def listings_from_showtimes(showtimes) -> dict[str, dict[str, list[str]]]:
+    """``{date_code: {venue_code: [formats]}}`` — what the platform lists,
+    per date, per theatre, from the shows themselves. A show without a
+    format label still lists the theatre for that date (an empty list)."""
+    out: dict[str, dict[str, list[str]]] = {}
+    for show in showtimes:
+        if not show.date_code:
+            continue
+        formats = out.setdefault(show.date_code, {}).setdefault(show.venue_code, [])
+        if show.format_label and show.format_label not in formats:
+            formats.append(show.format_label)
+    return {d: out[d] for d in sorted(out)}
+
+
 def entry_from_snapshot(snapshot: Snapshot) -> dict[str, Any]:
     return {
         "movie": asdict(snapshot.movie),
@@ -76,6 +98,7 @@ def entry_from_snapshot(snapshot: Snapshot) -> dict[str, Any]:
              "categories": [c.to_dict() for c in v.categories]}
             for v in snapshot.venues
         ],
+        "listings": listings_from_showtimes(snapshot.showtimes),
         "bookable_dates": list(snapshot.bookable_dates),
         "closed_dates": list(snapshot.closed_dates),
         "showtime_count": len(snapshot.showtimes),
@@ -88,6 +111,7 @@ def entry_from_movie(movie: MovieRef) -> dict[str, Any]:
     return {
         "movie": asdict(movie),
         "venues": [],
+        "listings": {},
         "bookable_dates": [],
         "closed_dates": [],
         "showtime_count": 0,
@@ -129,6 +153,67 @@ def categories_from_entry(raw: Any) -> tuple[SeatCategory, ...]:
         if cat.name:
             out.setdefault(cat.key, cat)
     return tuple(out.values())
+
+
+def listings_from_entry(entry: dict[str, Any]) -> dict[str, dict[str, tuple[str, ...]]]:
+    """A row's per-date listings. A row detailed before listings were kept
+    has none: callers fall back to the venues' formats, undated."""
+    raw = entry.get("listings")
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, dict[str, tuple[str, ...]]] = {}
+    for date_code, venues in raw.items():
+        if not isinstance(venues, dict) or not str(date_code).isdigit():
+            continue
+        out[str(date_code)] = {
+            str(code): tuple(dedupe(f for f in fmts if isinstance(f, str)))
+            for code, fmts in venues.items() if isinstance(fmts, list)
+        }
+    return out
+
+
+def read_detail(provider, movie: MovieRef) -> Snapshot:
+    """The platform's default date, then the next bookable dates it names,
+    up to ``DATE_SWEEP`` in all — one snapshot, its shows dated. The extra
+    dates are read only when the platform lists them, and only here, on the
+    runner: the pages never fetch."""
+    snapshot = provider.fetch(movie)
+    seen = {s.date_code for s in snapshot.showtimes if s.date_code}
+    extra = [d for d in snapshot.bookable_dates if d not in seen][:max(0, DATE_SWEEP - max(1, len(seen)))]
+    if not extra:
+        return snapshot
+    try:
+        more = provider.fetch(snapshot.movie, extra)
+    except Exception as exc:  # noqa: BLE001 - the extra dates are a bonus; the default date's read stands
+        print(f"[catalogue]   {snapshot.movie.title or snapshot.movie.event_code}: "
+              f"further dates {extra} not read ({type(exc).__name__}); keeping the default date")
+        return snapshot
+    return merge_snapshots(snapshot, more)
+
+
+def merge_snapshots(first: Snapshot, second: Snapshot) -> Snapshot:
+    """One film's reads on different dates as one snapshot: theatres by
+    code, their formats and categories unioned, every show kept."""
+    venues: dict[str, Venue] = {v.code: v for v in first.venues}
+    for v in second.venues:
+        known = venues.get(v.code)
+        if known is None:
+            venues[v.code] = v
+            continue
+        venues[v.code] = Venue(
+            code=known.code, name=known.name or v.name, area=known.area or v.area,
+            formats=tuple(dedupe([*known.formats, *v.formats])),
+            categories=tuple({c.key: c for c in (*known.categories, *v.categories)}.values()),
+        )
+    return Snapshot(
+        movie=first.movie,
+        venues=sorted(venues.values(), key=lambda v: v.name.lower()),
+        showtimes=[*first.showtimes, *second.showtimes],
+        bookable_dates=dedupe([*first.bookable_dates, *second.bookable_dates]),
+        closed_dates=[d for d in dedupe([*first.closed_dates, *second.closed_dates])
+                      if d not in set(first.bookable_dates) | set(second.bookable_dates)],
+        fetched_at=first.fetched_at,
+    )
 
 
 def is_detailed(entry: dict[str, Any]) -> bool:
@@ -356,7 +441,7 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
             if index:
                 provider_sleep(provider, DETAIL_DELAY)
             try:
-                snapshot = provider.fetch(movie)
+                snapshot = read_detail(provider, movie)
             except PlatformError as exc:
                 failed += 1
                 say(f"  {movie.title or movie.event_code}: {exc}")
@@ -404,7 +489,7 @@ def refresh_entry(movie_id: str, *, mirror: bool = True) -> dict[str, Any]:
     if entry is None:
         raise KeyError(f"{movie_id} is not in the catalogue.")
     movie = movie_from_entry(entry)
-    snapshot = get_provider(movie.platform).fetch(movie)
+    snapshot = read_detail(get_provider(movie.platform), movie)
     return store_snapshot(snapshot, mirror=mirror)
 
 
@@ -428,6 +513,7 @@ def ensure_detail(movie_id: str, *, mirror: bool = True) -> tuple[dict[str, Any]
 
 
 __all__ = [
+    "DATE_SWEEP",
     "DETAIL_LIMIT",
     "DETAIL_TTL",
     "SyncStatus",
@@ -437,6 +523,10 @@ __all__ = [
     "find_entry",
     "is_detailed",
     "is_stale",
+    "listings_from_entry",
+    "listings_from_showtimes",
+    "merge_snapshots",
+    "read_detail",
     "list_entries",
     "movie_from_entry",
     "refresh_entry",
