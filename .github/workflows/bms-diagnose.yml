@@ -19,6 +19,10 @@ on:
         description: "EVENT:VENUE:slug:date — probe theatre-page URL shapes (optional)"
         type: string
         default: ""
+      categories:
+        description: "EVENT:VENUE:date — print one theatre's seat categories, raw, per show (optional)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -41,4 +45,5 @@ jobs:
           INPUT_CITY: ${{ inputs.city }}
           INPUT_GROUP: ${{ inputs.group }}
           INPUT_VENUE_URL: ${{ inputs.venue_url }}
-        run: python tools/bms_diagnose.py --city "$INPUT_CITY" --group "$INPUT_GROUP" --venue-url "$INPUT_VENUE_URL"
+          INPUT_CATEGORIES: ${{ inputs.categories }}
+        run: python tools/bms_diagnose.py --city "$INPUT_CITY" --group "$INPUT_GROUP" --venue-url "$INPUT_VENUE_URL" --categories "$INPUT_CATEGORIES"

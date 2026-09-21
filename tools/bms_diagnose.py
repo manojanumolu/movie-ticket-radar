@@ -273,6 +273,31 @@ def probe_venue_urls(city: str, event_code: str, venue_code: str, slug: str, dat
     return 0
 
 
+def probe_categories(city: str, event_code: str, venue_code: str, date_code: str) -> int:
+    """Print every seat category of one theatre's shows, raw, from the same
+    showtimes response the provider reads — so a category picker can be
+    checked against what BookMyShow really sends (two "GOLD"s, say)."""
+    from platforms.bookmyshow import BookMyShowProvider, _dicts, _text, region_for
+
+    provider = BookMyShowProvider()
+    payload = provider._get(event_code, date_code, region_for(city))
+    data = payload.get("data", {})
+    for widget in _dicts(data.get("showtimeWidgets")):
+        for group in _dicts(widget.get("data")):
+            for card in _dicts(group.get("data")):
+                addl = card.get("additionalData") or {}
+                if card.get("type") != "venue-card" or _text(addl.get("venueCode")) != venue_code:
+                    continue
+                print(f"== {_text(addl.get('venueName'))} [{venue_code}] ==")
+                for show in _dicts(card.get("showtimes")):
+                    sa = show.get("additionalData") or {}
+                    print(f"  show {_text(show.get('title'))} session={_text(sa.get('sessionId'))} "
+                          f"attr={_text(show.get('screenAttr'))!r}")
+                    for cat in _dicts(sa.get("categories")):
+                        print("     ", json.dumps(cat, sort_keys=True))
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Diagnose BookMyShow reachability")
     parser.add_argument("--city", default="hyderabad")
@@ -280,8 +305,13 @@ def main(argv=None) -> int:
                         help="dump the child events (and each one's venues) of a listed movie group")
     parser.add_argument("--venue-url", default="",
                         help="EVENT:VENUE:slug:date — probe theatre-page URL shapes for one movie/venue")
+    parser.add_argument("--categories", default="",
+                        help="EVENT:VENUE:date — print one theatre's seat categories, raw, per show")
     args = parser.parse_args(argv)
 
+    if args.categories:
+        event, venue, date = (args.categories.split(":") + ["", "", ""])[:3]
+        return probe_categories(args.city, event, venue, date)
     if args.venue_url:
         event, venue, slug, date = (args.venue_url.split(":") + ["", "", "", ""])[:4]
         return probe_venue_urls(args.city, event, venue, slug, date)
