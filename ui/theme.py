@@ -88,6 +88,39 @@ def _nav_css() -> str:
     return "\n".join(rules)
 
 
+#: The rail's film rig, in pixels from the rail's top-left corner: two of
+#: Home's reels (``ui.home.reel_svg``) and the strip of film that runs from
+#: the first onto the second. The stylesheet places the reels from this and
+#: ``ui.home.rail_film_svg`` draws the film on their rims from the same
+#: numbers, so the film meets the reels exactly, whatever the rail's size —
+#: the rig never scales: a phone's wider rail shows the same picture.
+RAIL_RIG = {
+    "width": 244, "height": 700,
+    "top": {"left": 42, "top": 152, "size": 196},      # behind the navigation
+    "bottom": {"left": 10, "top": 492, "size": 136},   # lower, and to the left
+}
+
+
+def rail_reel(name: str) -> tuple[float, float, float]:
+    """A rail reel's centre and rim radius (the drawing's rim is r=190 in a
+    400-unit box)."""
+    reel = RAIL_RIG[name]
+    half = reel["size"] / 2
+    return reel["left"] + half, reel["top"] + half, reel["size"] * 190 / 400
+
+
+def _rail_rig_css() -> str:
+    top, bottom = RAIL_RIG["top"], RAIL_RIG["bottom"]
+    return (
+        f".tr-side-ambience .tr-reel.top {{ left: {top['left']}px; top: {top['top']}px; "
+        f"width: {top['size']}px; height: {top['size']}px; animation: tr-side-reel 42s linear infinite; }}\n"
+        f".tr-side-ambience .tr-reel.bottom {{ left: {bottom['left']}px; top: {bottom['top']}px; "
+        f"width: {bottom['size']}px; height: {bottom['size']}px; animation: tr-side-reel 30s linear infinite; }}\n"
+        f".tr-side-film {{ position: absolute; left: 0; top: 0; width: {RAIL_RIG['width']}px; "
+        f"height: {RAIL_RIG['height']}px; }}"
+    )
+
+
 #: Web fonts, injected as their own block. A ``<link>`` starts a Markdown
 #: HTML block that ends at the first blank line — put in front of the
 #: stylesheet it would cut the ``<style>`` element in half.
@@ -195,22 +228,24 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   min-width: 244px !important; width: 244px !important;
   position: relative; isolation: isolate;
 }
-/* Sidebar ambience — two reels and the film between them, behind the rail.
+/* Sidebar ambience — one piece of film equipment behind the rail.
 
-   The reels are Home's own drawing (``ui.home.reel_svg``: rim, sheen arc,
-   ring, six perforations, hub, pin) in Home's colours and opacities, so
-   the rail and the page carry one reel. The markup rides in the footer's
-   html block (``app.sidebar``) and is fixed here: ``position: fixed``
-   inside the rail — whose backdrop-filter makes it the containing block —
-   is the rail's box, so it never adds scrollable width to the rail's
-   scroll container, and ``overflow: hidden`` clips whatever runs past the
-   edge. The top reel sits behind the first three navigation buttons, the
-   smaller one low in the rail, and a strip of film runs down the left rim
-   of both with its sprocket holes moving. Transform-only motion, no
-   script, no asset; pointer-transparent at z-index 0 under the content
+   Two of Home's reels (``ui.home.reel_svg``: rim, sheen arc, ring, six
+   perforations, hub, pin, in Home's colours) with a strip of film wound
+   off the first onto the second: the film hugs the first reel's rim, leaves
+   it on a tangent, curves down and meets the second reel's rim on a
+   tangent — ``ui.home.rail_film_svg`` draws it from the same numbers
+   (``RAIL_RIG``) that place the reels here, so there is no gap at either
+   end and both turn the same way, the smaller one faster, as one length of
+   film would have them. The markup rides in the footer's html block
+   (``app.sidebar``) and is fixed here: ``position: fixed`` inside the rail
+   — whose backdrop-filter makes it the containing block — is the rail's
+   box, so it never adds scrollable width to the rail's scroll container,
+   and ``overflow: hidden`` clips whatever runs past the edge. The film
+   itself does not move; the reels' rotation is the motion. Transform-only,
+   no script, no asset; pointer-transparent at z-index 0 under the content
    (lifted to 1 below). */
 @keyframes tr-side-reel { to { transform: rotate(360deg); } }
-@keyframes tr-side-film { to { transform: translate3d(0, 36px, 0); } }
 .tr-side-ambience {
   position: fixed; left: 0; top: 0; width: 100%; height: 100%; z-index: 0;
   pointer-events: none; overflow: hidden; color: #FF8CA0;
@@ -222,29 +257,17 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 .tr-side-ambience .tr-reel .holes { opacity: .13; }
 .tr-side-ambience .tr-reel .hub { opacity: .14; }
 .tr-side-ambience .tr-reel .pin { opacity: .35; }
-.tr-side-ambience .tr-reel.top {
-  left: 40px; top: 65px; width: 300px; height: 300px;
-  filter: drop-shadow(0 0 28px rgba(255,51,85,.16)); animation: tr-side-reel 60s linear infinite;
-}
-.tr-side-ambience .tr-reel.bottom {
-  left: 40px; bottom: 40px; width: 220px; height: 220px;
-  animation: tr-side-reel 44s linear infinite;
-}
-/* the film: a band down the reels' left rim, its sprocket holes running */
-.tr-side-film {
-  position: absolute; left: 40px; width: 26px; top: 215px; bottom: 150px; overflow: hidden;
-  background: linear-gradient(90deg, rgba(255,140,160,.04), rgba(255,140,160,.11) 30%, rgba(255,140,160,.11) 70%, rgba(255,140,160,.04));
-  box-shadow: inset 2px 0 0 rgba(255,140,160,.12), inset -2px 0 0 rgba(255,140,160,.12);
-}
-.tr-side-film::before {
-  content: ""; position: absolute; left: 4px; right: 4px; top: -36px; bottom: 0; will-change: transform;
-  background:
-    linear-gradient(90deg, rgba(255,201,212,.30) 0 5px, transparent 5px calc(100% - 5px), rgba(255,201,212,.30) calc(100% - 5px)) 0 0 / 100% 36px repeat-y;
-  -webkit-mask-image: linear-gradient(180deg, #000 0 10px, transparent 10px 36px);
-  mask-image: linear-gradient(180deg, #000 0 10px, transparent 10px 36px);
-  -webkit-mask-size: 100% 36px; mask-size: 100% 36px;
-  animation: tr-side-film 1.6s linear infinite;
-}
+.tr-side-ambience .tr-reel.top { filter: drop-shadow(0 0 24px rgba(255,51,85,.14)); }
+__RAIL_RIG__
+/* the film, drawn as Home's strip is: a halo, the two edges, the band, the
+   sprocket ticks across it, the darker centre that leaves them only at the
+   margins, and the frame lines */
+.tr-side-film .halo { stroke: rgba(255,51,85,.05); stroke-width: 30; }
+.tr-side-film .edges { stroke: rgba(255,140,160,.18); stroke-width: 16; }
+.tr-side-film .band { stroke: rgba(26,18,25,.55); stroke-width: 14; }
+.tr-side-film .holes { stroke: rgba(255,140,160,.20); stroke-width: 14; stroke-dasharray: 2.2 4.4; }
+.tr-side-film .film { stroke: rgba(15,11,17,.5); stroke-width: 9; }
+.tr-side-film .frames { stroke: rgba(255,255,255,.05); stroke-width: 9; stroke-dasharray: 1 20; }
 /* off-canvas (a phone's collapsed rail) there is nothing to see */
 [data-testid="stSidebar"][aria-expanded="false"] .tr-side-ambience { display: none; }
 /* the rail's own content stays above the room, and readable */
@@ -579,7 +602,7 @@ __NAV_ICONS__
 
 /* Asked for stillness, the reels and the film stay — they just stop moving. */
 @media (prefers-reduced-motion: reduce) {
-  .tr-side-ambience .tr-reel.top, .tr-side-ambience .tr-reel.bottom, .tr-side-film::before {
+  .tr-side-ambience .tr-reel.top, .tr-side-ambience .tr-reel.bottom {
     animation: none;
     transform: none;
   }
@@ -1325,6 +1348,7 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 
   /* the sidebar is an overlay here; the toolbar's "open" control is the nav */
   [data-testid="stSidebar"] { width: min(300px, 86vw) !important; min-width: 0 !important; }
+  .tr-side-ambience { opacity: .8; }   /* the rail covers the page here; the reels keep their place, a shade quieter */
   .block-container { padding-top: 3.2rem !important; }
   /* the account chip sits at the top-right, below Streamlit's header so the
      transparent toolbar can never intercept a tap; a z-index keeps it on top. */
@@ -1424,7 +1448,7 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   font-family: 'Material Symbols Rounded' !important;
 }
 </style>
-""".replace("__NAV_ICONS__", _nav_css())
+""".replace("__NAV_ICONS__", _nav_css()).replace("__RAIL_RIG__", _rail_rig_css())
 
 
 def inject() -> None:
@@ -1433,4 +1457,4 @@ def inject() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
 
 
-__all__ = ["CSS", "FONTS", "NAV_ICONS", "TOKENS", "inject"]
+__all__ = ["CSS", "FONTS", "NAV_ICONS", "RAIL_RIG", "TOKENS", "inject", "rail_reel"]
