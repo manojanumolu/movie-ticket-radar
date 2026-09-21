@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from config.timezone import now_ist
-from monitor.changes import Change, apply_outcome, detect_changes, mark_notified
+from monitor.changes import Change, apply_outcome, detect_changes, mark_notified, settle_baseline
 from monitor.discovery import DiscoveryReport, discover_siblings
 from monitor.models import (
     Availability,
@@ -178,6 +178,9 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
             booking_url=_booking_url(monitor, snapshot, shows[0].date_code, target),
         )
 
+    if monitor.is_category_watch:
+        return _evaluate_categories(monitor, target, snapshot, matching)
+
     bookable = [s for s in matching if s.availability is Availability.AVAILABLE]
     if bookable:
         date_code = _earliest_date(bookable)
@@ -215,6 +218,56 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
         date_code=date_code,
         booking_url=_booking_url(monitor, snapshot, date_code, target),
         detail="Showtimes are listed but booking hasn't opened.",
+    )
+
+
+def _evaluate_categories(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot,
+                         shows: list[Showtime]) -> TargetResult:
+    """The category watch's verdict for shows already narrowed to the
+    theatre, the dates and the format: AVAILABLE only when one of the
+    watched seat categories is bookable in one of them. Reads nothing the
+    ordinary verdict did not — the categories came with the same response."""
+    shows = [s for s in shows if monitor.matches_show_time(s)]
+    if not shows:
+        return TargetResult(
+            target_key=target.key, venue_name=target.venue_name, fmt=target.fmt,
+            availability=Availability.SHOW_NOT_AVAILABLE,
+            detail=f"No show at {monitor.show_time} is listed yet.",
+            booking_url=_booking_url(monitor, snapshot, "", target),
+        )
+
+    def watched(show: Showtime) -> list[str]:
+        return [c.name for c in show.categories if monitor.watches_category(c.name)]
+
+    live = [s for s in shows if any(c.availability is Availability.AVAILABLE for c in s.categories
+                                    if monitor.watches_category(c.name))]
+    if live:
+        date_code = _earliest_date(live)
+        names = sorted({c.name for s in live for c in s.categories
+                        if monitor.watches_category(c.name) and c.availability is Availability.AVAILABLE})
+        return TargetResult(
+            target_key=target.key, venue_name=target.venue_name, fmt=target.fmt,
+            availability=Availability.AVAILABLE, showtimes=live, date_code=date_code,
+            booking_url=_booking_url(monitor, snapshot, date_code, target),
+            detail=f"{', '.join(names)} bookable at {len(live)} showtime(s).",
+        )
+
+    listed = [s for s in shows if watched(s)]
+    date_code = _earliest_date(shows)
+    if listed:
+        return TargetResult(
+            target_key=target.key, venue_name=target.venue_name, fmt=target.fmt,
+            availability=Availability.SOLD_OUT, showtimes=listed, date_code=date_code,
+            booking_url=_booking_url(monitor, snapshot, date_code, target),
+            detail=f"{monitor.category_label}: no seats left at the shows listed.",
+        )
+    seen = sorted({c.name for s in shows for c in s.categories})
+    return TargetResult(
+        target_key=target.key, venue_name=target.venue_name, fmt=target.fmt,
+        availability=Availability.NOT_BOOKABLE, showtimes=shows, date_code=date_code,
+        booking_url=_booking_url(monitor, snapshot, date_code, target),
+        detail=(f"{monitor.category_label} not listed for these shows (listed: {', '.join(seen)})."
+                if seen else "Shows are listed but no seat categories are published yet."),
     )
 
 
@@ -470,6 +523,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
                   f"({len(monitor.targets)} target(s))")
             outcome = outcome_for(monitor, listing, at=at)
             changes = detect_changes(monitor, outcome, ms)
+            settle_baseline(monitor, outcome, ms)
             apply_outcome(outcome, ms)
             dirty = True
 

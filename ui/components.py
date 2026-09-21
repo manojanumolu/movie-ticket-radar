@@ -822,6 +822,16 @@ PILL_HELP = {
 }
 
 
+def category_pill(monitor: Monitor) -> str:
+    """The category watch's pill — which seat categories, and at which show
+    when one was chosen. Empty for an ordinary monitor."""
+    if not monitor.is_category_watch:
+        return ""
+    label = monitor.category_label + (f" · {monitor.show_time}" if monitor.show_time else "")
+    return (f'<span class="tr-pill warn" title="Category watch: emailed when one of these seat categories '
+            f'opens up">{e(label.upper())}</span>')
+
+
 def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None = None) -> None:
     """One monitor as a single scannable card, for My Monitors.
 
@@ -863,7 +873,7 @@ def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None =
             <div class="info">
               <div class="pills"><span class="tr-pill {phase.css} lg" title="{e(PILL_HELP.get(phase.key, ''))}">{'<span class="tr-dot ok live"></span>' if phase.key == 'available' else ''}{e(PILL_LABEL.get(phase.key, phase.label))}</span>
                 <span class="tr-pill neutral" title="How often this monitor checks BookMyShow">EVERY {monitor.interval_minutes} MIN</span>
-                <span class="tr-pill neutral" title="Each theatre × format is watched on its own">{len(monitor.targets)} TARGET{'S' if len(monitor.targets) != 1 else ''}</span></div>
+                <span class="tr-pill neutral" title="Each theatre × format is watched on its own">{len(monitor.targets)} TARGET{'S' if len(monitor.targets) != 1 else ''}</span>{category_pill(monitor)}</div>
               <div class="title">{e(monitor.movie.title)}</div>
               {language_line(monitor.movie.language)}
               <div class="where">BookMyShow · {e(monitor.movie.city)}

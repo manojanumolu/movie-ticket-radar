@@ -348,7 +348,8 @@ def account_bar(settings: dict | None = None) -> None:
 # ──────────────────────────────────────────────────────────────────────────
 def start_monitor(interval: int, until, email: str, start_now: bool,
                   date_codes: list[str] | None = None,
-                  settings: dict | None = None) -> None:
+                  settings: dict | None = None,
+                  categories: list[str] | None = None, show_time: str = "") -> None:
     """Save a monitor and get its first check moving.
 
     ``settings`` is the page's already-loaded settings. It is passed in rather
@@ -419,6 +420,10 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
         date_codes=list(date_codes or []),
         # Ownership: the verified Firebase UID, nothing typed on this page.
         owner_uid=auth_session.current_uid(),
+        # A category watch is the administrator's alone: whatever the page
+        # carried, only the admin claim — Firebase's record — lets it through.
+        categories=[c for c in (categories or []) if c] if auth_session.is_admin() else [],
+        show_time=(show_time or "").strip() if auth_session.is_admin() else "",
     )
     # 1. Persist. In Firestore the monitor is the signed-in person's and the
     #    worker reads it from there; with the JSON store it is mirrored to
@@ -706,6 +711,15 @@ def wizard(monitors, *, settings: dict) -> None:
             user = auth_session.current_user()
             default_email = settings.get("notify_email") or (user.email if user else "")
             interval, until, email, start_now, dates = flow.step_monitoring(default_email)
+            # Admin only: a category watch. Gated here and again inside, and
+            # once more where the monitor is saved — an ordinary account
+            # never sees it and can never create one.
+            categories, show_time = [], ""
+            if auth_session.is_admin():
+                categories, show_time = flow.step_category_watch(
+                    cv.selected_venues(st.session_state.get("movie_id", ""), st.session_state.get("location", ""),
+                                       st.session_state.get("theatres", [])),
+                    is_admin=True)
             # Ordinary accounts have a ceiling on running monitors; the
             # store refuses past it whatever this page shows, so this is
             # the explanation, not the enforcement. An admin account has
@@ -720,7 +734,7 @@ def wizard(monitors, *, settings: dict) -> None:
                              help="Save this monitor. The first check runs right away, then on the "
                                   "schedule you chose, until the end time."):
                     start_monitor(interval, until, email, start_now, dates,
-                                  settings=settings)
+                                  settings=settings, categories=categories, show_time=show_time)
             with helper:
                 C.html(
                     f'<div class="tr-cta-help">{C.icon("bolt", 15, "#E8B25C")}<span>You\'ll get an email the second '

@@ -18,6 +18,18 @@ The response is a widget tree; the parts we need are::
                └ additionalData.categories[].availStatus
                    0 sold out · 1 almost full · 2 filling fast · 3 available
 
+Each category (verified from a live read, Sept 2026) is a price tier::
+
+    {"priceCode": "0002", "priceDesc": "GOLD", "curPrice": "295.00",
+     "areaCatCode": "0000000002", "availStatus": "3", "seatLayout": true,
+     "categoryRange": "1|2|3|4|5|6"}
+
+That is the finest grain this endpoint has. It carries no rows, no seats and
+no seat map — ``seatLayout`` is a flag that the web client may draw one,
+from an endpoint this module does not know. ``parse_seat_categories`` reads
+the categories onto each ``Showtime`` (from the same response — no second
+request) and nothing finer.
+
 This is an undocumented internal endpoint. It can change shape or start
 refusing us without notice, which is exactly why every parse step below is
 defensive and every failure raises :class:`PlatformError` rather than
@@ -42,6 +54,7 @@ from platforms.http import REQUEST_ERRORS, build_session, transport_name
 from monitor.models import (
     Availability,
     MovieRef,
+    SeatCategory,
     Showtime,
     Snapshot,
     Venue,
@@ -245,6 +258,44 @@ def published_show_url(show: dict[str, Any]) -> str:
             if is_bookmyshow_url(value):
                 return value
     return ""
+
+
+def _price(value: Any) -> str:
+    """A price as the payload wrote it — "295.00" — or a number's text."""
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, (int, float)):
+        return f"{value:.2f}"
+    return _text(value)
+
+
+def parse_seat_categories(show_data: Any) -> tuple[SeatCategory, ...]:
+    """The seat categories of one showtime's ``additionalData``.
+
+    Reads only what the payload carries — name, code, price, area code,
+    status, the seat-layout flag. Anything that is not a list of category
+    dicts, or a category with neither a name nor a code, yields nothing:
+    an empty tuple is "no categories published", which is what a listing
+    not yet on sale looks like, never a guess.
+    """
+    if not isinstance(show_data, dict):
+        return ()
+    out: list[SeatCategory] = []
+    for cat in _dicts(show_data.get("categories")):
+        name = _text(cat.get("priceDesc")) or _text(cat.get("categoryName")) or _text(cat.get("name"))
+        code = _text(cat.get("priceCode")) or _text(cat.get("categoryCode"))
+        if not name and not code:
+            continue
+        status = AVAIL_STATUS.get(str(cat.get("availStatus", "")).strip())
+        out.append(SeatCategory(
+            code=code,
+            name=name or code,
+            availability=status or Availability.NOT_BOOKABLE,
+            price=_price(cat.get("curPrice")),
+            area_code=_text(cat.get("areaCatCode")),
+            has_seat_layout=cat.get("seatLayout") is True or _text(cat.get("seatLayout")).lower() == "true",
+        ))
+    return tuple(out)
 
 
 #: Script blocks that carry a page's server-rendered data.
@@ -1126,6 +1177,7 @@ class BookMyShowProvider:
                     format_label=fmt,
                     availability=self._availability(sa),
                     booking_url=published_show_url(show) or self.booking_url(movie, date_code),
+                    categories=parse_seat_categories(sa),
                 )
             )
         return out
@@ -1157,11 +1209,14 @@ class BookMyShowProvider:
         whatever this movie is screening at that theatre today.
         """
         by_code: dict[str, list[str]] = {}
+        cats: dict[str, list[str]] = {}
         for s in showtimes:
             if s.format_label:
                 by_code.setdefault(s.venue_code, []).append(s.format_label)
+            cats.setdefault(s.venue_code, []).extend(c.name for c in s.categories)
         return [
-            Venue(code=v.code, name=v.name, area=v.area, formats=tuple(sorted(dedupe(by_code.get(v.code, [])))))
+            Venue(code=v.code, name=v.name, area=v.area, formats=tuple(sorted(dedupe(by_code.get(v.code, [])))),
+                  categories=tuple(dedupe(cats.get(v.code, []))))
             for v in sorted(venues, key=lambda v: v.name.lower())
         ]
 
@@ -1175,6 +1230,7 @@ __all__ = [
     "clean_format",
     "is_bookmyshow_url",
     "parse_listing_url",
+    "parse_seat_categories",
     "published_show_url",
     "region_for",
 ]

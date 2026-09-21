@@ -82,7 +82,8 @@ DEFAULTS = {
 #: when the widget is drawn — but they persist in the session exactly like
 #: the keys above, so a reset has to drop them too.
 WIDGET_KEYS = ("notify_email", "notify_email_draft", "until_date", "until_time",
-               "start_now_toggle", "show_date_single", "show_date_range")
+               "start_now_toggle", "show_date_single", "show_date_range",
+               "catwatch_categories", "catwatch_show_time")
 #: Prefixes of the per-venue / per-nonce widget keys (format checkboxes,
 #: theatre search boxes) — the exact keys depend on what was picked.
 WIDGET_PREFIXES = ("fmt_", "theatre_query_")
@@ -772,6 +773,53 @@ def _remember_email() -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Category watch — admin only
+# ──────────────────────────────────────────────────────────────────────────
+#: The admin's picks on the Monitoring step: the seat categories a show must
+#: have bookable, and optionally one show time. Both are session widgets and
+#: are dropped with the rest of the wizard on reset.
+CATEGORY_WATCH_KEY = "catwatch_categories"
+SHOW_TIME_KEY = "catwatch_show_time"
+CATEGORY_WATCH_TITLE = "Category watch"
+
+
+def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple[list[str], str]:
+    """Admin only: turn this monitor into a *category watch* — an alert when
+    one of the chosen seat categories (GOLD, PLATINUM…) becomes bookable at
+    the theatres, format and dates already picked, optionally at one show
+    time. Draws nothing for anyone else. The choices are the categories the
+    catalogue has seen those theatres list; the worker reads the live ones
+    from the same response it already fetches. Returns (categories, show
+    time); empty means an ordinary monitor.
+    """
+    if not is_admin:
+        return [], ""
+    C.rule(f"{CATEGORY_WATCH_TITLE} · admin")
+    C.step_header("ticket", "Watch specific seat categories?",
+                  "Leave empty for a normal monitor. With categories chosen, you're emailed only when one "
+                  "of them opens up — not on the first check, and not again while it stays open.")
+    seen = dedupe(name for v in venues for name in v.categories)
+    if not seen:
+        st.caption("The catalogue hasn't seen seat categories at these theatres yet — the next sync "
+                   "will list them. A normal monitor is still available.")
+        st.session_state[CATEGORY_WATCH_KEY] = []
+        return [], st.session_state.get(SHOW_TIME_KEY, "").strip()
+    with st.container(key="trpair_catwatch"):
+        left, right = st.columns([1.6, 1], gap="small")
+    chosen = left.multiselect("Seat categories", seen, key=CATEGORY_WATCH_KEY,
+                              placeholder="Choose categories…", label_visibility="collapsed",
+                              help="Only the categories BookMyShow lists at the chosen theatres")
+    show_time = right.text_input("Show time", key=SHOW_TIME_KEY, placeholder="Show time, e.g. 07:15 PM",
+                                 label_visibility="collapsed",
+                                 help="Optional. One show only; leave empty to watch every show at the theatre.")
+    if chosen:
+        st.caption(f"Category watch: {', '.join(chosen)}"
+                   + (f" at {show_time.strip()}" if show_time.strip() else " at every show")
+                   + " — for the theatres, format and dates above.")
+    return list(chosen), show_time.strip()
+
+
+# ──────────────────────────────────────────────────────────────────────────
 def summary(step: int) -> None:
     """Everything already answered, as one compact strip above the step card."""
     slug = st.session_state.get("location", "")
@@ -810,6 +858,9 @@ def ago(when) -> str:
 
 __all__ = [
     "INTERVALS",
+    "CATEGORY_WATCH_KEY",
+    "CATEGORY_WATCH_TITLE",
+    "SHOW_TIME_KEY",
     "STEPS",
     "VIEW_ALL_THRESHOLD",
     "ago",
@@ -825,6 +876,7 @@ __all__ = [
     "step_location",
     "step_monitoring",
     "step_movie",
+    "step_category_watch",
     "step_rail",
     "step_theatres",
     "summary",

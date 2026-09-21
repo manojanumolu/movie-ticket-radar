@@ -54,10 +54,15 @@ class Change:
     #: Every show date behind ``time_labels`` (``date_code`` is the earliest).
     date_codes: list[str] = field(default_factory=list)
     detected_at: datetime | None = None
+    #: The watched seat categories that became bookable (a category watch);
+    #: empty for an ordinary monitor.
+    categories: list[str] = field(default_factory=list)
 
     @property
     def headline(self) -> str:
         if self.kind is ChangeKind.TICKETS_LIVE:
+            if self.categories:
+                return f"{', '.join(self.categories)} AVAILABLE — {self.movie_title}"
             return f"TICKETS ARE LIVE — {self.movie_title}"
         return f"NEW SHOWTIME — {self.movie_title}"
 
@@ -77,6 +82,7 @@ class Change:
             "new_time_labels": self.new_time_labels,
             "time_links": [list(pair) for pair in self.time_links],
             "date_codes": list(self.date_codes),
+            "categories": list(self.categories),
         }
 
 
@@ -103,6 +109,18 @@ def detect_changes(monitor: Monitor, outcome: CheckOutcome, state: MonitorState)
     return changes
 
 
+def _live_categories(monitor: Monitor, result: TargetResult) -> list[str]:
+    """The watched categories bookable in the result's shows, first-seen order."""
+    if not monitor.is_category_watch:
+        return []
+    out: dict[str, None] = {}
+    for show in result.showtimes:
+        for c in show.categories:
+            if monitor.watches_category(c.name) and c.availability is Availability.AVAILABLE:
+                out.setdefault(c.name, None)
+    return list(out)
+
+
 def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
                 at: datetime) -> Change | None:
     if result.availability is not Availability.AVAILABLE:
@@ -117,6 +135,12 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
     # a previous transition whose email never made it out.
     is_transition = prior.availability in NOTIFIABLE_FROM
     is_retry = prior.availability is Availability.AVAILABLE and not already_announced
+    # A category watch (admin) is created to catch a category *opening up*:
+    # its first read only establishes where things stand (``settle_baseline``
+    # marks it announced). Finding GOLD already bookable on the very first
+    # check is not that transition.
+    if monitor.is_category_watch and prior.availability is Availability.UNKNOWN:
+        return None
 
     if not already_announced and (is_transition or is_retry):
         return Change(
@@ -134,9 +158,12 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
             time_links=result.time_links,
             date_codes=result.date_codes,
             detected_at=at,
+            categories=_live_categories(monitor, result),
         )
 
-    if not already_announced:
+    if not already_announced or monitor.is_category_watch:
+        # A category watch is about its categories opening, not about new
+        # screenings: once announced it stays quiet until it re-arms.
         return None
 
     # Already live and already announced: the only remaining news is a
@@ -170,6 +197,22 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
         new_showtime_keys=fresh,
         detected_at=at,
     )
+
+
+def settle_baseline(monitor: Monitor, outcome: CheckOutcome, state: MonitorState) -> None:
+    """A category watch's first read is its baseline. Called before
+    :func:`apply_outcome`: a target read as AVAILABLE with no prior
+    observation is marked as already announced, so neither this tick nor a
+    later "retry" emails it; the alert arms the first time the category is
+    seen unavailable. Ordinary monitors are untouched."""
+    if not monitor.is_category_watch or not outcome.ok:
+        return
+    for result in outcome.results:
+        prior = state.targets.get(result.target_key, TargetState())
+        if prior.availability is Availability.UNKNOWN and result.availability is Availability.AVAILABLE:
+            ts = state.target(result.target_key)
+            ts.notified_availability = Availability.AVAILABLE
+            ts.notified_showtime_keys = result.showtime_keys
 
 
 def apply_outcome(outcome: CheckOutcome, state: MonitorState) -> MonitorState:

@@ -72,7 +72,8 @@ def entry_from_snapshot(snapshot: Snapshot) -> dict[str, Any]:
     return {
         "movie": asdict(snapshot.movie),
         "venues": [
-            {"code": v.code, "name": v.name, "area": v.area, "formats": list(v.formats)}
+            {"code": v.code, "name": v.name, "area": v.area, "formats": list(v.formats),
+             "categories": list(v.categories)}
             for v in snapshot.venues
         ],
         "bookable_dates": list(snapshot.bookable_dates),
@@ -107,6 +108,7 @@ def venues_from_entry(entry: dict[str, Any]) -> list[Venue]:
             name=v.get("name", v.get("code", "")),
             area=v.get("area", ""),
             formats=tuple(dedupe(v.get("formats", []))),
+            categories=tuple(dedupe(v.get("categories", []) or [])),
         )
         for v in entry.get("venues", [])
         if isinstance(v, dict) and (v.get("code") or v.get("name"))

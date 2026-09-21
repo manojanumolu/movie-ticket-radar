@@ -144,15 +144,20 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
     date_label = " · ".join(fmt_date_code(d) for d in dates)
     times = change.new_time_labels if not live and change.new_time_labels else change.time_labels
 
+    categories = ", ".join(change.categories)
     subject = (
-        f"TICKETS ARE LIVE — {title} at {change.venue_name}"
+        f"{categories} AVAILABLE — {title} at {change.venue_name}"
+        if live and categories
+        else f"TICKETS ARE LIVE — {title} at {change.venue_name}"
         if live
         else f"New showtime — {title} at {change.venue_name}"
     )
 
-    eyebrow = "TICKETS ARE LIVE" if live else "NEW SHOWTIME"
+    eyebrow = (f"{categories} AVAILABLE" if categories else "TICKETS ARE LIVE") if live else "NEW SHOWTIME"
     lede = (
-        "Booking just opened for the theatre and format you're watching."
+        f"Seats in {categories} just became bookable at the theatre, format and show you're watching."
+        if live and categories
+        else "Booking just opened for the theatre and format you're watching."
         if live
         else "A showtime that wasn't there on the last check has appeared."
     )

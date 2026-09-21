@@ -86,6 +86,65 @@ class MonitorStatus(str, Enum):
 # ──────────────────────────────────────────────────────────────────────────
 # Platform-neutral view of a listing
 # ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────
+# Seat categories — the grain of the admin-only category watch
+# ──────────────────────────────────────────────────────────────────────────
+def normalise_category(value: str) -> str:
+    """Comparison key for a category name (and a show time): BookMyShow
+    writes them in capitals with stray spacing, so compare squashed,
+    lower-case alphanumerics — the format convention, ``normalise_format``."""
+    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+@dataclass(frozen=True)
+class SeatCategory:
+    """One seat category — a price tier such as PLATINUM or GOLD — of one
+    show, as the platform reports it.
+
+    This is the finest grain BookMyShow's showtimes payload carries (verified
+    from a live read, Sept 2026: ``additionalData.categories[]`` with
+    ``priceDesc``, ``priceCode``, ``areaCatCode``, ``curPrice``,
+    ``availStatus`` and a ``seatLayout`` flag). Rows and individual seats are
+    *not* in it — the web client draws those from an endpoint this
+    application does not know and will not guess — so nothing here claims to
+    be a row or a seat.
+    """
+
+    code: str                     # priceCode, "0002"
+    name: str                     # priceDesc, "GOLD"
+    availability: Availability    # from availStatus, as the checker reads it
+    price: str = ""               # curPrice, "295.00"
+    area_code: str = ""           # areaCatCode, "0000000002"
+    #: The platform says a seat map exists for this category. It is a flag,
+    #: not the map: the layout itself is not in the payload.
+    has_seat_layout: bool = False
+
+    @property
+    def key(self) -> str:
+        return f"{self.code}|{self.name}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code, "name": self.name, "availability": self.availability.value,
+            "price": self.price, "area_code": self.area_code, "has_seat_layout": self.has_seat_layout,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> SeatCategory:
+        try:
+            availability = Availability(str(raw.get("availability", "UNKNOWN")))
+        except ValueError:
+            availability = Availability.UNKNOWN
+        return cls(
+            code=str(raw.get("code", "") or ""),
+            name=str(raw.get("name", "") or ""),
+            availability=availability,
+            price=str(raw.get("price", "") or ""),
+            area_code=str(raw.get("area_code", "") or ""),
+            has_seat_layout=bool(raw.get("has_seat_layout", False)),
+        )
+
+
 @dataclass(frozen=True)
 class Showtime:
     """One bookable (or not) screening."""
@@ -102,11 +161,20 @@ class Showtime:
     #: platform itself published, or the most specific page we can *derive*
     #: (the date's booking page). Never a guessed pattern.
     booking_url: str = ""
+    #: The show's seat categories (price tiers) as the platform lists them,
+    #: read from the same response as everything above. Empty when the
+    #: listing publishes none — a show not yet on sale.
+    categories: tuple[SeatCategory, ...] = ()
 
     @property
     def key(self) -> str:
         """Stable identity of a screening, used for new-showtime detection."""
         return f"{self.venue_code}|{self.date_code}|{self.session_id or self.time_code}"
+
+    def category(self, name: str) -> SeatCategory | None:
+        """This show's category by loose name (``normalise_category``)."""
+        wanted = normalise_category(name)
+        return next((c for c in self.categories if normalise_category(c.name) == wanted), None)
 
 
 @dataclass(frozen=True)
@@ -115,6 +183,9 @@ class Venue:
     name: str
     area: str = ""
     formats: tuple[str, ...] = ()
+    #: Seat categories this theatre has been seen to list (GOLD, PLATINUM…),
+    #: from its showtimes — what the category watch may pick from.
+    categories: tuple[str, ...] = ()
 
     @property
     def abbr(self) -> str:
@@ -262,6 +333,14 @@ class Monitor:
     #: — who may see it, whose history it writes — is keyed on this and only
     #: this; the legacy JSON store predates it and leaves it "".
     owner_uid: str = ""
+    #: A *category watch* (admin only): the seat categories — GOLD,
+    #: PLATINUM… — that must be bookable before this monitor counts a show
+    #: as AVAILABLE. Empty for an ordinary monitor, where any category will
+    #: do; nothing else about the monitor changes.
+    categories: list[str] = field(default_factory=list)
+    #: Optionally one show time, "07:15 PM" or "1915"; "" watches every
+    #: show at the theatre.
+    show_time: str = ""
 
     # ── lifecycle ────────────────────────────────────────────────────────
     def is_expired(self, at: datetime | None = None) -> bool:
@@ -290,6 +369,28 @@ class Monitor:
 
     def target(self, key: str) -> TheatreTarget | None:
         return next((t for t in self.targets if t.key == key), None)
+
+    # ── category watch ───────────────────────────────────────────────────
+    @property
+    def is_category_watch(self) -> bool:
+        return bool(self.categories)
+
+    @property
+    def category_label(self) -> str:
+        return ", ".join(self.categories)
+
+    def watches_category(self, name: str) -> bool:
+        wanted = normalise_category(name)
+        return any(normalise_category(c) == wanted for c in self.categories)
+
+    def matches_show_time(self, show: Showtime) -> bool:
+        """``show_time`` compared loosely to the show's label and its code:
+        "7:15 PM", "07:15 PM" and "1915" all name the same show."""
+        wanted = normalise_category(self.show_time)
+        if not wanted:
+            return True
+        return wanted in (normalise_category(show.time_label).lstrip("0"), normalise_category(show.time_code)) \
+            or wanted.lstrip("0") == normalise_category(show.time_label).lstrip("0")
 
     def set_problem(self, kind: str, message: str, at: datetime | None = None) -> None:
         self.problem = {"kind": kind, "message": message, "at": to_iso(at or now_ist())}
@@ -320,6 +421,8 @@ class Monitor:
             "first_check_requested_at": to_iso(self.first_check_requested_at),
             "problem": dict(self.problem) if self.problem else None,
             "owner_uid": self.owner_uid,
+            "categories": list(self.categories),
+            "show_time": self.show_time,
         }
 
     @classmethod
@@ -340,6 +443,8 @@ class Monitor:
             first_check_requested_at=parse_iso(raw.get("first_check_requested_at")),
             problem=dict(raw["problem"]) if isinstance(raw.get("problem"), dict) else None,
             owner_uid=str(raw.get("owner_uid", "") or ""),
+            categories=[str(c) for c in (raw.get("categories") or []) if str(c).strip()],
+            show_time=str(raw.get("show_time", "") or ""),
         )
 
 
@@ -479,6 +584,7 @@ __all__ = [
     "MonitorStatus",
     "MovieRef",
     "NOTIFIABLE_FROM",
+    "SeatCategory",
     "Showtime",
     "Snapshot",
     "TargetResult",
@@ -487,6 +593,7 @@ __all__ = [
     "date_codes_between",
     "dedupe",
     "describe_date_codes",
+    "normalise_category",
     "normalise_format",
     "short_date",
 ]
