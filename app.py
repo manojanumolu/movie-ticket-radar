@@ -225,13 +225,13 @@ def sidebar(active_count: int) -> str:
             f'<div class="tr-version"><span>V{APP_VERSION}</span>'
             f"<span>{C.e(get_location(st.session_state.get('location') or 'hyderabad').name.upper())}</span></div>"
             "</div>"
-            # The rail's ambience: Home's own reel drawing, twice, and the
-            # film wound off one onto the other, drawn last so it lies on
-            # their rims. Carried in this block so it adds no element (and
-            # no gap) to the rail; the theme fixes it behind the navigation
-            # and clips it to the rail (``.tr-side-ambience``).
+            # The rail's ambience: Home's own reel drawing, twice — behind
+            # the navigation, and small in the empty rail below the footer.
+            # Carried in this block so it adds no element (and no gap) to
+            # the rail; the theme fixes it behind the navigation and clips
+            # it to the rail (``.tr-side-ambience``).
             '<div class="tr-side-ambience" aria-hidden="true">'
-            + home.reel_svg("top") + home.reel_svg("bottom") + home.rail_film_svg()
+            + home.reel_svg("top") + home.reel_svg("bottom")
             + "</div>"
         )
         return choice

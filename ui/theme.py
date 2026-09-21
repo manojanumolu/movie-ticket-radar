@@ -88,25 +88,16 @@ def _nav_css() -> str:
     return "\n".join(rules)
 
 
-#: The rail's film rig, in pixels from the rail's top-left corner: two of
-#: Home's reels (``ui.home.reel_svg``) and the strip of film that runs from
-#: the first onto the second. The stylesheet places the reels from this and
-#: ``ui.home.rail_film_svg`` draws the film on their rims from the same
-#: numbers, so the film meets the reels exactly, whatever the rail's size —
-#: the rig never scales: a phone's wider rail shows the same picture.
+#: The rail's two reels (``ui.home.reel_svg``), in pixels from the rail's
+#: top-left corner: one behind the navigation, a small one in the empty
+#: rail below the footer. The rig never scales — a phone's wider rail shows
+#: the same picture — and nothing joins the reels: the navigation, the
+#: quote and the footer fill the column between them, and a strip of film
+#: would have to pass them.
 RAIL_RIG = {
-    "width": 244, "height": 700,
-    "top": {"left": 22, "top": 160, "size": 180},      # behind the navigation; its left rim in the margin
-    "bottom": {"left": 96, "top": 588, "size": 128},   # below everything, to the right
+    "top": {"left": 22, "top": 160, "size": 180},      # behind the navigation
+    "bottom": {"left": 96, "top": 548, "size": 128},   # below everything, to the right
 }
-
-
-def rail_reel(name: str) -> tuple[float, float, float]:
-    """A rail reel's centre and rim radius (the drawing's rim is r=190 in a
-    400-unit box)."""
-    reel = RAIL_RIG[name]
-    half = reel["size"] / 2
-    return reel["left"] + half, reel["top"] + half, reel["size"] * 190 / 400
 
 
 def _rail_rig_css() -> str:
@@ -115,9 +106,7 @@ def _rail_rig_css() -> str:
         f".tr-side-ambience .tr-reel.top {{ left: {top['left']}px; top: {top['top']}px; "
         f"width: {top['size']}px; height: {top['size']}px; animation: tr-side-reel 42s linear infinite; }}\n"
         f".tr-side-ambience .tr-reel.bottom {{ left: {bottom['left']}px; top: {bottom['top']}px; "
-        f"width: {bottom['size']}px; height: {bottom['size']}px; animation: tr-side-reel 30s linear infinite; }}\n"
-        f".tr-side-film {{ position: absolute; left: 0; top: 0; width: {RAIL_RIG['width']}px; "
-        f"height: {RAIL_RIG['height']}px; }}"
+        f"width: {bottom['size']}px; height: {bottom['size']}px; animation: tr-side-reel 30s linear infinite; }}"
     )
 
 
@@ -228,25 +217,20 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   min-width: 244px !important; width: 244px !important;
   position: relative; isolation: isolate;
 }
-/* Sidebar ambience — one piece of film equipment behind the rail.
+/* Sidebar ambience — two of Home's reels behind the rail.
 
-   Two of Home's reels (``ui.home.reel_svg``: rim, sheen arc, ring, six
-   perforations, hub, pin, in Home's colours) with a thin strip of film
-   wound off the first onto the second: the film hugs the first reel's rim,
-   leaves its left side on a tangent, runs down the rail's left margin —
-   clear of the navigation, the quote and the footer at every width — and
-   below them sweeps right onto the second reel's rim on a tangent.
-   ``ui.home.rail_film_svg`` draws it from the same numbers (``RAIL_RIG``)
-   that place the reels here, so there is no gap at either end; both turn
-   counter-clockwise (a left rim running downward), the smaller one faster,
-   as one length of film would have them. The markup rides in the footer's html block
-   (``app.sidebar``) and is fixed here: ``position: fixed`` inside the rail
-   — whose backdrop-filter makes it the containing block — is the rail's
-   box, so it never adds scrollable width to the rail's scroll container,
-   and ``overflow: hidden`` clips whatever runs past the edge. The film
-   itself does not move; the reels' rotation is the motion. Transform-only,
-   no script, no asset; pointer-transparent at z-index 0 under the content
-   (lifted to 1 below). */
+   Home's reel drawing (``ui.home.reel_svg``: rim, sheen arc, ring, six
+   perforations, hub, pin, in Home's colours) twice: one behind the
+   navigation, a small one in the empty rail below the footer, both turning
+   the same way, the smaller one faster (``RAIL_RIG`` places them). No film
+   joins them — the navigation, the quote and the footer fill the column
+   between, and every word in the rail keeps a clear background. The
+   markup rides in the footer's html block (``app.sidebar``) and is fixed
+   here: ``position: fixed`` inside the rail — whose backdrop-filter makes
+   it the containing block — is the rail's box, so it never adds scrollable
+   width to the rail's scroll container, and ``overflow: hidden`` clips
+   whatever runs past the edge. Transform-only, no script, no asset;
+   pointer-transparent at z-index 0 under the content (lifted to 1 below). */
 @keyframes tr-side-reel { to { transform: rotate(-360deg); } }
 .tr-side-ambience {
   position: fixed; left: 0; top: 0; width: 100%; height: 100%; z-index: 0;
@@ -261,15 +245,6 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 .tr-side-ambience .tr-reel .pin { opacity: .35; }
 .tr-side-ambience .tr-reel.top { filter: drop-shadow(0 0 24px rgba(255,51,85,.14)); }
 __RAIL_RIG__
-/* the film, drawn as Home's strip is: a halo, the two edges, the band, the
-   sprocket ticks across it, the darker centre that leaves them only at the
-   margins, and the frame lines */
-.tr-side-film .halo { stroke: rgba(255,51,85,.05); stroke-width: 16; }
-.tr-side-film .edges { stroke: rgba(255,140,160,.16); stroke-width: 8; }
-.tr-side-film .band { stroke: rgba(26,18,25,.5); stroke-width: 7; }
-.tr-side-film .holes { stroke: rgba(255,140,160,.18); stroke-width: 7; stroke-dasharray: 1.5 3; }
-.tr-side-film .film { stroke: rgba(15,11,17,.45); stroke-width: 4; }
-.tr-side-film .frames { stroke: rgba(255,255,255,.04); stroke-width: 4; stroke-dasharray: 1 12; }
 /* off-canvas (a phone's collapsed rail) there is nothing to see */
 [data-testid="stSidebar"][aria-expanded="false"] .tr-side-ambience { display: none; }
 /* the rail's own content stays above the room, and readable */
@@ -602,7 +577,7 @@ __NAV_ICONS__
 @keyframes tr-spin  { to { transform:rotate(360deg) } }
 @keyframes tr-sweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
 
-/* Asked for stillness, the reels and the film stay — they just stop moving. */
+/* Asked for stillness, the reels stay — they just stop moving. */
 @media (prefers-reduced-motion: reduce) {
   .tr-side-ambience .tr-reel.top, .tr-side-ambience .tr-reel.bottom {
     animation: none;
@@ -1459,4 +1434,4 @@ def inject() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
 
 
-__all__ = ["CSS", "FONTS", "NAV_ICONS", "RAIL_RIG", "TOKENS", "inject", "rail_reel"]
+__all__ = ["CSS", "FONTS", "NAV_ICONS", "RAIL_RIG", "TOKENS", "inject"]
