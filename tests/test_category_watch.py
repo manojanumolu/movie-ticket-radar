@@ -606,10 +606,19 @@ def test_infinity_vision_variants_and_shows_carry_the_label_and_the_raw_string(p
     show = snap.shows_for("PRHN")[0]
     assert show.format_label == "Infinity Vision 3D" and show.format_raw == "Ms-Infinity Vsn 3d"
     assert is_infinity_vision(show.format_label) and not is_infinity_vision("Dolby Cinema 3D")
+    assert not is_infinity_vision("Infinity Vision Dolby Atmos")   # Aparna's own screen attribute: not claimed
     assert snap.venue("PRHN").formats == ("Infinity Vision 3D",)
     # a target picked as "Infinity Vision 2D" does not match the 3D screen, and vice versa
     assert TheatreTarget("PRHN", "Prasads", "", "Infinity Vision 3D").matches_format(show.format_label)
     assert not TheatreTarget("PRHN", "Prasads", "", "Infinity Vision 2D").matches_format(show.format_label)
+    # a sibling event's label stored before canonicalisation still lands as the canonical format
+    movie = MovieRef("bookmyshow", "ET00514163", "Avengers Endgame: Encore", "HYD", "hyderabad",
+                     variants=(("ET00516728", "Ms-Infinity Vsn 3D"),))
+    stale = provider_factory([build_payload(ALLU_LIVE),
+                              build_payload([{**ALLU_LIVE[0], "venue_code": "CTNR", "venue_name": "Cinepolis", "fmt": ""}])])
+    snap = stale.fetch(movie)                                        # the sibling's show carries no label of its own
+    assert snap.shows_for("CTNR")[0].format_label == "Infinity Vision 3D"
+    assert next(v for v in snap.venues if v.name.startswith("Cinepolis")).formats == ("Infinity Vision 3D",)
 
 
 def test_marvel_is_recognised_by_title_only():

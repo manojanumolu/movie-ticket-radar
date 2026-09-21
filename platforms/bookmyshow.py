@@ -1176,7 +1176,8 @@ class BookMyShowProvider:
 
             raw_fmt = (_text(show.get("screenAttr")) or _text(sa.get("attributes"))
                        or _text(sa.get("screenAttr")))
-            fmt = clean_format(raw_fmt) or default_format
+            # the sibling's label may have been stored before canonicalisation
+            fmt = clean_format(raw_fmt) or clean_format(default_format)
 
             out.append(
                 Showtime(

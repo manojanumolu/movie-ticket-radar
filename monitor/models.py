@@ -362,9 +362,11 @@ def is_marvel_title(title: str) -> bool:
 
 
 def is_infinity_vision(fmt: str) -> bool:
-    """A canonical Infinity Vision label ("Infinity Vision 2D"/"3D") — the
-    provider's mapping of BookMyShow's own strings, never a guess."""
-    return normalise_format(fmt).startswith("infinityvision")
+    """Exactly a canonical Infinity Vision label ("Infinity Vision 2D"/"3D")
+    — the provider's mapping of BookMyShow's "MS - Infinity Vision"
+    strings. A theatre's own screen attribute that merely contains the
+    words (Aparna's "Infinity Vision Dolby Atmos") is not claimed."""
+    return normalise_format(fmt) in ("infinityvision2d", "infinityvision3d")
 
 
 def normalise_format(value: str) -> str:
