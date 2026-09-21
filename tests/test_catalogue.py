@@ -276,8 +276,9 @@ def test_listing_keeps_premium_siblings_on_the_row(provider_factory):
     assert sorted((m.language, m.event_code) for m in movies) == [
         ("English", "ET00514163"), ("Telugu", "ET00514535")]
     english = next(m for m in movies if m.language == "English")
-    # … but the siblings ride along, with their format label, never dropped.
-    assert english.variants == (("ET00516729", "4DX 3D"), ("ET00516224", "Ms - Infinity Vision"))
+    # … but the siblings ride along, with their format label, never dropped —
+    # BookMyShow's "Ms - Infinity Vision" under its one canonical name.
+    assert english.variants == (("ET00516729", "4DX 3D"), ("ET00516224", "Infinity Vision 2D"))
     assert english.variant_codes == ("ET00516729", "ET00516224")
 
 

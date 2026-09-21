@@ -7,6 +7,7 @@ writing one more provider — not touching the monitoring engine.
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
@@ -188,6 +189,9 @@ class Showtime:
     #: read from the same response as everything above. Empty when the
     #: listing publishes none — a show not yet on sale.
     categories: tuple[SeatCategory, ...] = ()
+    #: The platform's own format string before ``clean_format`` tidied it
+    #: ("MS-Infinity Vsn 3d"); "" when the show carried none.
+    format_raw: str = ""
 
     @property
     def key(self) -> str:
@@ -336,6 +340,31 @@ class TheatreTarget:
             area=raw.get("area", ""),
             fmt=raw.get("fmt") or ANY_FORMAT,
         )
+
+
+#: Marvel Studios titles, the films Infinity Vision screens are sold for.
+#: The catalogue carries no franchise metadata, so this is the smallest
+#: explicit list that recognises them by title — matched on word
+#: boundaries, case-insensitively. Add a title here when Marvel releases
+#: one; nothing else about a film's handling depends on it.
+MARVEL_TITLE_MARKERS = (
+    "avengers", "marvel", "marvels", "spider-man", "spiderman", "captain america", "iron man", "thor",
+    "black panther", "guardians of the galaxy", "doctor strange", "ant-man", "deadpool",
+    "fantastic four", "thunderbolts", "black widow", "eternals", "shang-chi", "x-men", "wolverine",
+)
+_MARVEL_RE = re.compile(r"(?<![a-z0-9])(?:" + "|".join(re.escape(m) for m in MARVEL_TITLE_MARKERS) + r")(?![a-z0-9])", re.I)
+
+
+def is_marvel_title(title: str) -> bool:
+    """Is this a Marvel Studios film, by its title? Only what
+    ``MARVEL_TITLE_MARKERS`` names; "Author" is not "Thor"."""
+    return bool(_MARVEL_RE.search(title or ""))
+
+
+def is_infinity_vision(fmt: str) -> bool:
+    """A canonical Infinity Vision label ("Infinity Vision 2D"/"3D") — the
+    provider's mapping of BookMyShow's own strings, never a guess."""
+    return normalise_format(fmt).startswith("infinityvision")
 
 
 def normalise_format(value: str) -> str:
@@ -638,6 +667,8 @@ __all__ = [
     "date_codes_between",
     "dedupe",
     "describe_date_codes",
+    "is_infinity_vision",
+    "is_marvel_title",
     "normalise_category",
     "normalise_format",
     "short_date",

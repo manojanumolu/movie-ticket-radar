@@ -57,10 +57,15 @@ class Change:
     #: The watched seat categories that became bookable (a category watch);
     #: empty for an ordinary monitor.
     categories: list[str] = field(default_factory=list)
+    #: A category watch's first read found the category already bookable:
+    #: the email says so rather than calling it a release.
+    already_open: bool = False
 
     @property
     def headline(self) -> str:
         if self.kind is ChangeKind.TICKETS_LIVE:
+            if self.categories and self.already_open:
+                return f"{', '.join(self.categories)} ALREADY AVAILABLE — {self.movie_title}"
             if self.categories:
                 return f"{', '.join(self.categories)} AVAILABLE — {self.movie_title}"
             return f"TICKETS ARE LIVE — {self.movie_title}"
@@ -83,6 +88,7 @@ class Change:
             "time_links": [list(pair) for pair in self.time_links],
             "date_codes": list(self.date_codes),
             "categories": list(self.categories),
+            "already_open": self.already_open,
         }
 
 
@@ -135,12 +141,12 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
     # a previous transition whose email never made it out.
     is_transition = prior.availability in NOTIFIABLE_FROM
     is_retry = prior.availability is Availability.AVAILABLE and not already_announced
-    # A category watch (admin) is created to catch a category *opening up*:
-    # its first read only establishes where things stand (``settle_baseline``
-    # marks it announced). Finding GOLD already bookable on the very first
-    # check is not that transition.
-    if monitor.is_category_watch and prior.availability is Availability.UNKNOWN:
-        return None
+    # A category watch (admin) whose category is already bookable the first
+    # time it is read is told so — once, in words that say it was already
+    # open, not that it just opened. Nothing has ever been announced for it
+    # (``notified_availability`` is still UNKNOWN), which is also how the
+    # retry of a failed send knows to keep those words.
+    already_open = monitor.is_category_watch and prior.notified_availability is Availability.UNKNOWN
 
     if not already_announced and (is_transition or is_retry):
         return Change(
@@ -159,6 +165,7 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
             date_codes=result.date_codes,
             detected_at=at,
             categories=_live_categories(monitor, result),
+            already_open=already_open,
         )
 
     if not already_announced or monitor.is_category_watch:
@@ -197,22 +204,6 @@ def _change_for(monitor: Monitor, result: TargetResult, prior: TargetState,
         new_showtime_keys=fresh,
         detected_at=at,
     )
-
-
-def settle_baseline(monitor: Monitor, outcome: CheckOutcome, state: MonitorState) -> None:
-    """A category watch's first read is its baseline. Called before
-    :func:`apply_outcome`: a target read as AVAILABLE with no prior
-    observation is marked as already announced, so neither this tick nor a
-    later "retry" emails it; the alert arms the first time the category is
-    seen unavailable. Ordinary monitors are untouched."""
-    if not monitor.is_category_watch or not outcome.ok:
-        return
-    for result in outcome.results:
-        prior = state.targets.get(result.target_key, TargetState())
-        if prior.availability is Availability.UNKNOWN and result.availability is Availability.AVAILABLE:
-            ts = state.target(result.target_key)
-            ts.notified_availability = Availability.AVAILABLE
-            ts.notified_showtime_keys = result.showtime_keys
 
 
 def apply_outcome(outcome: CheckOutcome, state: MonitorState) -> MonitorState:

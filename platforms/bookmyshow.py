@@ -422,13 +422,27 @@ def split_venue_name(full_name: str) -> tuple[str, str]:
     return name, ""
 
 
+#: BookMyShow's spellings of Marvel Studios' Infinity Vision screen — "MS -
+#: Infinity Vision", "Ms-Infinity Vsn 3D", "MS - Infinity Vision 3D" — as one
+#: label each for 2D and 3D. Only a string that names it is ever mapped;
+#: nothing is inferred from a theatre or a film.
+INFINITY_VISION_RE = re.compile(r"^\s*ms\s*-?\s*infinity\s*(?:vision|vsn)\.?\s*(3\s*d|2\s*d)?\s*$", re.I)
+INFINITY_VISION = "Infinity Vision"
+
+
 def clean_format(raw: str) -> str:
     """'2D DOLBY CINEMA' -> 'Dolby Cinema 2D' is overkill; we just tidy case.
 
     BookMyShow returns things like ``"DOLBY CINEMA"``, ``"ICE 4K LASER"`` or
     ``"2D"``. We title-case words but keep known all-caps tokens intact so
-    "IMAX" doesn't become "Imax".
+    "IMAX" doesn't become "Imax". The one spelling we canonicalise is
+    Infinity Vision (``INFINITY_VISION_RE``), which BookMyShow writes three
+    ways for one screen.
     """
+    infinity = INFINITY_VISION_RE.match(raw or "")
+    if infinity:
+        dim = (infinity.group(1) or "").replace(" ", "").upper() or "2D"
+        return f"{INFINITY_VISION} {dim}"
     keep_upper = {"2D", "3D", "4DX", "IMAX", "ICE", "HDR", "4K", "MX4D", "EPIQ", "LUXE"}
     words = [w for w in re.split(r"\s+", (raw or "").strip()) if w]
     out = []
@@ -1160,11 +1174,9 @@ class BookMyShowProvider:
                 cutoff = _text(sa.get("cutOffDateTime"))
                 date_code = cutoff[:8] if DATE_CODE_RE.match(cutoff[:8]) else ""
 
-            fmt = clean_format(
-                _text(show.get("screenAttr"))
-                or _text(sa.get("attributes"))
-                or _text(sa.get("screenAttr"))
-            ) or default_format
+            raw_fmt = (_text(show.get("screenAttr")) or _text(sa.get("attributes"))
+                       or _text(sa.get("screenAttr")))
+            fmt = clean_format(raw_fmt) or default_format
 
             out.append(
                 Showtime(
@@ -1178,6 +1190,7 @@ class BookMyShowProvider:
                     availability=self._availability(sa),
                     booking_url=published_show_url(show) or self.booking_url(movie, date_code),
                     categories=parse_seat_categories(sa),
+                    format_raw=raw_fmt,
                 )
             )
         return out
@@ -1229,6 +1242,7 @@ __all__ = [
     "BookMyShowProvider",
     "DEFAULT_CITY",
     "REGIONS",
+    "INFINITY_VISION",
     "clean_format",
     "is_bookmyshow_url",
     "parse_listing_url",

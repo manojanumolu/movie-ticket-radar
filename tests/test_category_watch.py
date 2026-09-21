@@ -182,15 +182,68 @@ def _watch(make_monitor, categories=("PLATINUM",)):
     return watch
 
 
-def test_first_check_is_a_baseline_not_an_email(make_monitor, provider_factory, monkeypatch, later):
-    watch = _watch(make_monitor, ["GOLD"])                     # GOLD is already open on the first read
+def test_first_check_unavailable_is_a_baseline_with_no_email(make_monitor, provider_factory, monkeypatch, later):
+    watch = _watch(make_monitor, ["PLATINUM"])                  # PLATINUM is sold out on the first read
     sent = []
     _run(provider_factory([payload(ALLU_LIVE, REAL_CATEGORIES)]), monkeypatch, later(0), sent)
-    assert sent == []
-    assert get_state(watch.id).targets[watch.targets[0].key].availability is Availability.AVAILABLE
-    # …and stays quiet while it stays open
     _run(provider_factory([payload(ALLU_LIVE, REAL_CATEGORIES)]), monkeypatch, later(10), sent)
     assert sent == []
+    assert get_state(watch.id).targets[watch.targets[0].key].availability is Availability.SOLD_OUT
+
+
+def test_first_check_already_available_is_one_email_saying_so(make_monitor, provider_factory, monkeypatch, later):
+    watch = _watch(make_monitor, ["GOLD"])                      # GOLD is already open on the first read
+    sent = []
+    _run(provider_factory([payload(ALLU_LIVE, REAL_CATEGORIES)]), monkeypatch, later(0), sent)
+    assert len(sent) == 1
+    change = sent[0][1]
+    assert change.already_open and change.previous is Availability.UNKNOWN
+    assert change.headline == "GOLD · ₹295 · area 2 ALREADY AVAILABLE — Avengers: Endgame Encore"
+    ts = get_state(watch.id).targets[watch.targets[0].key]
+    assert ts.notified_availability is Availability.AVAILABLE and ts.notified_at is not None
+    # …and stays quiet while it stays open
+    for step in (10, 20, 30):
+        _run(provider_factory([payload(ALLU_LIVE, REAL_CATEGORIES)]), monkeypatch, later(step), sent)
+    assert len(sent) == 1
+    # an ordinary monitor never carries the flag
+    plain = make_monitor(targets=[TheatreTarget("AMB", "AMB Cinemas", "", ANY_FORMAT)])
+    upsert_monitor(plain, mirror=False)
+    _run(provider_factory([payload(ALLU_LIVE, REAL_CATEGORIES)]), monkeypatch, later(40), sent)
+    assert [c.already_open for _, c in sent] == [True, False] and sent[1][1].monitor_id == plain.id
+
+
+def test_already_available_email_says_it_was_already_open(make_monitor):
+    from monitor.changes import Change, ChangeKind
+    from notifications.email import render_change
+
+    watch = make_monitor(); watch.categories = ["0000000002|GOLD"]
+    change = Change(kind=ChangeKind.TICKETS_LIVE, monitor_id=watch.id, target_key="ALLU::Dolby Cinema",
+                    venue_name="Allu Cinemas", fmt="Dolby Cinema", movie_title=watch.movie.title,
+                    previous=Availability.UNKNOWN, current=Availability.AVAILABLE, date_code="20260925",
+                    time_labels=["07:30 PM"], date_codes=["20260925"], categories=["GOLD · ₹295 · area 2"], already_open=True)
+    subject, html, text = render_change(watch, change)
+    assert subject == "ALREADY AVAILABLE — GOLD · ₹295 · area 2 — Avengers: Endgame Encore at Allu Cinemas"
+    for body in (html, text):
+        assert "ALREADY AVAILABLE WHEN THIS WATCH STARTED" in body and "already available when this watch started" in body
+        assert "TICKETS ARE LIVE" not in body and "just became bookable" not in body
+    assert json.loads(json.dumps(change.to_dict()))["already_open"] is True
+
+
+def test_a_failed_already_available_email_is_retried_with_the_same_words(make_monitor, provider_factory, monkeypatch, later):
+    watch = _watch(make_monitor, ["GOLD"])
+    monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider_factory([payload(ALLU_LIVE, REAL_CATEGORIES)]))
+
+    def broken(monitor, change):
+        raise RuntimeError("SMTP down")
+
+    report = run_once(at=later(0), force=True, mirror=False, notifier=broken)
+    assert report.emails_sent == 0 and report.email_errors
+    sent = []
+    monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider_factory([payload(ALLU_LIVE, REAL_CATEGORIES)]))
+    run_once(at=later(10), force=True, mirror=False, notifier=lambda m, c: sent.append(c))
+    assert len(sent) == 1 and sent[0].already_open                # still "already open", not "just opened"
+    run_once(at=later(20), force=True, mirror=False, notifier=lambda m, c: sent.append(c))
+    assert len(sent) == 1
 
 
 def test_unavailable_to_available_is_one_email_then_silence(make_monitor, provider_factory, monkeypatch, later):
@@ -483,10 +536,6 @@ def test_email_status_line_is_truthful(make_monitor):
     live = TargetState(availability=Availability.AVAILABLE)
     # an ordinary monitor found live and not yet mailed: pending (the worker mails it this tick)
     assert email_status(plain, MonitorState(), live)[0] == "◷ Email pending"
-    # a category watch's baseline: announced without an email, and the page says so
-    baseline = TargetState(availability=Availability.AVAILABLE, notified_availability=Availability.AVAILABLE)
-    assert email_status(watch, MonitorState(), baseline)[0].startswith("— No email · already open")
-    assert email_status(plain, MonitorState(), baseline)[0] == "◷ Email pending"      # never claimed for a normal monitor
     # sent
     sent = TargetState(availability=Availability.AVAILABLE, notified_availability=Availability.AVAILABLE, notified_at=when)
     assert email_status(watch, MonitorState(), sent)[0] == "✓ Email sent · 9:20 PM"
@@ -496,22 +545,24 @@ def test_email_status_line_is_truthful(make_monitor):
     assert email_status(watch, failing, live)[0].startswith("✗ Email failed")
 
 
-def test_baseline_watch_reads_no_email_on_the_details_page(seeded_with_categories, signed_in, provider_factory, monkeypatch, later):
+def test_a_watch_found_open_on_its_first_read_shows_the_email_as_sent(seeded_with_categories, signed_in, provider_factory, monkeypatch, later):
     from tests.test_app import run, text
 
     signed_in.admin = True
     watch = Monitor.from_dict({**_make_watch_dict(seeded_with_categories)})
     upsert_monitor(watch, mirror=False)
     monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider_factory([payload(ALLU_LIVE, REAL_CATEGORIES)] * 8))
-    run_once(at=later(0), force=True, mirror=False, notifier=lambda m, c: (_ for _ in ()).throw(AssertionError("no email on a baseline")))
+    sent = []
+    run_once(at=later(0), force=True, mirror=False, notifier=lambda m, c: sent.append(c))
+    assert len(sent) == 1 and sent[0].already_open
     from ui import detail
 
     page = run()                                                   # Home's live card
     body = text(page)
-    assert "already open when the watch began" in body and "Email pending" not in body
+    assert "Email sent" in body and "Email pending" not in body
     assert "GOLD · AREA 2 AVAILABLE" in body and "TICKETS ARE LIVE" not in body
     page = run(**{detail.OPEN_KEY: watch.id})                      # the Details dialog
-    assert "already open when the watch began" in text(page) and "Email pending" not in text(page)
+    assert "Email sent" in text(page) and "Email pending" not in text(page)
 
 
 def _make_watch_dict(movie_id):
@@ -527,3 +578,65 @@ def _make_watch_dict(movie_id):
                 notify_email="admin@example.com", owner_uid="uid-test-1", categories=["0000000002|GOLD"],
                 monitor_until=datetime(2026, 9, 30, 23, 59, tzinfo=IST))
     return m.to_dict()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 7 · Infinity Vision: BookMyShow's three spellings, one label — Marvel only
+# ──────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("raw,expected", [
+    ("MS - Infinity Vision", "Infinity Vision 2D"), ("Ms - Infinity Vsn", "Infinity Vision 2D"),
+    ("MS-Infinity Vision", "Infinity Vision 2D"), ("Ms-Infinity Vsn 3D", "Infinity Vision 3D"),
+    ("MS - Infinity Vision 3D", "Infinity Vision 3D"), ("ms-infinity vsn 3d", "Infinity Vision 3D"),
+    ("Dolby Cinema 3D", "Dolby Cinema 3D"), ("DOLBY CINEMA", "Dolby Cinema"), ("imax 2d", "IMAX 2D"),
+    ("4DX 3D", "4DX 3D"), ("Barco Flagship Laser Dolby Atmos", "Barco Flagship Laser Dolby Atmos"),
+    ("Vision", "Vision"), ("", ""),
+])
+def test_clean_format_canonicalises_infinity_vision_and_nothing_else(raw, expected):
+    from platforms.bookmyshow import clean_format
+
+    assert clean_format(raw) == expected
+
+
+def test_infinity_vision_variants_and_shows_carry_the_label_and_the_raw_string(provider_factory, listing_url):
+    from monitor.models import is_infinity_vision
+
+    shows = [{**ALLU_LIVE[0], "venue_code": "PRHN", "venue_name": "Prasads Multiplex", "fmt": "Ms-Infinity Vsn 3d"}]
+    provider = provider_factory([build_payload(shows)])
+    snap = provider.resolve(listing_url)
+    show = snap.shows_for("PRHN")[0]
+    assert show.format_label == "Infinity Vision 3D" and show.format_raw == "Ms-Infinity Vsn 3d"
+    assert is_infinity_vision(show.format_label) and not is_infinity_vision("Dolby Cinema 3D")
+    assert snap.venue("PRHN").formats == ("Infinity Vision 3D",)
+    # a target picked as "Infinity Vision 2D" does not match the 3D screen, and vice versa
+    assert TheatreTarget("PRHN", "Prasads", "", "Infinity Vision 3D").matches_format(show.format_label)
+    assert not TheatreTarget("PRHN", "Prasads", "", "Infinity Vision 2D").matches_format(show.format_label)
+
+
+def test_marvel_is_recognised_by_title_only():
+    from monitor.models import is_marvel_title
+
+    assert is_marvel_title("Avengers Endgame: Encore") and is_marvel_title("Spider-Man: Brand New Day")
+    assert is_marvel_title("Thor: Love and Thunder") and is_marvel_title("The Marvels")
+    for other in ("The Paradise", "Mandaadi", "Author", "Ironman Triathlon Story", ""):
+        assert not is_marvel_title(other), other
+
+
+def test_the_formats_step_notes_infinity_vision_for_marvel_only(monkeypatch):
+    from ui import flow
+    from ui import catalogue_view as cv
+
+    notes = []
+    monkeypatch.setattr(flow.C, "html", lambda markup: notes.append(markup))
+    monkeypatch.setattr(flow.st, "session_state", {"movie_id": "bookmyshow:ET1", "location": "hyderabad"})
+    prasads = Venue("PRHN", "Prasads Multiplex", "Hyderabad", ("Infinity Vision 2D", "Infinity Vision 3D", "EPIQ"))
+    allu = Venue("ALUC", "ALLU Cinemas", "Kokapet", ("Dolby Cinema",))
+
+    monkeypatch.setattr(cv, "movie", lambda mid, slug: MovieRef("bookmyshow", "ET1", "Avengers Endgame: Encore", "HYD", "hyderabad"))
+    flow.infinity_vision_note([prasads, allu])
+    assert len(notes) == 1 and "Prasads Multiplex (2D, 3D)" in notes[0] and "ALLU" not in notes[0]
+    notes.clear()
+    flow.infinity_vision_note([allu])                              # Marvel, but no chosen theatre lists it
+    assert notes == []
+    monkeypatch.setattr(cv, "movie", lambda mid, slug: MovieRef("bookmyshow", "ET2", "The Paradise", "HYD", "hyderabad"))
+    flow.infinity_vision_note([prasads])                           # not Marvel: nothing, whatever the theatre lists
+    assert notes == []

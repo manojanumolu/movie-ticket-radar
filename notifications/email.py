@@ -145,17 +145,27 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
     times = change.new_time_labels if not live and change.new_time_labels else change.time_labels
 
     categories = ", ".join(change.categories)
+    already = live and categories and change.already_open
     subject = (
-        f"{categories} AVAILABLE — {title} at {change.venue_name}"
+        f"ALREADY AVAILABLE — {categories} — {title} at {change.venue_name}"
+        if already
+        else f"{categories} AVAILABLE — {title} at {change.venue_name}"
         if live and categories
         else f"TICKETS ARE LIVE — {title} at {change.venue_name}"
         if live
         else f"New showtime — {title} at {change.venue_name}"
     )
 
-    eyebrow = (f"{categories} AVAILABLE" if categories else "TICKETS ARE LIVE") if live else "NEW SHOWTIME"
+    eyebrow = (
+        "ALREADY AVAILABLE WHEN THIS WATCH STARTED" if already
+        else f"{categories} AVAILABLE" if categories
+        else "TICKETS ARE LIVE"
+    ) if live else "NEW SHOWTIME"
     lede = (
-        f"Seats in {categories} just became bookable at the theatre, format and show you're watching."
+        f"Seats in {categories} were already available when this watch started — this is where things "
+        "stand now, not a new release. You'll be emailed again only if they sell out and come back."
+        if already
+        else f"Seats in {categories} just became bookable at the theatre, format and show you're watching."
         if live and categories
         else "Booking just opened for the theatre and format you're watching."
         if live

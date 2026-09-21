@@ -933,17 +933,12 @@ def _chip(label: str, url: str) -> str:
 def email_status(monitor: Monitor, state: MonitorState, ts) -> tuple[str, str]:
     """What happened to the alert for a live target: (label, colour).
 
-    Sent, failed and being retried, held back because the category was
-    already open when the watch began (its baseline — no email by design),
-    or genuinely pending. Read from the state the worker wrote, so the page
-    never says "pending" about an email that was never going to be sent."""
+    Sent, failed and being retried, or pending — read from the state the
+    worker wrote."""
     if ts is not None and ts.notified_at:
         return f"✓ Email sent · {fmt_time(ts.notified_at)}", "#3ED598"
     if state.last_email_error:
         return "✗ Email failed · retried on the next check", "#FF8A8A"
-    if (monitor.is_category_watch and ts is not None
-            and ts.notified_availability is Availability.AVAILABLE and ts.notified_at is None):
-        return "— No email · already open when the watch began", "#A9A9B5"
     return "◷ Email pending", "#E8B25C"
 
 

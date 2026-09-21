@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from config.timezone import now_ist
-from monitor.changes import Change, apply_outcome, detect_changes, mark_notified, settle_baseline
+from monitor.changes import Change, apply_outcome, detect_changes, mark_notified
 from monitor.discovery import DiscoveryReport, discover_siblings
 from monitor.models import (
     Availability,
@@ -522,7 +522,6 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
                   f"({len(monitor.targets)} target(s))")
             outcome = outcome_for(monitor, listing, at=at)
             changes = detect_changes(monitor, outcome, ms)
-            settle_baseline(monitor, outcome, ms)
             apply_outcome(outcome, ms)
             dirty = True
 

@@ -36,7 +36,8 @@ import streamlit as st
 
 from config.locations import LOCATIONS, enabled_locations, get_location
 from config.timezone import IST, now_ist
-from monitor.models import ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes, normalise_format
+from monitor.models import (ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes, is_infinity_vision,
+                            is_marvel_title, normalise_format)
 from ui import catalogue_view as cv
 from ui import components as C
 
@@ -581,6 +582,23 @@ def step_theatres() -> list[Venue]:
 # ──────────────────────────────────────────────────────────────────────────
 # 4 · Formats
 # ──────────────────────────────────────────────────────────────────────────
+def infinity_vision_note(venues: list[Venue]) -> None:
+    """For a Marvel film only: which of the chosen theatres BookMyShow lists
+    an Infinity Vision screen at, 2D and 3D, from the catalogue's own format
+    strings — nothing is inferred from a theatre's name. Silent when the
+    film is not Marvel's or no chosen theatre lists one."""
+    movie = cv.movie(st.session_state.get("movie_id", ""), st.session_state.get("location", ""))
+    if movie is None or not is_marvel_title(movie.title):
+        return
+    where = [(v.name, [f for f in v.formats if is_infinity_vision(f)]) for v in venues]
+    where = [(name, fmts) for name, fmts in where if fmts]
+    if not where:
+        return
+    listed = " · ".join(f"{name} ({', '.join(f.replace('Infinity Vision ', '') for f in fmts)})" for name, fmts in where)
+    C.html(f'<div class="tr-cta-help">{C.icon("format", 15, "#E8B25C")}<span><b>Infinity Vision</b> — '
+           f"BookMyShow lists it at {C.e(listed)}. Pick it below to watch that screen.</span></div>")
+
+
 def unknown_formats(venue: Venue, chosen: list[str]) -> list[str]:
     """The chosen formats this theatre is not known to run at all.
 
@@ -614,6 +632,7 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
         st.caption("Pick a theatre first.")
         return {}
 
+    infinity_vision_note(venues)
     formats: dict[str, list[str]] = dict(st.session_state.get("formats", {}))
     for venue in venues:
         options = dedupe(venue.formats)
@@ -868,6 +887,7 @@ __all__ = [
     "boot",
     "goto",
     "grid",
+    "infinity_vision_note",
     "pick",
     "request_reset",
     "reset_from",
