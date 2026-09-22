@@ -502,16 +502,19 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 @media (max-width: 768px) {{
   .tr-hero {{ min-height:0; }}
   .tr-hero-inner {{ min-height:0; }}
-  .tr-hero-inner > div:first-child {{ padding-right:64px; }}
+  .tr-hero-inner > div:first-child {{ padding-right:64px; min-width:0; }}
   .tr-hero-radar {{ height:120px; border-radius:18px; }}
   .tr-hero-radar .scan {{ display:none; }}
   .tr-hero-radar .tr-radar.home {{ width:56px !important; right:16px; top:18px; }}
   .tr-home-zone.band, .tr-home-zone.rail, .tr-home-zone.foot {{ display:none; }}
-  .tr-home-ambience .tr-reel.big {{ width:380px; right:-190px; bottom:-150px; opacity:.6; animation-duration:140s; }}
+  /* reel animation: will-change + explicit play-state so mobile browsers never
+     deprioritize the rotation of an off-screen-at-load absolute element */
+  .tr-home-ambience .tr-reel.big {{ width:380px; right:-190px; bottom:-150px; opacity:.6;
+    animation-duration:140s; will-change:transform; -webkit-animation-play-state:running; animation-play-state:running; }}
   .tr-home-ambience .tr-reel.small, .tr-home-ambience .tr-strip, .tr-home-ambience .tr-reel .fmts {{ display:none; }}   /* a cropped reel carries no legible badges */
-  .tr-craft .tr-sub {{ max-width:min(300px, calc(100vw - 28px)); }}
+  .tr-craft .tr-sub {{ max-width:min(280px, calc(100vw - 24px)); }}
   .tr-home-strip {{ position:relative; }}
-  .tr-home-strip .tr-craft {{ position:static; }}   /* the card anchors to the strip's right edge, never off-screen */
+  .tr-home-strip .tr-craft {{ position:static; flex-shrink:0; }}   /* the card anchors to the strip's right edge, never off-screen */
   .tr-home-strip .tr-craft:hover, .tr-home-strip .tr-craft:focus, .tr-home-strip .tr-craft:focus-visible {{ transform:none; }}   /* a transform would re-anchor the card to the mark */
   /* the strip rides just under the hero, near the top of the scroll: the card drops
      below it, because opening upward is what the top of the window cuts off */
@@ -520,7 +523,10 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
   /* back in the flow, but still above what follows it: the card drops over the
      Platform shelf, and the shelf comes later in the document */
   [class*="st-key-trstatus"] > [data-testid="stElementContainer"]:has(> .stMarkdown .tr-home-zone.band) {{ position:relative; inset:auto; z-index:7; height:auto; width:auto; }}
-  .tr-home-strip {{ display:flex; justify-content:flex-end; gap:4px; padding:2px 2px 0; margin-top:-8px; }}
+  /* craft strip: centred row with horizontal scroll fallback for very narrow phones */
+  .tr-home-strip {{ display:flex; justify-content:center; gap:8px; padding:4px 8px 6px; margin-top:-6px;
+    overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; border-bottom:1px solid rgba(255,255,255,.06); }}
+  .tr-home-strip::-webkit-scrollbar {{ display:none; }}
   .tr-home-strip .tr-craft {{ margin:0; width:32px; height:32px; opacity:.55; }}
 }}
 @media (prefers-reduced-motion: reduce) {{

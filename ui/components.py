@@ -137,7 +137,19 @@ def scroll_to_top(token: str) -> None:
             "var d=window.parent.document;"
             "['[data-testid=\"stAppViewContainer\"]','[data-testid=\"stMain\"]','section.stMain','.stMain']"
             ".forEach(function(s){var el=d.querySelector(s); if(el){el.scrollTo({top:0});}});"
-            f"window.parent.scrollTo(0,0);}})();/* {e(token)} */</script></body></html>",
+            "window.parent.scrollTo(0,0);"
+            "try{"
+            "var p=window.parent;"
+            "if(p&&p.innerWidth<=768){"
+            "var sb=d.querySelector('[data-testid=\"stSidebar\"]');"
+            "if(sb&&sb.getAttribute('aria-expanded')==='true'){"
+            "var btn=d.querySelector('[data-testid=\"stSidebarCollapseButton\"] button')||"
+            "d.querySelector('[data-testid=\"stSidebar\"] button[aria-label*=\"close\" i]');"
+            "if(btn){btn.click();}"
+            "}"
+            "}"
+            "}catch(err){}"
+            f"}})();/* {e(token)} */</script></body></html>",
             height=1,
         )
 

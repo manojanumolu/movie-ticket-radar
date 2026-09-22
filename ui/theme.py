@@ -122,7 +122,6 @@ FONTS = (
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 
 /* ── tokens ─────────────────────────────────────────────────────────
    Three surfaces (page · card · interactive), one accent for intent,
@@ -1300,11 +1299,13 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
      trsteps    the 1–5 step rail, compact
    Nothing here is a desktop rule: at 769px and up this block is inert.  */
 @media (max-width: 768px) {
-  .block-container { padding: .75rem 1rem 5rem !important; }
+  .block-container { padding: .75rem 1rem 5.5rem !important; }
   [data-testid="stMainBlockContainer"] { padding-top: .5rem !important; }
   [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: .6rem !important; }
   [data-testid="stColumn"] { flex: 1 1 100% !important; width: 100% !important; min-width: 100% !important; }
   [data-testid="stColumn"] > div > [data-testid="stVerticalBlock"] { gap: .6rem; }
+  /* prevent any horizontal page overflow on phones */
+  html, body { overflow-x: hidden; }
 
   /* grids: --tr-cols per row, an empty trailing column takes no room */
   [class*="st-key-trgrid_"] [data-testid="stHorizontalBlock"] { gap: .55rem !important; }
@@ -1333,13 +1334,13 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   .tr-acct-chip .n { max-width: 110px; font-size: 12.5px; }
 
   /* hero: responsive type, the mark becomes one quiet line under the copy */
-  .tr-hero { padding: 24px 20px 20px; border-radius: 18px; margin-bottom: 16px; }
+  .tr-hero { padding: 22px 18px 18px; border-radius: 18px; margin-bottom: 14px; }
   .tr-hero-inner { flex-wrap: wrap; gap: 0; align-items: flex-start; }
-  .tr-hero h1 { font-size: clamp(27px, 7.6vw, 36px); letter-spacing: -.035em; line-height: 1.04; }
-  .tr-hero-lede { font-size: 15.5px; margin-top: 10px; }
-  .tr-hero-sub { font-size: 13px; }
+  .tr-hero h1 { font-size: clamp(22px, 7vw, 34px); letter-spacing: -.035em; line-height: 1.04; overflow-wrap: break-word; word-break: break-word; }
+  .tr-hero-lede { font-size: 15px; margin-top: 8px; }
+  .tr-hero-sub { font-size: 12.5px; }
   .tr-hero-mark { display: flex; flex-direction: row; flex-wrap: wrap; gap: 0 7px; width: 100%; align-items: center;
-    margin-top: 16px; padding: 12px 0 0; border-top: 1px solid rgba(255,255,255,.08); font-size: 9.5px; letter-spacing: .2em; line-height: 1.6; white-space: normal; }
+    margin-top: 12px; padding: 10px 0 0; border-top: 1px solid rgba(255,255,255,.08); font-size: 9.5px; letter-spacing: .2em; line-height: 1.6; white-space: normal; }
 
   /* platforms: BookMyShow full width, District and PVR as a tidy pair */
   .tr-platforms { grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -1359,33 +1360,43 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   .tr-step-pip { padding: 0; height: 38px; justify-content: center; gap: 0; border-radius: 11px; }
   .tr-step-pip .l { display: none; }
   .tr-step-pip .n { width: 24px; height: 24px; font-size: 11.5px; }
-  .tr-step-mobile { display: block; font-size: 11px; letter-spacing: .18em; color: var(--tr-text-2); margin: 8px 0 2px; }
+  .tr-step-mobile { display: block; font-size: 11px; letter-spacing: .18em; color: var(--tr-text-2); margin: 6px 0 2px; }
 
-  /* cards and tiles */
-  [class*="st-key-trcard"] { padding: 16px 14px !important; border-radius: 16px !important; }
-  [class*="st-key-trpanel"] { padding: 14px 14px 12px !important; }
-  .tr-step-title { font-size: 19px; }
-  .tr-step-help { font-size: 13px; }
-  .tr-loc { padding: 18px 10px 16px; min-height: 0; }
+  /* cards and tiles — compact for mobile reachability */
+  [class*="st-key-trcard"] { padding: 14px 12px !important; border-radius: 16px !important; }
+  [class*="st-key-trcard_step"] [data-testid="stVerticalBlock"] { gap: .45rem; }
+  [class*="st-key-trpanel"] { padding: 12px 12px 10px !important; }
+  .tr-step-head { gap: 10px; }
+  .tr-step-title { font-size: 17px; overflow-wrap: anywhere; word-break: break-word; }
+  .tr-step-help { font-size: 12.5px; margin-top: 2px; }
+  .tr-rule { margin: 3px 0 4px; }
+  .tr-loc { padding: 16px 10px 14px; min-height: 0; }
   .tr-loc .n { font-size: 16px; }
   .tr-loc .s { font-size: 11px; }
   .tr-loc.disabled .s { white-space: nowrap; letter-spacing: .1em; }
-  .tr-interval { padding: 14px 6px; }
-  .tr-interval .num { font-size: 26px; }
-  .tr-interval.choice { padding: 11px 6px; }
-  .tr-interval.choice .lbl { font-size: 13px; }
-  .tr-interval.choice .unit { font-size: 11px; }
-  .tr-feat { min-height: 0; padding: 14px 15px 13px; }
+  .tr-interval { padding: 10px 4px; }
+  .tr-interval .num { font-size: 22px; }
+  .tr-interval.choice { padding: 9px 4px; }
+  .tr-interval.choice .lbl { font-size: 12.5px; }
+  .tr-interval.choice .unit { font-size: 10.5px; }
+  .tr-feat { min-height: 0; padding: 12px 13px 11px; }
   .tr-poster .body { height: 84px; }
-  .tr-summary-strip .v { max-width: 100%; }
+  .tr-summary-strip .v { max-width: 100%; overflow-wrap: anywhere; }
+  .tr-summary-strip .i { padding: 6px 10px 6px 7px; }
   .tr-mcard .grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 12px; }
-  .tr-mcard .title { font-size: 18px; }
-  [class*="st-key-trcard_mon_"] { padding: 16px 14px 14px !important; }
-  .tr-state.empty { padding: 26px 18px; }
-  .tr-state .h { font-size: 20px; }
+  .tr-mcard .title { font-size: 18px; overflow-wrap: anywhere; }
+  [class*="st-key-trcard_mon_"] { padding: 14px 12px 12px !important; }
+  .tr-state.empty { padding: 24px 16px; }
+  .tr-state .h { font-size: 20px; overflow-wrap: anywhere; }
+  .tr-live { padding: 18px 14px; }
+  .tr-live h2 { font-size: clamp(20px, 6.5vw, 26px); overflow-wrap: anywhere; word-break: break-word; }
   .tr-live .detected { text-align: left; }
-  .tr-cta-help { padding-top: 4px; }
-  [class*="st-key-start"] .stButton button[kind="primary"] { min-height: 60px; font-size: 15px; }
+  .tr-cta-help { padding-top: 4px; font-size: 11.5px; }
+  /* START MONITOR: prominent but compact so it's reachable without endless scroll */
+  [class*="st-key-start"] .stButton button[kind="primary"] { min-height: 54px; font-size: 14px; border-radius: 14px; margin-bottom: 16px; }
+  [class*="st-key-start"] .stButton button[kind="primary"] p { font-size: 14px; }
+  .stButton button { max-width: 100%; box-sizing: border-box; }
+  .stButton button p { white-space: normal; }
   /* 16px in the field itself stops iOS zooming the page on focus; the
      placeholder alone is a touch smaller so the whole sentence fits. */
   .stSelectbox .react-aria-ComboBox > [role="group"] { min-height: 54px; padding-left: 42px !important; }
@@ -1393,7 +1404,7 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   .stSelectbox .react-aria-ComboBox input { font-size: 16px !important; height: 52px; }
   .stSelectbox .react-aria-ComboBox input::placeholder { font-size: 14.5px !important; }
   .stTextInput [data-baseweb="input"] input { font-size: 16px !important; }
-  .tr-page-foot { flex-wrap: wrap; gap: 6px; }
+  .tr-page-foot { flex-wrap: wrap; gap: 6px; overflow-wrap: anywhere; }
 }
 @media (max-width: 600px) {
   [class*="st-key-trgrid_movie"] [data-testid="stColumn"], [class*="st-key-trgrid_pop"] [data-testid="stColumn"] { --tr-cols: 2; }
