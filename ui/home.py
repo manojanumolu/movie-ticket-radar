@@ -126,10 +126,9 @@ HOME_LAYOUT: dict[str, tuple[str, float, float]] = {
 }
 assert set(HOME_LAYOUT) == set(crafts.BY_KEY), "every craft has a home"
 
-#: The eight the phone strip shows: the band's own eight, in the band's
-#: order, so a phone reads the same first six lines as a desktop does.
-STRIP = tuple(k for k, (z, _x, _y) in HOME_LAYOUT.items() if z == "band")
+STRIP = tuple(c.key for c in crafts.CRAFTS)
 assert STRIP[:6] == TELUGU_SIX, "the phone strip opens with the six too"
+assert len(STRIP) == 24, "all 24 crafts are in the strip"
 
 
 def _icon(craft: crafts.Craft) -> str:
@@ -198,10 +197,12 @@ def crafts_zone(zone: str) -> str:
             f'<div class="tr-crafts">{marks}</div></div>')
 
 
-def crafts_strip() -> str:
-    """The phone's eight, in a row: the same marks and tips, so a tap or a
-    focus reveals the line where there is nothing to hover."""
-    marks = "".join(_mark(crafts.BY_KEY[k], 0, 0, zone="strip", positioned=False) for k in STRIP)
+def crafts_strip(keys: tuple[str, ...] = STRIP) -> str:
+    """The phone's craft strip: all twenty-four filmmaking crafts in a clean,
+    scrollable horizontal strip with their dialogues."""
+    n = len(keys)
+    marks = "".join(_mark(crafts.BY_KEY[k], (i / (n - 1) * 100) if n > 1 else 0, 0,
+                          zone="strip", positioned=False) for i, k in enumerate(keys))
     return f'<div class="tr-home-strip" aria-label="The crafts of filmmaking">{marks}</div>'
 
 
@@ -512,22 +513,19 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
   .tr-home-ambience .tr-reel.big {{ width:380px; right:-190px; bottom:-150px; opacity:.6;
     animation-duration:140s; will-change:transform; -webkit-animation-play-state:running; animation-play-state:running; }}
   .tr-home-ambience .tr-reel.small, .tr-home-ambience .tr-strip, .tr-home-ambience .tr-reel .fmts {{ display:none; }}   /* a cropped reel carries no legible badges */
-  .tr-craft .tr-sub {{ max-width:min(280px, calc(100vw - 24px)); }}
-  .tr-home-strip {{ position:relative; }}
-  .tr-home-strip .tr-craft {{ position:static; flex-shrink:0; }}   /* the card anchors to the strip's right edge, never off-screen */
-  .tr-home-strip .tr-craft:hover, .tr-home-strip .tr-craft:focus, .tr-home-strip .tr-craft:focus-visible {{ transform:none; }}   /* a transform would re-anchor the card to the mark */
-  /* the strip rides just under the hero, near the top of the scroll: the card drops
-     below it, because opening upward is what the top of the window cuts off */
-  .tr-home-strip .tr-craft .tr-sub {{ left:auto !important; right:0 !important; bottom:auto !important; top:calc(100% + 8px); transform:translate(0, -4px) !important; }}
-  .tr-home-strip .tr-craft:hover .tr-sub, .tr-home-strip .tr-craft:focus .tr-sub, .tr-home-strip .tr-craft:focus-visible .tr-sub {{ transform:none !important; }}
-  /* back in the flow, but still above what follows it: the card drops over the
-     Platform shelf, and the shelf comes later in the document */
-  [class*="st-key-trstatus"] > [data-testid="stElementContainer"]:has(> .stMarkdown .tr-home-zone.band) {{ position:relative; inset:auto; z-index:7; height:auto; width:auto; }}
-  /* craft strip: centred row with horizontal scroll fallback for very narrow phones */
-  .tr-home-strip {{ display:flex; justify-content:center; gap:8px; padding:4px 8px 6px; margin-top:-6px;
+  .tr-craft .tr-sub {{ max-width:min(300px, calc(100vw - 28px)); }}
+  .tr-home-strip {{ display:flex; position:relative; justify-content:flex-start; align-items:center; gap:8px;
+    padding:6px 12px 64px; margin:4px 0 -48px;
     overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; border-bottom:1px solid rgba(255,255,255,.06); }}
   .tr-home-strip::-webkit-scrollbar {{ display:none; }}
-  .tr-home-strip .tr-craft {{ margin:0; width:32px; height:32px; opacity:.55; }}
+  .tr-home-strip .tr-craft {{ position:relative; flex-shrink:0; margin:0; width:34px; height:34px; opacity:.55; }}
+  .tr-home-strip .tr-craft:hover, .tr-home-strip .tr-craft:focus, .tr-home-strip .tr-craft:focus-visible {{ opacity:1; color:#FF8CA0; }}
+  .tr-home-strip .tr-craft .tr-sub {{ position:absolute; left:0; right:auto; bottom:auto; top:calc(100% + 8px);
+    width:max-content; max-width:min(280px, calc(100vw - 28px)); white-space:normal; transform:none !important; z-index:10; }}
+  .tr-home-strip .tr-craft.tip-l .tr-sub {{ left:auto; right:0; }}
+  .tr-home-strip .tr-craft:not(.tip-r):not(.tip-l) .tr-sub {{ left:50%; right:auto; transform:translateX(-50%) !important; }}
+  .tr-home-strip .tr-craft:hover .tr-sub, .tr-home-strip .tr-craft:focus .tr-sub, .tr-home-strip .tr-craft:focus-visible .tr-sub {{ opacity:1; visibility:visible; }}
+  [class*="st-key-trstatus"] > [data-testid="stElementContainer"]:has(> .stMarkdown .tr-home-zone.band) {{ position:relative; inset:auto; z-index:7; height:auto; width:auto; }}
 }}
 @media (prefers-reduced-motion: reduce) {{
   .tr-home-ambience::after, .tr-hero-radar .scan {{ animation:none; }}

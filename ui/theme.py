@@ -189,7 +189,7 @@ button[data-testid="stExpandSidebarButton"] span, button[data-testid="stExpandSi
    `min-width: calc(100% - …)` media rule; a global `min-width: 0` here sat
    later in the document and cancelled it, which is how the right rail ended
    up a 60px column with "No active monitors" wrapping letter by letter. */
-@media (min-width: 769px) { [data-testid="stColumn"] { min-width: 0; } }
+@media (min-width: 769px) { [data-testid="stColumn"] { min-width: 0; } [class*="st-key-tr_home_history"] { display: block !important; } }
 
 h1, h2, h3, h4 { font-family: var(--tr-sans); letter-spacing:-.03em; color: var(--tr-text); }
 p, span, div, label, li, input, button { font-family: var(--tr-sans); }
@@ -613,10 +613,27 @@ __NAV_ICONS__
 .tr-step-mobile { display:none; font-family:var(--tr-mono); font-size:10px; letter-spacing:.16em;
   color:var(--tr-text-4); text-transform:uppercase; margin:2px 0 4px; }
 
-.tr-selected { display:flex; align-items:center; gap:9px; font-size:13px; color:var(--tr-text-2); margin:2px 0; min-width:0; }
+.tr-selected { display:flex; align-items:center; gap:9px; font-size:13.5px; color:var(--tr-text-2); margin:4px 0; min-width:0; flex-wrap:wrap; }
 .tr-selected .n { width:18px; height:18px; flex:none; border-radius:5px; display:flex; align-items:center;
   justify-content:center; font-size:10px; background:var(--tr-accent); color:#fff; }
-.tr-selected b { color:var(--tr-text); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tr-selected b { color:var(--tr-text); font-weight:700; white-space:normal; overflow-wrap:anywhere; word-break:break-word; line-height:1.35; }
+
+.tr-selected-card {
+  display:flex; gap:14px; padding:13px 15px; border-radius:16px;
+  background:linear-gradient(180deg, rgba(255,51,85,.12), rgba(255,51,85,.03)), var(--tr-raised);
+  border:1.5px solid var(--tr-accent); box-shadow: var(--tr-hi), 0 16px 36px -18px rgba(255,51,85,.6);
+  margin:8px 0 12px; box-sizing:border-box; min-width:0;
+}
+.tr-selected-card .art {
+  width:60px; aspect-ratio:2/3; border-radius:10px; overflow:hidden; background:#1B1216;
+  flex:none; position:relative; display:flex; align-items:center; justify-content:center;
+}
+.tr-selected-card .art img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.tr-selected-card .body { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; justify-content:center; }
+.tr-selected-card .k { display:flex; align-items:center; gap:6px; }
+.tr-selected-card .title { font-size:16.5px; font-weight:800; letter-spacing:-.02em; line-height:1.25;
+  color:var(--tr-text); overflow-wrap:anywhere; word-break:break-word; white-space:normal; }
+.tr-selected-card .meta { display:flex; flex-wrap:wrap; gap:5px; }
 .tr-summary-strip { display:flex; flex-wrap:wrap; gap:6px 8px; margin:2px 0 6px; min-width:0; }
 .tr-summary-strip .i {
   display:inline-flex; align-items:center; gap:8px; padding:8px 13px 8px 9px; border-radius:11px;
@@ -1320,9 +1337,13 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   [class*="st-key-trgrid_interval"] [data-testid="stColumn"],
   [class*="st-key-trgrid_datemode"] [data-testid="stColumn"] { --tr-cols: 3; }
   [class*="st-key-trgrid_feat"] [data-testid="stColumn"],
-  [class*="st-key-trgrid_th"] [data-testid="stColumn"] { --tr-cols: 1; }
+  [class*="st-key-trgrid_th"] [data-testid="stColumn"],
+  [class*="st-key-trgrid_watch"] [data-testid="stColumn"] { --tr-cols: 1; }
   [class*="st-key-trpair"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
   [class*="st-key-trpair"] [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+
+  /* Home-page History content is hidden on mobile viewports */
+  [class*="st-key-tr_home_history"] { display: none !important; }
 
   /* the sidebar is an overlay here; the toolbar's "open" control is the nav */
   [data-testid="stSidebar"] { width: min(300px, 86vw) !important; min-width: 0 !important; }
@@ -1370,18 +1391,26 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   .tr-step-title { font-size: 17px; overflow-wrap: anywhere; word-break: break-word; }
   .tr-step-help { font-size: 12.5px; margin-top: 2px; }
   .tr-rule { margin: 3px 0 4px; }
-  .tr-loc { padding: 16px 10px 14px; min-height: 0; }
-  .tr-loc .n { font-size: 16px; }
-  .tr-loc .s { font-size: 11px; }
-  .tr-loc.disabled .s { white-space: nowrap; letter-spacing: .1em; }
+  .tr-loc { padding: 14px 6px 12px; min-height: 0; }
+  .tr-loc .n { font-size: clamp(12.5px, 3.8vw, 15px); white-space: nowrap; overflow: visible; text-overflow: unset; }
+  .tr-loc .s { font-size: 10.5px; }
+  .tr-loc.disabled .s { white-space: nowrap; letter-spacing: .08em; }
   .tr-interval { padding: 10px 4px; }
   .tr-interval .num { font-size: 22px; }
   .tr-interval.choice { padding: 9px 4px; }
   .tr-interval.choice .lbl { font-size: 12.5px; }
   .tr-interval.choice .unit { font-size: 10.5px; }
   .tr-feat { min-height: 0; padding: 12px 13px 11px; }
-  .tr-poster .body { height: 84px; }
-  .tr-summary-strip .v { max-width: 100%; overflow-wrap: anywhere; }
+  .tr-feat .s { display: block !important; -webkit-line-clamp: unset !important; overflow: visible !important; }
+  .tr-throw { min-height: 0; padding: 11px 11px 9px; }
+  .tr-throw .n { display: block !important; -webkit-line-clamp: unset !important; overflow: visible !important; white-space: normal !important; overflow-wrap: anywhere; word-break: break-word; }
+  .tr-throw .a { overflow-wrap: anywhere; word-break: break-word; }
+  .tr-throw .fmts { flex-wrap: wrap; }
+  .tr-poster .body { height: auto !important; min-height: 80px; }
+  .tr-poster .t { height: auto !important; display: block !important; -webkit-line-clamp: unset !important; overflow: visible !important; white-space: normal !important; overflow-wrap: anywhere; word-break: break-word; }
+  .tr-selected-card { padding: 12px 12px; }
+  .tr-selected-card .title { font-size: 15.5px; }
+  .tr-summary-strip .v { max-width: 100%; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; overflow-wrap: anywhere; word-break: break-word; }
   .tr-summary-strip .i { padding: 6px 10px 6px 7px; }
   .tr-mcard .grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 12px; }
   .tr-mcard .title { font-size: 18px; overflow-wrap: anywhere; }

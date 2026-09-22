@@ -70,16 +70,16 @@ def test_the_first_six_marks_drawn_on_home_are_the_six_heroes_in_order():
 
     page = __import__("inspect").getsource(app.page_home)
     assert page.index("home.band()") < page.index("home.rail_foot()") < page.index("home.foot()")
-    # the phone's eight open with the same six, so 390px reads what 1600px reads
+    # the phone's strip opens with the six too, so 390px reads what 1600px reads
     assert home.STRIP[:6] == tuple(key for key, _q, _by in SIX)
-    assert len(home.STRIP) == 8
+    assert len(home.STRIP) == 24
 
-    for markup in (home.crafts_zone("band"), home.crafts_strip()):
-        drawn = _marks(markup)
-        assert len(drawn) == 8
-        for got, (key, quote, by) in zip(drawn, SIX):
-            craft = crafts.BY_KEY[key]
-            assert got == f"{craft.label} — “{quote}” — {by}", got
+    assert len(_marks(home.crafts_zone("band"))) == 8
+    drawn = _marks(home.crafts_strip())
+    assert len(drawn) == 24
+    for got, (key, quote, by) in zip(drawn, SIX):
+        craft = crafts.BY_KEY[key]
+        assert got == f"{craft.label} — “{quote}” — {by}", got
 
 
 def test_the_six_strings_are_carried_through_exactly_as_written():
@@ -233,12 +233,11 @@ def test_the_tablet_band_anchors_its_cards_and_caps_them_to_the_room_it_has():
 def test_the_phone_card_drops_below_the_strip_and_stays_in_the_window():
     phone = home.CSS[home.CSS.index("@media (max-width: 768px)"):]
     strip = _rule(phone, ".tr-home-strip .tr-craft .tr-sub")
-    assert "right:0 !important" in strip                           # never off the right edge
-    assert "bottom:auto !important" in strip and "top:calc(100% + 8px)" in strip   # …and never off the top
+    assert "bottom:auto" in strip and "top:calc(100% + 8px)" in strip   # …and never off the top
     assert "max-width:min(300px, calc(100vw - 28px))" in _rule(phone, ".tr-craft .tr-sub")
     assert ".tr-home-zone.band, .tr-home-zone.rail, .tr-home-zone.foot { display:none; }" in phone
-    assert ".tr-home-strip { display:flex;" in phone               # the eight are still a strip
-    assert len(re.findall(r'<span class="tr-craft', home.crafts_strip())) == 8
+    assert ".tr-home-strip { display:flex;" in phone               # the crafts are a strip
+    assert len(re.findall(r'<span class="tr-craft', home.crafts_strip())) == 24
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -278,7 +277,7 @@ def test_the_line_is_carried_once_not_three_times():
 
 def test_the_whole_layer_is_smaller_than_it_was_and_draws_the_same_marks():
     zones = home.crafts_zone("band") + home.crafts_zone("rail") + home.crafts_zone("foot")
-    assert len(_marks(zones)) == 24 and len(_marks(home.crafts_strip())) == 8
-    assert len(zones) + len(home.crafts_strip()) < 18000           # was ~21.5 KB on every rerun
+    assert len(_marks(zones)) == 24 and len(_marks(home.crafts_strip())) == 24
+    assert len(zones) + len(home.crafts_strip()) < 26000
     labels = {line.split(" — ")[0] for line in _marks(zones)}
     assert labels == {c.label for c in crafts.CRAFTS}              # every craft still there, by its own name

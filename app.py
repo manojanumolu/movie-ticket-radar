@@ -607,8 +607,9 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
         C.html('<div class="tr-rail-title"><span class="tr-dot grey"></span><span>Active monitor</span></div>')
         C.empty_card()
         if history:
-            C.html('<div class="tr-rail-head" style="margin-top:18px;"><span class="tr-eyebrow">Recent history</span></div>')
-            C.history_rows(history, languages=languages_of(monitors))
+            with st.container(key="tr_home_history"):
+                C.html('<div class="tr-rail-head" style="margin-top:18px;"><span class="tr-eyebrow">Recent history</span></div>')
+                C.history_rows(history, languages=languages_of(monitors))
         return
 
     monitor = active[0]
@@ -624,8 +625,9 @@ def rail(monitors: list[Monitor], states: dict[str, MonitorState], history: list
     if len(active) > 1:
         st.caption(f"+{len(active) - 1} more active — see **My Monitors**.")
     if history:
-        C.html('<div class="tr-rail-head" style="margin-top:14px;"><span class="tr-eyebrow">Recent history</span></div>')
-        C.history_rows(history, languages=languages_of(monitors))
+        with st.container(key="tr_home_history"):
+            C.html('<div class="tr-rail-head" style="margin-top:14px;"><span class="tr-eyebrow">Recent history</span></div>')
+            C.history_rows(history, languages=languages_of(monitors))
 
 
 # ──────────────────────────────────────────────────────────────────────────

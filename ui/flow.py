@@ -360,17 +360,24 @@ def step_movie() -> bool:
     )
     query = "" if cv.movie_for_label(choice or "", location.slug) else (choice or "")
 
+    if selected:
+        current = cv.card(selected, location.slug)
+        if current is not None:
+            C.selected_movie_card(current.title, current.meta, current.poster_url)
+            st.button("Continue to theatres", type="primary", use_container_width=True,
+                      key="movie_continue", icon=":material/arrow_forward:", on_click=_go, args=(3,))
+
     if query:
         matches = cv.search_movies(query, location.slug)
         if not matches:
             st.caption(f"No movie in the {location.name} listing matches “{query}”.")
-            return False
+            return bool(selected)
         st.caption(f"{len(matches)} movie(s) matching “{query}” · tap a poster to select it")
         _poster_grid(matches[:GRID_COLUMNS * 4], selected)
     else:
         shelf = cv.popular(location.slug, POPULAR_LIMIT)
         if shelf:
-            C.rule("Now showing")
+            C.rule("Or change selection" if selected else "Now showing")
             _poster_grid(shelf, selected, prefix="pop_")
         rest = catalogue.movies
         st.caption(f"{len(rest)} movie(s) · tap a poster to select it")
@@ -392,12 +399,6 @@ def step_movie() -> bool:
                               on_click=_set_show_all_movies, args=(False,))
             _poster_grid(rest, selected, compact=True)
 
-    if selected:
-        current = cv.card(selected, location.slug)
-        if current is not None:
-            C.html(f'<div class="tr-selected"><span class="n">✓</span>Selected: <b>{C.e(current.label)}</b></div>')
-        st.button("Continue to theatres", type="primary", use_container_width=True,
-                  key="movie_continue", icon=":material/arrow_forward:", on_click=_go, args=(3,))
     return bool(selected)
 
 

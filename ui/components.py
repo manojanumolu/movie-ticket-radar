@@ -493,6 +493,27 @@ def interval_tile(minutes: int, selected: bool) -> None:
     )
 
 
+def selected_movie_card(title: str, meta: str, poster_url: str = "") -> None:
+    """A prominent card for the selected movie showing complete unclipped title."""
+    art = (
+        f'<img src="{escape(poster_url, quote=True)}" alt="" loading="lazy" decoding="async">'
+        if poster_url
+        else FILM_GLYPH.format(size=28)
+    )
+    meta_parts = meta.split(" · ") if meta else []
+    chips = "".join(f'<span class="tr-badge">{e(m)}</span>' for m in meta_parts)
+    html(
+        f"""<div class="tr-selected-card">
+          <div class="art">{art}</div>
+          <div class="body">
+            <div class="k"><span class="tr-pill ok">✓ Selected:</span></div>
+            <div class="title">{e(title)}</div>
+            <div class="meta">{chips}</div>
+          </div>
+        </div>"""
+    )
+
+
 def poster_tile(title: str, meta: str, selected: bool, poster_url: str = "",
                 compact: bool = False) -> None:
     art = (
