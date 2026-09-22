@@ -389,7 +389,8 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
         venue = venues.get(code)
         if venue is None:
             continue
-        unknown = flow.unknown_formats(venue, formats.get(code) or [ANY_FORMAT], capable.get(code, ()))
+        unknown = flow.unknown_formats(venue, formats.get(code) or [ANY_FORMAT], capable.get(code, ()),
+                                       cv.release_watch_formats(movie_id, slug))
         if unknown:
             problems.append(f"{venue.name} isn't known to run {', '.join(unknown)} — pick a format it lists")
     if problems:
@@ -711,7 +712,8 @@ def wizard(monitors, *, settings: dict) -> None:
                               coming=cv.coming_soon_codes(movie_id, slug, codes, dates),
                               capable=cv.capabilities(slug, codes),
                               dates_by_venue={c: cv.listed_dates(movie_id, slug, c) for c in codes},
-                              dates=dates)
+                              dates=dates,
+                              release=cv.release_watch_formats(movie_id, slug))
         else:
             # The box starts as the saved notification address or, for an
             # account that has never set one, the address they signed in

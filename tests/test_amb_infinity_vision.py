@@ -410,14 +410,144 @@ def test_step_4_offers_infinity_vision_at_amb_only_when_bookmyshow_lists_it_ther
     assert "Infinity Vision" in body and "AMB Cinemas (2D)" in body
 
 
-def test_step_4_refuses_infinity_vision_at_amb_when_bookmyshow_does_not_list_it(provider_factory):
-    """AMB has no verified Infinity Vision screen, so with no listing there
-    is no basis for the target — and the wizard refuses it rather than
-    inferring one from "Marvel" or "AMB"."""
+def test_step_4_refuses_infinity_vision_at_amb_when_bookmyshow_sells_the_film_in_no_such_event(
+        provider_factory):
+    """With no Infinity Vision sibling event for this film there is no basis
+    for the target anywhere in the city, and the wizard refuses it rather
+    than inferring one from "Marvel" or "AMB"."""
     film = movie(variants=())
     provider = provider_factory([build_payload([BARCO_LIVE])])
     catalogue.store_snapshot(provider.fetch(film, [SHOW_DATE]), mirror=False)
 
     [venue] = cv.selected_venues(film.id, "hyderabad", ["AMBH"], [SHOW_DATE])
     assert venue.formats == ("Barco Flagship Laser Dolby Atmos",)
+    assert cv.release_watch_formats(film.id, "hyderabad") == ()
     assert flow.unknown_formats(venue, ["Infinity Vision 2D"], premium_formats("AMBH")) == ["Infinity Vision 2D"]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The format-release watch: AMB + Infinity Vision *before* it is listed
+# ──────────────────────────────────────────────────────────────────────────
+#: The film as BookMyShow sells it in the city — its sibling events. Two of
+#: them are Infinity Vision, which is what makes the format watchable at a
+#: theatre that has not listed it.
+CITY_VARIANTS = (("ET00516731", "3D"), ("ET00516728", "Ms-Infinity Vsn 3D"), ("ET00516729", "4DX 3D"),
+                 (INFINITY, "Ms - Infinity Vision"), ("ET00517111", "Dolby Cinema 3D"))
+
+
+def store_amb_without_infinity_vision(provider_factory) -> MovieRef:
+    """The catalogue as it really stands: AMB listed in Barco only, and the
+    film's Infinity Vision events listing other theatres — not AMB."""
+    film = movie(variants=CITY_VARIANTS)
+    # base event, then one response per sibling: 3D, IV 3D, 4DX, IV 2D, Dolby.
+    provider = provider_factory([build_payload([BARCO_LIVE])] + [build_payload([]) for _ in range(5)])
+    catalogue.store_snapshot(provider.fetch(film, [SHOW_DATE]), mirror=False)
+    return film
+
+
+def test_infinity_vision_is_watchable_at_amb_although_amb_does_not_list_it(provider_factory):
+    """CASE 1. BookMyShow sells this film in Infinity Vision in Hyderabad
+    (its own sibling events) but lists AMB in Barco only. Infinity Vision is
+    offered at AMB as a release watch, and the start guard accepts it."""
+    film = store_amb_without_infinity_vision(provider_factory)
+
+    assert cv.release_watch_formats(film.id, "hyderabad") == ("Infinity Vision 3D", "Infinity Vision 2D")
+    [venue] = cv.selected_venues(film.id, "hyderabad", ["AMBH"], [SHOW_DATE])
+    assert venue.formats == ("Barco Flagship Laser Dolby Atmos",)          # AMB lists no Infinity Vision
+    assert "Infinity Vision" not in " ".join(premium_formats("AMBH"))      # and has no such capability
+    # …yet the target has a basis, so creation is not refused.
+    assert flow.unknown_formats(venue, ["Infinity Vision 2D"], premium_formats("AMBH"),
+                                cv.release_watch_formats(film.id, "hyderabad")) == []
+    # A format with no basis at all is still refused.
+    assert flow.unknown_formats(venue, ["IMAX"], premium_formats("AMBH"),
+                                cv.release_watch_formats(film.id, "hyderabad")) == ["IMAX"]
+
+    app = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    app.session_state["page"] = "Home"
+    for key, value in {"step": 4, "furthest": 4, "location": "hyderabad", "movie_id": film.id,
+                       "theatres": ["AMBH"], "show_dates": [SHOW_DATE]}.items():
+        app.session_state[key] = value
+    app.run()
+    boxes = {c.key: c for c in app.checkbox}
+    assert "fmt_AMBH_Infinity Vision 2D" in boxes and "fmt_AMBH_Infinity Vision 3D" in boxes
+    assert boxes["fmt_AMBH_Infinity Vision 2D"].proto.help == (
+        "BookMyShow sells this movie in Infinity Vision 2D in this city but hasn't listed it at "
+        "AMB Cinemas — watching until it appears here in this format.")
+    # AMB's own screens are still offered, and still said apart.
+    assert boxes["fmt_AMBH_HDR By Barco"].proto.help.startswith("AMB Cinemas's HDR By Barco screen")
+    assert boxes["fmt_AMBH_Barco Flagship Laser Dolby Atmos"].proto.help.startswith("Currently listed")
+
+
+def test_the_watch_survives_the_whole_release_with_one_email_at_the_right_moment(
+        provider_factory, monkeypatch, at):
+    """CASES 1 → 2 → 3 → 4, on the real worker tick: not listed, then listed
+    and sold out, then bookable, then a second showtime."""
+    monitor = make_monitor(at, AMB_IV)
+    upsert_monitor(monitor, mirror=False)
+    sent: list = []
+    wire = Wire(provider_factory, monkeypatch)
+
+    # CASE 1 — Infinity Vision is not listed at AMB at all. Still ACTIVE, silent.
+    wire.tick([BARCO_LIVE], [])
+    check(at, sent, force=True)
+    assert load_state()[monitor.id].targets[AMB_IV.key].availability is Availability.SHOW_NOT_AVAILABLE
+    assert load_monitors()[0].status is MonitorStatus.ACTIVE
+    assert sent == []
+
+    # CASE 2 — it appears, sold out. Still ACTIVE, still silent.
+    wire.tick([BARCO_LIVE], [IV_SOLD_OUT])
+    check(at + timedelta(minutes=10), sent)
+    assert load_state()[monitor.id].targets[AMB_IV.key].availability is Availability.SOLD_OUT
+    assert sent == []
+
+    # CASE 3 — it becomes bookable. Exactly one email.
+    wire.tick([BARCO_LIVE], [IV_LIVE])
+    check(at + timedelta(minutes=20), sent)
+    assert [(c.kind.value, c.fmt) for c in sent] == [("TICKETS_LIVE", "Infinity Vision 2D")]
+
+    # CASE 4 — a second Infinity Vision showtime is released.
+    wire.tick([BARCO_LIVE], [IV_LIVE, IV_SECOND])
+    check(at + timedelta(minutes=30), sent)
+    assert [c.kind.value for c in sent] == ["TICKETS_LIVE", "NEW_SHOWTIME"]
+    assert sent[1].new_time_labels == ["10:45 PM"]
+    assert load_monitors()[0].status is MonitorStatus.ACTIVE
+
+
+def test_the_watch_survives_amb_not_being_listed_for_the_film_at_all(
+        provider_factory, monkeypatch, at):
+    """AMB listed for nothing yet: THEATRE_NOT_AVAILABLE, active, silent —
+    and it still fires the day Infinity Vision opens there."""
+    monitor = make_monitor(at, AMB_IV)
+    upsert_monitor(monitor, mirror=False)
+    sent: list = []
+    wire = Wire(provider_factory, monkeypatch)
+
+    wire.tick([], [])
+    check(at, sent, force=True)
+    assert load_state()[monitor.id].targets[AMB_IV.key].availability is Availability.THEATRE_NOT_AVAILABLE
+    assert sent == []
+
+    wire.tick([BARCO_LIVE], [IV_LIVE])
+    check(at + timedelta(minutes=10), sent)
+    assert [(c.kind.value, c.fmt, c.previous) for c in sent] == [
+        ("TICKETS_LIVE", "Infinity Vision 2D", Availability.THEATRE_NOT_AVAILABLE)]
+
+
+@pytest.mark.parametrize("noise", ["Barco Flagship Laser Dolby Atmos", "HDR By Barco", "MB LUXE", "VIP"])
+def test_no_other_amb_screen_can_trigger_the_infinity_vision_watch(
+        provider_factory, monkeypatch, at, noise):
+    """CASES 5 and 6. Every other AMB screen goes bookable, twice over, while
+    Infinity Vision is absent: absolutely nothing."""
+    monitor = make_monitor(at, AMB_IV)
+    upsert_monitor(monitor, mirror=False)
+    sent: list = []
+    wire = Wire(provider_factory, monkeypatch)
+
+    wire.tick([amb(noise, "3")], [])
+    check(at, sent, force=True)
+    wire.tick([amb(noise, "3"), amb(noise, "3", "11:45 PM", "2345")], [])
+    check(at + timedelta(minutes=10), sent)
+
+    assert load_state()[monitor.id].targets[AMB_IV.key].availability is Availability.SHOW_NOT_AVAILABLE
+    assert sent == []
+    assert load_monitors()[0].status is MonitorStatus.ACTIVE

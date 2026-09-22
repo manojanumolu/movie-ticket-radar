@@ -26,7 +26,8 @@ import streamlit as st
 from config import store
 from config.theatre_capabilities import premium_formats
 from monitor import catalogue
-from monitor.models import MovieRef, Venue, dedupe, normalise_format
+from monitor.models import MovieRef, Venue, dedupe, is_infinity_vision, normalise_format
+from platforms.bookmyshow import clean_format
 
 
 @dataclass(frozen=True)
@@ -239,6 +240,34 @@ def capabilities(slug: str, codes: list[str]) -> dict[str, tuple[str, ...]]:
     return {code: premium_formats(code) for code in codes}
 
 
+def release_watch_formats(movie_id: str, slug: str = "") -> tuple[str, ...]:
+    """Premium formats **this film** is sold in in this city that no theatre
+    can be waited for any other way — its Infinity Vision sibling events.
+
+    A theatre is watched for a format it does not list yet through
+    :func:`capabilities`, the verified list of screens it *has*. Infinity
+    Vision is in that list for no theatre and deliberately so
+    (``config.theatre_capabilities``: the source does not verify it
+    anywhere), so before BookMyShow lists a film in it at a theatre there is
+    nothing to select — and the one format whose screens move between
+    theatres release by release is the one that cannot be waited for. That
+    is the gap this closes.
+
+    The basis is BookMyShow's own data and only that: ``MovieRef.variants``
+    are the sibling *events* it created for this film — "Ms - Infinity
+    Vision" (2D) and "Ms-Infinity Vsn 3D" — which is the platform saying
+    this film is sold in Infinity Vision here. A film with no such sibling
+    returns nothing, so nothing is ever inferred from a theatre's name or a
+    film's franchise, and the worker (``monitor.discovery``) keeps the list
+    current if BookMyShow creates one later.
+    """
+    film = movie(movie_id, slug)
+    if film is None:
+        return ()
+    labels = (clean_format(label) for _, label in film.variants)
+    return tuple(dedupe(f for f in labels if is_infinity_vision(f)))
+
+
 def seen_formats(slug: str, codes: list[str]) -> dict[str, tuple[str, ...]]:
     """code -> every format string BookMyShow has been seen to use at the
     theatre, for any film (the city directory). Background only: it is what
@@ -428,6 +457,7 @@ __all__ = [
     "movie",
     "movie_for_label",
     "popular",
+    "release_watch_formats",
     "search_movies",
     "search_venues",
     "selected_venues",

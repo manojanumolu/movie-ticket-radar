@@ -606,18 +606,22 @@ def infinity_vision_note(venues: list[Venue]) -> None:
            f"BookMyShow lists it at {C.e(listed)}. Pick it below to watch that screen.</span></div>")
 
 
-def unknown_formats(venue: Venue, chosen: list[str], capable: tuple[str, ...] = ()) -> list[str]:
+def unknown_formats(venue: Venue, chosen: list[str], capable: tuple[str, ...] = (),
+                    watchable: tuple[str, ...] = ()) -> list[str]:
     """The chosen formats this theatre is not known to run at all.
 
-    ``venue.formats`` is what this movie lists at the theatre and ``capable``
+    ``venue.formats`` is what this movie lists at the theatre, ``capable``
     the theatre's verified premium screens plus every format BookMyShow has
-    been seen to use there. A format outside all of that is not
-    "unreleased" — it has no basis — and is the one thing the monitoring
-    step refuses. Any format always passes, and a theatre with no known
-    formats has nothing reliable to check against, so everything passes for
-    it: the existing behaviour, unchanged.
+    been seen to use there, and ``watchable`` the formats BookMyShow sells
+    *this film* in in this city through its own sibling events
+    (``catalogue_view.release_watch_formats`` — Infinity Vision), which may
+    be watched at a chosen theatre before that theatre lists them. A format
+    outside all of that is not "unreleased" — it has no basis — and is the
+    one thing the monitoring step refuses. Any format always passes, and a
+    theatre with no known formats has nothing reliable to check against, so
+    everything passes for it: the existing behaviour, unchanged.
     """
-    known = {normalise_format(f) for f in (*venue.formats, *capable)}
+    known = {normalise_format(f) for f in (*venue.formats, *capable, *watchable)}
     if not known:
         return []
     return [f for f in chosen if f != ANY_FORMAT and normalise_format(f) not in known]
@@ -627,14 +631,19 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                  listed: dict[str, tuple[str, ...]] | None = None,
                  capable: dict[str, tuple[str, ...]] | None = None,
                  dates_by_venue: dict[str, dict[str, tuple[str, ...]]] | None = None,
-                 dates: list[str] | None = None) -> dict[str, list[str]]:
+                 dates: list[str] | None = None,
+                 release: tuple[str, ...] = ()) -> dict[str, list[str]]:
     """``venues`` carry exactly the formats BookMyShow lists *this movie* in
     at each theatre — on the chosen show dates when there are any, else on
     the dates the catalogue read (see ``catalogue_view.selected_venues``);
     those are the options. ``coming`` names the theatres the movie is not
     listed at (on those dates); ``capable`` is what each theatre runs for
     other films, shown as such and never offered; ``dates_by_venue`` is
-    date -> formats per theatre, for the hints."""
+    date -> formats per theatre, for the hints; ``release`` is the formats
+    BookMyShow sells *this film* in in this city through its own sibling
+    events (``catalogue_view.release_watch_formats``), offered at every
+    chosen theatre that has not listed them yet — the format-release
+    watch."""
     coming = coming or set()
     capable = capable or {}
     dates_by_venue = dates_by_venue or {}
@@ -669,12 +678,17 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                        for f in premium for a in format_aliases(venue.code, f))
 
         # The options: every verified premium screen — a permanent watch
-        # target, listed or not — then whatever else BookMyShow lists the
-        # movie in here (the ordinary formats). Nothing else.
-        options = dedupe([*premium, *[f for f in listed if not is_alias_label(f)
-                                      and not any(normalise_format(q) == normalise_format(f) for q in premium)]])
-        current = {f for f in options if (f in premium and covered(f)) or (f not in premium)}
-        waiting = [f for f in premium if not covered(f)]
+        # target, listed or not — then the formats BookMyShow sells this
+        # film in in this city that no capability list can name (Infinity
+        # Vision), also watchable before this theatre lists them, then
+        # whatever else BookMyShow lists the movie in here (the ordinary
+        # formats). Nothing else.
+        watch = dedupe([*premium, *[f for f in release
+                                    if not any(normalise_format(q) == normalise_format(f) for q in premium)]])
+        options = dedupe([*watch, *[f for f in listed if not is_alias_label(f)
+                                    and not any(normalise_format(q) == normalise_format(f) for q in watch)]])
+        current = {f for f in options if (f in watch and covered(f)) or (f not in watch)}
+        waiting = [f for f in watch if not covered(f)]
         listed_on = dates_by_venue.get(venue.code, {})
         when = ""
         if dates and is_coming:
@@ -717,9 +731,14 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                         as_named = f" as “{under[0]}” on BookMyShow" if under else ""
                         hint = ("Currently listed for this movie here on " + ", ".join(short_date(d) for d in on)
                                 + as_named + "." if on else f"Currently listed for this movie at this theatre{as_named}.")
-                    else:
+                    elif fmt in premium:
                         hint = (f"{venue.name}'s {fmt} screen (HyderabadTheatres). Not yet listed for this movie — "
                                 "watching until it opens here in this format.")
+                    else:
+                        # A format-release watch: BookMyShow sells this film
+                        # in it in this city, this theatre has not listed it.
+                        hint = (f"BookMyShow sells this movie in {fmt} in this city but hasn't listed it at "
+                                f"{venue.name} — watching until it appears here in this format.")
                     if st.checkbox(fmt, key=f"fmt_{venue.code}_{fmt}",
                                    value=fmt in formats.get(venue.code, []), help=hint):
                         chosen.append(fmt)
