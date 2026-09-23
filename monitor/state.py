@@ -881,6 +881,22 @@ def _assert_may_run(monitor: Monitor, monitors: list[Monitor], *, at: datetime |
         raise MonitorLimitError(limit)
 
 
+def _assert_interval_allowed(monitor: Monitor) -> None:
+    """Enforce the admin-only five-minute interval at the write boundary.
+
+    The worker may read existing monitors without a user scope, while a
+    signed-in UI write has the Firebase claim available through the scope
+    provider. This keeps old 10/15/30 monitors unchanged and prevents a
+    member from manufacturing a five-minute monitor through widget or API
+    input.
+    """
+    if monitor.interval_minutes != 5 or _scope_provider is None:
+        return
+    scope = _scope_provider()
+    if scope is not None and not scope.admin:
+        raise ValueError("Only the admin account may use a five-minute interval")
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Monitors — the functions the UI, the checker and the worker call
 # ──────────────────────────────────────────────────────────────────────────
@@ -904,6 +920,7 @@ def upsert_monitor(monitor: Monitor, *, mirror: bool = True) -> list[Monitor]:
     """Save a monitor — refusing, before anything is written, one that
     would put the account over :data:`ACTIVE_MONITOR_LIMIT`."""
     monitors = load_monitors()
+    _assert_interval_allowed(monitor)
     _assert_may_run(monitor, monitors)
     for i, existing in enumerate(monitors):
         if existing.id == monitor.id:

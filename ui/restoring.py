@@ -34,7 +34,7 @@ from ui import radar
 
 #: TicketRadar's own line. Not a quotation from anything — the app's voice,
 #: saying what it is doing: the queue is the booking page it watches.
-LEAD = "Finding your place in the queue."
+LEAD = "Waiting for the next showtime."
 #: The plain one. It is what is actually happening, and it is what the
 #: screen settles on for as long as the wait lasts.
 STATUS = "Restoring your session…"

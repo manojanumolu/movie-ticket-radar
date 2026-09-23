@@ -317,8 +317,12 @@ __RAIL_RIG__
    still asks Firebase's own claim. */
 .tr-admin-tag { display:inline-flex; align-items:center; margin-left:7px; padding:2px 6px 1px; border-radius:5px;
   font-family:var(--tr-mono); font-size:9px; font-weight:600; letter-spacing:.18em; line-height:1.5; white-space:nowrap;
-  color:#FFD2DB; background:linear-gradient(180deg,rgba(255,51,85,.34),rgba(255,51,85,.16));
-  border:1px solid rgba(255,107,133,.55); box-shadow:0 4px 12px -8px rgba(255,51,85,.9); }
+  color:#C8F6DF; background:linear-gradient(180deg,rgba(62,213,152,.20),rgba(62,213,152,.08));
+  border:1px solid rgba(126,235,190,.42); box-shadow:0 4px 12px -8px rgba(62,213,152,.9); }
+.tr-admin-tag::before { content:""; width:5px; height:5px; margin-right:5px; border-radius:50%;
+  background:#65E6AA; box-shadow:0 0 0 2px rgba(62,213,152,.13), 0 0 9px rgba(62,213,152,.75);
+  animation:tr-admin-pulse 2.8s ease-in-out infinite; }
+@keyframes tr-admin-pulse { 0%,100% { opacity:.65; transform:scale(.9); } 50% { opacity:1; transform:scale(1.15); } }
 .tr-acct-chip .tr-admin-tag { margin-left:0; margin-right:2px; flex:none; }
 /* the destructive action is set apart from the ordinary ones: a quiet row in
    the same shape as the others, red only in its text, louder only on hover */

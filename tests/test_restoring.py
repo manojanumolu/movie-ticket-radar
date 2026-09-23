@@ -73,7 +73,7 @@ def test_reduced_motion_is_honoured():
 # What it says
 # ──────────────────────────────────────────────────────────────────────────
 def test_the_line_is_ticketradars_own_and_the_status_is_honest():
-    assert restoring.LEAD == "Finding your place in the queue."
+    assert restoring.LEAD == "Waiting for the next showtime."
     assert "Restoring your session" in restoring.STATUS
     markup = restoring.markup()
     assert restoring.LEAD in markup and "Restoring your session" in markup

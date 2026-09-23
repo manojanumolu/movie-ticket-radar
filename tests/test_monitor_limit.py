@@ -100,6 +100,21 @@ def test_a_person_with_nothing_running_can_create_one(account):
     assert account.running() == 1
 
 
+def test_five_minute_interval_is_admin_only_at_the_store_boundary(account):
+    account.as_(FRIEND)
+    member_monitor = _monitor("Five minute member", owner=FRIEND)
+    member_monitor.interval_minutes = 5
+    with pytest.raises(ValueError, match="admin account"):
+        state_mod.upsert_monitor(member_monitor, mirror=False)
+    assert state_mod.load_monitors() == []
+
+    account.as_(OWNER, admin=True)
+    admin_monitor = _monitor("Five minute admin", owner=OWNER)
+    admin_monitor.interval_minutes = 5
+    state_mod.upsert_monitor(admin_monitor, mirror=False)
+    assert state_mod.load_monitors()[0].interval_minutes == 5
+
+
 def test_the_fifth_is_allowed(account):
     account.as_(FRIEND)
     for i in range(ACTIVE_MONITOR_LIMIT - 1):

@@ -266,6 +266,23 @@ def test_monitoring_step_offers_the_three_intervals(seeded):
     assert any(b.key == "start" for b in app.button)
 
 
+def test_admin_monitoring_step_also_offers_five_minutes(seeded, signed_in):
+    signed_in.admin = True
+    app = run(step=5, location="hyderabad", movie_id=seeded,
+              theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]})
+    assert not app.exception
+    assert {b.key for b in app.button if b.key.startswith("interval_")} == {
+        "interval_5", "interval_10", "interval_15", "interval_30"}
+
+
+def test_member_monitoring_step_does_not_offer_five_minutes(seeded, signed_in):
+    signed_in.admin = False
+    app = run(step=5, location="hyderabad", movie_id=seeded,
+              theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]})
+    assert not app.exception
+    assert "interval_5" not in {b.key for b in app.button}
+
+
 def test_start_monitoring_creates_one_target_per_theatre_format(seeded):
     app = run(step=5, location="hyderabad", movie_id=seeded,
               theatres=["ALLU", "AMB"],

@@ -105,6 +105,13 @@ def test_the_admin_account_is_named_admin_in_the_chip_and_the_menu(admin):
     assert admin.email in page, "the address is still shown"
 
 
+def test_admin_chip_keeps_the_display_name_out_of_the_closed_chip(admin):
+    app = run()
+    chip = next(m.value for m in app.markdown if 'class="tr-acct-chip"' in m.value)
+    assert ">Admin<" in chip
+    assert "Test Person" not in chip
+
+
 def test_an_ordinary_member_is_their_own_name_and_carries_no_admin_mark(signed_in):
     app = run()
     page = body(app)

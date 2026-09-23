@@ -774,7 +774,8 @@ def wizard(monitors, *, settings: dict) -> None:
             # with — from Firebase's record, never from anything typed here.
             user = auth_session.current_user()
             default_email = settings.get("notify_email") or (user.email if user else "")
-            interval, until, email, start_now, dates = flow.step_monitoring(default_email)
+            interval, until, email, start_now, dates = flow.step_monitoring(
+                default_email, is_admin=auth_session.is_admin())
             # Admin only: a category watch. Gated here and again inside, and
             # once more where the monitor is saved — an ordinary account
             # never sees it and can never create one.

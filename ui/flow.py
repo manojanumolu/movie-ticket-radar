@@ -44,6 +44,7 @@ from ui import components as C
 
 STEPS = ["Location", "Movie", "Theatres", "Formats", "Monitoring"]
 INTERVALS = [10, 15, 30]
+ADMIN_INTERVALS = [5, 10, 15, 30]
 
 #: How many posters the "Now showing" shelf holds.
 POPULAR_LIMIT = 6
@@ -804,16 +805,17 @@ def _set(key: str, value) -> None:
     st.session_state[key] = value
 
 
-def step_monitoring(default_email: str) -> tuple[int, datetime, str, bool, list[str]]:
+def step_monitoring(default_email: str, *, is_admin: bool = False) -> tuple[int, datetime, str, bool, list[str]]:
     C.rule("Schedule")
     left, right = st.columns(2, gap="large")
 
     with left:
         C.step_header(5, "How often should I check?", "Checks run automatically in the background.")
+        intervals = ADMIN_INTERVALS if is_admin else INTERVALS
         current = st.session_state.get("interval", 10)
-        if current not in INTERVALS:
+        if current not in intervals:
             current = 10
-        for column, minutes in grid(INTERVALS, 3, "interval"):
+        for column, minutes in grid(intervals, 4 if is_admin else 3, "interval"):
             with column:
                 pick(f"interval_{minutes}", f"Every {minutes} minutes",
                      lambda m=minutes, sel=(minutes == current): C.interval_tile(m, sel),
