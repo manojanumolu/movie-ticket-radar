@@ -457,6 +457,22 @@ class FirebaseAuth:
             "admin": admin_claim(user.get("customAttributes")),
         }
 
+    def set_display_name(self, id_token: str, name: str) -> str:
+        """``POST accounts:update {idToken, displayName}`` — rename the
+        account the token belongs to, and hand back the name Firebase kept.
+
+        The same call ``sign_up`` makes for a brand-new account; the ID token
+        is the authority, so Firebase decides *which* account this renames and
+        the page can never name another one. For a Google account this touches
+        only the Firebase user record — Google's own profile is not ours to
+        write and is never asked to change.
+        """
+        if not id_token:
+            raise AuthError(MESSAGES["INVALID_ID_TOKEN"], "INVALID_ID_TOKEN")
+        body = self._call("update", {"idToken": id_token, "displayName": name,
+                                     "returnSecureToken": False})
+        return str(body.get("displayName") or name)
+
     def delete_account(self, id_token: str) -> None:
         """``POST accounts:delete {idToken}`` — permanently remove the account
         the token belongs to.

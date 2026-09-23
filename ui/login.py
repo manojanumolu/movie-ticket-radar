@@ -1097,6 +1097,24 @@ def handle_verified_return() -> None:
         pass
 
 
+def apply_switch_prefill() -> None:
+    """An admin asked to continue as another account: open the sign-in form
+    with that address already in the box.
+
+    The address survived the sign-out and nothing else did — no password, no
+    token, no session. It is a convenience on a form, not a credential:
+    Firebase still authenticates, and until it does nobody is signed in.
+    Runs from the gate, after the session reset and before any widget, which
+    is the only moment a widget's key may still be set.
+    """
+    email = session.take_switch_email()
+    if not email or not firebase.valid_email(email):
+        return
+    st.session_state[MODE_KEY] = "signin"
+    st.session_state["auth_email"] = email
+    st.session_state[NOTICE_KEY] = ("info", f"Signed out. Sign in as {email} to continue.")
+
+
 def _cooldown_remaining(pend: dict | None, now: float | None = None) -> int:
     """Whole seconds until the resend is allowed again — from the absolute
     deadline Firebase's acceptance set, never a counter."""
@@ -1300,4 +1318,4 @@ def entrance() -> None:
 
 
 __all__ = ["CSS", "ENTRANCE_CSS", "MODE_KEY", "ERROR_KEY", "NOTICE_KEY", "VERIFIED_KEY",
-           "entrance", "handle_verified_return", "render"]
+           "apply_switch_prefill", "entrance", "handle_verified_return", "render"]

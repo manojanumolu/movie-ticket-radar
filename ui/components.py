@@ -76,6 +76,7 @@ ICON_PATHS = {
     "catalogue": "<path d='M4 5.5A1.5 1.5 0 0 1 5.5 4H10l2 2h6.5A1.5 1.5 0 0 1 20 7.5v10a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z'/>",
     "history": "<path d='M3.5 12a8.5 8.5 0 1 0 2.6-6.1'/><path d='M3.2 4.6v3.9h3.9'/><path d='M12 8v4.4l3.2 1.9'/>",
     "chevron": "<path d='M8 10l4 4 4-4'/>",
+    "user": "<circle cx='12' cy='8.5' r='3.5'/><path d='M5 20a7 7 0 0 1 14 0'/>",
 }
 
 
@@ -176,14 +177,28 @@ def e(value: object) -> str:
 def asset_uri(name: str) -> str:
     """A bundled image as a data URI (st.markdown can't serve local files).
 
-    Cached: the three platform logos are ~37 KB of PNG that every rerun was
-    re-reading and re-encoding.
+    For the odd small mark that genuinely has to ride inside the page.
+    Anything the browser can cache goes through :func:`brand_url` instead —
+    a data URI travels in the markup on *every* rerun, and the three
+    platform logos were 50 KB of base64 in each one.
     """
     path = ASSETS / name
     try:
         return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
     except OSError:
         return ""
+
+
+def brand_url(key: str) -> str:
+    """A brand mark in ``static/branding`` as an address the browser fetches
+    once and then revalidates — the same served path the avatars and the
+    Login wall use (``ui.assets_registry``). It replaced a data URI: those
+    three logos were re-sent inside the page on every single rerun, which is
+    every click, for bytes that never change."""
+    from ui import assets_registry as art
+
+    asset = art.brand(key)
+    return art.static_url(asset) if asset else ""
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -327,7 +342,7 @@ def platform_selector(platforms, active_slug: str, theatre_count: int, city: str
             cards.append(
                 f"""<div class="tr-platform{live}">
                   <div class="row">
-                    <img src="{asset_uri('logo-bookmyshow.png')}" alt="BookMyShow">
+                    <img src="{brand_url('bookmyshow')}" alt="BookMyShow" loading="lazy" decoding="async">
                     <span class="tr-pill ok connected">{CHECK_CIRCLE}Connected</span>
                   </div>
                   <div class="meta">{PIN_GLYPH.format(size=15, color='#FF3355')}{e(known)}</div>
@@ -336,7 +351,7 @@ def platform_selector(platforms, active_slug: str, theatre_count: int, city: str
         elif p.slug == "district":
             cards.append(
                 f"""<div class="tr-platform">
-                  <div class="lockup"><img src="{asset_uri('logo-district.png')}" alt="District by Zomato"
+                  <div class="lockup"><img src="{brand_url('district')}" alt="District by Zomato" loading="lazy" decoding="async"
                     style="width:34px;height:34px;border-radius:9px;"><div class="name">District</div></div>
                   <div class="soon">Coming soon</div>
                 </div>"""
@@ -344,7 +359,7 @@ def platform_selector(platforms, active_slug: str, theatre_count: int, city: str
         elif p.slug == "pvr":
             cards.append(
                 f"""<div class="tr-platform">
-                  <div class="lockup"><img src="{asset_uri('logo-pvr.png')}" alt="PVR Cinemas"
+                  <div class="lockup"><img src="{brand_url('pvr')}" alt="PVR Cinemas" loading="lazy" decoding="async"
                     style="height:36px;width:auto;opacity:.88;"><div class="name">Cinemas</div></div>
                   <div class="soon">Coming soon</div>
                 </div>"""
@@ -1159,6 +1174,7 @@ __all__ = [
     "Phase",
     "active_monitor_card",
     "asset_uri",
+    "brand_url",
     "catalogue_banner",
     "choice_tile",
     "clean_html",

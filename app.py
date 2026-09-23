@@ -75,6 +75,7 @@ from monitor.state import (  # noqa: E402
 from notifications.email import NotificationError, is_configured, send_test_email  # noqa: E402
 from platforms import PLATFORMS  # noqa: E402
 from platforms.http import HAS_CURL_CFFI  # noqa: E402
+from ui import account  # noqa: E402
 from ui import avatar  # noqa: E402
 from ui import detail  # noqa: E402
 from ui import home  # noqa: E402
@@ -173,6 +174,10 @@ def refresh_from_github() -> None:
         _refresh_thread.start()
 
 
+#: The last view this session drew, with the UID it was read for.
+VIEW_KEY = "_tr_view_snapshot"
+
+
 def load_view():
     """Persisted config + state + settings, expiring anything past its end time.
 
@@ -182,11 +187,31 @@ def load_view():
     The four reads go out together (``load_many``). They have no order between
     them, and on Firestore each one is a network round trip — fetched one
     after another they were the largest part of what every click cost.
+
+    A run the wizard asked for skips the read entirely. Picking a city, a
+    film, a theatre, a format or an interval changes only this session's own
+    picks (``ui.flow.mark_ui_only``); nothing stored moved, so the page draws
+    the snapshot it drew a moment ago. The store's own read cache lapses
+    after five seconds, which is less than the time it takes to look at a
+    poster — so browsing films was paying for four network round trips per
+    click for records that could not have changed. The snapshot is keyed on
+    the UID it was read for and never survives a sign-out (the session is
+    wiped), and every write — starting, stopping, extending or deleting a
+    monitor, saving settings, choosing an avatar — goes through a run that
+    was never marked, so it is read fresh exactly as before. The rail's live
+    card is unaffected either way: it re-reads its own monitor's state on its
+    own thirty-second fragment.
     """
+    if flow.take_ui_only():
+        snapshot = st.session_state.get(VIEW_KEY)
+        if isinstance(snapshot, tuple) and snapshot[0] == auth_session.current_uid():
+            return snapshot[1]
     refresh_from_github()
     data = state_store.load_many("monitors", "state", "history", "settings")
     monitors, _ = expire_due_monitors(data["monitors"], mirror=mirrored())
-    return monitors, data["state"], data["history"], data["settings"]
+    view = (monitors, data["state"], data["history"], data["settings"])
+    st.session_state[VIEW_KEY] = (auth_session.current_uid(), view)
+    return view
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -307,23 +332,43 @@ def account_bar(settings: dict | None = None) -> None:
     that opens a small menu with Change avatar, Account settings, Delete
     account and Sign out. It is part of the TicketRadar page, not the
     sidebar and not Streamlit's toolbar. The face on the chip is the
-    avatar chosen in ``settings`` (``ui.avatar``), else the initial."""
+    avatar chosen in ``settings`` (``ui.avatar``), else the initial.
+
+    Two things vary, and both from the same fact — Firebase's ``admin``
+    claim on this session's account record (``ui.account.is_admin``), which
+    lives in server-side session state and which no page can set. The admin
+    is *named* Admin, so the account is recognisable at a glance whatever
+    display name it carries; and the admin alone is offered Switch account.
+    An ordinary member sees Change avatar, Account settings, Sign out and
+    Delete account — the menu it has always had. The label changes nothing
+    about authorization: every gate still asks the claim itself.
+    """
     user = auth_session.current_user()
     if user is None:
         return
     settings = settings or {}
+    admin = account.is_admin(user)
+    name = account.display_name(user, settings)
     with st.container(key="tracct_top"):
         C.html(
             '<div class="tr-acct-chip">'
             f'{avatar.mark(user, settings)}'
-            f'<div class="n">{C.e(user.first_name)}</div>'
-            f'<div class="chev">{C.icon("chevron", 14, "currentColor", "2")}</div></div>'
+            f'<div class="n">{C.e(account.chip_label(user, settings))}</div>'
+            + ('<span class="tr-admin-tag" title="This is the admin account">ADMIN</span>'
+               if admin else '')
+            + f'<div class="chev">{C.icon("chevron", 14, "currentColor", "2")}</div></div>'
         )
         with st.popover("Account", key="acct_menu"):
+            # The admin's own name still has a place — under the word that
+            # identifies the account, never instead of it.
+            sub = (f'<div class="who">{C.e(name)}</div>'
+                   if admin and name.lower() != account.ADMIN_LABEL.lower() else '')
             C.html(
                 '<div class="tr-acct-menu">'
                 f'{avatar.mark(user, settings, cls="av big")}'
-                f'<div><div class="n">{C.e(user.label)}</div>'
+                f'<div><div class="n">{C.e(account.ADMIN_LABEL if admin else name)}'
+                + ('<span class="tr-admin-tag">ADMIN</span>' if admin else '')
+                + f'</div>{sub}'
                 f'<div class="m">{C.e(user.email)}</div></div></div>'
             )
             st.button("Change avatar", key="acct_avatar", use_container_width=True,
@@ -331,12 +376,21 @@ def account_bar(settings: dict | None = None) -> None:
                       help="Pick the character that stands for you")
             st.button("Account settings", key="acct_settings", use_container_width=True,
                       icon=":material/manage_accounts:", on_click=open_account_settings,
-                      help="Change the email your alerts go to")
+                      help="Change your display name and where alerts go")
+            if admin:
+                # Admin only. Not a shortcut past Firebase: it signs this
+                # account out and opens the login page with an address
+                # filled in — the next account proves itself as always.
+                st.button("Switch account", key="acct_switch", use_container_width=True,
+                          icon=":material/switch_account:",
+                          on_click=account.open_switcher, args=(user, settings),
+                          kwargs={"mirror": mirrored()},
+                          help="Sign out and sign in as one of your other accounts")
             if st.button("Sign out", key="auth_signout", use_container_width=True, icon=":material/logout:",
                          help="Sign out of TicketRadar in this browser"):
                 auth_session.sign_out()
                 st.rerun()
-            # Destructive, so it is set apart from the two ordinary actions.
+            # Destructive, so it is set apart from the ordinary actions.
             C.html('<div class="tr-acct-sep"></div>')
             st.button("Delete account", key="acct_delete", use_container_width=True,
                       icon=":material/delete_forever:", on_click=ask_delete_account,
@@ -934,6 +988,11 @@ def page_settings(settings) -> None:
 
     left, right = st.columns(2, gap="large")
 
+    user = auth_session.current_user()
+    if user is not None:
+        with left:
+            account.settings_card(user, settings, mirror=mirrored(), notify=flash)
+
     with left, st.container(border=True, key="trcard_notify"):
         C.step_header("mail", "Notifications", "The address every alert is sent to.")
         C.html('<div class="tr-field-label">Notification email</div>')
@@ -1022,6 +1081,7 @@ def main() -> None:
         page = sidebar(sum(1 for m in monitors if m.is_running()))
         account_bar(settings)
         avatar.picker(user, settings, mirror=mirrored(), notify=flash)
+        account.dialog(user, settings, mirror=mirrored())
         delete_account_panel()
 
         # Navigation lands at the top of the new page — the hero, on Home.

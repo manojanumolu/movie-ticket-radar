@@ -311,6 +311,15 @@ __RAIL_RIG__
   font-family:var(--tr-mono); font-size:18px; color:#fff; background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
 .tr-acct-menu .n { font-size:13.5px; font-weight:700; color:var(--tr-text); overflow-wrap:anywhere; }
 .tr-acct-menu .m { font-size:11.5px; color:var(--tr-text-3); overflow-wrap:anywhere; margin-top:2px; }
+.tr-acct-menu .who { font-size:12px; color:var(--tr-text-2); overflow-wrap:anywhere; margin-top:3px; }
+/* the admin account, said in the design's own voice: the brand's red, the
+   mono face the rest of the UI uses for facts. It is a label — every gate
+   still asks Firebase's own claim. */
+.tr-admin-tag { display:inline-flex; align-items:center; margin-left:7px; padding:2px 6px 1px; border-radius:5px;
+  font-family:var(--tr-mono); font-size:9px; font-weight:600; letter-spacing:.18em; line-height:1.5; white-space:nowrap;
+  color:#FFD2DB; background:linear-gradient(180deg,rgba(255,51,85,.34),rgba(255,51,85,.16));
+  border:1px solid rgba(255,107,133,.55); box-shadow:0 4px 12px -8px rgba(255,51,85,.9); }
+.tr-acct-chip .tr-admin-tag { margin-left:0; margin-right:2px; flex:none; }
 /* the destructive action is set apart from the ordinary ones: a quiet row in
    the same shape as the others, red only in its text, louder only on hover */
 .tr-acct-sep { height:1px; background:var(--tr-border); margin:6px 4px 4px; }
@@ -1353,6 +1362,9 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
      transparent toolbar can never intercept a tap; a z-index keeps it on top. */
   [class*="st-key-tracct_top"] { margin: 0 0 10px auto; position: relative; z-index: 200; }
   .tr-acct-chip .n { max-width: 110px; font-size: 12.5px; }
+  /* the admin tag keeps its shape at 390px; the chip's name gives the room */
+  .tr-acct-chip .tr-admin-tag { font-size: 8.5px; letter-spacing: .14em; padding: 2px 5px 1px; }
+  .tr-acct-chip:has(.tr-admin-tag) .n { max-width: 76px; }
 
   /* hero: responsive type, the mark becomes one quiet line under the copy */
   .tr-hero { padding: 22px 18px 18px; border-radius: 18px; margin-bottom: 14px; }

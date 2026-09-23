@@ -61,6 +61,11 @@ def require_user() -> AuthUser:
     # (or prefill the sign-in form). It has to run before we decide who is
     # signed in, and before either page is drawn.
     login.handle_verified_return()
+    # An admin asked to continue as another account: that sign-out already
+    # happened, and one address survived it. Put it in the sign-in box —
+    # before any widget exists, which is the only moment a widget key can
+    # still be set. It authenticates nobody.
+    login.apply_switch_prefill()
 
     # The two fixed slots, always here and always in this order.
     chrome = st.container(key="tr_chrome")
@@ -146,25 +151,28 @@ def _restoring() -> None:
     On Community Cloud this is the first thing a returning person sees, for
     as long as one component round trip and one more script run take. It
     used to draw nothing at all — a dark page with the bridge's placeholder
-    bar, measured at a couple of seconds on the deployed app — on the
-    reasoning that anything drawn here would be a flash and a layout shift.
-    That is true of the login page, which stays out of here: showing a
-    sign-in form to somebody who is already signed in is the bug this path
-    exists to avoid. It is not true of the brand. The sidebar's logo is the
-    same element the app draws first in the same place, so it does not
-    move; and one status line in the page slot says honestly what is
-    happening and is replaced by the app on the next run.
+    bar, measured at a couple of seconds on the deployed app — and then a
+    logo and one grey status line, which still read like something had
+    stalled. ``ui.restoring`` draws the wait on purpose instead: the app's
+    own radar, sweeping, and two lines that settle on what is actually
+    happening.
 
-    No account data, no navigation, nothing private: the logo is on the
-    login page too. ``st.markdown`` runs a fragment through a Markdown
-    parser first and an indented line becomes a code block —
-    ``ui.components.html`` cleans that, which is why it is used here.
+    It is a cover, never a delay. Nothing here waits, polls, sleeps or asks
+    for a rerun: it is one CSS animation on one block of markup, and the run
+    that finishes the restore replaces it with the app wherever the sweep
+    happens to be. The login page still stays out of this path — showing a
+    sign-in form to somebody already signed in is the bug it exists to
+    avoid — and there is nothing private on screen: the radar and the brand
+    are both on the login page.
+
+    ``st.markdown`` runs a fragment through a Markdown parser first and an
+    indented line becomes a code block, so the markup is built in
+    ``ui.restoring`` and rendered through ``ui.components.html``, which
+    cleans it.
     """
-    from ui import components as C
+    from ui import restoring
 
-    with st.sidebar:
-        C.logo()
-    C.status_line("wait", "Restoring your session…")
+    restoring.screen()
 
 
 def _diag_panel() -> None:

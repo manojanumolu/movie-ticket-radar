@@ -88,6 +88,8 @@ LABELS = {
     "iron_man": "Iron Man",
     "kung_fu_panda": "Kung Fu Panda",
     "dc": "DC",
+    "bookmyshow": "BookMyShow",
+    "pvr": "PVR Cinemas",
 }
 
 

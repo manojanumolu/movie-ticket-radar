@@ -27,6 +27,7 @@ from typing import Callable
 import streamlit as st
 
 from monitor.state import save_settings
+from ui import account
 from ui import assets_registry as art
 from ui import components as C
 from ui import flow
@@ -68,8 +69,12 @@ def current_key(settings: dict) -> str:
     return asset.key if asset else ""
 
 
-def _initial(user) -> str:
-    return (getattr(user, "first_name", "") or "")[:1].upper() or "·"
+def _initial(user, settings: dict | None = None) -> str:
+    """The letter behind the face: the first of the TicketRadar name the
+    person chose (``ui.account``), which is Firebase's when they have not
+    chosen one. Same letter the chip has always shown, from the name that
+    is now theirs to change."""
+    return (account.first_name(user, settings) or "")[:1].upper() or "·"
 
 
 def mark(user, settings: dict, *, cls: str = "av") -> str:
@@ -77,7 +82,7 @@ def mark(user, settings: dict, *, cls: str = "av") -> str:
     the very markup the chip has always drawn for the initial."""
     asset = chosen(settings)
     if asset is None:
-        return f'<div class="{cls}">{C.e(_initial(user))}</div>'
+        return f'<div class="{cls}">{C.e(_initial(user, settings))}</div>'
     return (f'<div class="{cls} has-avatar"><img src="{C.e(art.static_url(asset))}" '
             f'alt="{C.e(asset.label)}" loading="lazy" decoding="async"></div>')
 
@@ -115,9 +120,9 @@ def save(settings: dict, key: str, *, mirror: bool) -> bool:
 
 
 # ── the picker ────────────────────────────────────────────────────────────
-def _tile(asset: art.Asset | None, user, selected: bool) -> str:
+def _tile(asset: art.Asset | None, user, selected: bool, settings: dict | None = None) -> str:
     if asset is None:
-        face = f'<span class="initial">{C.e(_initial(user))}</span>'
+        face = f'<span class="initial">{C.e(_initial(user, settings))}</span>'
         name = "Your initial"
     else:
         face = (f'<img src="{C.e(art.static_url(asset))}" alt="" loading="lazy" decoding="async">')
@@ -127,29 +132,29 @@ def _tile(asset: art.Asset | None, user, selected: bool) -> str:
             f'<div class="ring">{face}{check}</div><div class="n">{C.e(name)}</div></div>')
 
 
-def _preview(user, draft: str) -> str:
+def _preview(user, draft: str, settings: dict | None = None) -> str:
     asset = art.resolve_avatar(draft)
     face = (f'<img src="{C.e(art.static_url(asset))}" alt="" decoding="async">' if asset
-            else f'<span class="initial">{C.e(_initial(user))}</span>')
+            else f'<span class="initial">{C.e(_initial(user, settings))}</span>')
     what = f"{asset.label} · {art.label_for(asset.category)}" if asset else "Your initial — no character yet"
     return f"""<div class="tr-avp-head">
       <div class="big">{face}</div>
       <div><div class="eyebrow">YOUR TICKETRADAR AVATAR</div>
-      <div class="who">{C.e(getattr(user, "first_name", "") or "You")}</div>
+      <div class="who">{C.e(account.first_name(user, settings) or "You")}</div>
       <div class="what">{C.e(what)}</div></div>
     </div>"""
 
 
 def _body(user, settings: dict, *, mirror: bool, notify: Callable[[str, str], None] | None) -> None:
     draft = st.session_state.get(DRAFT_KEY, current_key(settings))
-    C.html(CSS + _preview(user, draft))
+    C.html(CSS + _preview(user, draft, settings))
     C.html('<div class="tr-avp-title">Choose your avatar</div>')
 
     # The way back to the letter, first, in the same grid as the characters.
     C.html('<div class="tr-avp-cat"><span>Default</span><em>The first letter of your name</em></div>')
     for column, _none in flow.grid([None], PER_ROW, "av_default"):
         with column:
-            flow.pick("av_initial", "Your initial", lambda: C.html(_tile(None, user, draft == "")),
+            flow.pick("av_initial", "Your initial", lambda: C.html(_tile(None, user, draft == "", settings)),
                       on_click=_choose, args=("",))
 
     for category, assets in art.avatars_by_category().items():      # empty folders never appear
@@ -158,7 +163,7 @@ def _body(user, settings: dict, *, mirror: bool, notify: Callable[[str, str], No
         for column, asset in flow.grid(assets, PER_ROW, f"av_{category}"):
             with column:
                 flow.pick(f"av_{asset.key}", asset.label,
-                          lambda a=asset: C.html(_tile(a, user, draft == a.key)),
+                          lambda a=asset: C.html(_tile(a, user, draft == a.key, settings)),
                           on_click=_choose, args=(asset.key,))
 
     with st.container(key="trpair_avatar_foot"):

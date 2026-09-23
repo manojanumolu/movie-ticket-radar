@@ -90,6 +90,18 @@ WIDGET_KEYS = ("notify_email", "notify_email_draft", "until_date", "until_time",
 #: theatre search boxes) — the exact keys depend on what was picked.
 WIDGET_PREFIXES = ("fmt_", "theatre_query_")
 RESET_FLAG = "wizard_reset_pending"
+#: Set by a wizard callback whose entire effect is a change to *this
+#: session's own* picks — the city, the film, a theatre, a format, an
+#: interval, the step. Nothing stored moved, so the run that follows needs
+#: no fresh read of the account's monitors, state, history or settings: the
+#: page reuses the snapshot it drew a moment ago (``app.load_view``). On
+#: Firestore that read is a network round trip, and the read cache lapses
+#: after five seconds — long enough that anybody deliberating over a poster
+#: paid for four of them on every click. Consumed once, by the run it was
+#: set for; anything that writes (starting, stopping, extending or deleting
+#: a monitor, saving settings or an avatar) never sets it and is read fresh
+#: exactly as before.
+UI_ONLY_KEY = "wizard_ui_only_run"
 
 
 def boot() -> None:
@@ -134,6 +146,17 @@ def request_reset() -> None:
     st.session_state[RESET_FLAG] = True
 
 
+def mark_ui_only() -> None:
+    """"The next run changes nothing stored." Set by the wizard's own
+    callbacks; see :data:`UI_ONLY_KEY`."""
+    st.session_state[UI_ONLY_KEY] = True
+
+
+def take_ui_only() -> bool:
+    """Whether this run is one of those, consuming the mark."""
+    return bool(st.session_state.pop(UI_ONLY_KEY, False))
+
+
 def goto(step: int, *, rerun: bool = True) -> None:
     """Move the wizard to ``step``.
 
@@ -143,6 +166,7 @@ def goto(step: int, *, rerun: bool = True) -> None:
     """
     st.session_state["step"] = step
     st.session_state["furthest"] = max(st.session_state.get("furthest", 1), step)
+    mark_ui_only()
     if rerun:
         st.rerun()
 
@@ -249,6 +273,7 @@ def back_button(step: int) -> None:
 # 1 · Location
 # ──────────────────────────────────────────────────────────────────────────
 def _choose_location(slug: str) -> None:
+    mark_ui_only()
     if slug != st.session_state.get("location", ""):
         st.session_state["location"] = slug
         reset_from(1)
@@ -287,6 +312,7 @@ def _select_movie(movie_id: str) -> None:
     run that follows the callback drawing the theatre step; called from the
     script body it would set ``step`` after the page had already chosen
     which step to draw, and the click would look like it did nothing."""
+    mark_ui_only()
     if movie_id != st.session_state.get("movie_id", ""):
         st.session_state["movie_id"] = movie_id
         reset_from(2)
@@ -308,6 +334,7 @@ def _pick_from_movie_search() -> None:
 
 
 def _set_show_all_movies(value: bool) -> None:
+    mark_ui_only()
     st.session_state["show_all_movies"] = value
 
 
@@ -413,6 +440,7 @@ def _toggle_theatre(code: str, listed: list[Venue]) -> None:
     knows from other films but that hasn't listed this movie yet), in the
     order they were picked.
     """
+    mark_ui_only()
     chosen = list(st.session_state.get("theatres", []))
     if code in chosen:
         chosen.remove(code)
@@ -428,6 +456,7 @@ def _toggle_theatre(code: str, listed: list[Venue]) -> None:
 def _select_all(venues: list[Venue]) -> None:
     """Every theatre listed for the film — or none, when they all already
     are; release-watch picks stay as they are."""
+    mark_ui_only()
     chosen = list(st.session_state.get("theatres", []))
     every = [v.code for v in venues]
     extra = [c for c in chosen if c not in every]
@@ -445,6 +474,7 @@ def _pick_from_search(nonce: int, venues: list[Venue]) -> None:
 
 
 def _set_show_all(value: bool) -> None:
+    mark_ui_only()
     st.session_state["show_all_theatres"] = value
 
 
@@ -770,6 +800,7 @@ DATE_MODES = [("any", "Any date", "Every date on sale"),
 
 def _set(key: str, value) -> None:
     """A tile that sets one value — as a callback, so one run draws it."""
+    mark_ui_only()
     st.session_state[key] = value
 
 

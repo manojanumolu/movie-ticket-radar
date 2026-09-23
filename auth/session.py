@@ -50,6 +50,11 @@ GOOGLE_SIGNAL = "ticketradar-google-auth-complete"
 POPUP_DONE_KEY = "auth_google_popup_done"
 #: How many completion signals this session has already acted on.
 SIGNALS_SEEN_KEY = "auth_google_signals_seen"
+#: One address, kept across a sign-out so the login page can open with it
+#: already typed in (the admin's account switcher). An address is not a
+#: credential: it proves nothing, unlocks nothing, and the next person still
+#: signs in through Firebase. Nothing else about the previous session lives.
+SWITCH_EMAIL_KEY = "auth_switch_email"
 SESSION_STARTED_KEY = "auth_session_started"
 SESSION_EXPIRES_KEY = "auth_session_expires"
 # This is an absolute deadline, not a sliding refresh-token lifetime.
@@ -68,7 +73,9 @@ RESET_KEEPS = frozenset({USER_KEY, "auth_just_signed_in", "auth_restore_tried",
                          # right after sign_in_user asks for the reset, and the
                          # count of signals already acted on must outlive a
                          # sign-out, or a stale signal could re-open the door.
-                         POPUP_DONE_KEY, SIGNALS_SEEN_KEY})
+                         POPUP_DONE_KEY, SIGNALS_SEEN_KEY,
+                         # …and the address an account switch is heading for.
+                         SWITCH_EMAIL_KEY})
 RESET_FLAG = "auth_reset_pending"
 
 
@@ -238,6 +245,41 @@ def sign_out(reason: str = "sign_out") -> None:
     # A reload after signing out must not quietly sign back in from the
     # cookie this session was opened with.
     st.session_state["auth_restore_tried"] = True
+
+
+def update_display_name(name: str) -> AuthUser | None:
+    """Record a new display name on this session's user.
+
+    A label and nothing else: the UID, the tokens, the ``admin`` claim and
+    the seven-day deadline are untouched, so no authorization changes and
+    nothing has to be re-read. It exists so the account chip shows the new
+    name on the very run that saved it, without a sign-out or a reload.
+    """
+    user = current_user()
+    if user is None:
+        return None
+    fresh = replace(user, display_name=name)
+    st.session_state[USER_KEY] = fresh
+    return fresh
+
+
+def request_switch(email: str) -> None:
+    """Leave this account and offer ``email`` on the login page.
+
+    This *is* a sign-out — the Firebase session is dropped, the cookie is
+    cleared, and :func:`request_reset` takes the rest of the session with
+    it. What survives is one address, which authenticates nobody: the next
+    person signs in through Firebase exactly as they always would. No
+    password is kept, no token is kept, and no session is ever fabricated
+    for another account.
+    """
+    sign_out("account_switch")
+    st.session_state[SWITCH_EMAIL_KEY] = (email or "").strip().lower()
+
+
+def take_switch_email() -> str:
+    """The address a switch is heading for, once. "" when there is none."""
+    return str(st.session_state.pop(SWITCH_EMAIL_KEY, "") or "")
 
 
 def delete_account() -> dict[str, int]:
@@ -833,4 +875,8 @@ __all__ = [
     "set_pending",
     "sign_in_user",
     "sign_out",
+    "SWITCH_EMAIL_KEY",
+    "request_switch",
+    "take_switch_email",
+    "update_display_name",
 ]
