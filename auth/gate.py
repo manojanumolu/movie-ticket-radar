@@ -61,11 +61,6 @@ def require_user() -> AuthUser:
     # (or prefill the sign-in form). It has to run before we decide who is
     # signed in, and before either page is drawn.
     login.handle_verified_return()
-    # An admin asked to continue as another account: that sign-out already
-    # happened, and one address survived it. Put it in the sign-in box —
-    # before any widget exists, which is the only moment a widget key can
-    # still be set. It authenticates nobody.
-    login.apply_switch_prefill()
 
     # The two fixed slots, always here and always in this order.
     chrome = st.container(key="tr_chrome")

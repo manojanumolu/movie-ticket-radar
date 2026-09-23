@@ -740,7 +740,7 @@ def test_the_uid_is_available_to_the_application():
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Step 6B — email verification, account switching, the sidebar
+# Step 6B — email verification and the sidebar
 # ──────────────────────────────────────────────────────────────────────────
 def sign_in_as(app, email: str, password: str):
     app.text_input(key="auth_email").set_value(email)

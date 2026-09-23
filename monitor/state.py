@@ -890,10 +890,10 @@ def _assert_interval_allowed(monitor: Monitor) -> None:
     member from manufacturing a five-minute monitor through widget or API
     input.
     """
-    if monitor.interval_minutes != 5 or _scope_provider is None:
+    if monitor.interval_minutes != 5:
         return
-    scope = _scope_provider()
-    if scope is not None and not scope.admin:
+    scope = _scope_provider() if _scope_provider is not None else None
+    if scope is None or not scope.admin:
         raise ValueError("Only the admin account may use a five-minute interval")
 
 

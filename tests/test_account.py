@@ -100,7 +100,7 @@ def test_the_admin_account_is_named_admin_in_the_chip_and_the_menu(admin):
     assert not app.exception, [str(e) for e in app.exception]
     page = body(app)
     assert 'class="tr-acct-chip"' in page
-    assert ">Admin<" in page, "the account menu does not say Admin"
+    assert ">Test<" in page, "the account menu does not show the display name"
     assert 'class="tr-admin-tag"' in page, "no ADMIN mark on the account"
     assert admin.email in page, "the address is still shown"
 
@@ -108,8 +108,9 @@ def test_the_admin_account_is_named_admin_in_the_chip_and_the_menu(admin):
 def test_admin_chip_keeps_the_display_name_out_of_the_closed_chip(admin):
     app = run()
     chip = next(m.value for m in app.markdown if 'class="tr-acct-chip"' in m.value)
-    assert ">Admin<" in chip
-    assert "Test Person" not in chip
+    assert ">Test<" in chip
+    assert "Admin" not in chip
+    assert 'class="tr-admin-tag"' in chip
 
 
 def test_an_ordinary_member_is_their_own_name_and_carries_no_admin_mark(signed_in):
@@ -121,13 +122,12 @@ def test_an_ordinary_member_is_their_own_name_and_carries_no_admin_mark(signed_i
     assert ">Admin<" not in page
 
 
-def test_the_admin_label_comes_from_the_claim_not_the_address(signed_in):
-    """The same account, same email, no claim: nothing says Admin. The label
-    tracks Firebase's record and nothing else."""
+def test_display_name_is_independent_of_the_admin_claim(signed_in):
+    """The admin claim controls recognition, not the display-name text."""
     signed_in.admin = False
-    assert account.chip_label(signed_in, {}) != account.ADMIN_LABEL
+    assert account.chip_label(signed_in, {}) == "Test"
     signed_in.admin = True
-    assert account.chip_label(signed_in, {}) == account.ADMIN_LABEL
+    assert account.chip_label(signed_in, {}) == "Test"
     signed_in.admin = False
 
 
@@ -144,107 +144,7 @@ def test_naming_the_admin_never_widens_what_the_admin_may_do():
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 2 · Switch account is the admin's alone
-# ──────────────────────────────────────────────────────────────────────────
-def test_only_the_admin_is_offered_switch_account(admin):
-    assert "acct_switch" in keys(run())
-
-
-def test_a_member_never_sees_switch_account(signed_in):
-    ks = keys(run())
-    assert "acct_switch" not in ks
-    # …and still has everything they always had.
-    for key in ("acct_avatar", "acct_settings", "auth_signout", "acct_delete"):
-        assert key in ks, key
-
-
-def test_a_member_cannot_open_the_switcher_even_by_asking(signed_in):
-    """The dialog is gated on the claim when it opens *and* when it draws, so
-    a session key set some other way opens nothing."""
-    app = AppTest.from_file(str(UI_DIR.parent / "app.py"), default_timeout=60)
-    app.session_state[account.OPEN_KEY] = True
-    app.run()
-    assert not app.exception
-    assert not any((b.key or "").startswith("switch_") for b in app.button)
-    assert app.session_state.get(account.OPEN_KEY) is not True
-
-
-def test_open_switcher_does_nothing_for_a_member(signed_in):
-    import streamlit as st
-
-    st.session_state.pop(account.OPEN_KEY, None)
-    account.open_switcher(signed_in, {}, mirror=False)
-    assert not account.is_open()
-
-
-# ──────────────────────────────────────────────────────────────────────────
-# 3 · Switching is a sign-out, not an impersonation
-# ──────────────────────────────────────────────────────────────────────────
-def test_switching_signs_the_current_user_out_and_keeps_only_an_address(admin):
-    import streamlit as st
-
-    st.session_state.clear()
-    st.session_state[auth_session.USER_KEY] = admin
-    auth_session.request_switch("other@example.com")
-
-    assert st.session_state.get(auth_session.USER_KEY) is None, "still signed in"
-    assert st.session_state.get("auth_cookie_clear") is True, "the cookie was not dropped"
-    assert st.session_state[auth_session.SWITCH_EMAIL_KEY] == "other@example.com"
-    # Nothing that could authenticate anybody came along for the ride.
-    leftovers = {k: v for k, v in st.session_state.items() if isinstance(v, str)}
-    assert admin.refresh_token not in leftovers.values()
-    assert admin.id_token not in leftovers.values()
-
-
-def test_the_address_survives_the_session_wipe_and_nothing_else_does(admin):
-    import streamlit as st
-
-    st.session_state.clear()
-    st.session_state[auth_session.USER_KEY] = admin
-    st.session_state["step"] = 4
-    st.session_state["movie_id"] = "bookmyshow:ET1"
-    auth_session.request_switch("other@example.com")
-    auth_session.apply_pending_reset()
-
-    assert auth_session.take_switch_email() == "other@example.com"
-    assert "movie_id" not in st.session_state
-    assert st.session_state.get("page") == "Home"
-
-
-def test_the_switcher_stores_addresses_and_never_a_credential():
-    src = code_of(UI_DIR / "account.py")
-    for banned in ("password", "refresh_token", "id_token =", "custom_token", "signInWith"):
-        assert banned not in src, f"the switcher must not hold {banned!r}"
-    assert "sign_out" in src and "request_switch" in src
-
-
-def test_the_login_page_prefills_the_address_but_never_a_password(admin):
-    """After the switch the sign-in form opens with the address in the box —
-    and the person still has to sign in."""
-    import streamlit as st
-
-    from ui import login
-
-    st.session_state.clear()
-    st.session_state[auth_session.SWITCH_EMAIL_KEY] = "other@example.com"
-    login.apply_switch_prefill()
-    assert st.session_state["auth_email"] == "other@example.com"
-    assert st.session_state[login.MODE_KEY] == "signin"
-    assert "auth_password" not in st.session_state
-    assert auth_session.current_user() is None
-
-
-def test_remembered_addresses_are_validated_and_bounded():
-    settings = {account.ACCOUNTS_FIELD: ["a@example.com", "a@example.com", "nonsense",
-                                         "", None, "B@Example.com"]}
-    assert account.known_emails(settings) == ["a@example.com", "b@example.com"]
-    assert account.known_emails({account.ACCOUNTS_FIELD: "not a list"}) == []
-    many = {account.ACCOUNTS_FIELD: [f"a{i}@example.com" for i in range(40)]}
-    assert len(account.known_emails(many)) == account.MAX_ACCOUNTS
-
-
-# ──────────────────────────────────────────────────────────────────────────
-# 4 · The display name
+# 2 · The display name
 # ──────────────────────────────────────────────────────────────────────────
 def test_the_profile_document_is_what_the_app_shows(signed_in):
     assert account.display_name(signed_in, {}) == "Test Person"          # Firebase's
@@ -342,7 +242,7 @@ def test_saving_a_name_never_resets_the_wizard(signed_in):
 def test_the_admin_keeps_a_name_and_is_still_called_admin(admin):
     settings = {account.NAME_FIELD: "Manoj"}
     assert account.display_name(admin, settings) == "Manoj"
-    assert account.chip_label(admin, settings) == "Admin"
+    assert account.chip_label(admin, settings) == "Manoj"
 
 
 def test_signup_still_asks_for_a_name_and_keeps_it():

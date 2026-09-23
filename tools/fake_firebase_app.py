@@ -6,7 +6,7 @@
 Everything is the real ``app.py`` — the same gate, session cookie, login page,
 wizard and pages — except that ``auth.firebase._post`` is the suite's
 :class:`tests.test_auth.FakeFirebase`, so a browser can sign in, sign out,
-switch accounts and reload without a Firebase project or a network. The data
+and reload without a Firebase project or a network. The data
 directory is a throwaway copy so nothing here touches ``data/``.
 
 Accounts (all verified; ``newbie`` is not):

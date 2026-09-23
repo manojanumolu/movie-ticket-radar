@@ -1,4 +1,4 @@
-"""The name TicketRadar calls you by — and the admin's account switcher.
+"""The name TicketRadar calls you by and the admin recognition state.
 
 Two small things live here, and both are *labels*, never authority.
 
@@ -26,11 +26,6 @@ what the menu *says* and which rows it draws; every authorization decision
 (the category watch, the monitor ceiling, Firestore's own rules) still asks
 the claim itself, exactly as before.
 
-**Switching accounts** is a sign-out and a normal sign-in, nothing else. The
-switcher remembers *addresses*, on the admin's own profile document, and an
-address is not a credential: choosing one signs the current user out and
-opens the login page with the box filled in. No credential is stored, no
-token is kept, no session is fabricated, and no account is ever impersonated.
 """
 
 from __future__ import annotations
@@ -49,21 +44,9 @@ from ui import components as C
 #: knows" — no migration, and an account that never opens Account settings
 #: keeps looking exactly as it did.
 NAME_FIELD = "display_name"
-#: Addresses the admin's switcher offers, on the *admin's own* document.
-#: Addresses only: never a credential, never a token, never another account's
-#: data. Nothing reads this but the menu that wrote it.
-ACCOUNTS_FIELD = "known_emails"
-
 #: Long enough for a real name, short enough that the chip never becomes a
 #: paragraph. The chip and the menu both ellipsise beyond their own width.
 MAX_NAME = 40
-MAX_ACCOUNTS = 8
-
-#: What the account menu calls the admin account, whatever name it carries.
-ADMIN_LABEL = "Admin"
-
-OPEN_KEY = "acct_switch_open"
-ADD_KEY = "acct_switch_add"
 NAME_INPUT = "settings_display_name"
 
 
@@ -118,9 +101,8 @@ def is_admin(user) -> bool:
 
 
 def chip_label(user, settings: dict | None = None) -> str:
-    """The name on the chip: the admin is the admin, everybody else is
-    themselves."""
-    return ADMIN_LABEL if is_admin(user) else first_name(user, settings)
+    """The actual TicketRadar display name shown on the account chip."""
+    return first_name(user, settings)
 
 
 def save_display_name(user, settings: dict, raw: object, *, mirror: bool) -> str:
@@ -184,171 +166,17 @@ def _save_name(user, settings: dict, mirror: bool, notify) -> None:
     notify("success", f"You're {clean_name(raw)} across TicketRadar now.")
 
 
-# ──────────────────────────────────────────────────────────────────────────
-# Switching accounts — admin only
-# ──────────────────────────────────────────────────────────────────────────
-def known_emails(settings: dict | None) -> list[str]:
-    """The addresses the switcher offers, as stored. Strings only, deduped,
-    and never more than :data:`MAX_ACCOUNTS`."""
-    raw = settings.get(ACCOUNTS_FIELD, []) if isinstance(settings, dict) else []
-    if not isinstance(raw, list):
-        return []
-    out: list[str] = []
-    for value in raw:
-        email = str(value or "").strip().lower()
-        if email and firebase.valid_email(email) and email not in out:
-            out.append(email)
-    return out[:MAX_ACCOUNTS]
-
-
-def open_switcher(user, settings: dict, *, mirror: bool) -> None:
-    """An ``on_click``: open the switcher, remembering the account it was
-    opened from so the way back is always on the list. Admin only — and
-    checked again when the dialog draws, and again when it acts."""
-    if not is_admin(user):
-        return
-    st.session_state[OPEN_KEY] = True
-    email = str(getattr(user, "email", "") or "").strip().lower()
-    known = known_emails(settings)
-    if email and email not in known and len(known) < MAX_ACCOUNTS:
-        _remember(settings, known + [email], mirror=mirror)
-
-
-def is_open() -> bool:
-    return bool(st.session_state.get(OPEN_KEY))
-
-
-def _close() -> None:
-    st.session_state.pop(OPEN_KEY, None)
-
-
-def _remember(settings: dict, emails: list[str], *, mirror: bool) -> None:
-    save_settings({**settings, ACCOUNTS_FIELD: emails[:MAX_ACCOUNTS]}, mirror=mirror)
-    settings[ACCOUNTS_FIELD] = emails[:MAX_ACCOUNTS]      # the page already in hand
-
-
-def _switch_to(email: str) -> None:
-    """Leave this account and open the login page with ``email`` in its box.
-
-    This is a sign-out. The Firebase session is dropped, the cookie is
-    cleared and every trace of the previous person goes with it; what
-    survives is one address, which proves nothing and unlocks nothing. The
-    next person signs in through Firebase exactly as they always would.
-    An empty address is an ordinary sign-out with nothing carried over.
-    """
-    if email:
-        auth_session.request_switch(email)
-    else:
-        auth_session.sign_out("account_switch")
-
-
-def dialog(user, settings: dict, *, mirror: bool) -> None:
-    """Draw the switcher if it is open, and only for the admin."""
-    if not is_open():
-        return
-    if not is_admin(user):
-        _close()
-        return
-
-    @st.dialog("Switch account")
-    def _dialog() -> None:
-        _body(user, settings, mirror=mirror)
-
-    _dialog()
-
-
-def _body(user, settings: dict, *, mirror: bool) -> None:
-    current = str(getattr(user, "email", "") or "").strip().lower()
-    C.html(SWITCH_CSS)
-    C.html(
-        '<div class="tr-switch-head">'
-        f'<div class="t">Signed in as <b>{C.e(current)}</b></div>'
-        '<div class="s">Pick another TicketRadar account. This signs you out here '
-        'and opens the sign-in page with that address filled in — you sign in with '
-        'its own sign-in, as always. No credential is ever stored.</div></div>'
-    )
-
-    others = [e for e in known_emails(settings) if e != current]
-    if others:
-        C.html('<div class="tr-switch-label">Your accounts</div>')
-        for email in others:
-            row, remove = st.columns([5, 1], gap="small", vertical_alignment="center")
-            with row:
-                if st.button(email, key=f"switch_to_{email}", use_container_width=True,
-                             icon=":material/switch_account:",
-                             help=f"Sign out and sign in as {email}"):
-                    _switch_to(email)
-                    _close()
-                    st.rerun()
-            with remove:
-                if st.button("", key=f"switch_forget_{email}", use_container_width=True,
-                             icon=":material/close:", help="Forget this address"):
-                    _remember(settings, [e for e in known_emails(settings) if e != email],
-                              mirror=mirror)
-                    st.rerun()
-    else:
-        C.html('<div class="tr-switch-empty">No other accounts remembered yet — '
-               'add one below.</div>')
-
-    C.html('<div class="tr-switch-label">Add an account</div>')
-    add = st.text_input("Add an account", key=ADD_KEY, placeholder="other@example.com",
-                        label_visibility="collapsed", autocomplete="off")
-    a, b = st.columns(2, gap="small")
-    if a.button("Remember", key="switch_remember", use_container_width=True,
-                icon=":material/bookmark_add:",
-                help="Keep this address on the list. It is an address, not a login."):
-        email = str(add or "").strip().lower()
-        if not firebase.valid_email(email):
-            C.html('<div class="tr-switch-bad">That doesn\'t look like an email address.</div>')
-        elif len(known_emails(settings)) >= MAX_ACCOUNTS:
-            C.html(f'<div class="tr-switch-bad">That\'s {MAX_ACCOUNTS} accounts — '
-                   'forget one first.</div>')
-        else:
-            _remember(settings, known_emails(settings) + [email], mirror=mirror)
-            st.session_state.pop(ADD_KEY, None)
-            st.rerun()
-    if b.button("Use another account", key="switch_other", use_container_width=True,
-                icon=":material/logout:", help="Sign out and sign in as somebody else"):
-        _switch_to("")
-        _close()
-        st.rerun()
-
-    if st.button("Cancel", key="switch_cancel", use_container_width=True):
-        _close()
-        st.rerun()
-
-
-SWITCH_CSS = """<style>
-.tr-switch-head .t { font-size:14px; font-weight:700; color:var(--tr-text); letter-spacing:-.01em; }
-.tr-switch-head .t b { color:#FF8CA0; font-weight:700; }
-.tr-switch-head .s { font-size:12.5px; color:var(--tr-text-3); margin-top:6px; line-height:1.55; }
-.tr-switch-label { font-family:var(--tr-mono); font-size:10px; letter-spacing:.26em; text-transform:uppercase;
-  color:var(--tr-text-3); margin:14px 0 2px; }
-.tr-switch-empty { font-size:12.5px; color:var(--tr-text-4); padding:6px 2px; }
-.tr-switch-bad { font-size:12.5px; color:#FF8A8A; margin-top:6px; }
-[class*="st-key-switch_to_"] button { justify-content:flex-start !important; }
-[class*="st-key-switch_forget_"] button { color:var(--tr-text-4) !important; }
-[class*="st-key-switch_cancel"] button { border-color:transparent !important; color:var(--tr-text-3) !important; }
-</style>"""
-
-
 __all__ = [
-    "ACCOUNTS_FIELD",
-    "ADMIN_LABEL",
     "MAX_NAME",
     "NAME_FIELD",
     "NAME_INPUT",
     "OPEN_KEY",
     "chip_label",
     "clean_name",
-    "dialog",
     "display_name",
     "first_name",
     "is_admin",
-    "is_open",
-    "known_emails",
     "name_problem",
-    "open_switcher",
     "save_display_name",
     "settings_card",
     "stored_name",

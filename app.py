@@ -337,8 +337,8 @@ def account_bar(settings: dict | None = None) -> None:
     Two things vary, and both from the same fact — Firebase's ``admin``
     claim on this session's account record (``ui.account.is_admin``), which
     lives in server-side session state and which no page can set. The admin
-    is *named* Admin, so the account is recognisable at a glance whatever
-    display name it carries; and the admin alone is offered Switch account.
+    keeps the same display-name hierarchy as every other account, with a
+    small green admin badge beside it.
     An ordinary member sees Change avatar, Account settings, Sign out and
     Delete account — the menu it has always had. The label changes nothing
     about authorization: every gate still asks the claim itself.
@@ -359,16 +359,12 @@ def account_bar(settings: dict | None = None) -> None:
             + f'<div class="chev">{C.icon("chevron", 14, "currentColor", "2")}</div></div>'
         )
         with st.popover("Account", key="acct_menu"):
-            # The admin's own name still has a place — under the word that
-            # identifies the account, never instead of it.
-            sub = (f'<div class="who">{C.e(name)}</div>'
-                   if admin and name.lower() != account.ADMIN_LABEL.lower() else '')
             C.html(
                 '<div class="tr-acct-menu">'
                 f'{avatar.mark(user, settings, cls="av big")}'
-                f'<div><div class="n">{C.e(account.ADMIN_LABEL if admin else name)}'
+                f'<div><div class="n">{C.e(name)}'
                 + ('<span class="tr-admin-tag">ADMIN</span>' if admin else '')
-                + f'</div>{sub}'
+                + f'</div>'
                 f'<div class="m">{C.e(user.email)}</div></div></div>'
             )
             st.button("Change avatar", key="acct_avatar", use_container_width=True,
@@ -377,15 +373,6 @@ def account_bar(settings: dict | None = None) -> None:
             st.button("Account settings", key="acct_settings", use_container_width=True,
                       icon=":material/manage_accounts:", on_click=open_account_settings,
                       help="Change your display name and where alerts go")
-            if admin:
-                # Admin only. Not a shortcut past Firebase: it signs this
-                # account out and opens the login page with an address
-                # filled in — the next account proves itself as always.
-                st.button("Switch account", key="acct_switch", use_container_width=True,
-                          icon=":material/switch_account:",
-                          on_click=account.open_switcher, args=(user, settings),
-                          kwargs={"mirror": mirrored()},
-                          help="Sign out and sign in as one of your other accounts")
             if st.button("Sign out", key="auth_signout", use_container_width=True, icon=":material/logout:",
                          help="Sign out of TicketRadar in this browser"):
                 auth_session.sign_out()
@@ -1082,7 +1069,6 @@ def main() -> None:
         page = sidebar(sum(1 for m in monitors if m.is_running()))
         account_bar(settings)
         avatar.picker(user, settings, mirror=mirrored(), notify=flash)
-        account.dialog(user, settings, mirror=mirrored())
         delete_account_panel()
 
         # Navigation lands at the top of the new page — the hero, on Home.
