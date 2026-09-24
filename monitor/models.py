@@ -292,7 +292,11 @@ class MovieRef:
 
     @property
     def variant_codes(self) -> tuple[str, ...]:
-        return tuple(code for code, _ in self.variants if code != self.event_code)
+        """Each sibling event once, first-seen order. One code can be stored
+        under two labels ("Ms - Infinity Vision" on the monitor, "Infinity
+        Vision 2D" from the catalogue — ``checker.with_current_variants``
+        keeps both pairs), and it is still one event to read."""
+        return tuple(dict.fromkeys(code for code, _ in self.variants if code != self.event_code))
 
 
 @dataclass
