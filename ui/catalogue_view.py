@@ -27,6 +27,7 @@ from config import store
 from config.theatre_capabilities import premium_formats
 from monitor import catalogue
 from monitor.models import MovieRef, Venue, dedupe, is_infinity_vision, normalise_format
+from platforms import DEFAULT_PLATFORM, is_enabled
 from platforms.bookmyshow import clean_format
 
 
@@ -91,9 +92,23 @@ _last_stat: tuple[str, int, int] | None = None
 _last_digest: str = ""
 
 
-def _signature() -> tuple[str, str]:
+def current_platform() -> str:
+    """The platform this session is setting up a monitor on.
+
+    Only an *enabled* platform the person chose counts; anything else —
+    no choice, a disabled platform, no session at all — is BookMyShow, so
+    with PVR INOX switched off every screen reads exactly what it always
+    did."""
+    try:
+        chosen = st.session_state.get("platform")
+    except Exception:  # noqa: BLE001 - no Streamlit session (the worker, a test)
+        chosen = None
+    return chosen if isinstance(chosen, str) and chosen and is_enabled(chosen) else DEFAULT_PLATFORM
+
+
+def _signature(platform: str = DEFAULT_PLATFORM) -> tuple[str, str]:
     global _last_stat, _last_digest
-    path = store.CATALOGUE_FILE
+    path = store.catalogue_file(platform)
     try:
         st_ = path.stat()
         stat = (str(path), st_.st_mtime_ns, st_.st_size)
@@ -110,9 +125,9 @@ def _signature() -> tuple[str, str]:
 
 
 @st.cache_resource(show_spinner=False)
-def _build(signature: tuple[str, str], slug: str) -> CatalogueView:
+def _build(signature: tuple[str, str], slug: str, platform: str = DEFAULT_PLATFORM) -> CatalogueView:
     """Parse once per (file content, city). ``signature`` is only the cache key."""
-    entries = catalogue.list_entries(slug)
+    entries = catalogue.list_entries(slug, platform)
     by_id: dict[str, dict[str, Any]] = {}
     venues_by_id: dict[str, list[Venue]] = {}
     movies: list[MovieCard] = []
@@ -143,13 +158,14 @@ def _build(signature: tuple[str, str], slug: str) -> CatalogueView:
                 )
     return CatalogueView(
         slug=slug, entries=entries, movies=movies, by_id=by_id, venues_by_id=venues_by_id,
-        theatre_count=len(directory), sync=catalogue.sync_state(slug), labels=labels,
+        theatre_count=len(directory), sync=catalogue.sync_state(slug, platform), labels=labels,
         directory=directory,
     )
 
 
-def view(slug: str) -> CatalogueView:
-    return _build(_signature(), slug)
+def view(slug: str, platform: str | None = None) -> CatalogueView:
+    platform = platform or current_platform()
+    return _build(_signature(platform), slug, platform)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -236,7 +252,11 @@ def capabilities(slug: str, codes: list[str]) -> dict[str, tuple[str, ...]]:
     """code -> the theatre's verified premium screens (PXL, PCX, EPIQ, Dolby
     Cinema, 4DX…) from ``config.theatre_capabilities`` — what the theatre
     *has*, offered as formats to wait for when it has not listed the movie,
-    and never as a format the movie is playing in."""
+    and never as a format the movie is playing in. BookMyShow's alone: the
+    table is keyed on BookMyShow venue codes, and another platform's formats
+    come only from what that platform lists."""
+    if current_platform() != "bookmyshow":
+        return {code: () for code in codes}
     return {code: premium_formats(code) for code in codes}
 
 
@@ -261,6 +281,8 @@ def release_watch_formats(movie_id: str, slug: str = "") -> tuple[str, ...]:
     film's franchise, and the worker (``monitor.discovery``) keeps the list
     current if BookMyShow creates one later.
     """
+    if catalogue.platform_of(movie_id) != "bookmyshow":
+        return ()                         # Infinity Vision release watches are BookMyShow's
     film = movie(movie_id, slug)
     if film is None:
         return ()

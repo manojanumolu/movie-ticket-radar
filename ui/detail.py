@@ -32,6 +32,7 @@ import streamlit as st
 from config.timezone import fmt_datetime, fmt_time, now_ist
 from monitor.models import Availability, Monitor
 from monitor.state import MonitorState
+from platforms import is_platform_url, platform_name
 from platforms.bookmyshow import is_bookmyshow_url
 from ui import radar
 from ui import components as C
@@ -68,12 +69,21 @@ def _eyebrow(icon: str, text: str) -> str:
     return f'<div class="tr-eyebrow">{C.icon(icon, 12, "currentColor", "1.9")}{text}</div>'
 
 
+def _link_ok(monitor: Monitor, url: str) -> bool:
+    """The email's own link test, per platform: a BookMyShow monitor's links
+    pass ``is_bookmyshow_url`` exactly as before; any other platform's pass
+    only that platform's own https hosts."""
+    if monitor.movie.platform == "bookmyshow":
+        return is_bookmyshow_url(url)
+    return is_platform_url(url, monitor.movie.platform)
+
+
 def _target_block(monitor: Monitor, state: MonitorState, target, finished: bool) -> str:
     ts = state.targets.get(target.key)
     availability = ts.availability if ts else Availability.UNKNOWN
     label, cls, glyph = C.AVAILABILITY_UI.get(availability, ("Watching", "", "◌"))
     live = availability is Availability.AVAILABLE
-    url = ts.booking_url if (ts and live and is_bookmyshow_url(ts.booking_url)) else ""
+    url = ts.booking_url if (ts and live and _link_ok(monitor, ts.booking_url)) else ""
 
     # The state reads as a pill: a dot in the semantic colour, the word in
     # mono. Green only for a live target; amber for sold out; red only for
@@ -98,15 +108,16 @@ def _target_block(monitor: Monitor, state: MonitorState, target, finished: bool)
             f'<div class="st">{watching}{state_line}</div></div>')
 
     if live and ts:
-        links = {lbl: u for lbl, u in ts.time_links if is_bookmyshow_url(u)}
+        links = {lbl: u for lbl, u in ts.time_links if _link_ok(monitor, u)}
         chips = "".join(C._chip(t, links.get(t, url)) for t in ts.time_labels)
         times = (f'<div class="tr-det-times"><div class="tr-eyebrow">Showtimes</div>'
                  f'<div class="tr-chips">{chips}</div></div>') if chips else ""
         found = f"Found {fmt_time(ts.since)}" if ts.since else ""
         mailed, _ = C.email_status(monitor, state, ts)
         book = (f'<a class="tr-book tr-det-book" href="{escape(url, quote=True)}" target="_blank" '
-                f'rel="noopener">BOOK ON BOOKMYSHOW ↗</a>' if url else
-                '<div class="tr-det-nobook">Booking link not available yet — open BookMyShow to book.</div>')
+                f'rel="noopener">BOOK ON {C.e(platform_name(monitor.movie.platform).upper())} ↗</a>' if url else
+                f'<div class="tr-det-nobook">Booking link not available yet — open '
+                f'{C.e(platform_name(monitor.movie.platform))} to book.</div>')
         foot = f'<div class="tr-det-tgt-foot"><span>{C.e(found)}</span><span>{C.e(mailed)}</span></div>' if found else ""
         return f'<div class="tr-det-tgt ok">{body}{times}{book}{foot}</div>'
 
@@ -165,7 +176,7 @@ def markup(monitor: Monitor, state: MonitorState, *, at=None) -> str:
         <div class="who">
           <div class="title">{C.e(monitor.movie.title)}</div>
           {C.language_line(monitor.movie.language)}
-          <div class="where">BookMyShow · {C.e(monitor.movie.city)}</div>
+          <div class="where">{C.e(platform_name(monitor.movie.platform))} · {C.e(monitor.movie.city)}</div>
         </div>
         <span class="tr-pill {phase.css} lg">{'<span class="tr-dot ok live"></span>' if phase.key == 'available' else ''}{C.e(phase.label)}</span>
       </div>

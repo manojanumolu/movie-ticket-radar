@@ -28,7 +28,7 @@ from typing import Any, Callable
 from config.store import load_catalogue, save_catalogue
 from config.timezone import now_ist, parse_iso, to_iso
 from monitor.models import Availability, MovieRef, SeatCategory, Snapshot, Venue, dedupe
-from platforms import get_provider
+from platforms import get_provider, is_enabled
 from platforms.base import PlatformBlocked, PlatformError
 
 #: How many movies a single sync will resolve theatre/format detail for.
@@ -241,9 +241,16 @@ def siblings_changed(entry: dict[str, Any], listed: MovieRef) -> bool:
 # ──────────────────────────────────────────────────────────────────────────
 # Reading
 # ──────────────────────────────────────────────────────────────────────────
-def list_entries(region_slug: str = "") -> list[dict[str, Any]]:
+def platform_of(movie_id: str) -> str:
+    """The platform a movie id belongs to — ``"pvr_inox:35288-ENGLISH"`` is
+    PVR INOX's; an id without a prefix is BookMyShow's, as it always was."""
+    platform, sep, _ = (movie_id or "").partition(":")
+    return platform if sep and platform else "bookmyshow"
+
+
+def list_entries(region_slug: str = "", platform: str = "bookmyshow") -> list[dict[str, Any]]:
     entries = [
-        e for e in load_catalogue().get("movies", [])
+        e for e in load_catalogue(platform).get("movies", [])
         if isinstance(e, dict) and e.get("movie")
     ]
     if region_slug:
@@ -252,11 +259,12 @@ def list_entries(region_slug: str = "") -> list[dict[str, Any]]:
 
 
 def find_entry(movie_id: str) -> dict[str, Any] | None:
-    return next((e for e in list_entries() if movie_from_entry(e).id == movie_id), None)
+    return next((e for e in list_entries(platform=platform_of(movie_id)) if movie_from_entry(e).id == movie_id),
+                None)
 
 
-def search_entries(query: str, region_slug: str = "") -> list[dict[str, Any]]:
-    entries = list_entries(region_slug)
+def search_entries(query: str, region_slug: str = "", platform: str = "bookmyshow") -> list[dict[str, Any]]:
+    entries = list_entries(region_slug, platform)
     q = (query or "").strip().lower()
     if not q:
         return entries
@@ -268,9 +276,9 @@ def search_entries(query: str, region_slug: str = "") -> list[dict[str, Any]]:
     return out
 
 
-def sync_state(region_slug: str = "") -> dict[str, Any]:
+def sync_state(region_slug: str = "", platform: str = "bookmyshow") -> dict[str, Any]:
     """The last sync's outcome, for the UI to render honestly."""
-    catalogue = load_catalogue()
+    catalogue = load_catalogue(platform)
     states = catalogue.get("sync", {})
     raw = states.get(region_slug) if region_slug else None
     if not isinstance(raw, dict):
@@ -289,8 +297,8 @@ def sync_state(region_slug: str = "") -> dict[str, Any]:
 
 
 def _record_sync(region_slug: str, status: SyncStatus, message: str = "",
-                 movie_count: int = 0, *, mirror: bool) -> None:
-    catalogue = load_catalogue()
+                 movie_count: int = 0, *, mirror: bool, platform: str = "bookmyshow") -> None:
+    catalogue = load_catalogue(platform)
     catalogue.setdefault("sync", {})[region_slug] = {
         "status": status.value,
         "message": message,
@@ -298,15 +306,16 @@ def _record_sync(region_slug: str, status: SyncStatus, message: str = "",
         "movie_count": movie_count,
     }
     catalogue["updated_at"] = to_iso(now_ist())
-    save_catalogue(catalogue, mirror=mirror)
+    save_catalogue(catalogue, mirror=mirror, platform=platform)
 
 
 # ──────────────────────────────────────────────────────────────────────────
 # Writing
 # ──────────────────────────────────────────────────────────────────────────
-def _upsert(entries: list[dict[str, Any]], *, region_slug: str, mirror: bool) -> None:
+def _upsert(entries: list[dict[str, Any]], *, region_slug: str, mirror: bool,
+            platform: str = "bookmyshow") -> None:
     """Replace this region's rows, leaving other regions alone."""
-    catalogue = load_catalogue()
+    catalogue = load_catalogue(platform)
     keep = [
         e for e in catalogue.get("movies", [])
         if isinstance(e, dict) and e.get("movie")
@@ -314,7 +323,7 @@ def _upsert(entries: list[dict[str, Any]], *, region_slug: str, mirror: bool) ->
     ]
     catalogue["movies"] = entries + keep
     catalogue["updated_at"] = to_iso(now_ist())
-    save_catalogue(catalogue, mirror=mirror)
+    save_catalogue(catalogue, mirror=mirror, platform=platform)
 
 
 def store_snapshot(snapshot: Snapshot, *, mirror: bool = True) -> dict[str, Any]:
@@ -328,7 +337,8 @@ def store_snapshot(snapshot: Snapshot, *, mirror: bool = True) -> dict[str, Any]
     rather than replaced.
     """
     entry = entry_from_snapshot(snapshot)
-    catalogue = load_catalogue()
+    platform = snapshot.movie.platform or "bookmyshow"
+    catalogue = load_catalogue(platform)
 
     movies = [e for e in catalogue.get("movies", []) if isinstance(e, dict) and e.get("movie")]
     position = next(
@@ -354,18 +364,19 @@ def store_snapshot(snapshot: Snapshot, *, mirror: bool = True) -> dict[str, Any]
         movies[position] = entry
     catalogue["movies"] = movies
     catalogue["updated_at"] = to_iso(now_ist())
-    save_catalogue(catalogue, mirror=mirror)
+    save_catalogue(catalogue, mirror=mirror, platform=platform)
     return entry
 
 
 def remove_entry(movie_id: str, *, mirror: bool = True) -> None:
-    catalogue = load_catalogue()
+    platform = platform_of(movie_id)
+    catalogue = load_catalogue(platform)
     catalogue["movies"] = [
         e for e in catalogue.get("movies", [])
         if isinstance(e, dict) and e.get("movie") and movie_from_entry(e).id != movie_id
     ]
     catalogue["updated_at"] = to_iso(now_ist())
-    save_catalogue(catalogue, mirror=mirror)
+    save_catalogue(catalogue, mirror=mirror, platform=platform)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -382,28 +393,33 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
     user would believe it.
     """
     say = on_progress or (lambda msg: print(f"[catalogue] {msg}"))
+    if not is_enabled(platform):
+        # A disabled platform is never read and its catalogue never written.
+        message = f"{platform} is not enabled; nothing was synced."
+        say(message)
+        return {"ok": False, "status": SyncStatus.ERROR, "message": message, "movies": 0}
     provider = get_provider(platform)
 
     try:
         movies = provider.list_movies(region_slug)
     except PlatformBlocked as exc:
         say(f"blocked: {exc}")
-        _record_sync(region_slug, SyncStatus.BLOCKED, str(exc), mirror=mirror)
+        _record_sync(region_slug, SyncStatus.BLOCKED, str(exc), mirror=mirror, platform=platform)
         return {"ok": False, "status": SyncStatus.BLOCKED, "message": str(exc), "movies": 0}
     except PlatformError as exc:
         say(f"failed: {exc}")
-        _record_sync(region_slug, SyncStatus.ERROR, str(exc), mirror=mirror)
+        _record_sync(region_slug, SyncStatus.ERROR, str(exc), mirror=mirror, platform=platform)
         return {"ok": False, "status": SyncStatus.ERROR, "message": str(exc), "movies": 0}
 
     if not movies:
         say("the city listing came back empty")
-        _record_sync(region_slug, SyncStatus.EMPTY, "No movies listed.", mirror=mirror)
+        _record_sync(region_slug, SyncStatus.EMPTY, "No movies listed.", mirror=mirror, platform=platform)
         return {"ok": True, "status": SyncStatus.EMPTY, "message": "No movies listed.", "movies": 0}
 
     say(f"{len(movies)} movie(s) listed in {region_slug}")
 
     # Keep whatever detail we already have; only re-read what we must.
-    existing = {movie_from_entry(e).id: e for e in list_entries(region_slug)}
+    existing = {movie_from_entry(e).id: e for e in list_entries(region_slug, platform)}
     entries: list[dict[str, Any]] = []
     for movie in movies:
         prior = existing.get(movie.id)
@@ -425,10 +441,26 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
         else:
             entries.append(entry_from_movie(movie))
 
-    _upsert(entries, region_slug=region_slug, mirror=mirror)
+    _upsert(entries, region_slug=region_slug, mirror=mirror, platform=platform)
 
     detailed = failed = 0
-    if detail:
+    city_read = getattr(provider, "city_snapshots", None)
+    if detail and city_read is not None:
+        # A provider that reads per cinema (PVR INOX) answers for every film
+        # at once: one bounded sweep of the city's cinemas over the first
+        # dates on sale, instead of one read per film.
+        try:
+            snapshots = city_read(region_slug, sale_dates_for_catalogue())
+        except PlatformError as exc:
+            say(f"theatre/format detail not read: {exc}")
+            failed = len(entries)
+        else:
+            listed = {movie_from_entry(e).id for e in entries}
+            for snapshot in snapshots:
+                if snapshot.movie.id in listed:
+                    store_snapshot(snapshot, mirror=False)
+                    detailed += 1
+    elif detail:
         # Never-detailed rows first, then the stalest, up to the limit.
         pending = sorted(
             (e for e in entries if not is_detailed(e) or is_stale(e)),
@@ -456,7 +488,7 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
                 f"{len(snapshot.showtimes)} showtime(s)"
             )
 
-    _record_sync(region_slug, SyncStatus.OK, "", movie_count=len(entries), mirror=mirror)
+    _record_sync(region_slug, SyncStatus.OK, "", movie_count=len(entries), mirror=mirror, platform=platform)
     return {
         "ok": True,
         "status": SyncStatus.OK,
@@ -464,6 +496,16 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
         "detailed": detailed,
         "failed": failed,
     }
+
+
+def sale_dates_for_catalogue() -> list[str]:
+    """The dates a per-cinema catalogue read covers: today and the next
+    ``DATE_SWEEP - 1`` days (IST) — the same breadth BookMyShow's detail
+    read has."""
+    from datetime import timedelta as _td
+
+    today = now_ist().date()
+    return [(today + _td(days=i)).strftime("%Y%m%d") for i in range(DATE_SWEEP)]
 
 
 def provider_sleep(provider, seconds: float) -> None:
@@ -525,6 +567,8 @@ __all__ = [
     "listings_from_entry",
     "listings_from_showtimes",
     "merge_snapshots",
+    "platform_of",
+    "sale_dates_for_catalogue",
     "read_detail",
     "list_entries",
     "movie_from_entry",

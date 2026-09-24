@@ -228,6 +228,14 @@ class SharedFetch:
         return len(self.monitors) > 1
 
     @property
+    def venue_codes(self) -> list[str]:
+        """Every cinema any member watches, first-seen order. Only a provider
+        that reads per cinema (PVR INOX) uses it, and it must read the whole
+        union: a cinema left out would be reported as "not listed" to the
+        monitor that watches it."""
+        return list(dict.fromkeys(t.venue_code for m in self.monitors for t in m.targets if t.venue_code))
+
+    @property
     def targets(self) -> tuple[TargetIdentity, ...]:
         """Every distinct venue+format waiting on this one read."""
         seen: dict[TargetIdentity, None] = {}

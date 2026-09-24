@@ -73,7 +73,7 @@ from monitor.state import (  # noqa: E402
     upsert_monitor,
 )
 from notifications.email import NotificationError, is_configured, send_test_email  # noqa: E402
-from platforms import PLATFORMS  # noqa: E402
+from platforms import PLATFORMS, is_enabled  # noqa: E402
 from platforms.http import HAS_CURL_CFFI  # noqa: E402
 from ui import account  # noqa: E402
 from ui import avatar  # noqa: E402
@@ -413,6 +413,10 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     problems = []
     if entry is None:
         problems.append("pick a movie")
+    elif not is_enabled(catalogue.movie_from_entry(entry).platform):
+        # Refused here, whatever the page carried: a platform that is switched
+        # off gets no monitors.
+        problems.append("that platform isn't available yet")
     if not st.session_state.get("theatres"):
         problems.append("pick at least one theatre")
     if until <= now_ist():
@@ -455,8 +459,10 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
         flash("warning", "Pick at least one format.")
         st.rerun()
 
+    movie = catalogue.movie_from_entry(entry)
+    category_watch_allowed = auth_session.is_admin() and movie.platform == "bookmyshow"
     monitor = Monitor(
-        movie=catalogue.movie_from_entry(entry),
+        movie=movie,
         targets=targets,
         interval_minutes=interval,
         monitor_until=until,
@@ -467,8 +473,9 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
         owner_uid=auth_session.current_uid(),
         # A category watch is the administrator's alone: whatever the page
         # carried, only the admin claim — Firebase's record — lets it through.
-        categories=[c for c in (categories or []) if c] if auth_session.is_admin() else [],
-        show_time=(show_time or "").strip() if auth_session.is_admin() else "",
+        # It reads BookMyShow's seat categories, so it is BookMyShow's alone too.
+        categories=[c for c in (categories or []) if c] if category_watch_allowed else [],
+        show_time=(show_time or "").strip() if category_watch_allowed else "",
     )
     # 1. Persist. In Firestore the monitor is the signed-in person's and the
     #    worker reads it from there; with the JSON store it is mirrored to
@@ -751,7 +758,7 @@ def wizard(monitors, *, settings: dict) -> None:
             dates = list(st.session_state.get("show_dates", []))
             flow.step_formats(cv.selected_venues(movie_id, slug, codes, dates),
                               coming=cv.coming_soon_codes(movie_id, slug, codes, dates),
-                              capable=cv.capabilities(slug, codes),
+                              capable=cv.capabilities(slug, codes),  # BookMyShow's table; empty elsewhere
                               dates_by_venue={c: cv.listed_dates(movie_id, slug, c) for c in codes},
                               dates=dates,
                               release=cv.release_watch_formats(movie_id, slug))
@@ -767,7 +774,7 @@ def wizard(monitors, *, settings: dict) -> None:
             # once more where the monitor is saved — an ordinary account
             # never sees it and can never create one.
             categories, show_time = [], ""
-            if auth_session.is_admin():
+            if auth_session.is_admin() and cv.current_platform() == "bookmyshow":
                 categories, show_time = flow.step_category_watch(
                     cv.selected_venues(st.session_state.get("movie_id", ""), st.session_state.get("location", ""),
                                        st.session_state.get("theatres", [])),

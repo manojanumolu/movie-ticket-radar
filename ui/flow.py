@@ -36,6 +36,7 @@ import streamlit as st
 
 from config.locations import LOCATIONS, enabled_locations, get_location
 from config.theatre_capabilities import format_aliases, premium_formats
+from platforms import DEFAULT_PLATFORM, enabled_platforms, platform_name
 from config.timezone import IST, now_ist
 from monitor.models import (ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes, is_infinity_vision,
                             is_marvel_title, normalise_format, short_date)
@@ -281,8 +282,40 @@ def _choose_location(slug: str) -> None:
     goto(2, rerun=False)
 
 
+def _platform_label() -> str:
+    """The name of the platform being set up — 'BookMyShow' unless another
+    enabled platform was chosen."""
+    return platform_name(cv.current_platform())
+
+
+def _choose_platform(slug: str) -> None:
+    """Pick the ticketing platform. A different platform is a different
+    catalogue: the movie, theatres and formats picked so far go."""
+    mark_ui_only()
+    if slug != st.session_state.get("platform", DEFAULT_PLATFORM):
+        st.session_state["platform"] = slug
+        reset_from(1)
+
+
+def platform_choice() -> None:
+    """The platform tiles — drawn only when more than one platform is
+    enabled. With BookMyShow alone (PVR INOX disabled) nothing is drawn and
+    the step is exactly what it always was."""
+    platforms = enabled_platforms()
+    if len(platforms) < 2:
+        return
+    current = cv.current_platform()
+    for column, p in grid(platforms, len(platforms), "platform"):
+        with column:
+            selected = p.slug == current
+            pick(f"platform_{p.slug}", "Selected" if selected else f"Choose {p.name}",
+                 lambda p=p, selected=selected: C.choice_tile(p.name, p.city or "", selected),
+                 on_click=_choose_platform, args=(p.slug,))
+
+
 def step_location() -> None:
     C.step_header(1, "Where are you watching?", "Pick your city and we'll load what's on.")
+    platform_choice()
 
     locations = enabled_locations()
     coming = [loc for loc in LOCATIONS if not loc.enabled][:2]
@@ -522,7 +555,7 @@ def step_theatres() -> list[Venue]:
         else:
             C.catalogue_banner("EMPTY", "", ago(cv.view(movie.region_slug).sync["at"]), 0)
             st.caption(
-                f"BookMyShow lists **{movie.title}** but hasn't published any theatres for "
+                f"{platform_name(movie.platform)} lists **{movie.title}** but hasn't published any theatres for "
                 "it yet — that's normal before a release opens. The background sync will "
                 "pick them up as soon as they appear."
             )
@@ -626,7 +659,7 @@ def infinity_vision_note(venues: list[Venue]) -> None:
     strings — nothing is inferred from a theatre's name. Silent when the
     film is not Marvel's or no chosen theatre lists one."""
     movie = cv.movie(st.session_state.get("movie_id", ""), st.session_state.get("location", ""))
-    if movie is None or not is_marvel_title(movie.title):
+    if movie is None or movie.platform != "bookmyshow" or not is_marvel_title(movie.title):
         return
     where = [(v.name, [f for f in v.formats if is_infinity_vision(f)]) for v in venues]
     where = [(name, fmts) for name, fmts in where if fmts]
@@ -680,7 +713,7 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
     dates_by_venue = dates_by_venue or {}
     dates = [d for d in (dates or []) if d]
     C.step_header(4, "Formats, per theatre",
-                  "The formats BookMyShow lists this movie in at that theatre"
+                  f"The formats {_platform_label()} lists this movie in at that theatre"
                   + (f" on {describe_date_codes(dates)}" if dates else "") + ". A theatre that hasn't "
                   "listed the movie yet offers its premium screens to wait for, or every format.")
 
@@ -759,7 +792,7 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                         under = dedupe(f for fmts in listed_on.values() for f in fmts
                                        if any(normalise_format(n) in normalise_format(f) for n in names)
                                        and normalise_format(f) != normalise_format(fmt))
-                        as_named = f" as “{under[0]}” on BookMyShow" if under else ""
+                        as_named = f" as “{under[0]}” on {_platform_label()}" if under else ""
                         hint = ("Currently listed for this movie here on " + ", ".join(short_date(d) for d in on)
                                 + as_named + "." if on else f"Currently listed for this movie at this theatre{as_named}.")
                     elif fmt in premium:
@@ -768,7 +801,7 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                     else:
                         # A format-release watch: BookMyShow sells this film
                         # in it in this city, this theatre has not listed it.
-                        hint = (f"BookMyShow sells this movie in {fmt} in this city but hasn't listed it at "
+                        hint = (f"{_platform_label()} sells this movie in {fmt} in this city but hasn't listed it at "
                                 f"{venue.name} — watching until it appears here in this format.")
                     if st.checkbox(fmt, key=f"fmt_{venue.code}_{fmt}",
                                    value=fmt in formats.get(venue.code, []), help=hint):
@@ -875,7 +908,7 @@ def step_monitoring(default_email: str, *, is_admin: bool = False) -> tuple[int,
                    f"({len(show_dates)} day{'s' if len(show_dates) != 1 else ''}).")
         date_listing_note(show_dates)
     else:
-        st.caption("Watching every date BookMyShow has on sale.")
+        st.caption(f"Watching every date {_platform_label()} has on sale.")
 
     C.rule("Alerts")
     C.step_header("mail", "Where should we email you?", "One message the moment tickets open — nothing else.")

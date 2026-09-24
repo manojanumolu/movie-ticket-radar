@@ -32,6 +32,7 @@ from config.timezone import (
 )
 from monitor.models import Availability, Monitor, MonitorStatus, describe_date_codes
 from monitor.state import MonitorState
+from platforms import platform_name
 
 ASSETS = Path(__file__).parent / "assets"
 
@@ -356,7 +357,7 @@ def platform_selector(platforms, active_slug: str, theatre_count: int, city: str
                   <div class="soon">Coming soon</div>
                 </div>"""
             )
-        elif p.slug == "pvr":
+        elif p.slug == "pvr_inox":
             cards.append(
                 f"""<div class="tr-platform">
                   <div class="lockup"><img src="{brand_url('pvr')}" alt="PVR Cinemas" loading="lazy" decoding="async"
@@ -612,6 +613,12 @@ def phase_for(monitor: Monitor, state: MonitorState, *, at: datetime | None = No
     return Phase("not_released", "MONITORING ACTIVE", "ok", True)
 
 
+def _pname(monitor: Monitor) -> str:
+    """The platform a monitor watches, by name — 'BookMyShow' for every
+    monitor created so far."""
+    return platform_name(monitor.movie.platform)
+
+
 def status_for(monitor: Monitor, state: MonitorState) -> str:
     """Which card the monitor should render as."""
     key = phase_for(monitor, state).key
@@ -649,12 +656,12 @@ def problems_for(monitor: Monitor, state: MonitorState, *, at: datetime | None =
                     "workflow itself failed — open the repository's Actions tab."))
     if state.consecutive_errors:
         if state.is_blocked:
-            out.append(("BookMyShow blocked the request",
+            out.append((f"{_pname(monitor)} blocked the request",
                         f"{state.last_error or 'Bot check refused the request.'} — "
                         f"{state.consecutive_errors} failed attempt(s); last good check "
                         f"{fmt_time(state.last_success_at)}. Not a 'no tickets' answer."))
         else:
-            out.append(("Couldn't reach BookMyShow",
+            out.append((f"Couldn't reach {_pname(monitor)}",
                         f"{state.last_error or 'Network error.'} — {state.consecutive_errors} failed "
                         f"attempt(s); last good check {fmt_time(state.last_success_at)}."))
     if state.last_email_error:
@@ -739,12 +746,12 @@ def _note(monitor: Monitor, state: MonitorState, phase: Phase, at: datetime) -> 
                 f'<div><div class="t">Waiting for first check…</div><div class="s">{e(sub)}</div></div></div>')
     if phase.key == "blocked":
         return ('<div class="tr-note bad"><span style="color:#FF6B85;font-size:14px;">!</span>'
-                '<div><div class="t">BookMyShow refused the check</div>'
+                f'<div><div class="t">{e(_pname(monitor))} refused the check</div>'
                 f'<div class="s">Bot check, not a "no tickets" answer · last good check '
                 f"{e(fmt_time(state.last_success_at))} · retrying automatically</div></div></div>")
     if phase.key == "error":
         return ('<div class="tr-note bad"><span style="color:#FF6B85;font-size:14px;">!</span>'
-                '<div><div class="t">Couldn\'t check BookMyShow</div>'
+                f'<div><div class="t">Couldn\'t check {e(_pname(monitor))}</div>'
                 f'<div class="s">Connection problem, not a "no tickets" answer · last good check '
                 f"{e(fmt_time(state.last_success_at))}</div></div></div>")
     if phase.key == "available":
@@ -789,7 +796,7 @@ def active_monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime |
             <div style="min-width:0;">
               <div class="title">{e(monitor.movie.title)}</div>
               {language_line(monitor.movie.language)}
-              <div class="where">BookMyShow · {e(monitor.movie.city)}</div>
+              <div class="where">{e(_pname(monitor))} · {e(monitor.movie.city)}</div>
               <div style="margin-top:10px;"><span class="tr-pill {phase.css}">{e(phase.label)}</span></div>
             </div>
           </div>
@@ -920,7 +927,7 @@ def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None =
     if finished == "stopped":
         note = ('<div class="tr-note"><span style="color:#C9C9D2;">■</span>'
                 f'<div><div class="t">Monitoring stopped</div><div class="s">You stopped this alert at '
-                f'{e(fmt_time(monitor.stopped_at))}. We are no longer checking BookMyShow.</div></div></div>')
+                f'{e(fmt_time(monitor.stopped_at))}. We are no longer checking {e(_pname(monitor))}.</div></div></div>')
     elif finished == "expired":
         note = ('<div class="tr-note warn"><span style="color:#E8B25C;">◷</span>'
                 '<div><div class="t">Monitoring expired</div><div class="s">This alert stopped on its own '
@@ -934,11 +941,11 @@ def monitor_card(monitor: Monitor, state: MonitorState, *, at: datetime | None =
             {thumb(monitor.movie.poster_url)}
             <div class="info">
               <div class="pills"><span class="tr-pill {phase.css} lg" title="{e(PILL_HELP.get(phase.key, ''))}">{'<span class="tr-dot ok live"></span>' if phase.key == 'available' else ''}{e(PILL_LABEL.get(phase.key, phase.label))}</span>
-                <span class="tr-pill neutral" title="How often this monitor checks BookMyShow">EVERY {monitor.interval_minutes} MIN</span>
+                <span class="tr-pill neutral" title="How often this monitor checks {e(_pname(monitor))}">EVERY {monitor.interval_minutes} MIN</span>
                 <span class="tr-pill neutral" title="Each theatre × format is watched on its own">{len(monitor.targets)} TARGET{'S' if len(monitor.targets) != 1 else ''}</span>{category_pill(monitor)}</div>
               <div class="title">{e(monitor.movie.title)}</div>
               {language_line(monitor.movie.language)}
-              <div class="where">BookMyShow · {e(monitor.movie.city)}
+              <div class="where">{e(_pname(monitor))} · {e(monitor.movie.city)}
                 · created {e(fmt_datetime(monitor.created_at))}</div>
             </div>
           </div>
@@ -1013,13 +1020,13 @@ def live_card(monitor: Monitor, state: MonitorState, target_key: str) -> None:
 
     links = {label: url for label, url in ts.time_links}
     chips = "".join(_chip(t, links.get(t, ts.booking_url)) for t in ts.time_labels) or (
-        '<span class="tr-chip" style="font-weight:400;color:#8E8E98;">See BookMyShow for times</span>'
+        f'<span class="tr-chip" style="font-weight:400;color:#8E8E98;">See {e(_pname(monitor))} for times</span>'
     )
     booked = (
         f'<a class="tr-book" href="{escape(ts.booking_url, quote=True)}" target="_blank" '
-        f'rel="noopener">BOOK ON BOOKMYSHOW ↗</a>'
+        f'rel="noopener">BOOK ON {e(_pname(monitor).upper())} ↗</a>'
         if ts.booking_url
-        else '<span class="tr-chip" style="text-align:center;">Open BookMyShow to book</span>'
+        else f'<span class="tr-chip" style="text-align:center;">Open {e(_pname(monitor))} to book</span>'
     )
     dates = list(ts.date_codes) or ([ts.date_code] if ts.date_code else [])
     date_block = (
@@ -1075,7 +1082,7 @@ def stopped_card(monitor: Monitor, state: MonitorState) -> None:
           <div class="icon">■</div>
           <div class="h">Monitoring stopped</div>
           <div class="p">You stopped this alert at {e(fmt_time(monitor.stopped_at))}.
-            We are no longer checking BookMyShow.</div>
+            We are no longer checking {e(_pname(monitor))}.</div>
           <div class="box">{e(monitor.movie.title)}<br>
             {len(monitor.targets)} theatre{'s' if len(monitor.targets) != 1 else ''} ·
             {state.success_count} check{'s' if state.success_count != 1 else ''} run</div>

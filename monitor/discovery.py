@@ -52,7 +52,7 @@ from config.store import load_discovery, save_discovery
 from config.timezone import now_ist, parse_iso, to_iso
 from monitor.models import Availability, Monitor, MovieRef
 from monitor.state import MonitorState
-from platforms import get_provider
+from platforms import get_provider, is_enabled
 from platforms.base import PlatformBlocked, PlatformError
 
 #: How long one city listing is trusted before a watching worker re-lists it.
@@ -122,7 +122,7 @@ def last_listed_at(region_key: str, clock: dict[str, Any]) -> tuple[datetime | N
     from monitor import catalogue  # local: catalogue imports platforms too
 
     _platform, _, slug = region_key.partition(":")
-    sync = catalogue.sync_state(slug)
+    sync = catalogue.sync_state(slug, platform=_platform)
     if sync["at"] is not None and not sync["status"].is_failure:
         if when is None or sync["at"] > when:
             when, ok = sync["at"], True
@@ -200,6 +200,8 @@ def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[s
     # Which cities need a fresh listing, and the first reason why.
     reasons: dict[str, str] = {}
     for monitor in due:
+        if not is_enabled(monitor.movie.platform):
+            continue                       # a disabled platform is never read, not even listed
         why = needs_discovery(monitor, state.get(monitor.id))
         if why:
             reasons.setdefault(_region_key(monitor), f"{monitor.movie.title}: {why}")

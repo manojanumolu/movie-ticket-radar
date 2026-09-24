@@ -60,7 +60,7 @@ from monitor.state import (
     save_monitors,
     save_state,
 )
-from platforms import get_provider
+from platforms import get_provider, is_enabled, platform_name
 from platforms.base import PlatformBlocked, PlatformError
 
 
@@ -301,7 +301,7 @@ def _hint_other_rows(monitor: Monitor, target: TheatreTarget | None) -> None:
     movie = monitor.movie
     mine = catalogue.find_entry(movie.id)
     title = (catalogue.movie_from_entry(mine).title if mine else movie.title).strip().lower()
-    for entry in catalogue.list_entries(movie.region_slug):
+    for entry in catalogue.list_entries(movie.region_slug, platform=movie.platform):
         other = catalogue.movie_from_entry(entry)
         if other.id == movie.id or other.title.strip().lower() != title:
             continue
@@ -371,16 +371,28 @@ class Listing:
         return self.snapshot is not None
 
 
-def fetch_listing(movie: MovieRef, date_codes: list[str] | None = None) -> Listing:
+def fetch_listing(movie: MovieRef, date_codes: list[str] | None = None,
+                  venue_codes: list[str] | None = None) -> Listing:
     """Read one platform listing. Never raises.
 
     ``movie`` is taken as given — already resolved through the catalogue by
     the caller — so a shared read is made once with one reference rather than
     re-resolved per subscriber.
+
+    ``venue_codes`` reaches only a provider that reads per cinema
+    (``reads_per_venue``, PVR INOX); BookMyShow reads a whole city per event
+    and is called exactly as before. A platform that is not enabled is never
+    read at all: a monitor on it records an honest ERROR.
     """
+    if not is_enabled(movie.platform):
+        return Listing(error=f"{platform_name(movie.platform)} is not enabled in TicketRadar; "
+                             "nothing was checked.")
     try:
         provider = get_provider(movie.platform)
-        snapshot = provider.fetch(movie, date_codes or None)
+        if getattr(provider, "reads_per_venue", False):
+            snapshot = provider.fetch(movie, date_codes or None, venue_codes=list(venue_codes or []))
+        else:
+            snapshot = provider.fetch(movie, date_codes or None)
     except PlatformBlocked as exc:
         return Listing(error=str(exc), blocked=True)
     except PlatformError as exc:
@@ -390,6 +402,15 @@ def fetch_listing(movie: MovieRef, date_codes: list[str] | None = None) -> Listi
             error=f"Unexpected failure while reading the listing: {type(exc).__name__}: {exc}",
         )
     return Listing(snapshot=snapshot)
+
+
+def reads_per_venue(platform: str) -> bool:
+    """Does this platform's provider read per cinema (PVR INOX)? BookMyShow
+    does not, and its read is made exactly as it always was."""
+    try:
+        return bool(getattr(get_provider(platform), "reads_per_venue", False))
+    except PlatformError:
+        return False
 
 
 def outcome_for(monitor: Monitor, listing: Listing, *, at: datetime | None = None) -> CheckOutcome:
@@ -415,7 +436,11 @@ def check_monitor(monitor: Monitor, *, at: datetime | None = None) -> CheckOutco
     as the catalogue knows it now, not as of the day the monitor was created.
     """
     at = at or now_ist()
-    listing = fetch_listing(with_current_variants(monitor.movie), monitor.date_codes)
+    movie = with_current_variants(monitor.movie)
+    if reads_per_venue(movie.platform):
+        listing = fetch_listing(movie, monitor.date_codes, venue_codes=[t.venue_code for t in monitor.targets])
+    else:
+        listing = fetch_listing(movie, monitor.date_codes)
     return outcome_for(monitor, listing, at=at)
 
 
@@ -513,7 +538,10 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
         if group.riders:
             print(f"[checker] aligned {', '.join(short_id(r) for r in group.riders)} "
                   f"to this read; due together from now on")
-        listing = fetch_listing(group.movie, group.date_codes)
+        if reads_per_venue(group.movie.platform):
+            listing = fetch_listing(group.movie, group.date_codes, venue_codes=group.venue_codes)
+        else:
+            listing = fetch_listing(group.movie, group.date_codes)
         report.fetches += 1
 
         for monitor in group.monitors:
@@ -571,4 +599,4 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
 
 
 __all__ = ["Listing", "RunReport", "check_monitor", "evaluate_target", "fetch_listing",
-           "outcome_for", "run_once", "short_id"]
+           "outcome_for", "reads_per_venue", "run_once", "short_id"]

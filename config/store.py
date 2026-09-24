@@ -40,6 +40,8 @@ DEFAULTS: dict[str, Any] = {
     "history.json": [],
     "settings.json": {"notify_email": "", "default_interval": 10},
     "discovery.json": {},
+    # PVR INOX's catalogue, kept apart from BookMyShow's (``catalogue_file``).
+    "catalogue_pvr_inox.json": {"movies": [], "updated_at": None},
 }
 
 
@@ -294,16 +296,27 @@ def save_settings(settings: dict[str, Any], *, mirror: bool = True) -> None:
     write_json(SETTINGS_FILE, settings, mirror=mirror, message="chore: update settings")
 
 
-def load_catalogue() -> dict[str, Any]:
-    data = read_json(CATALOGUE_FILE)
+def catalogue_file(platform: str = "bookmyshow") -> Path:
+    """Where a platform's catalogue lives. BookMyShow keeps
+    ``data/catalogue.json``; any other platform gets a file of its own, so
+    one platform's movies, theatres and formats can never appear in the
+    other's pickers."""
+    if not platform or platform == "bookmyshow":
+        return CATALOGUE_FILE
+    return DATA_DIR / f"catalogue_{platform}.json"
+
+
+def load_catalogue(platform: str = "bookmyshow") -> dict[str, Any]:
+    path = catalogue_file(platform)
+    data = read_json(path)
     if not isinstance(data, dict):
-        return _default_for(CATALOGUE_FILE)
+        return _default_for(path)
     data.setdefault("movies", [])
     return data
 
 
-def save_catalogue(catalogue: dict[str, Any], *, mirror: bool = True) -> None:
-    write_json(CATALOGUE_FILE, catalogue, mirror=mirror, message="chore: update movie catalogue")
+def save_catalogue(catalogue: dict[str, Any], *, mirror: bool = True, platform: str = "bookmyshow") -> None:
+    write_json(catalogue_file(platform), catalogue, mirror=mirror, message="chore: update movie catalogue")
 
 
 def load_discovery() -> dict[str, Any]:
@@ -335,6 +348,7 @@ __all__ = [
     "REPO_ROOT",
     "SETTINGS_FILE",
     "STATE_FILE",
+    "catalogue_file",
     "dispatch_workflow",
     "explain_github_error",
     "github_status",

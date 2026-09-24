@@ -174,8 +174,9 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
     # Every showtime chip links somewhere real: the show-level link when the
     # platform published one, else the date's booking page. Anything that is
     # not a BookMyShow https URL is dropped rather than rendered.
-    links = {label: url for label, url in change.time_links if _safe_url(url)}
-    booking_url = change.booking_url if _safe_url(change.booking_url) else ""
+    platform = monitor.movie.platform or "bookmyshow"
+    links = {label: url for label, url in change.time_links if _safe_url(url, platform)}
+    booking_url = change.booking_url if _safe_url(change.booking_url, platform) else ""
     for label in times:
         links.setdefault(label, booking_url)
 
@@ -213,20 +214,32 @@ def render_change(monitor: Monitor, change: Change) -> tuple[str, str, str]:
     return subject, html, text
 
 
-def _safe_url(url: str) -> bool:
-    """The only links that go into mail are the platform's own https pages."""
-    from platforms.bookmyshow import is_bookmyshow_url
+def _safe_url(url: str, platform: str = "bookmyshow") -> bool:
+    """The only links that go into mail are the platform's own https pages:
+    BookMyShow's for a BookMyShow monitor, exactly as before, and each
+    other platform's own hosts for its monitors — never another's."""
+    if platform == "bookmyshow":
+        from platforms.bookmyshow import is_bookmyshow_url
 
-    return is_bookmyshow_url(url or "")
+        return is_bookmyshow_url(url or "")
+    from platforms import is_platform_url
+
+    return is_platform_url(url or "", platform)
 
 
-def _time_chips(times: list[str], links: dict[str, str] | None = None) -> str:
+def _pname(monitor: Monitor) -> str:
+    from platforms import platform_name
+
+    return platform_name(monitor.movie.platform or "bookmyshow")
+
+
+def _time_chips(times: list[str], links: dict[str, str] | None = None, platform: str = "BookMyShow") -> str:
     """Showtime chips. Each one is an ``<a>`` when it has a verified link."""
     links = links or {}
     if not times:
         return (
             f'<div style="font-size:14px;color:{TEXT_3};">'
-            "Showtimes weren't listed individually — open BookMyShow for the full list.</div>"
+            f"Showtimes weren't listed individually — open {escape(platform)} for the full list.</div>"
         )
     chip_style = (
         f"display:block;padding:9px 14px;border-radius:9px;background:#17171C;"
@@ -289,9 +302,9 @@ def _html(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: st
             f'<a href="{escape(booking_url, quote=True)}" '
             f'style="display:block;padding:18px;border-radius:14px;background:{accent};'
             f'color:{ink_on_accent};font-family:{font};font-size:16px;font-weight:800;letter-spacing:.06em;'
-            f'text-align:center;text-decoration:none;">BOOK ON BOOKMYSHOW &#8599;</a>'
+            f'text-align:center;text-decoration:none;">BOOK ON {escape(_pname(monitor).upper())} &#8599;</a>'
             f'<div style="font-family:{font};font-size:12px;color:{TEXT_3};text-align:center;margin-top:10px;">'
-            f"Opens {escape(venue)} on BookMyShow.</div>"
+            f"Opens {escape(venue)} on {escape(_pname(monitor))}.</div>"
             f"</td></tr>"
         )
 
@@ -350,8 +363,8 @@ def _html(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: st
       {date_block}
       <td valign="top">
         <div style="font-family:{mono};font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:{TEXT_3};">Showtimes</div>
-        <div style="margin-top:8px;">{_time_chips(times, links)}</div>
-        {_chip_hint(times, links)}
+        <div style="margin-top:8px;">{_time_chips(times, links, _pname(monitor))}</div>
+        {_chip_hint(times, links, _pname(monitor))}
       </td>
     </tr></table>
   </td></tr>
@@ -373,14 +386,14 @@ def _html(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: st
 </body></html>"""
 
 
-def _chip_hint(times: list[str], links: dict[str, str] | None) -> str:
+def _chip_hint(times: list[str], links: dict[str, str] | None, platform: str = "BookMyShow") -> str:
     """Say what a showtime click does, so a date page never surprises anyone."""
     links = links or {}
     if not times or not any(links.get(t) for t in times):
         return ""
     return (
         f'<div style="font-size:11.5px;color:{TEXT_3};margin-top:4px;line-height:1.5;">'
-        "Tap a showtime to open it on BookMyShow.</div>"
+        f"Tap a showtime to open it on {escape(platform)}.</div>"
     )
 
 
@@ -399,7 +412,7 @@ def _text(*, eyebrow: str, title: str, lede: str, venue: str, fmt: str, city: st
         for t in times:
             lines += [f"  {t}" + (f"  {links[t]}" if links.get(t) else "")]
     else:
-        lines += ["Showtimes: see BookMyShow"]
+        lines += [f"Showtimes: see {_pname(monitor)}"]
     lines += [""]
     if booking_url:
         lines += [f"Book: {booking_url}", ""]
