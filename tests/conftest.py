@@ -440,3 +440,18 @@ QUICKBOOK_HYD = build_quickbook([
 #: theatres are not in the base event's answer — see
 #: ``platforms.bookmyshow._primary_children``.
 DETAIL_REQUESTS_HYD = 6
+#: Which of those six reads are premium siblings, in the order a sync makes
+#: them: Telugu 2D, EPIQ, Dolby Cinema 2D, Tamil 2D, HDR By Barco, Hindi 2D.
+_HYD_SIBLING_READS = (False, True, True, False, True, False)
+
+
+def hyd_detail(payload: dict) -> list[dict]:
+    """The answers to a full detail sync of QUICKBOOK_HYD: ``payload`` for
+    each row's base event and an empty listing for each premium sibling.
+
+    BookMyShow answers a sibling event with that event's own theatres, never
+    the base event's; replaying the base payload there would claim every
+    theatre is also listed in EPIQ, Dolby Cinema 2D and HDR By Barco — which
+    a show now keeps (``Showtime.event_format``) beside its screen's name.
+    """
+    return [build_payload([]) if sibling else payload for sibling in _HYD_SIBLING_READS]

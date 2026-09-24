@@ -1161,9 +1161,15 @@ class BookMyShowProvider:
 
     def _parse_showtimes(self, card: dict[str, Any], venue_code: str, venue_name: str,
                          movie: MovieRef, *, default_format: str = "") -> list[Showtime]:
-        """``default_format`` names the show when the card carries no screen
-        attribute — a sibling event's own format label ("4DX 3D"), which is
-        real BookMyShow data for that event, never a guess."""
+        """``default_format`` is the sibling event's own format label ("4DX
+        3D", "Ms - Infinity Vision") — real BookMyShow data for that event,
+        never a guess. It names the show when the card carries no screen
+        attribute, and is kept as ``event_format`` when it does: a premium
+        event's shows carry the *screen's* attribute (AMB's Infinity Vision
+        shows say "BARCO FLAGSHIP LASER DOLBY ATMOS"), so preferring one over
+        the other loses the format the show is sold in."""
+        # the sibling's label may have been stored before canonicalisation
+        event_fmt = clean_format(default_format)
         out: list[Showtime] = []
         for show in _dicts(card.get("showtimes")):
             sa = show.get("additionalData")
@@ -1176,8 +1182,7 @@ class BookMyShowProvider:
 
             raw_fmt = (_text(show.get("screenAttr")) or _text(sa.get("attributes"))
                        or _text(sa.get("screenAttr")))
-            # the sibling's label may have been stored before canonicalisation
-            fmt = clean_format(raw_fmt) or clean_format(default_format)
+            fmt = clean_format(raw_fmt) or event_fmt
 
             out.append(
                 Showtime(
@@ -1192,6 +1197,7 @@ class BookMyShowProvider:
                     booking_url=published_show_url(show) or self.booking_url(movie, date_code),
                     categories=parse_seat_categories(sa),
                     format_raw=raw_fmt,
+                    event_format=event_fmt,
                 )
             )
         return out
@@ -1225,8 +1231,7 @@ class BookMyShowProvider:
         by_code: dict[str, list[str]] = {}
         cats: dict[str, dict[str, SeatCategory]] = {}
         for s in showtimes:
-            if s.format_label:
-                by_code.setdefault(s.venue_code, []).append(s.format_label)
+            by_code.setdefault(s.venue_code, []).extend(s.format_labels)
             for c in s.categories:
                 # one entry per platform identity — two "GOLD"s stay two
                 cats.setdefault(s.venue_code, {}).setdefault(c.key, c)

@@ -49,9 +49,9 @@ def section(body: str, label: str) -> str | None:
 @pytest.fixture
 def seeded(provider_factory, monkeypatch):
     """A synced Hyderabad catalogue with theatre/format detail."""
-    from tests.conftest import ALLU_LIVE, DETAIL_REQUESTS_HYD, QUICKBOOK_HYD, build_payload
+    from tests.conftest import ALLU_LIVE, QUICKBOOK_HYD, build_payload, hyd_detail
 
-    provider = provider_factory([QUICKBOOK_HYD] + [build_payload(ALLU_LIVE)] * DETAIL_REQUESTS_HYD)
+    provider = provider_factory([QUICKBOOK_HYD] + hyd_detail(build_payload(ALLU_LIVE)))
     monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
     catalogue.sync_region("hyderabad", mirror=False, detail=True)
     entry = next(e for e in catalogue.list_entries("hyderabad")
@@ -640,11 +640,11 @@ PRASADS_LIVE = [
 def release_watch(provider_factory, monkeypatch):
     """Mandaadi plays at Allu/AMB; Prasads (PCX) is only known from Hanuman
     Ansh. So for Mandaadi, Prasads is a *coming soon* theatre."""
-    from tests.conftest import ALLU_LIVE, QUICKBOOK_HYD, build_payload
+    from tests.conftest import ALLU_LIVE, QUICKBOOK_HYD, build_payload, hyd_detail
 
     responses = ([QUICKBOOK_HYD]
-                 + [build_payload(ALLU_LIVE)] * 5       # Mandaadi Telugu (3 events) + Tamil (2)
-                 + [build_payload(PRASADS_LIVE)])       # Hanuman Ansh
+                 + hyd_detail(build_payload(ALLU_LIVE))[:5]   # Mandaadi Telugu (3 events) + Tamil (2)
+                 + [build_payload(PRASADS_LIVE)])             # Hanuman Ansh
     provider = provider_factory(responses)
     monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
     catalogue.sync_region("hyderabad", mirror=False, detail=True)

@@ -456,7 +456,7 @@ def test_log_points_at_the_other_language_row_when_it_lists_the_theatre(
     assert load_state()[monitor.id].targets[ALLU.key].availability is Availability.THEATRE_NOT_AVAILABLE
     out = capsys.readouterr().out
     assert "[hint] ALLU Cinemas is listed for 'Avengers Endgame: Encore · English" in out
-    assert f"({ENGLISH_2D}; formats: Barco Laser 4K Atmos)" in out
+    assert f"({ENGLISH_2D}; formats: Barco Laser, Barco Laser 4K Atmos)" in out
     assert f"watches the Telugu row ({TELUGU_2D})" in out
 
 

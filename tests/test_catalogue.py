@@ -15,11 +15,11 @@ from platforms.base import PlatformBlocked, PlatformError
 from platforms.bookmyshow import poster_url, split_venue_name
 from tests.conftest import (
     ALLU_LIVE,
-    DETAIL_REQUESTS_HYD,
     QUICKBOOK_HYD,
     FakeResponse,
     build_payload,
     build_quickbook,
+    hyd_detail,
 )
 
 
@@ -136,7 +136,7 @@ def test_sync_stores_movies_and_records_success(provider_factory, monkeypatch):
 
 
 def test_sync_resolves_theatres_and_formats(provider_factory, monkeypatch):
-    provider = provider_factory([QUICKBOOK_HYD] + [build_payload(ALLU_LIVE)] * DETAIL_REQUESTS_HYD)
+    provider = provider_factory([QUICKBOOK_HYD] + hyd_detail(build_payload(ALLU_LIVE)))
     _patch_provider(monkeypatch, provider)
 
     result = catalogue.sync_region("hyderabad", mirror=False, detail=True)
@@ -191,7 +191,7 @@ def test_one_movie_failing_detail_does_not_abort_the_sync(provider_factory, monk
 
 
 def test_sync_keeps_detail_it_already_has(provider_factory, monkeypatch):
-    _patch_provider(monkeypatch, provider_factory([QUICKBOOK_HYD] + [build_payload(ALLU_LIVE)] * DETAIL_REQUESTS_HYD))
+    _patch_provider(monkeypatch, provider_factory([QUICKBOOK_HYD] + hyd_detail(build_payload(ALLU_LIVE))))
     catalogue.sync_region("hyderabad", mirror=False, detail=True)
     assert all(catalogue.is_detailed(e) for e in catalogue.list_entries("hyderabad"))
 
@@ -295,7 +295,10 @@ def test_fetch_sweeps_the_siblings_and_merges_their_theatres(provider_factory):
     # A sibling show with no screen attribute is labelled with the sibling's
     # own format — BookMyShow's data for that event, not a guess.
     assert snapshot.venue("PIIC").formats == ("4DX 3D",)
-    assert snapshot.venue("PVFS").formats == ("4DX",)
+    # A sibling show *with* a screen attribute keeps both names: the screen's
+    # and the event's it is sold under.
+    assert snapshot.venue("PVFS").formats == ("4DX", "4DX 3D")
+    assert snapshot.venue("AMBH").formats == ("Barco Flagship Laser Dolby Atmos", "Infinity Vision 2D")
     # The 4DX shows book on the 4DX event's own page.
     pvr = next(s for s in snapshot.showtimes if s.venue_code == "PVFS")
     assert pvr.booking_url.endswith("/buytickets/ET00516729/20260925")
@@ -362,7 +365,7 @@ def test_stale_detail_is_re_read_on_the_next_sync(provider_factory, monkeypatch)
     from config.timezone import now_ist, to_iso
     from config.store import load_catalogue, save_catalogue
 
-    _patch_provider(monkeypatch, provider_factory([QUICKBOOK_HYD] + [build_payload(ALLU_LIVE)] * DETAIL_REQUESTS_HYD))
+    _patch_provider(monkeypatch, provider_factory([QUICKBOOK_HYD] + hyd_detail(build_payload(ALLU_LIVE))))
     catalogue.sync_region("hyderabad", mirror=False, detail=True)
 
     # Fresh detail is kept: a listing-only sync re-reads nothing.

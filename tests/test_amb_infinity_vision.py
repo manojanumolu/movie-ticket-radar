@@ -58,10 +58,16 @@ def movie(*, variants=((INFINITY, "Ms - Infinity Vision"),)) -> MovieRef:
     )
 
 
+#: The ``screenAttr`` BookMyShow sends on *every* AMB show — the base
+#: event's and the "MS - Infinity Vision" sibling's alike (bms-diagnose,
+#: 24 Sep 2026: ET00516224 at AMBH, 09:05 AM / 03:45 PM / 10:40 PM, each
+#: ``attr='BARCO FLAGSHIP LASER DOLBY ATMOS'``). Only the event says
+#: Infinity Vision.
+AMB_SCREEN = "BARCO FLAGSHIP LASER DOLBY ATMOS"
+
+
 def amb(fmt: str, status: str | None, time: str = "07:30 PM", code: str = "1930") -> dict:
-    """One AMB show. ``fmt=""`` is how the Infinity Vision sibling's own
-    cards look — no screen attribute, the event's own dimension names them —
-    which is what the provider's ``default_format`` is for."""
+    """One AMB show, ``fmt`` being its raw ``screenAttr``."""
     return {"venue_code": "AMBH", "venue_name": "AMB Cinemas", "area": "Gachibowli",
             "time": time, "time_code": code, "fmt": fmt, "status": status, "date": SHOW_DATE}
 
@@ -70,9 +76,9 @@ def amb(fmt: str, status: str | None, time: str = "07:30 PM", code: str = "1930"
 BARCO_LIVE = amb("Barco Flagship Laser Dolby Atmos", "3", "06:45 PM", "1845")
 BARCO_LATE = amb("Barco Flagship Laser Dolby Atmos", "3", "11:45 PM", "2345")
 # Infinity Vision, in its own event: sold out, bookable, and a second show.
-IV_SOLD_OUT = amb("", "0")
-IV_LIVE = amb("", "3")
-IV_SECOND = amb("", "3", "10:45 PM", "2245")
+IV_SOLD_OUT = amb(AMB_SCREEN, "0")
+IV_LIVE = amb(AMB_SCREEN, "3")
+IV_SECOND = amb(AMB_SCREEN, "3", "10:45 PM", "2245")
 
 
 def make_monitor(at, *targets: TheatreTarget) -> Monitor:
@@ -195,7 +201,7 @@ def test_an_infinity_vision_listing_that_never_opens_is_not_a_theatre_not_availa
     upsert_monitor(monitor, mirror=False)
     sent: list = []
     wire = Wire(provider_factory, monkeypatch)
-    wire.tick([BARCO_LIVE], [amb("", None)])
+    wire.tick([BARCO_LIVE], [amb(AMB_SCREEN, None)])
     check(at, sent, force=True)
     assert load_state()[monitor.id].targets[AMB_IV.key].availability is Availability.NOT_BOOKABLE
     assert sent == []
@@ -319,13 +325,15 @@ def test_an_existing_amb_barco_monitor_keeps_working_and_is_left_untouched(
     assert [(c.monitor_id, c.fmt) for c in sent] == [
         (barco_monitor.id, "Barco Flagship Laser Dolby Atmos")]
 
-    # Infinity Vision opens: the other monitor fires, once, and the Barco
-    # monitor — already announced — stays quiet.
+    # Infinity Vision opens: the other monitor fires, once. BookMyShow sells
+    # it on AMB's Barco Flagship screen and says so in the show's own
+    # ``screenAttr``, so to the Barco monitor — already announced — it is a
+    # new bookable showtime on its screen, as it always was; nothing more.
     wire.tick([BARCO_LIVE], [IV_LIVE])
     check(at + timedelta(minutes=10), sent)
-    assert [(c.monitor_id, c.fmt) for c in sent] == [
-        (barco_monitor.id, "Barco Flagship Laser Dolby Atmos"),
-        (iv_monitor.id, "Infinity Vision 2D")]
+    assert sorted((c.monitor_id, c.kind.value, c.fmt) for c in sent[1:]) == sorted([
+        (barco_monitor.id, "NEW_SHOWTIME", "Barco Flagship Laser Dolby Atmos"),
+        (iv_monitor.id, "TICKETS_LIVE", "Infinity Vision 2D")])
 
     state = load_state()
     assert state[barco_monitor.id].targets[AMB_BARCO.key].availability is Availability.AVAILABLE
@@ -349,7 +357,11 @@ def test_one_monitor_can_hold_both_amb_targets_without_either_muting_the_other(
 
     wire.tick([BARCO_LIVE], [IV_LIVE])
     check(at + timedelta(minutes=10), sent)
-    assert [c.fmt for c in sent] == ["Barco Flagship Laser Dolby Atmos", "Infinity Vision 2D"]
+    # The Infinity Vision show is on the Barco Flagship screen too (its own
+    # ``screenAttr``), so the Barco target sees one more showtime — while the
+    # Infinity Vision target goes live on its own key.
+    assert sorted((c.kind.value, c.fmt) for c in sent[1:]) == [
+        ("NEW_SHOWTIME", "Barco Flagship Laser Dolby Atmos"), ("TICKETS_LIVE", "Infinity Vision 2D")]
 
     targets = load_state()[monitor.id].targets
     assert set(targets) == {AMB_BARCO.key, AMB_IV.key}

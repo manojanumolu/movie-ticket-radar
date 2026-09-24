@@ -41,9 +41,9 @@ def body_of(app) -> str:
 @pytest.fixture
 def seeded(provider_factory, monkeypatch):
     from monitor import catalogue
-    from tests.conftest import DETAIL_REQUESTS_HYD, QUICKBOOK_HYD
+    from tests.conftest import QUICKBOOK_HYD, hyd_detail
 
-    provider = provider_factory([QUICKBOOK_HYD] + [build_payload(ALLU_LIVE)] * DETAIL_REQUESTS_HYD)
+    provider = provider_factory([QUICKBOOK_HYD] + hyd_detail(build_payload(ALLU_LIVE)))
     monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
     catalogue.sync_region("hyderabad", mirror=False, detail=True)
     entry = next(e for e in catalogue.list_entries("hyderabad")

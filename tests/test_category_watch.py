@@ -340,9 +340,9 @@ def _wizard(movie_id):
 def seeded_with_categories(provider_factory, monkeypatch):
     """test_app's synced catalogue, with the live category shape in every show."""
     from monitor import catalogue
-    from tests.conftest import DETAIL_REQUESTS_HYD, QUICKBOOK_HYD
+    from tests.conftest import QUICKBOOK_HYD, hyd_detail
 
-    provider = provider_factory([QUICKBOOK_HYD] + [payload(ALLU_LIVE, REAL_CATEGORIES)] * DETAIL_REQUESTS_HYD)
+    provider = provider_factory([QUICKBOOK_HYD] + hyd_detail(payload(ALLU_LIVE, REAL_CATEGORIES)))
     monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
     catalogue.sync_region("hyderabad", mirror=False, detail=True)
     entry = next(e for e in catalogue.list_entries("hyderabad") if catalogue.movie_from_entry(e).title == "Mandaadi")
@@ -425,9 +425,9 @@ def test_a_category_watch_is_its_owners_only(make_monitor, monkeypatch):
 def seeded_without_categories(provider_factory, monkeypatch):
     """A synced catalogue whose shows publish no categories yet."""
     from monitor import catalogue
-    from tests.conftest import DETAIL_REQUESTS_HYD, QUICKBOOK_HYD
+    from tests.conftest import QUICKBOOK_HYD, hyd_detail
 
-    provider = provider_factory([QUICKBOOK_HYD] + [payload(ALLU_LIVE, [])] * DETAIL_REQUESTS_HYD)
+    provider = provider_factory([QUICKBOOK_HYD] + hyd_detail(payload(ALLU_LIVE, [])))
     monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
     catalogue.sync_region("hyderabad", mirror=False, detail=True)
     entry = next(e for e in catalogue.list_entries("hyderabad") if catalogue.movie_from_entry(e).title == "Mandaadi")

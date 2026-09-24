@@ -190,8 +190,22 @@ class Showtime:
     #: listing publishes none — a show not yet on sale.
     categories: tuple[SeatCategory, ...] = ()
     #: The platform's own format string before ``clean_format`` tidied it
-    #: ("MS-Infinity Vsn 3d"); "" when the show carried none.
+    #: ("BARCO FLAGSHIP LASER DOLBY ATMOS"); "" when the show carried none.
     format_raw: str = ""
+    #: The format of the premium *sibling event* the show was listed under
+    #: ("Infinity Vision 2D", "4DX 3D"), canonicalised; "" for the base
+    #: event. BookMyShow names a premium format by its event, not by the
+    #: show: verified live (bms-diagnose, 24 Sep 2026), every show in
+    #: "MS - Infinity Vision" (ET00516224) at AMB carries the screen's own
+    #: ``screenAttr`` "BARCO FLAGSHIP LASER DOLBY ATMOS", so ``format_label``
+    #: alone never says Infinity Vision.
+    event_format: str = ""
+
+    @property
+    def format_labels(self) -> tuple[str, ...]:
+        """Every name this show is listed under — its screen attribute and
+        its event's format — distinct, non-empty, screen first."""
+        return tuple(dedupe(f for f in (self.format_label, self.event_format) if f))
 
     @property
     def key(self) -> str:
@@ -338,6 +352,14 @@ class TheatreTarget:
         from config.theatre_capabilities import format_aliases
 
         return any(normalise_format(alias) in listed for alias in format_aliases(self.venue_code, self.fmt))
+
+    def matches_show(self, show: Showtime) -> bool:
+        """The chosen format is any name the show is listed under
+        (:attr:`Showtime.format_labels`) — its screen, or the premium event
+        it belongs to. Each name is matched on its own, so "Infinity Vision
+        2D" never matches a 3D event and a screen attribute never becomes an
+        event format."""
+        return any(self.matches_format(label) for label in show.format_labels or ("",))
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

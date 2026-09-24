@@ -375,10 +375,10 @@ def seeded_app(provider_factory, monkeypatch):
     """test_app's ``seeded`` catalogue plus its ``run`` helper, in one."""
     pytest.importorskip("streamlit.testing.v1")
     from monitor import catalogue
-    from tests.conftest import ALLU_LIVE, DETAIL_REQUESTS_HYD, QUICKBOOK_HYD, build_payload
+    from tests.conftest import ALLU_LIVE, QUICKBOOK_HYD, build_payload, hyd_detail
     from tests.test_app import run
 
-    provider = provider_factory([QUICKBOOK_HYD] + [build_payload(ALLU_LIVE)] * DETAIL_REQUESTS_HYD)
+    provider = provider_factory([QUICKBOOK_HYD] + hyd_detail(build_payload(ALLU_LIVE)))
     monkeypatch.setattr(catalogue, "get_provider", lambda slug: provider)
     catalogue.sync_region("hyderabad", mirror=False, detail=True)
     entry = next(e for e in catalogue.list_entries("hyderabad")

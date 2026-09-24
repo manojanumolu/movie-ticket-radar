@@ -85,8 +85,7 @@ def listings_from_showtimes(showtimes) -> dict[str, dict[str, list[str]]]:
         if not show.date_code:
             continue
         formats = out.setdefault(show.date_code, {}).setdefault(show.venue_code, [])
-        if show.format_label and show.format_label not in formats:
-            formats.append(show.format_label)
+        formats.extend(f for f in show.format_labels if f not in formats)
     return {d: out[d] for d in sorted(out)}
 
 

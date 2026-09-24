@@ -164,9 +164,9 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
                 booking_url=_booking_url(monitor, snapshot, sorted(wanted_dates)[0], target),
             )
 
-    matching = [s for s in shows if target.matches_format(s.format_label)]
+    matching = [s for s in shows if target.matches_show(s)]
     if not matching:
-        seen = sorted({s.format_label or "(no format)" for s in shows})
+        seen = sorted({label for s in shows for label in (s.format_labels or ("(no format)",))})
         print(f"    [filter] {target.venue_name}: {len(shows)} show(s) but none in '{target.fmt}' "
               f"— formats listed: {seen}")
         return TargetResult(
