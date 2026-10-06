@@ -12,10 +12,12 @@ writes are atomic so a crashed run can't leave a half-written monitor list.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -167,8 +169,8 @@ def explain_github_error(exc: BaseException) -> str:
     text = str(exc)
     if "Resource not accessible by personal access token" in text or "403" in text[:5]:
         return ("GitHub refused (403): the GH_TOKEN doesn't have permission for this. "
-                "A fine-grained PAT needs Contents: read & write, and Actions: read & write "
-                "for on-demand checks.")
+                "It should be a fine-grained PAT for this repository only, with "
+                "Actions: read & write (nothing else is needed).")
     if "Bad credentials" in text or text.startswith("401"):
         return "GitHub rejected the GH_TOKEN (401): it is invalid or expired."
     if "Not Found" in text or text.startswith("404"):
@@ -246,6 +248,22 @@ def github_status() -> tuple[bool, str]:
 
 MONITOR_WORKFLOW = "bookmyshow-monitor.yml"
 
+#: Set only by ``monitor.dispatch`` once it has decided the signed-in person
+#: may start this workflow. Outside GitHub Actions nothing else can dispatch:
+#: a code path that forgot to ask is refused here, not trusted.
+_DISPATCH_GRANT: contextvars.ContextVar[bool] = contextvars.ContextVar("tr_dispatch_grant", default=False)
+
+
+@contextmanager
+def dispatch_grant():
+    """The authorisation layer's (``monitor.dispatch``) — and only its —
+    way to say "this dispatch was checked"."""
+    token = _DISPATCH_GRANT.set(True)
+    try:
+        yield
+    finally:
+        _DISPATCH_GRANT.reset(token)
+
 
 def dispatch_workflow(workflow: str, inputs: dict[str, str] | None = None, ref: str = "") -> tuple[bool, str]:
     """Trigger a workflow_dispatch run. Never raises.
@@ -253,10 +271,17 @@ def dispatch_workflow(workflow: str, inputs: dict[str, str] | None = None, ref: 
     Used by the UI to start a check the moment a monitor is created, and by
     the worker to hand over to its next segment. Inside Actions the token is
     the run's own ``GITHUB_TOKEN`` (needs ``permissions: actions: write``);
-    from the UI it is the configured PAT (needs the *Actions: write* scope —
-    without it GitHub answers 403 and the monitor simply waits for the
-    schedule, which the caller reports honestly).
+    from the UI it is the configured PAT — a fine-grained token for this one
+    repository with *Actions: read and write* and nothing else (without it
+    GitHub answers 403 and the monitor simply waits for the schedule, which
+    the caller reports honestly). Outside Actions the call must come through
+    ``monitor.dispatch`` (see :func:`dispatch_grant`).
     """
+    if not running_in_actions() and not _DISPATCH_GRANT.get():
+        # From the app, only through ``monitor.dispatch``, which checks who
+        # is asking (an admin, or the owner of the one monitor named).
+        print(f"[store] refused an unauthorised dispatch of {workflow}", flush=True)
+        return False, "Not allowed: you can't start that from here."
     token = github_token()
     if not token:
         return False, "No GH_TOKEN configured."

@@ -57,11 +57,13 @@ def test_starting_a_monitor_leaves_a_clean_wizard_for_the_next_one(seeded):
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU", "AMB"],
               formats={"ALLU": ["Dolby Cinema"], "AMB": [ANY_FORMAT]}, interval=30,
               date_mode="single", furthest=5)
-    app.text_input(key="notify_email").set_value("a@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception, [str(e) for e in app.exception]
     monitor_a = load_monitors()[0]
-    assert monitor_a.interval_minutes == 30 and monitor_a.notify_email == "a@example.com"
+    # The alert address is the signed-in account's own (security change: it
+    # used to be whatever was typed on the page).
+    assert monitor_a.interval_minutes == 30 and monitor_a.notify_email == "tester@example.com"
 
     # Every wizard key is back at its default; the widget-backed ones are gone.
     for key, default in flow.DEFAULTS.items():
@@ -184,7 +186,7 @@ def test_the_rail_stop_button_still_stops_and_redraws_the_whole_page(make_monito
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# H / I. The notification email: the account's own, then whatever was typed
+# H / I. The notification email: the account's own, and nothing else
 # ──────────────────────────────────────────────────────────────────────────
 def test_a_new_account_sees_its_own_email_prefilled(seeded, signed_in):
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU"],
@@ -192,10 +194,13 @@ def test_a_new_account_sees_its_own_email_prefilled(seeded, signed_in):
     assert app.text_input(key="notify_email").value == signed_in.email == "tester@example.com"
 
 
-def test_a_saved_notification_address_wins_over_the_account_email(seeded):
+def test_a_saved_settings_address_no_longer_redirects_alerts(seeded, signed_in):
+    """Security change: a stored ``notify_email`` used to win over the
+    account's address, so whatever had been saved — by anyone able to write
+    the settings document — received the alerts. Alerts now go to the
+    signed-in account's own verified address only."""
     from monitor.state import Scope, save_settings, set_scope_provider
 
-    # Settings are per account; save under the signed-in fixture's UID.
     set_scope_provider(lambda: Scope("", "uid-test-1", lambda: ""))
     try:
         save_settings({"notify_email": "alerts@example.com"}, mirror=False)
@@ -203,23 +208,29 @@ def test_a_saved_notification_address_wins_over_the_account_email(seeded):
         set_scope_provider(None)
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU"],
               formats={"ALLU": [ANY_FORMAT]})
-    assert app.text_input(key="notify_email").value == "alerts@example.com"
+    assert app.text_input(key="notify_email").value == signed_in.email
+    app.button(key="start").click().run()
+    assert load_monitors()[0].notify_email == signed_in.email
 
 
-def test_a_typed_address_survives_reruns_and_a_trip_to_another_page(seeded):
+def test_the_alert_address_cannot_be_edited(seeded, signed_in):
+    """Security change: the box used to take any address — or a list of
+    them — and the monitor emailed whatever was typed. It is now read-only,
+    and the saved monitor is addressed to the account whatever the page
+    sends."""
+    from streamlit.testing.v1.errors import AppTestError
+
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU"],
               formats={"ALLU": [ANY_FORMAT]})
-    app.text_input(key="notify_email").set_value("custom@example.com").run()
-    assert app.session_state["notify_email_draft"] == "custom@example.com"
-    app.run()                                                      # a rerun changes nothing
-    assert app.text_input(key="notify_email").value == "custom@example.com"
-    app.session_state["page"] = "History"                          # widget not drawn: Streamlit drops its state
+    box = app.text_input(key="notify_email")
+    assert box.disabled
+    with pytest.raises(AppTestError):
+        box.set_value("victim@example.org, other@example.org")
+    app.session_state["notify_email"] = "victim@example.org"     # a forged widget value
     app.run()
-    app.session_state["page"] = "Home"
-    app.run()
-    assert app.text_input(key="notify_email").value == "custom@example.com"
     app.button(key="start").click().run()
-    assert load_monitors()[0].notify_email == "custom@example.com"
+    assert not app.exception, [str(e) for e in app.exception]
+    assert load_monitors()[0].notify_email == "tester@example.com"
 
 
 def test_the_prefill_is_the_signed_in_persons_email_only(seeded, monkeypatch):
@@ -274,7 +285,7 @@ def test_a_sign_out_wipes_the_wizard_the_draft_and_the_page():
 def test_a_format_the_theatre_lists_is_accepted(seeded):
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU"],
               formats={"ALLU": ["Dolby Cinema"]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert [t.key for t in load_monitors()[0].targets] == ["ALLU::Dolby Cinema"]
 
@@ -285,7 +296,7 @@ def test_a_format_the_theatre_is_not_known_to_run_is_refused(seeded):
     only the courtesy."""
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU"],
               formats={"ALLU": ["IMAX 3D"]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert load_monitors() == []
     assert any("isn't known to run IMAX 3D" in w.value for w in app.warning)
@@ -307,7 +318,7 @@ def test_any_format_and_a_known_but_unlisted_format_pass(seeded, monkeypatch):
     monkeypatch.setattr(cv, "selected_venues", wider)
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU", "AMB"],
               formats={"ALLU": ["IMAX"], "AMB": [ANY_FORMAT]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception
     assert sorted(t.key for t in load_monitors()[0].targets) == ["ALLU::IMAX", "AMB::Any format"]

@@ -116,7 +116,7 @@ def test_no_monitor_is_saved_on_a_disabled_platform():
     catalogue.store_snapshot(snapshot, mirror=False)
     app = run_app(step=5, location="hyderabad", movie_id=FILM_EN.id, theatres=["101"],
                   formats={"101": ["Any format"]}, platform="pvr_inox")
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert load_monitors() == []
 

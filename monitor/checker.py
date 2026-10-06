@@ -50,9 +50,11 @@ from monitor.models import (
     TargetResult,
     TheatreTarget,
 )
+from monitor import policy
 from monitor.sharing import SharingReport, describe, select_for_fetch
 from monitor.state import (
     MonitorState,
+    backend_name,
     expire_due_monitors,
     load_monitors_for_checking,
     load_state,
@@ -92,6 +94,13 @@ class RunReport:
     #: True when this tick decided from ``known_state`` that nothing was due
     #: and read no state document at all (see ``run_once``).
     state_read_skipped: bool = False
+    #: Monitor id → why ``monitor.policy`` refused it this tick. A refused
+    #: monitor is never checked, never emailed, and never keeps a segment
+    #: alive.
+    rejected: dict[str, str] = field(default_factory=dict)
+    #: Running monitors whose owners could not be looked up this tick: not
+    #: checked, retried on the next tick.
+    deferred: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         text = (
@@ -479,8 +488,26 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     # Only what can still be checked. On Firestore that is the ACTIVE
     # documents alone — a stopped or expired monitor is never read again by
     # the worker, and never written back by it either.
-    monitors, newly_expired = expire_due_monitors(load_monitors_for_checking(), at=at, mirror=mirror)
+    stored, newly_expired = expire_due_monitors(load_monitors_for_checking(), at=at, mirror=mirror)
     report.expired = [m.id for m in newly_expired]
+
+    # The worker is a security boundary of its own: a stored monitor is
+    # data, not an instruction. ``monitor.policy`` binds each alert to its
+    # owner's verified account address, enforces the intervals, the end-date
+    # cap, admin-only features and the active-monitor limit, and refuses
+    # anything malformed — whatever the document, the rules or the app said.
+    screened = policy.screen(stored, at=at, resolver=policy.worker_resolver(backend_name()))
+    report.rejected = dict(screened.rejected)
+    report.deferred = [m.id for m in screened.deferred]
+    for monitor_ref in screened.deferred:
+        report.skipped.append(f"{short_id(monitor_ref.id)} (owner not verified yet)")
+    for rejected_id in screened.rejected:
+        report.skipped.append(f"{short_id(rejected_id)} (refused)")
+    if screened.clamped:
+        # The whole list: the JSON store rewrites its file from what it is
+        # given, so a subset would drop every other monitor.
+        save_monitors(stored, mirror=mirror)
+    monitors = screened.eligible
 
     if known_state is not None and not force and not monitor_id and all(
         m.id in known_state and not known_state[m.id].is_due(m.interval_minutes, at)
@@ -511,7 +538,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     # *before* fetching, so this tick's sweep is the film as it is now.
     report.discovery = discover_siblings(monitors, due, state, at=at, mirror=mirror)
     if report.discovery.updated:
-        save_monitors(monitors, mirror=mirror)
+        save_monitors(stored, mirror=mirror)
 
     # Several people wanting the same seat want the same answer. Collapse the
     # running monitors into the listing reads they actually need, read every

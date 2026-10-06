@@ -51,6 +51,7 @@ from config.store import (
     write_json,
 )
 from config.timezone import now_ist, parse_iso, to_iso
+from monitor import policy
 from monitor.models import Availability, Monitor, MonitorStatus
 
 #: Never send more than one "new showtime" notice per target inside this
@@ -84,6 +85,21 @@ class Scope:
     #: lifts the application's active-monitor limit and nothing else: not
     #: what this UID may read or write, which the rules alone decide.
     admin: bool = False
+    #: The account's email address as Firebase's own record reports it
+    #: (verified — an unverified account is never signed in). Every running
+    #: monitor this scope writes is addressed to it and to nothing else.
+    email: str = ""
+    #: This scope belongs to a real deployment — Firebase sign-in is
+    #: configured on this host. A deployment keeps user data in Firestore
+    #: only: if Firestore is not usable, user-data calls fail with
+    #: :class:`StorageUnavailable` instead of falling back to the JSON files.
+    deployment: bool = False
+
+
+class StorageUnavailable(RuntimeError):
+    """A signed-in person's data has nowhere safe to live: the deployment
+    has Firebase sign-in but no usable Firestore. Refused, never redirected
+    to the repository's JSON files (which are public)."""
 
 
 ScopeProvider = Callable[[], "Scope | None"]
@@ -160,6 +176,12 @@ def _backend() -> "_Store":
             if scope.firestore_enabled and scope.project_id:
                 client = fs.FirestoreClient(scope.project_id, scope.token, transport=_transport or fs._http)
                 return _FirestoreStore(client, uid=scope.uid)
+            if scope.deployment:
+                # Never the JSON files for a real person on a real host: they
+                # live in a public repository.
+                raise StorageUnavailable("Firestore is not enabled for this deployment")
+            # A developer's machine (no Firebase sign-in configured): the
+            # per-UID view of the local files, which never leave the machine.
             return _JsonStore(uid=scope.uid)
     info = fs.service_account_from_env()
     project = fs.project_from_env()
@@ -183,6 +205,16 @@ class _JsonStore:
         # A UID is the browser fallback view: old ownerless records and every
         # other account's records are deliberately invisible.
         self.uid = uid
+
+    def _mirror(self, mirror: bool) -> bool:
+        """Whether a write may be mirrored to the GitHub repository.
+
+        Never for a signed-in person's view. The repository is public; a
+        person's monitors carry their UID and the address their alerts go
+        to. Only the ownerless command-line view (the operator's own legacy
+        files) may mirror, as it always has.
+        """
+        return bool(mirror) and self.uid is None
 
     def _owns(self, item: dict[str, Any]) -> bool:
         return self.uid is None or str(item.get("owner_uid", "")) == self.uid
@@ -222,7 +254,7 @@ class _JsonStore:
                     raise PermissionError("a monitor cannot be written under another account")
                 monitor.owner_uid = self.uid
             payload = others + [m.to_dict() for m in monitors]
-        write_json(MONITORS_FILE, payload, mirror=mirror,
+        write_json(MONITORS_FILE, payload, mirror=self._mirror(mirror),
                    message="chore: update monitors")
 
     def delete_monitor(self, monitor_id: str, *, mirror: bool = True) -> None:
@@ -262,7 +294,7 @@ class _JsonStore:
             owned_ids = {m.id for m in self.load_monitors()}
             payload = {k: v for k, v in payload.items() if k not in owned_ids}
             payload.update({k: v.to_dict() for k, v in state.items() if k in owned_ids})
-        write_json(STATE_FILE, payload, mirror=mirror,
+        write_json(STATE_FILE, payload, mirror=self._mirror(mirror),
                    message="chore: update monitoring state")
 
     def clear_monitor_state(self, monitor_id: str, *, mirror: bool = True) -> None:
@@ -286,7 +318,7 @@ class _JsonStore:
         # this, worker-written history was invisible to the person who owns it.
         owner = self.uid or monitor.owner_uid
         history.insert(0, {**item, "owner_uid": owner} if owner else item)
-        _json_save_history(history, mirror=mirror)
+        _json_save_history(history, mirror=self._mirror(mirror))
 
     def recent_history_for(self, monitor: Monitor) -> list[dict[str, Any]]:
         return self.load_history()[:8]
@@ -301,13 +333,13 @@ class _JsonStore:
 
     def save_settings(self, settings: dict[str, Any], *, mirror: bool = True) -> None:
         if self.uid is None:
-            _json_save_settings(settings, mirror=mirror)
+            _json_save_settings(settings, mirror=self._mirror(mirror))
             return
         raw = read_json(SETTINGS_FILE)
         payload = raw if isinstance(raw, dict) else {}
         users = payload.get("users") if isinstance(payload.get("users"), dict) else {}
         payload = {"users": {**users, self.uid: dict(settings)}}
-        write_json(SETTINGS_FILE, payload, mirror=mirror, message="chore: update settings")
+        write_json(SETTINGS_FILE, payload, mirror=self._mirror(mirror), message="chore: update settings")
 
     def purge_user_data(self, *, mirror: bool = True) -> dict[str, int]:
         """Remove everything this UID owns: monitors, their observed state,
@@ -319,24 +351,24 @@ class _JsonStore:
 
         raw = read_json(MONITORS_FILE)
         keep = [i for i in raw if isinstance(i, dict) and not self._owns(i)] if isinstance(raw, list) else []
-        write_json(MONITORS_FILE, keep, mirror=mirror, message="chore: update monitors")
+        write_json(MONITORS_FILE, keep, mirror=self._mirror(mirror), message="chore: update monitors")
 
         raw_state = read_json(STATE_FILE)
         if isinstance(raw_state, dict):
             write_json(STATE_FILE, {k: v for k, v in raw_state.items() if k not in mine},
-                       mirror=mirror, message="chore: update monitoring state")
+                       mirror=self._mirror(mirror), message="chore: update monitoring state")
 
         history = _json_load_history()
         kept_history = [i for i in history if isinstance(i, dict) and not self._owns(i)]
         removed_history = len(history) - len(kept_history)
-        _json_save_history(kept_history, mirror=mirror)
+        _json_save_history(kept_history, mirror=self._mirror(mirror))
 
         raw_settings = read_json(SETTINGS_FILE)
         users = raw_settings.get("users") if isinstance(raw_settings, dict) else None
         had_settings = isinstance(users, dict) and self.uid in users
         if had_settings:
             write_json(SETTINGS_FILE, {"users": {k: v for k, v in users.items() if k != self.uid}},
-                       mirror=mirror, message="chore: update settings")
+                       mirror=self._mirror(mirror), message="chore: update settings")
         return {"monitors": len(mine), "history": removed_history, "settings": int(had_settings)}
 
 
@@ -411,6 +443,18 @@ class _FirestoreStore:
         for doc_id, doc in self.client.query(MONITORS, equals=equals).items():
             if not self._owned(doc):
                 continue
+            if self.uid is None:
+                # The worker reads every owner's documents with a credential
+                # that bypasses the rules. A document carrying a field this
+                # application never writes did not come from it: skip it
+                # whole rather than guess which parts to trust.
+                extra = policy.unknown_fields(doc)
+                if extra:
+                    # Counted, not named: the names are the writer's text and
+                    # this log is public.
+                    print(f"[state] skipping monitor {doc_id[:8]}: {len(extra)} field(s) "
+                          "the application never writes", flush=True)
+                    continue
             try:
                 monitor = Monitor.from_dict({**doc, "id": doc_id})
             except (KeyError, TypeError, ValueError) as exc:
@@ -820,7 +864,7 @@ def load_many(*kinds: str) -> dict[str, Any]:
 #: The most ACTIVE monitors an ordinary account may have at once. Only
 #: running ones count: a STOPPED or EXPIRED monitor holds no slot, and every
 #: past monitor stays in My Monitors and History regardless.
-ACTIVE_MONITOR_LIMIT = 5
+ACTIVE_MONITOR_LIMIT = policy.ACTIVE_MONITOR_LIMIT
 
 LIMIT_MESSAGE = ("Active monitor limit reached — you can have up to {limit} active monitors "
                  "at a time. Stop an existing monitor to start another.")
@@ -890,11 +934,58 @@ def _assert_interval_allowed(monitor: Monitor) -> None:
     member from manufacturing a five-minute monitor through widget or API
     input.
     """
-    if monitor.interval_minutes != 5:
+    scope = _signed_in_scope()
+    if scope is None:
         return
-    scope = _scope_provider() if _scope_provider is not None else None
-    if scope is None or not scope.admin:
+    if monitor.interval_minutes not in policy.ADMIN_INTERVALS:
+        raise policy.MonitorNotAllowed("That check interval isn't one TicketRadar offers.")
+    if monitor.interval_minutes == 5 and not scope.admin:
         raise ValueError("Only the admin account may use a five-minute interval")
+
+
+def _signed_in_scope() -> "Scope | None":
+    if _scope_provider is None:
+        return None
+    scope = _scope_provider()
+    return scope if scope is not None and scope.uid else None
+
+
+def _prepare_for_write(monitors: list[Monitor]) -> None:
+    """Make every running monitor a signed-in person writes one the policy
+    (and Firestore's rules) accept — before anything leaves the app.
+
+    * Its alerts go to the account's own verified address. Whatever an older
+      document or a widget carried, the recipient is the person's own.
+    * An ordinary account cannot hold an admin-only interval or a category
+      watch (an account whose claim was revoked keeps its monitors, as
+      ordinary ones).
+    * An end date beyond :data:`policy.MAX_MONITOR_DAYS` is pulled back.
+
+    The store writes the person's whole list on every save, so one older
+    document the rules would now refuse would otherwise make every save —
+    stopping a monitor included — fail. Stopped and expired monitors are
+    left exactly as they are: the rules only constrain running ones.
+    Ownership is untouched: the store stamps the UID, as before.
+    """
+    scope = _signed_in_scope()
+    if scope is None:
+        return
+    bound = policy.normalise_recipient(scope.email) if scope.email else ""
+    for monitor in monitors:
+        if not monitor.is_running():
+            continue
+        if bound:
+            monitor.notify_email = bound
+        else:
+            # A scope without an address only exists outside a deployment
+            # (tests, a developer's machine): the address must still be one.
+            monitor.notify_email = policy.normalise_recipient(monitor.notify_email)
+        if not scope.admin:
+            if monitor.interval_minutes not in policy.MEMBER_INTERVALS:
+                monitor.interval_minutes = 10
+            monitor.categories, monitor.show_time = [], ""
+        if not policy.until_allowed(monitor.monitor_until):
+            monitor.monitor_until = policy.max_until()
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -913,6 +1004,7 @@ def load_monitors_for_checking() -> list[Monitor]:
 
 def save_monitors(monitors: list[Monitor], *, mirror: bool = True) -> None:
     invalidate_cache("monitors")
+    _prepare_for_write(monitors)
     _backend().save_monitors(monitors, mirror=mirror)
 
 
@@ -921,6 +1013,10 @@ def upsert_monitor(monitor: Monitor, *, mirror: bool = True) -> list[Monitor]:
     would put the account over :data:`ACTIVE_MONITOR_LIMIT`."""
     monitors = load_monitors()
     _assert_interval_allowed(monitor)
+    if _signed_in_scope() is not None and monitor.is_running():
+        # Refused with a reason, not silently shortened: this is the
+        # person's own choice being saved.
+        policy.assert_until_allowed(monitor.monitor_until)
     _assert_may_run(monitor, monitors)
     for i, existing in enumerate(monitors):
         if existing.id == monitor.id:
@@ -982,6 +1078,9 @@ def extend_monitor(monitor_id: str, hours: int = 24, *, mirror: bool = True) -> 
         limit = active_monitor_limit()
         if limit is not None and active_monitor_count(monitors) >= limit:
             raise MonitorLimitError(limit)
+    if _signed_in_scope() is not None:
+        # Checked before the flip: the list may be the page's cached read.
+        policy.assert_until_allowed(max(target.monitor_until, now_ist()) + timedelta(hours=hours))
     target.extend(hours)
     save_monitors(monitors, mirror=mirror)
     return target

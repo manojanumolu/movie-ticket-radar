@@ -10,7 +10,20 @@ rules_version = '2';
 // about them (email, display name, anything typed on the page) counts. The
 // worker on GitHub Actions uses a service account, which bypasses these
 // rules by design — it is the only privileged writer and never runs where a
-// browser could reach it.
+// browser could reach it. It does not trust what these rules let through,
+// either: monitor/policy.py re-checks every monitor before it is checked.
+//
+// A monitor written straight through Firebase's API — bypassing the app —
+// meets the same limits the app enforces (the numbers are monitor/policy.py's
+// and tests/test_security_hardening.py keeps the two in step):
+//   * writes need a verified email address;
+//   * only the fields the application writes, with sane sizes;
+//   * a running monitor emails the account's own verified address, checks at
+//     10/15/30 minutes (5 for the admin claim), carries no admin-only
+//     category watch, and ends within the 30-day limit.
+// Stopped and expired monitors are only shape-checked, so an older document
+// can always be stopped or deleted. What rules cannot count — how many
+// monitors one account is running — the app and the worker enforce.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -18,24 +31,103 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid != null;
     }
 
+    // A sign-in whose address Firebase has verified. Every write needs one.
+    function verified() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string;
+    }
+
+    // The `admin: true` custom claim — set only with the service account
+    // (tools/grant_admin.py), never by a client.
+    function isAdmin() {
+      return request.auth.token.admin == true;
+    }
+
     function ownsExisting() {
       return signedIn() && resource.data.owner_uid == request.auth.uid;
     }
 
     function ownsIncoming() {
-      return signedIn() && request.resource.data.owner_uid == request.auth.uid;
+      return verified() && request.resource.data.owner_uid == request.auth.uid;
+    }
+
+    // ── Monitors ─────────────────────────────────────────────────────────
+    // Exactly what Monitor.to_dict() writes.
+    function monitorFields() {
+      return ['id', 'movie', 'targets', 'interval_minutes', 'monitor_until',
+              'start_immediately', 'notify_email', 'date_codes', 'status',
+              'created_at', 'stopped_at', 'stopped_reason',
+              'first_check_requested_at', 'problem', 'owner_uid',
+              'categories', 'show_time'];
+    }
+
+    function hasNoneOrEmptyList(d, key) {
+      return !(key in d) || d[key] == null || (d[key] is list && d[key].size() == 0);
+    }
+
+    function hasNoneOrEmptyString(d, key) {
+      return !(key in d) || d[key] == null || d[key] == '';
+    }
+
+    function validShape(d, id) {
+      return d.keys().hasOnly(monitorFields())
+        && d.keys().hasAll(['movie', 'targets', 'interval_minutes', 'monitor_until',
+                            'notify_email', 'status', 'owner_uid'])
+        && (!('id' in d) || d.id == id)
+        && d.movie is map
+        && d.targets is list && d.targets.size() > 0 && d.targets.size() <= 200
+        && d.interval_minutes is int
+        && d.status in ['ACTIVE', 'STOPPED', 'EXPIRED']
+        && d.notify_email is string && d.notify_email.size() <= 254
+        && d.monitor_until is string
+        && (!('date_codes' in d) || (d.date_codes is list && d.date_codes.size() <= 62))
+        && (!('categories' in d) || (d.categories is list && d.categories.size() <= 20))
+        && (!('show_time' in d) || d.show_time is string);
+    }
+
+    // 'YYYY-MM-DD' for a timestamp, zero-padded.
+    function pad2(n) {
+      return n < 10 ? '0' + string(n) : string(n);
+    }
+
+    function isoDate(t) {
+      return string(t.year()) + '-' + pad2(t.month()) + '-' + pad2(t.day());
+    }
+
+    // The app stores ISO-8601 strings ("2026-09-26T23:59:00+05:30"), which
+    // sort in time order. A day of margin over the 30-day limit absorbs the
+    // UTC/IST difference; the app and the worker hold the exact limit.
+    function endsWithinLimit(until) {
+      return until.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*')
+        && until < isoDate(request.time + duration.value(32, 'd'));
+    }
+
+    function runningAllowed(d) {
+      return d.status != 'ACTIVE' || (
+        d.notify_email.lower() == request.auth.token.email.lower()
+        && (d.interval_minutes in [10, 15, 30] || (isAdmin() && d.interval_minutes == 5))
+        && (isAdmin() || (hasNoneOrEmptyList(d, 'categories') && hasNoneOrEmptyString(d, 'show_time')))
+        && endsWithinLimit(d.monitor_until)
+      );
+    }
+
+    function validMonitor(d, id) {
+      return validShape(d, id) && runningAllowed(d);
     }
 
     // users/{uid}: the person's own settings document.
     match /users/{uid} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if verified() && request.auth.uid == uid
+        && (!('owner_uid' in request.resource.data) || request.resource.data.owner_uid == uid);
     }
 
     // monitors/{id}: created and managed by their owner.
     match /monitors/{id} {
       allow read: if ownsExisting();
-      allow create: if ownsIncoming();
-      allow update: if ownsExisting() && ownsIncoming();
+      allow create: if ownsIncoming() && validMonitor(request.resource.data, id);
+      allow update: if ownsExisting() && ownsIncoming() && validMonitor(request.resource.data, id);
       allow delete: if ownsExisting();
     }
 

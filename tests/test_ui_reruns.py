@@ -136,7 +136,7 @@ def test_starting_a_monitor_still_reruns_into_step_one(seeded, reruns):
     """The one rerun that stays: Start monitoring writes, then wants the
     page redrawn at step 1 with its flash — that is not a tile."""
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU"], formats={"ALLU": [ANY_FORMAT]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception
     assert app.session_state["step"] == 1
@@ -167,7 +167,7 @@ def test_the_wizard_renders_exactly_once_after_every_interaction(seeded, signed_
     assert _wizards(app) == once
     app.button(key="interval_15").click().run();          assert _wizards(app) == once
     app.button(key="datemode_single").click().run();      assert _wizards(app) == once
-    app.text_input(key="notify_email").set_value("me@example.com").run(); assert _wizards(app) == once
+    app.run(); assert _wizards(app) == once
     app.run();                                             assert _wizards(app) == once
     app.button(key="step_3").click().run()
     assert _wizards(app)["start buttons"] == 0             # step 3 is not the wizard's last step

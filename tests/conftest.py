@@ -60,10 +60,53 @@ def isolated_data(tmp_path, monkeypatch):
 
     # Never mirror to GitHub from a test.
     monkeypatch.setattr(store, "push_to_github", lambda *a, **k: False)
+    # The suite's signed-in sessions keep their data in these throwaway files
+    # even where a test configures Firebase sign-in. A deployment never sets
+    # this; tests/test_security_hardening.py removes it to prove that such a
+    # host then refuses rather than fall back to JSON.
+    monkeypatch.setenv("TICKETRADAR_LOCAL_JSON_STORE", "1")
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     return data
+
+
+#: The suite's "now": the same moment as the ``at`` fixture below. The
+#: fixtures describe a release weekend in late September 2026 (monitors that
+#: run until 26 Sep, shows on 25–26 Sep), and every check of "is this still
+#: running?" asks the clock. Left on the wall clock, that whole story expired
+#: on 27 Sep 2026 and ~30 tests started failing for no reason but the date.
+SUITE_NOW = datetime(2026, 9, 25, 22, 20, tzinfo=IST)
+
+
+@pytest.fixture(autouse=True)
+def pinned_clock(monkeypatch):
+    """Anchor the application's clock at :data:`SUITE_NOW`.
+
+    ``config.timezone.now_ist`` is the application's only clock and reads
+    ``datetime`` from that module, so replacing that one name is enough. The
+    clock stands still, as the ``at`` fixture always has: tests that age a
+    record by "now minus five hours" get exactly five hours. ``isinstance`` keeps answering for real datetimes (``parse_iso`` relies
+    on it). Nothing outside ``config.timezone`` is touched.
+    """
+    from config import timezone as tz
+
+    real = datetime
+
+    class _Meta(type):
+        def __instancecheck__(cls, obj):
+            return isinstance(obj, real)
+
+        def __subclasscheck__(cls, sub):
+            return issubclass(sub, real)
+
+    class Pinned(real, metaclass=_Meta):
+        @classmethod
+        def now(cls, tz_=None):
+            moment = SUITE_NOW
+            return moment.astimezone(tz_) if tz_ is not None else moment.replace(tzinfo=None)
+
+    monkeypatch.setattr(tz, "datetime", Pinned)
 
 
 @pytest.fixture(autouse=True)
@@ -148,6 +191,27 @@ def no_live_discovery(monkeypatch):
             raise PlatformError("no city listing in tests")
 
     monkeypatch.setattr(discovery, "get_provider", lambda slug: Unreachable())
+
+
+@pytest.fixture(autouse=True)
+def owner_identities():
+    """The worker's owner check (``monitor.policy``) without Firebase.
+
+    In production the worker reads each owner's account record from Firebase
+    Authentication; there is no such service here, and asking it would make
+    every Firestore-backed worker test defer its monitors. By default the
+    suite uses :data:`policy.LOCAL` — the stored address is *validated* but
+    not bound, exactly what the JSON store does on a developer's machine.
+    ``tests/test_security_hardening.py`` installs a fake account directory
+    to test the binding itself.
+    """
+    from monitor import policy
+
+    policy.set_identity_resolver(policy.LOCAL)
+    policy._built = None
+    yield
+    policy.set_identity_resolver(None)
+    policy._built = None
 
 
 @pytest.fixture(autouse=True)

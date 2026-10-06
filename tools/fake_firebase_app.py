@@ -35,6 +35,9 @@ os.environ.setdefault("FIREBASE_WEB_API_KEY", "fake-web-api-key")
 os.environ.pop("FIREBASE_PROJECT_ID", None)
 os.environ.pop("GH_TOKEN", None)
 os.environ.pop("GITHUB_TOKEN", None)
+# A developer's machine: keep the signed-in session's data in the local JSON
+# files (never pushed anywhere) instead of failing closed for want of Firestore.
+os.environ.setdefault("TICKETRADAR_LOCAL_JSON_STORE", "1")
 
 from auth import firebase  # noqa: E402
 from config import store  # noqa: E402

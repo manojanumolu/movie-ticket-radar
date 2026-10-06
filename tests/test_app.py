@@ -287,7 +287,7 @@ def test_start_monitoring_creates_one_target_per_theatre_format(seeded):
     app = run(step=5, location="hyderabad", movie_id=seeded,
               theatres=["ALLU", "AMB"],
               formats={"ALLU": ["Dolby Cinema"], "AMB": ["HDR By Barco", ANY_FORMAT]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception, [str(e) for e in app.exception]
 
@@ -296,7 +296,9 @@ def test_start_monitoring_creates_one_target_per_theatre_format(seeded):
     monitor = monitors[0]
     assert monitor.movie.title == "Mandaadi"
     assert monitor.status is MonitorStatus.ACTIVE
-    assert monitor.notify_email == "me@example.com"
+    # Security change: the alert goes to the signed-in account's own
+    # verified address (the fixture's), not to an address typed on the page.
+    assert monitor.notify_email == "tester@example.com"
     assert sorted(t.key for t in monitor.targets) == [
         "ALLU::Dolby Cinema", "AMB::Any format", "AMB::HDR By Barco",
     ]
@@ -304,13 +306,16 @@ def test_start_monitoring_creates_one_target_per_theatre_format(seeded):
     assert monitor.target("ALLU::Dolby Cinema").area == "Attapur, Hyderabad"
 
 
-def test_start_is_blocked_without_an_email(seeded):
+def test_start_is_blocked_without_a_usable_account_email(seeded, signed_in):
+    """The recipient can no longer be typed (or emptied) on the page; it is
+    the account's address. An account without a usable one cannot start a
+    monitor — there would be nowhere it is allowed to send."""
+    signed_in.email = "not an address"
     app = run(step=5, location="hyderabad", movie_id=seeded,
               theatres=["ALLU"], formats={"ALLU": [ANY_FORMAT]})
-    app.text_input(key="notify_email").set_value("").run()
     app.button(key="start").click().run()
     assert load_monitors() == []
-    assert any("notification email" in w.value for w in app.warning)
+    assert any("no usable email address" in w.value for w in app.warning)
 
 
 def test_changing_the_movie_clears_theatres_and_formats(seeded):
@@ -705,7 +710,7 @@ def test_release_watch_monitor_is_saved_and_fires_when_the_theatre_appears(
     at = now_ist()
     app = run(step=5, location="hyderabad", movie_id=release_watch,
               theatres=["PRHN"], formats={"PRHN": ["Pcx Screen"]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception, [str(e) for e in app.exception]
     monitor = load_monitors()[0]

@@ -337,6 +337,11 @@ def run_loop(
 
         wait = seconds_until_next_due(clock(), poll_seconds,
                                       monitors=report.monitors, state=report.state)
+        if wait is None and report.deferred:
+            # Monitors whose owners could not be looked up this tick are not
+            # refused, only postponed: keep polling at the ordinary pace (never
+            # faster — a failing lookup is not retried in a tight loop).
+            wait = float(poll_seconds)
         if wait is None:
             loop.stopped_reason = "nothing running"
             break

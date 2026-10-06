@@ -1,0 +1,14 @@
+{
+  "name": "ticketradar-firestore-rules-tests",
+  "private": true,
+  "description": "Runs firestore.rules in the Firebase emulator. See README.md.",
+  "type": "module",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-ticketradar \"node rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.0",
+    "firebase": "^10.0.0",
+    "firebase-tools": "^13.0.0"
+  }
+}

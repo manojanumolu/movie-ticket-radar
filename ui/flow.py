@@ -38,6 +38,7 @@ from config.locations import LOCATIONS, enabled_locations, get_location
 from config.theatre_capabilities import format_aliases, premium_formats
 from platforms import DEFAULT_PLATFORM, enabled_platforms, platform_name
 from config.timezone import IST, now_ist
+from monitor import policy
 from monitor.models import (ANY_FORMAT, Venue, date_codes_between, dedupe, describe_date_codes, is_infinity_vision,
                             is_marvel_title, normalise_format, short_date)
 from ui import catalogue_view as cv
@@ -861,14 +862,22 @@ def step_monitoring(default_email: str, *, is_admin: bool = False) -> tuple[int,
         C.step_header("clock", "Monitor until", "The monitor stops itself after this time.")
         with st.container(key="trpair_until"):
             date_col, time_col = st.columns([1.5, 1], gap="small")
+        latest = policy.max_until()
         end_date = date_col.date_input("End date", value=(now_ist() + timedelta(days=1)).date(),
-                                       min_value=now_ist().date(), format="DD/MM/YYYY",
+                                       min_value=now_ist().date(), max_value=latest.date(),
+                                       format="DD/MM/YYYY",
                                        key="until_date", label_visibility="collapsed",
                                        help="The last day this monitor keeps checking")
         end_time = time_col.time_input("End time", value=dtime(23, 59), step=timedelta(minutes=15),
                                        key="until_time", label_visibility="collapsed",
                                        help="The time on that day it stops")
         until = datetime.combine(end_date, end_time, tzinfo=IST)
+        if until > latest:
+            # The last allowed day, later in the day than the cap: stop at
+            # the cap itself. The store refuses anything beyond it anyway.
+            until = latest
+            st.caption(f"Monitors run for at most {policy.MAX_MONITOR_DAYS} days — this one stops "
+                       f"{latest.strftime('%d %b, %I:%M %p').lstrip('0')}.")
         start_now = st.toggle("Start checking immediately", key="start_now_toggle",
                               value=bool(st.session_state.get("start_now", True)),
                               help="Runs the first check the moment you press Start, "
@@ -913,16 +922,14 @@ def step_monitoring(default_email: str, *, is_admin: bool = False) -> tuple[int,
     C.rule("Alerts")
     C.step_header("mail", "Where should we email you?", "One message the moment tickets open — nothing else.")
     C.html('<div class="tr-field-label">Notification email</div>')
-    # ``default_email`` fills the box only while nothing has been typed: the
-    # draft is what the person last entered, kept outside the widget so it
-    # survives a visit to another page (Streamlit drops a widget's own state
-    # when the widget is not drawn) and is never overwritten by a rerun.
-    draft = st.session_state.get("notify_email_draft")
-    email = st.text_input("Notification email", value=default_email if draft is None else draft,
-                          placeholder="you@gmail.com", label_visibility="collapsed",
-                          key="notify_email", on_change=_remember_email,
-                          help="Where the alert is sent. Prefilled with your account's email — change it if you like.")
-    return interval, until, email.strip(), bool(start_now), show_dates
+    # Alerts go to the verified address the person signed in with, and only
+    # there: shown, not editable. (Saving ignores this box regardless — the
+    # store binds every monitor to the account's own address.)
+    st.session_state["notify_email"] = default_email
+    email = st.text_input("Notification email", key="notify_email", disabled=True,
+                          label_visibility="collapsed",
+                          help="Alerts go to the verified email address you sign in with.")
+    return interval, until, (email or "").strip(), bool(start_now), show_dates
 
 
 def date_listing_note(show_dates: list[str]) -> None:
@@ -953,10 +960,6 @@ def date_listing_note(show_dates: list[str]) -> None:
     if missing:
         st.caption(f"Not listed on {describe_date_codes(show_dates)} yet: " + "; ".join(dedupe(missing))
                    + " — you'll be emailed when it is.")
-
-
-def _remember_email() -> None:
-    st.session_state["notify_email_draft"] = st.session_state.get("notify_email", "")
 
 
 # ──────────────────────────────────────────────────────────────────────────

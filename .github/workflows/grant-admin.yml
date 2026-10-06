@@ -7,16 +7,21 @@ name: Grant admin claim
 # can reach; this is the one place that credential is used for anything but
 # the worker. Nothing here touches Firestore, rules, or any other account.
 #
-# Run it from the Actions tab: Grant admin claim → Run workflow → your
-# sign-in email, action "grant". This repository and its logs are public,
-# so the log shows a masked address and whether the claim is set — never
-# the full address, the UID, a key or a token.
+# Run it from the Actions tab: Grant admin claim → Run workflow → the
+# account's Firebase UID (Firebase console → Authentication → User UID; an
+# email address also works), action "grant".
+#
+# This repository and its logs are public, and GitHub prints a step's `env:`
+# block and command line in the log. So the account is NOT passed either way:
+# tools/grant_admin.py reads it from the event payload file, masks it with
+# ::add-mask::, and prints only a masked address and UID prefix and whether
+# the claim is set. Never the full address, the UID, a key or a token.
 
 on:
   workflow_dispatch:
     inputs:
-      email:
-        description: "The account's sign-in email address"
+      account:
+        description: "The account's Firebase UID (preferred) or sign-in email — never printed"
         type: string
         required: true
       action:
@@ -39,13 +44,15 @@ jobs:
           python-version: "3.12"
       - run: pip install requests google-auth
       - name: Manage admin claim
+        # The account input is deliberately absent from env: and from the
+        # command line (both are printed in this public log): the script reads
+        # it from $GITHUB_EVENT_PATH and masks it before printing anything.
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          INPUT_EMAIL: ${{ inputs.email }}
           INPUT_ACTION: ${{ inputs.action }}
         run: |
           args=()
           [ "$INPUT_ACTION" = "grant" ] && args+=(--grant)
           [ "$INPUT_ACTION" = "revoke" ] && args+=(--revoke)
-          python tools/grant_admin.py --email "$INPUT_EMAIL" "${args[@]}"
+          python tools/grant_admin.py --from-event "${args[@]}"

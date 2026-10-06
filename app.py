@@ -47,15 +47,14 @@ from auth import session as auth_session  # noqa: E402
 from auth.gate import app_container, require_user  # noqa: E402
 from config.locations import get_location  # noqa: E402
 from config.store import (  # noqa: E402
-    dispatch_workflow,
     github_status,
     github_token,
-    last_mirror,
-    request_check_now,
     sync_from_github,
 )
 from config.timezone import fmt_datetime, fmt_time, now_ist  # noqa: E402
 from monitor import catalogue  # noqa: E402
+from monitor import dispatch as dispatcher  # noqa: E402
+from monitor import policy  # noqa: E402
 from monitor.models import ANY_FORMAT, Availability, Monitor, MonitorStatus, TheatreTarget  # noqa: E402
 from monitor import state as state_store  # noqa: E402
 from monitor.state import (  # noqa: E402
@@ -68,11 +67,10 @@ from monitor.state import (  # noqa: E402
     load_monitors,
     load_settings,
     record_history,
-    save_settings,
     stop_monitor,
     upsert_monitor,
 )
-from notifications.email import NotificationError, is_configured, send_test_email  # noqa: E402
+from notifications.email import NotificationError, is_configured, send_account_test_email  # noqa: E402
 from platforms import PLATFORMS, is_enabled  # noqa: E402
 from platforms.http import HAS_CURL_CFFI  # noqa: E402
 from ui import account  # noqa: E402
@@ -87,6 +85,15 @@ from ui.theme import inject  # noqa: E402
 APP_VERSION = "2.6.0"
 
 inject()
+
+
+def local_json_store_allowed() -> bool:
+    """Development only: ``TICKETRADAR_LOCAL_JSON_STORE=1`` lets a signed-in
+    session keep its data in the local ``data/*.json`` files (never mirrored
+    to GitHub) on a machine that has Firebase sign-in configured but no
+    Firestore. A deployment never sets it, and without it such a host fails
+    closed rather than store anyone's monitors outside Firestore."""
+    return os.environ.get("TICKETRADAR_LOCAL_JSON_STORE", "").strip() == "1"
 
 
 def _scope() -> Scope | None:
@@ -111,7 +118,15 @@ def _scope() -> Scope | None:
                  firestore_enabled=enabled in {"1", "true", "yes", "on"},
                  # Firebase's account record said so at sign-in; nothing on a
                  # page can. Lifts the active-monitor limit, nothing else.
-                 admin=user.admin)
+                 admin=user.admin,
+                 # The verified address on that same record: where this
+                 # person's alerts go, and the only place they can go.
+                 email=user.email,
+                 # A host with Firebase sign-in is a real deployment: its
+                 # users' data lives in Firestore or nowhere — never in the
+                 # repository's (public) JSON files. Only a developer's
+                 # machine may opt into the local, never-mirrored JSON view.
+                 deployment=firebase.is_configured() and not local_json_store_allowed())
 
 
 state_store.set_scope_provider(_scope)
@@ -159,8 +174,11 @@ def refresh_from_github() -> None:
     own; it is at most one interaction staler than before.
     """
     global _refresh_thread
-    if state_store.backend_name() == "firestore":
-        return   # the store is read directly; there is nothing to pull from the repo
+    if state_store.backend_name() == "firestore" or auth_session.current_uid():
+        # Firestore is read directly. And a signed-in person's JSON view
+        # (a developer's machine) is never mirrored to the repository, so
+        # pulling the repository's files over it would only erase it.
+        return
     if not st.session_state.get("_synced_once"):
         # The first paint waits, so a fresh tab never shows a stale monitor.
         sync_from_github()
@@ -398,6 +416,14 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     loaded them, and on Firestore reading them a second time is another
     network round trip for data already in hand.
     """
+    # Where the alert goes is not the page's to say: the signed-in account's
+    # verified address, from Firebase's record. Whatever ``email`` the form
+    # carried is ignored.
+    user = auth_session.current_user()
+    try:
+        email = policy.normalise_recipient(user.email if user is not None else "")
+    except policy.InvalidRecipient:
+        email = ""
     slug = st.session_state.get("location", "")
     movie_id = st.session_state.get("movie_id", "")
     entry = cv.entry(movie_id, slug)
@@ -421,8 +447,10 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
         problems.append("pick at least one theatre")
     if until <= now_ist():
         problems.append("choose an end time in the future")
+    elif not policy.until_allowed(until):
+        problems.append(f"choose an end time within {policy.MAX_MONITOR_DAYS} days")
     if not email:
-        problems.append("enter a notification email")
+        problems.append("your account has no usable email address for alerts")
     # A format the theatre has never been seen to run is not a target, it is
     # a typo's worth of stale state — refused here, on the server, whatever
     # the page showed. A format the theatre runs but this movie has not
@@ -490,18 +518,15 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
     home.busy("Saving your monitor")
     try:
         upsert_monitor(monitor, mirror=mirrored())
-    except MonitorLimitError as exc:
+    except (MonitorLimitError, policy.MonitorNotAllowed) as exc:
         # Refused in the store, before anything was written — the button
         # above is only a courtesy; this is the guard.
         flash("error", str(exc))
         st.rerun()
-    firestore = state_store.backend_name() == "firestore"
-    mirror = {"committed": False, "error": ""} if firestore else last_mirror()
+    # A signed-in person's monitor is never committed to the repository (it
+    # is public), so no commit starts the worker: the dispatch below does.
+    mirror = {"committed": False, "error": ""}
     record_history(monitor, "CREATED", "Monitor created.", mirror=mirrored())
-
-    settings = load_settings() if settings is None else settings
-    if settings.get("notify_email") != email:
-        save_settings({**settings, "notify_email": email}, mirror=mirrored())
 
     # 2. Make sure a check is actually on its way. The commit above triggers
     #    the workflow by itself; a workflow_dispatch is tried as well when the
@@ -515,7 +540,7 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
             started_by = "push"
         elif mirror.get("error"):
             reasons.append(f"Saving the monitor to GitHub failed — {mirror['error']}")
-        ok, why = request_check_now(monitor.id)
+        ok, why = request_check(monitor.id)
         if ok:
             started_by = started_by or "dispatch"
         elif not started_by:
@@ -546,10 +571,26 @@ def start_monitor(interval: int, until, email: str, start_now: bool,
 # ──────────────────────────────────────────────────────────────────────────
 # Problems
 # ──────────────────────────────────────────────────────────────────────────
+def request_check(monitor_id: str = "") -> tuple[bool, str]:
+    """Ask the worker for a check now — through ``monitor.dispatch``, which
+    decides on the server whether this person may (their own running
+    monitor; every monitor only for the admin)."""
+    try:
+        return dispatcher.check_now(monitor_id)
+    except dispatcher.DispatchNotAllowed as exc:
+        return False, str(exc)
+
+
 def retry_check(monitor: Monitor) -> None:
     """Ask for a check again and clear a stale problem if that worked."""
     home.busy("Asking the worker to check again")
-    ok, msg = request_check_now(monitor.id)
+    try:
+        ok, msg = dispatcher.check_now(monitor.id)
+    except dispatcher.DispatchNotAllowed as exc:
+        # Refused before anything was attempted (asked again too soon, or the
+        # monitor is no longer running): nothing went wrong with the monitor.
+        flash("warning", str(exc))
+        st.rerun()
     if ok:
         monitor.first_check_requested_at = now_ist()
         monitor.clear_problem()
@@ -763,13 +804,13 @@ def wizard(monitors, *, settings: dict) -> None:
                               dates=dates,
                               release=cv.release_watch_formats(movie_id, slug))
         else:
-            # The box starts as the saved notification address or, for an
-            # account that has never set one, the address they signed in
-            # with — from Firebase's record, never from anything typed here.
+            # Alerts go to the address the person signed in with — from
+            # Firebase's record, never from anything typed here. The box
+            # shows it; ``start_monitor`` uses it regardless.
             user = auth_session.current_user()
-            default_email = settings.get("notify_email") or (user.email if user else "")
+            account_email = user.email if user else ""
             interval, until, email, start_now, dates = flow.step_monitoring(
-                default_email, is_admin=auth_session.is_admin())
+                account_email, is_admin=auth_session.is_admin())
             # Admin only: a category watch. Gated here and again inside, and
             # once more where the monitor is saved — an ordinary account
             # never sees it and can never create one.
@@ -843,10 +884,10 @@ def do_delete_monitor(monitor_id: str) -> None:
 def do_extend_monitor(monitor_id: str) -> None:
     try:
         extend_monitor(monitor_id, 24, mirror=mirrored())
-    except MonitorLimitError as exc:
+    except (MonitorLimitError, policy.MonitorNotAllowed) as exc:
         flash("error", str(exc))
         return
-    ok, _ = request_check_now(monitor_id)
+    ok, _ = request_check(monitor_id)
     flash("success", "Extended by 24 hours — monitoring is active again"
           + (" and a check is running now." if ok else "."))
 
@@ -991,24 +1032,26 @@ def page_settings(settings) -> None:
     with left, st.container(border=True, key="trcard_notify"):
         C.step_header("mail", "Notifications", "The address every alert is sent to.")
         C.html('<div class="tr-field-label">Notification email</div>')
-        email = st.text_input("Notification email", value=settings.get("notify_email", ""),
-                              placeholder="you@gmail.com", key="settings_email",
-                              label_visibility="collapsed")
+        # Alerts — and the test message — go to the account's own verified
+        # address and nowhere else, so it is shown, not edited.
+        account_email = user.email if user is not None else ""
+        st.session_state["settings_email"] = account_email
+        st.text_input("Notification email", key="settings_email", disabled=True,
+                      label_visibility="collapsed",
+                      help="Alerts go to the verified email address you sign in with.")
         with st.container(key="trpair_settings"):
-            a, b = st.columns(2, gap="small")
-        if a.button("Save", use_container_width=True, key="save_settings", type="primary", icon=":material/save:",
-                    help="Use this address for new monitors"):
-            save_settings({**settings, "notify_email": email.strip()}, mirror=mirrored())
-            flash("success", "Settings saved.")
-            st.rerun()
-        if b.button("Send test email", use_container_width=True, key="test_email", icon=":material/send:",
-                    help="Send one test message to this address"):
+            a, _ = st.columns(2, gap="small")
+        if a.button("Send test email", use_container_width=True, key="test_email", icon=":material/send:",
+                    help="Send one test message to your account's email address"):
             try:
-                send_test_email(email.strip() or settings.get("notify_email", ""))
+                # The recipient is the signed-in account's own address, from
+                # the server-side session; the send is rate-limited per
+                # account and per server, not per browser.
+                sent_to = send_account_test_email(user.uid if user is not None else "", account_email)
             except NotificationError as exc:
                 flash("error", str(exc))
             else:
-                flash("success", f"Test email sent to {email.strip()}.")
+                flash("success", f"Test email sent to {sent_to}.")
             st.rerun()
         C.status_line("ok" if is_configured() else "wait",
                       "Gmail credentials are present here." if is_configured() else
@@ -1036,25 +1079,31 @@ def page_settings(settings) -> None:
             C.status_line("warn", "curl_cffi isn't installed here, so this app can't refresh the "
                           "catalogue itself — BookMyShow bot-checks plain requests. The "
                           "background job still can.")
-        a, b = st.columns(2, gap="small")
-        if a.button("Refresh catalogue", use_container_width=True, key="sync_now", icon=":material/sync:",
-                    help="Re-sync the movie/theatre/format catalogue. This is browsing data, "
-                         "not a monitor check — active monitors check their targets on their own."):
-            ok, msg = dispatch_workflow("catalogue-sync.yml", {"city": slug})
-            flash("success" if ok else "error", msg)
-            st.rerun()
-        if b.button("Run a ticket check now", use_container_width=True, key="run_now", icon=":material/bolt:",
-                    help="Ask the background worker to check every active monitor now"):
-            ok, msg = request_check_now()
-            flash("success" if ok else "error",
-                  "Check started — results land in the rail within a minute or two." if ok else msg)
-            st.rerun()
+        # Both start a GitHub workflow for every account at once, so they are
+        # the administrator's: drawn only for the admin claim, and refused by
+        # ``monitor.dispatch`` for anyone else whatever the page sends.
+        if auth_session.is_admin():
+            a, b = st.columns(2, gap="small")
+            if a.button("Refresh catalogue", use_container_width=True, key="sync_now", icon=":material/sync:",
+                        help="Re-sync the movie/theatre/format catalogue. This is browsing data, "
+                             "not a monitor check — active monitors check their targets on their own."):
+                try:
+                    ok, msg = dispatcher.refresh_catalogue(slug)
+                except dispatcher.DispatchNotAllowed as exc:
+                    ok, msg = False, str(exc)
+                flash("success" if ok else "error", msg)
+                st.rerun()
+            if b.button("Run a ticket check now", use_container_width=True, key="run_now", icon=":material/bolt:",
+                        help="Ask the background worker to check every active monitor now"):
+                ok, msg = request_check()
+                flash("success" if ok else "error",
+                      "Check started — results land in the rail within a minute or two." if ok else msg)
+                st.rerun()
         connected, message = cached_github_status()
         C.status_line("ok" if connected else "bad", message)
         if connected:
-            C.status_line("info", "Starting a monitor triggers the worker through the commit it "
-                          "makes. Retry now and Run a ticket check now additionally need the "
-                          "token to have the Actions: write scope.")
+            C.status_line("info", "Starting a monitor asks the worker for its first check; that "
+                          "needs the token to have the Actions: write permission.")
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -1072,7 +1121,15 @@ def main() -> None:
         st.session_state.setdefault("page", "Home")
         st.session_state.setdefault("flash", None)
 
-        monitors, states, history, settings = load_view()
+        try:
+            monitors, states, history, settings = load_view()
+        except state_store.StorageUnavailable:
+            # Fail closed: a deployment with sign-in but no Firestore has
+            # nowhere safe to keep anyone's monitors. Say so, write nothing.
+            print("[app] storage unavailable: Firestore is not enabled for this deployment", flush=True)
+            st.error("TicketRadar's storage isn't available right now, so monitors can't be "
+                     "shown or saved. Please try again later.")
+            st.stop()
         page = sidebar(sum(1 for m in monitors if m.is_running()))
         account_bar(settings)
         avatar.picker(user, settings, mirror=mirrored(), notify=flash)

@@ -15,6 +15,9 @@ from __future__ import annotations
 
 import os
 import smtplib
+import threading
+import time
+from collections import deque
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -23,6 +26,7 @@ from html import escape
 from config.timezone import fmt_date_code, fmt_datetime, fmt_time, now_ist
 from monitor.changes import Change, ChangeKind
 from monitor.models import Monitor, describe_date_codes
+from monitor.policy import InvalidRecipient, normalise_recipient
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 465
@@ -87,9 +91,15 @@ def is_configured() -> bool:
 # Transport
 # ──────────────────────────────────────────────────────────────────────────
 def send_email(to: str, subject: str, html: str, text: str) -> None:
-    to = (to or "").strip()
-    if not to:
+    if not (to or "").strip():
         raise NotificationError("No recipient address configured for this monitor.")
+    # Exactly one bare address, checked here — the last step before Gmail —
+    # whoever the caller is. A list ("a@x, b@y"), a display name or a header
+    # break never reaches the To: line.
+    try:
+        to = normalise_recipient(to)
+    except InvalidRecipient as exc:
+        raise NotificationError(str(exc)) from None
 
     address, password = credentials()
     msg = EmailMessage()
@@ -113,6 +123,79 @@ def send_email(to: str, subject: str, html: str, text: str) -> None:
         raise NotificationError(f"Could not send mail: {type(exc).__name__}") from None
 
     print(f"[email] sent '{subject}' to {_mask(to)}")
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# The test button: the account's own address, a few times an hour
+# ──────────────────────────────────────────────────────────────────────────
+class TestEmailLimiter:
+    """How often "Send test email" may actually send.
+
+    Held in this server process, shared by every browser session — not in a
+    session, a cookie or anything a page can reset. Per account: one send
+    every :attr:`GAP` seconds and at most :attr:`PER_HOUR` an hour. For the
+    whole process: at most :attr:`GLOBAL_PER_HOUR` an hour, so that many
+    accounts together still cannot turn the button into a mail cannon
+    against the sending Gmail account's limits. An attempt counts whether or
+    not Gmail then accepts it.
+    """
+
+    GAP = 120.0
+    PER_HOUR = 3
+    GLOBAL_PER_HOUR = 20
+    WINDOW = 3600.0
+
+    def __init__(self, clock=time.monotonic):
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._per_uid: dict[str, deque[float]] = {}
+        self._all: deque[float] = deque()
+
+    @staticmethod
+    def _trim(stamps: deque[float], now: float, window: float) -> None:
+        while stamps and now - stamps[0] >= window:
+            stamps.popleft()
+
+    def acquire(self, uid: str) -> None:
+        """Take one send for ``uid``, or raise :class:`NotificationError`
+        saying how long to wait."""
+        if not uid:
+            raise NotificationError("Sign in to send a test email.")
+        with self._lock:
+            now = self._clock()
+            mine = self._per_uid.setdefault(uid, deque())
+            self._trim(mine, now, self.WINDOW)
+            self._trim(self._all, now, self.WINDOW)
+            if mine and now - mine[-1] < self.GAP:
+                wait = int(self.GAP - (now - mine[-1])) + 1
+                raise NotificationError(f"A test email was just sent. Try again in {wait} seconds.")
+            if len(mine) >= self.PER_HOUR:
+                wait = int(self.WINDOW - (now - mine[0])) // 60 + 1
+                raise NotificationError(
+                    f"That's {self.PER_HOUR} test emails this hour. Try again in about {wait} minutes.")
+            if len(self._all) >= self.GLOBAL_PER_HOUR:
+                raise NotificationError("Test emails are paused for a while. Please try again later.")
+            mine.append(now)
+            self._all.append(now)
+
+
+_TEST_LIMITER = TestEmailLimiter()
+
+
+def send_account_test_email(uid: str, account_email: str) -> str:
+    """Send the test message to the signed-in account's own address.
+
+    ``account_email`` must be the address Firebase's record holds for
+    ``uid`` — the app passes the signed-in session's, never anything typed.
+    There is no way to name another recipient. Returns the address used.
+    """
+    try:
+        address = normalise_recipient(account_email)
+    except InvalidRecipient:
+        raise NotificationError("Your account has no usable email address.") from None
+    _TEST_LIMITER.acquire(uid)
+    send_test_email(address)
+    return address
 
 
 def _mask(address: str) -> str:
@@ -461,6 +544,8 @@ if __name__ == "__main__":  # pragma: no cover
 
 __all__ = [
     "NotificationError",
+    "TestEmailLimiter",
+    "send_account_test_email",
     "credentials",
     "is_configured",
     "render_change",

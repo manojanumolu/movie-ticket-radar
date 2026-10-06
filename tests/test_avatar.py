@@ -309,11 +309,18 @@ def test_a_planted_bad_key_never_crashes_the_page_or_loads_anything(isolated_dat
 
 
 def test_the_other_settings_writes_keep_the_avatar(isolated_data):
+    """The other write on the Settings page — the display name — keeps the
+    avatar. (The notification address is no longer a setting anyone can
+    edit: alerts go to the account's own verified address.)"""
+    from ui import account
+
     seed(isolated_data, notify_email="old@example.com", avatar_key="oggy")
     app = run("Settings")
-    app.text_input(key="settings_email").set_value("new@example.com")
-    app.button(key="save_settings").click().run()
-    assert stored(isolated_data) == {"notify_email": "new@example.com", "default_interval": 10, "avatar_key": "oggy"}
+    assert app.text_input(key="settings_email").disabled
+    app.text_input(key=account.NAME_INPUT).set_value("Movie Man").run()
+    app.button(key="save_display_name").click().run()
+    assert stored(isolated_data) == {"notify_email": "old@example.com", "default_interval": 10,
+                                     "avatar_key": "oggy", "display_name": "Movie Man"}
 
 
 # ──────────────────────────────────────────────────────────────────────────

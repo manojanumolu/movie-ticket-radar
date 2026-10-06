@@ -438,7 +438,11 @@ def test_the_rules_file_says_what_the_fake_enforces():
     assert "request.auth != null" in rules
     assert "resource.data.owner_uid == request.auth.uid" in rules
     assert "request.resource.data.owner_uid == request.auth.uid" in rules
-    assert re.search(r"match /users/\{uid\} \{\s*allow read, write: if signedIn\(\) && request.auth.uid == uid;", rules)
+    # users/{uid}: still the owner's alone; writing it now also needs a
+    # verified address (security hardening — tests/firestore_rules runs the
+    # real rules in the emulator).
+    assert re.search(r"match /users/\{uid\} \{\s*allow read, delete: if signedIn\(\) && request.auth.uid == uid;", rules)
+    assert re.search(r"match /users/\{uid\} \{[^}]*allow create, update: if verified\(\) && request.auth.uid == uid", rules, re.S)
     assert re.search(r"match /monitor_state/\{id\} \{[^}]*allow create, update: if false;", rules, re.S)
     # history: readable and creatable by its owner, deletable by its owner so
     # account deletion can take it, and never updatable.

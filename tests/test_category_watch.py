@@ -369,7 +369,7 @@ def test_an_ordinary_account_sees_nothing_and_cannot_create_one(seeded_with_cate
     assert not app.multiselect and not any((w.key or "").startswith("catwatch") for w in app.text_input)
     # even with the picks smuggled into the session, the saved monitor is ordinary
     app = run(**_wizard(seeded_with_categories), **{CATEGORY_WATCH_KEY: ["GOLD"], "catwatch_show_time": "07:30 PM"})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     monitors = load_monitors()
     assert len(monitors) == 1 and monitors[0].categories == [] and monitors[0].show_time == ""
@@ -388,7 +388,7 @@ def test_the_admin_sees_the_block_and_creates_a_category_watch(seeded_with_categ
     assert not any(w for w in app.checkbox if "row" in (w.label or "").lower() or "seat" in (w.label or "").lower())
     app = picker.select("GOLD · ₹295 · area 2").select("PLATINUM · ₹350 · area 1").run()
     app.text_input(key="catwatch_show_time").set_value("07:30 PM").run()
-    app.text_input(key="notify_email").set_value("admin@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception, [str(e) for e in app.exception]
     monitors = load_monitors()

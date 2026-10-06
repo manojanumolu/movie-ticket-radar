@@ -69,7 +69,7 @@ def dispatches(monkeypatch):
 def start_from_ui(seeded):
     app = run_app(step=5, location="hyderabad", movie_id=seeded,
                   theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception, [str(e) for e in app.exception]
     return app
@@ -83,7 +83,9 @@ def test_start_monitoring_persists_the_monitor(seeded, dispatches):
     monitors = load_monitors()
     assert len(monitors) == 1
     assert monitors[0].is_running()
-    assert monitors[0].notify_email == "me@example.com"
+    # Security change: addressed to the signed-in account (the fixture's),
+    # never to an address typed on the page.
+    assert monitors[0].notify_email == "tester@example.com"
 
 
 def test_start_monitoring_dispatches_an_immediate_check(seeded, dispatches):
@@ -128,25 +130,23 @@ def test_a_failed_dispatch_still_creates_the_monitor_and_shows_a_problem(seeded,
     assert "403" in opened and "permission" in opened
 
 
-def test_a_mirror_commit_counts_as_started_even_when_dispatch_is_forbidden(seeded, monkeypatch):
-    """The commit to data/monitors.json triggers the workflow by itself, so a
-    PAT without Actions scope still gets an immediate first check."""
+def test_a_signed_in_persons_monitor_is_never_committed_to_the_repository(seeded, monkeypatch):
+    """Security change. A signed-in person's monitor used to be mirrored into
+    data/monitors.json — with their UID and alert address — in a *public*
+    repository, and that commit doubled as the worker's trigger. Nothing a
+    signed-in session writes is pushed any more, so a forbidden dispatch is
+    an honest PROBLEM rather than a first check started by a commit."""
     monkeypatch.setattr(store, "github_token", lambda: "test-token")
     monkeypatch.setattr(store, "sync_from_github", lambda **k: False)
     monkeypatch.setattr(store, "dispatch_workflow", lambda *a, **k: (False, "403"))
-
-    def fake_push(path, body, message):
-        store._last_mirror = {"ok": True, "committed": path.name == "monitors.json",
-                              "error": "", "path": path.name}
-        return True
-
-    monkeypatch.setattr(store, "push_to_github", fake_push)
+    pushed = []
+    monkeypatch.setattr(store, "push_to_github", lambda path, body, message: pushed.append(path.name) or True)
     app = start_from_ui(seeded)
     monitor = load_monitors()[0]
-    assert monitor.problem is None
-    assert monitor.first_check_requested_at is not None
-    assert "First check is starting now" in body_of(app)
-    assert not [b for b in app.button if b.key.startswith("prob_")]
+    assert pushed == []
+    assert monitor.first_check_requested_at is None
+    assert monitor.problem and monitor.problem["kind"] == "FIRST_CHECK_NOT_STARTED"
+    assert "First check is starting now" not in body_of(app)
 
 
 def test_workflow_is_triggered_by_the_monitors_commit():
@@ -162,7 +162,7 @@ def test_workflow_is_triggered_by_the_monitors_commit():
 def test_dispatch_is_skipped_when_start_now_is_off(seeded, dispatches):
     app = run_app(step=5, location="hyderabad", movie_id=seeded,
                   theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.toggle(key="start_now_toggle").set_value(False).run()
     app.button(key="start").click().run()
     assert load_monitors()[0].is_running()
@@ -656,7 +656,7 @@ def test_email_shows_every_available_date_and_the_watched_range(make_monitor, at
 def test_ui_stores_a_single_show_date_on_the_monitor(seeded, dispatches):
     app = run_app(step=5, location="hyderabad", movie_id=seeded,
                   theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]}, date_mode="single")
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.date_input(key="show_date_single").set_value(_date(2026, 9, 25)).run()
     assert "Watching shows on 25 Sep 2026" in body_of(app)
     app.button(key="start").click().run()
@@ -668,7 +668,7 @@ def test_ui_stores_a_single_show_date_on_the_monitor(seeded, dispatches):
 def test_ui_stores_a_show_date_range_on_the_monitor(seeded, dispatches):
     app = run_app(step=5, location="hyderabad", movie_id=seeded,
                   theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]}, date_mode="range")
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.date_input(key="show_date_range").set_value((_date(2026, 9, 25), _date(2026, 9, 28))).run()
     assert "Watching shows on 25–28 Sep 2026 (4 days)" in body_of(app)
     app.button(key="start").click().run()

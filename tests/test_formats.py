@@ -153,7 +153,7 @@ def test_a_known_unreleased_format_can_be_monitored_and_is_found_when_it_opens(
     seed(provider_factory, avengers_at_allu=[ALLU_BARCO_LIVE])
     app = run(step=5, furthest=5, location="hyderabad", movie_id=AVENGERS, theatres=["ALUC"],
               formats={"ALUC": ["Dolby Cinema"]}, date_mode="any")
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception
     [monitor] = load_monitors()
@@ -367,7 +367,7 @@ def test_1_lakeshore_has_pxl_and_offers_it_before_the_movie_is_listed(provider_f
     assert app.session_state["formats"] == {"ILKS": ["PXL"]}
     # …and the monitor starts with PXL at Lakeshore
     app = run(step=5, furthest=5, location="hyderabad", movie_id=MARVEL.id, theatres=["ILKS"], formats={"ILKS": ["PXL"]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception, [str(e) for e in app.exception]
     [monitor] = load_monitors()
@@ -476,7 +476,7 @@ def test_amb_offers_hdr_and_mb_luxe_both_selectable_with_states(provider_factory
     # 11: saved as two independent theatre+format targets
     app = run(step=5, furthest=5, location="hyderabad", movie_id=MARVEL.id, theatres=["AMBH"],
               formats={"AMBH": ["HDR By Barco", "MB LUXE"]})
-    app.text_input(key="notify_email").set_value("me@example.com").run()
+    app.run()
     app.button(key="start").click().run()
     assert not app.exception, [str(e) for e in app.exception]
     [monitor] = load_monitors()
