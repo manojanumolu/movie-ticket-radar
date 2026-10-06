@@ -299,12 +299,12 @@ a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outli
 .tr-auth-or::before, .tr-auth-or::after { content:""; flex:1; height:1px; background:rgba(255,255,255,.1); }
 
 /* text links, as buttons the tests can press */
-[class*="st-key-auth_forgot"] .stButton, [class*="st-key-auth_to_signup"] .stButton, [class*="st-key-auth_to_signin"] .stButton, [class*="st-key-auth_back"] .stButton { width:auto; display:inline-block; }
-[class*="st-key-auth_forgot"] .stButton > button, [class*="st-key-auth_to_signup"] .stButton > button, [class*="st-key-auth_to_signin"] .stButton > button, [class*="st-key-auth_back"] .stButton > button {
+[class*="st-key-auth_forgot"] .stFormSubmitButton, [class*="st-key-auth_forgot"] .stButton, [class*="st-key-auth_to_signup"] .stButton, [class*="st-key-auth_to_signin"] .stButton, [class*="st-key-auth_back"] .stButton { width:auto; display:inline-block; }
+[class*="st-key-auth_forgot"] .stFormSubmitButton > button, [class*="st-key-auth_forgot"] .stButton > button, [class*="st-key-auth_to_signup"] .stButton > button, [class*="st-key-auth_to_signin"] .stButton > button, [class*="st-key-auth_back"] .stButton > button {
   background:none !important; border:none !important; box-shadow:none !important; padding:2px 2px; min-height:0; width:auto; transform:none !important;
   color:var(--tr-accent-soft); font-size:14px; font-weight:600; letter-spacing:0; text-transform:none; border-radius:6px; }
-[class*="st-key-auth_forgot"] .stButton > button:hover, [class*="st-key-auth_to_signup"] .stButton > button:hover, [class*="st-key-auth_to_signin"] .stButton > button:hover, [class*="st-key-auth_back"] .stButton > button:hover { color:#fff; text-decoration:underline; text-underline-offset:3px; }
-[class*="st-key-auth_forgot"] .stButton > button p, [class*="st-key-auth_to_signup"] .stButton > button p, [class*="st-key-auth_to_signin"] .stButton > button p, [class*="st-key-auth_back"] .stButton > button p { font-size:14px; font-weight:600; }
+[class*="st-key-auth_forgot"] .stFormSubmitButton > button:hover, [class*="st-key-auth_forgot"] .stButton > button:hover, [class*="st-key-auth_to_signup"] .stButton > button:hover, [class*="st-key-auth_to_signin"] .stButton > button:hover, [class*="st-key-auth_back"] .stButton > button:hover { color:#fff; text-decoration:underline; text-underline-offset:3px; }
+[class*="st-key-auth_forgot"] .stFormSubmitButton > button p, [class*="st-key-auth_forgot"] .stButton > button p, [class*="st-key-auth_to_signup"] .stButton > button p, [class*="st-key-auth_to_signin"] .stButton > button p, [class*="st-key-auth_back"] .stButton > button p { font-size:14px; font-weight:600; }
 [class*="st-key-auth_forgot"] { display:flex; justify-content:flex-end; margin-top:-2px; }
 [class*="st-key-trpair_auth_foot"] { margin-top:8px; }
 [class*="st-key-trpair_auth_foot"] [data-testid="stHorizontalBlock"] { justify-content:center; gap:6px !important; align-items:center; }
@@ -929,7 +929,13 @@ def _signin() -> None:
         _feedback()
         submitted = st.form_submit_button("SIGN IN", key="auth_signin", type="primary",
                                           use_container_width=True, icon=":material/arrow_forward:")
-    st.button("Forgot password?", key="auth_forgot", on_click=_forgot_from_signin)
+        # A submit button of this same form, not a plain button beside it: a
+        # form's widgets only reach the session when the form is submitted,
+        # so a button outside it never saw the address already typed (and
+        # answered "Enter your email address first."). SIGN IN comes first, so
+        # Enter in either box still signs in. Its callback only reads the
+        # address and switches panels; the password is never used here.
+        st.form_submit_button("Forgot password?", key="auth_forgot", on_click=_forgot_from_signin)
     status = st.empty()
 
     C.html('<div class="tr-auth-or">OR</div>')

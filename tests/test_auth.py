@@ -679,6 +679,39 @@ def test_forgot_password_flow(visitor, fake):
     assert "Check your inbox." in body(app)
     assert "If an account exists for this email" in body(app)
     assert fake.reset_requests == ["ravi@example.com"]
+
+
+def test_forgot_password_sees_the_typed_address_and_never_signs_in(visitor, fake):
+    """Regression: "Forgot password?" used to be a plain button *outside*
+    the sign-in form. A form's widgets reach the session only when that form
+    is submitted, so the address the person had just typed was invisible to
+    it and they were told to "Enter your email address first." It is now a
+    submit button of the same form: it sees the address, switches to the
+    reset panel with it filled in — and does nothing else. No sign-in is
+    attempted and the typed password goes nowhere."""
+    app = run()
+    signin = app.button(key="auth_signin")
+    forgot = app.button(key="auth_forgot")
+    assert signin.proto.form_id == forgot.proto.form_id != ""          # one form
+    keys = [b.key for b in app.button]
+    assert keys.index("auth_signin") < keys.index("auth_forgot")       # Enter still means SIGN IN
+
+    app.text_input(key="auth_email").set_value("ravi@example.com")
+    app.text_input(key="auth_password").set_value("Popcorn2026")
+    app.button(key="auth_forgot").click().run()
+    assert not app.exception
+    assert "Reset your password." in body(app)
+    assert app.text_input(key="auth_reset_email").value == "ravi@example.com"
+    assert "Enter your email address first." not in body(app)
+    assert fake.calls == []                                            # no Firebase call at all
+    assert session.current_user() is None and not in_the_app(app)
+
+    # Signing in from the same form still works exactly as before.
+    app = run()
+    app.text_input(key="auth_email").set_value("ravi@example.com")
+    app.text_input(key="auth_password").set_value("Popcorn2026")
+    app.button(key="auth_signin").click().run()
+    assert in_the_app(app)
     assert {t.key for t in app.text_input} == set()          # nothing left to type
 
 
