@@ -243,7 +243,9 @@ class _JsonStore:
         """
         return self.load_monitors()
 
-    def save_monitors(self, monitors: list[Monitor], *, mirror: bool = True) -> None:
+    def save_monitors(self, monitors: list[Monitor], *, mirror: bool = True,
+                      changed: list[Monitor] | None = None) -> None:
+        # One file: every save is the whole list, whatever ``changed`` says.
         if self.uid is None:
             payload = [m.to_dict() for m in monitors]
         else:
@@ -465,9 +467,10 @@ class _FirestoreStore:
         monitors.sort(key=lambda m: m.created_at, reverse=True)
         return monitors
 
-    def save_monitors(self, monitors: list[Monitor], *, mirror: bool = True) -> None:
+    def save_monitors(self, monitors: list[Monitor], *, mirror: bool = True,
+                      changed: list[Monitor] | None = None) -> None:
         writes = []
-        for monitor in monitors:
+        for monitor in (monitors if changed is None else changed):
             owner = self._stamp(monitor)
             _owner_of[monitor.id] = owner
             writes.append((MONITORS, monitor.id, monitor.to_dict()))
@@ -1002,10 +1005,16 @@ def load_monitors_for_checking() -> list[Monitor]:
     return _backend().load_monitors_for_checking()
 
 
-def save_monitors(monitors: list[Monitor], *, mirror: bool = True) -> None:
+def save_monitors(monitors: list[Monitor], *, mirror: bool = True,
+                  changed: list[Monitor] | None = None) -> None:
+    """``changed`` names the monitors this call altered (None: all of them).
+    Firestore writes each document on its own and writes only those, so a
+    stop, delete or edit made in the app since ``monitors`` was read is not
+    overwritten with the worker's stale copy; the JSON store rewrites its
+    whole file and still needs the full list."""
     invalidate_cache("monitors")
     _prepare_for_write(monitors)
-    _backend().save_monitors(monitors, mirror=mirror)
+    _backend().save_monitors(monitors, mirror=mirror, changed=changed)
 
 
 def upsert_monitor(monitor: Monitor, *, mirror: bool = True) -> list[Monitor]:
@@ -1046,7 +1055,7 @@ def expire_due_monitors(monitors: list[Monitor] | None = None, *, at: datetime |
         m.expire(at)
         record_history(m, "EXPIRED", "Monitoring expired — reached the end time you set.")
     if newly_expired:
-        save_monitors(monitors, mirror=mirror)
+        save_monitors(monitors, mirror=mirror, changed=newly_expired)
     return monitors, newly_expired
 
 

@@ -98,6 +98,20 @@ def normalise_category(value: str) -> str:
     return " ".join((value or "").lower().split())
 
 
+def _stored_text(raw: dict[str, Any], key: str, default: str = "") -> str:
+    """A text field of a stored document: a string, or absent/None for
+    ``default``. Any other type is a document this application did not
+    write — a direct Firestore write — and raises TypeError, which every
+    store treats as "skip this document" rather than letting it crash the
+    worker's tick for every other monitor."""
+    value = raw.get(key)
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise TypeError(f"{key} is a {type(value).__name__}, not text")
+    return value
+
+
 def _squash(value: str) -> str:
     """Alphanumerics only, lower-case — for show times ("07:15 PM" / "1915")."""
     return "".join(ch for ch in (value or "").lower() if ch.isalnum())
@@ -306,6 +320,11 @@ class MovieRef:
         return tuple(dict.fromkeys(code for code, _ in self.variants if code != self.event_code))
 
 
+#: MovieRef's text fields: what ``Monitor.from_dict`` requires to be text.
+_MOVIE_TEXT_FIELDS = ("platform", "event_code", "title", "region_code", "region_slug",
+                      "city", "language", "poster_url", "source_url")
+
+
 @dataclass
 class Snapshot:
     """A successful read of a platform listing. Never constructed on failure."""
@@ -377,11 +396,14 @@ class TheatreTarget:
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> TheatreTarget:
+        venue_code = raw["venue_code"]
+        if not isinstance(venue_code, str):
+            raise TypeError(f"venue_code is a {type(venue_code).__name__}, not text")
         return cls(
-            venue_code=raw["venue_code"],
-            venue_name=raw.get("venue_name", raw["venue_code"]),
-            area=raw.get("area", ""),
-            fmt=raw.get("fmt") or ANY_FORMAT,
+            venue_code=venue_code,
+            venue_name=_stored_text(raw, "venue_name", venue_code),
+            area=_stored_text(raw, "area"),
+            fmt=_stored_text(raw, "fmt") or ANY_FORMAT,
         )
 
 
@@ -544,15 +566,24 @@ class Monitor:
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> Monitor:
+        movie = raw["movie"]
+        if not isinstance(movie, dict):
+            raise TypeError("movie is not a map")
+        for key in _MOVIE_TEXT_FIELDS:
+            if key in movie and not isinstance(movie[key], str):
+                raise TypeError(f"movie.{key} is a {type(movie[key]).__name__}, not text")
+        date_codes = raw.get("date_codes", [])
+        if not isinstance(date_codes, list) or not all(isinstance(c, str) for c in date_codes):
+            raise TypeError("date_codes is not a list of text")
         return cls(
             id=raw.get("id") or uuid.uuid4().hex[:12],
-            movie=MovieRef(**raw["movie"]),
+            movie=MovieRef(**movie),
             targets=[TheatreTarget.from_dict(t) for t in raw.get("targets", [])],
             interval_minutes=int(raw.get("interval_minutes", 10)),
             monitor_until=parse_iso(raw["monitor_until"]),
             start_immediately=bool(raw.get("start_immediately", True)),
             notify_email=raw.get("notify_email", ""),
-            date_codes=list(raw.get("date_codes", [])),
+            date_codes=list(date_codes),
             status=MonitorStatus(raw.get("status", "ACTIVE")),
             created_at=parse_iso(raw.get("created_at")) or now_ist(),
             stopped_at=parse_iso(raw.get("stopped_at")),

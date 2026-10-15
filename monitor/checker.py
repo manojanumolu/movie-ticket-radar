@@ -513,7 +513,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     if screened.clamped:
         # The whole list: the JSON store rewrites its file from what it is
         # given, so a subset would drop every other monitor.
-        save_monitors(stored, mirror=mirror)
+        save_monitors(stored, mirror=mirror, changed=screened.clamped)
     monitors = screened.eligible
 
     if known_state is not None and not force and not monitor_id and all(
@@ -545,7 +545,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     # *before* fetching, so this tick's sweep is the film as it is now.
     report.discovery = discover_siblings(monitors, due, state, at=at, mirror=mirror)
     if report.discovery.updated:
-        save_monitors(stored, mirror=mirror)
+        save_monitors(stored, mirror=mirror,
+                      changed=[m for m in stored if m.id in report.discovery.updated])
 
     # Several people wanting the same seat want the same answer. Collapse the
     # running monitors into the listing reads they actually need, read every

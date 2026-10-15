@@ -439,6 +439,69 @@ def test_refused_monitors_do_not_keep_a_segment_alive(cloud, make_monitor, monke
     assert loop.stopped_reason == "nothing running" and loop.ticks == 1
 
 
+#: Values the rules let through (they type only the top-level fields) but
+#: the application never writes. Each one used to raise inside the worker's
+#: tick — after the per-document skip — and stop every account's checks.
+MISTYPED = [
+    ("date_codes", [5]), ("date_codes", [None]), ("date_codes", [{"a": 1}]), ("date_codes", "20261016"),
+    ("movie", "ET00518675"), ("movie.event_code", {"x": 1}), ("movie.title", {"a": 1}),
+    ("targets.0.venue_code", 5), ("targets.0.venue_code", {"a": 1}), ("targets.0.venue_name", {"a": 1}),
+    ("targets.0.area", [1]), ("targets.0.fmt", 7),
+]
+
+
+@pytest.mark.parametrize("path,value", MISTYPED, ids=[f"{p}={v!r}" for p, v in MISTYPED])
+def test_a_mistyped_document_is_skipped_and_never_stops_anyone_elses_check(
+        cloud, make_monitor, monkeypatch, at, path, value):
+    from tests.conftest import ALLU_LIVE
+
+    good = monitor_for(make_monitor, "uid-a", "a@example.com")
+    good.targets = live_target()
+    plant(cloud, good)
+    bad = monitor_for(make_monitor, "uid-b", "b@example.com")
+    bad.targets = live_target()
+    doc = bad.to_dict()
+    *parents, leaf = path.split(".")
+    node = doc
+    for key in parents:
+        node = node[int(key)] if isinstance(node, list) else node[key]
+    node[leaf] = value
+    cloud.docs["monitors"][bad.id] = doc
+    report, sent = run_worker(cloud, monkeypatch, at, ALLU_LIVE, directory=Directory(**{
+        "uid-a": verified("a@example.com"), "uid-b": verified("b@example.com")}))
+    assert [monitor_id for monitor_id, _, _ in sent] == [good.id]
+    assert good.id in report.checked and bad.id not in report.checked
+
+
+def test_the_worker_writes_back_only_what_it_changed(cloud, make_monitor, monkeypatch, at):
+    """A monitor expiring makes the worker save. It must write that monitor
+    alone: a stop or a delete the app made after the worker read the list
+    is not overwritten with — or resurrected from — the worker's old copy."""
+    from monitor import checker
+    from tests.conftest import NOT_ON_SALE
+
+    ending = monitor_for(make_monitor, "uid-a", "a@example.com")
+    ending.monitor_until = at - timedelta(minutes=1)
+    stopped, deleted = (monitor_for(make_monitor, uid, f"{uid}@example.com") for uid in ("uid-b", "uid-c"))
+    for m in (ending, stopped, deleted):
+        m.targets = live_target()
+        plant(cloud, m)
+    read = checker.load_monitors_for_checking
+
+    def read_then_the_app_acts():
+        monitors = read()
+        cloud.docs["monitors"][stopped.id]["status"] = "STOPPED"     # the owner presses Stop…
+        del cloud.docs["monitors"][deleted.id]                        # …another deletes theirs
+        return monitors
+
+    monkeypatch.setattr(checker, "load_monitors_for_checking", read_then_the_app_acts)
+    report, _ = run_worker(cloud, monkeypatch, at, NOT_ON_SALE, directory=Directory(**{
+        uid: verified(f"{uid}@example.com") for uid in ("uid-a", "uid-b", "uid-c")}))
+    assert report.expired == [ending.id] and cloud.docs["monitors"][ending.id]["status"] == "EXPIRED"
+    assert cloud.docs["monitors"][stopped.id]["status"] == "STOPPED"
+    assert deleted.id not in cloud.docs["monitors"]
+
+
 def test_production_selects_firebase_accounts_and_fails_closed_without_a_credential(monkeypatch):
     policy.set_identity_resolver(None)
     assert policy.worker_resolver("json") == policy.LOCAL
