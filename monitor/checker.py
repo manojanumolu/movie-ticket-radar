@@ -260,7 +260,9 @@ def _evaluate_categories(monitor: Monitor, target: TheatreTarget, snapshot: Snap
             detail=f"{', '.join(names)} bookable at {len(live)} showtime(s).",
         )
 
-    listed = [s for s in shows if watched(s)]
+    # SOLD_OUT only on a status that says so: a watched category whose
+    # status could not be read is "we don't know", never "no seats left".
+    listed = [s for s in shows if any(c.availability is Availability.SOLD_OUT for c in watched(s))]
     date_code = _earliest_date(shows)
     if listed:
         return TargetResult(
@@ -270,12 +272,17 @@ def _evaluate_categories(monitor: Monitor, target: TheatreTarget, snapshot: Snap
             detail=f"{monitor.category_label}: no seats left at the shows listed.",
         )
     seen = sorted({c.label for s in shows for c in s.categories})
+    if any(watched(s) for s in shows):
+        detail = f"{monitor.category_label} is listed, but BookMyShow sent no status we can read for it."
+    elif seen:
+        detail = f"{monitor.category_label} not listed for these shows (listed: {', '.join(seen)})."
+    else:
+        detail = "Shows are listed but no seat categories are published yet."
     return TargetResult(
         target_key=target.key, venue_name=target.venue_name, fmt=target.fmt,
         availability=Availability.NOT_BOOKABLE, showtimes=shows, date_code=date_code,
         booking_url=_booking_url(monitor, snapshot, date_code, target),
-        detail=(f"{monitor.category_label} not listed for these shows (listed: {', '.join(seen)})."
-                if seen else "Shows are listed but no seat categories are published yet."),
+        detail=detail,
     )
 
 

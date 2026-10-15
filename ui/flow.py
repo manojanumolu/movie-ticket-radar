@@ -1005,7 +1005,9 @@ def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple
     if chosen:
         st.caption(f"Category watch: {', '.join(chosen)}"
                    + (f" at {show_time.strip()}" if show_time.strip() else " at every show")
-                   + " — for the theatres, format and dates above.")
+                   + " — for the theatres, format and dates above. A category is everything BookMyShow "
+                   "sells under it: where a theatre sells two blocks as one category, a seat in either "
+                   "block counts.")
     return [seen[label] for label in chosen if label in seen], show_time.strip()
 
 

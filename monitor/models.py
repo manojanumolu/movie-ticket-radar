@@ -115,6 +115,13 @@ class SeatCategory:
     *not* in it — the web client draws those from an endpoint this
     application does not know and will not guess — so nothing here claims to
     be a row or a seat.
+
+    A category is not always one physical block. ALLU sells its two GOLD
+    blocks as two categories (areas 3 and 5); AMB sells both of its GOLD
+    blocks as one — verified live (bms-diagnose, 15 Oct 2026): every AMB
+    show lists a single ``GOLD`` (priceCode 0002, area 0000000002) with one
+    ``availStatus`` for both blocks, so which block a free seat is in is
+    not in the payload, and nothing here pretends to know it.
     """
 
     code: str                     # priceCode, "0002"

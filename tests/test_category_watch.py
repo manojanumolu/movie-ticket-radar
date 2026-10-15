@@ -649,3 +649,148 @@ def test_the_formats_step_notes_infinity_vision_for_marvel_only(monkeypatch):
     monkeypatch.setattr(cv, "movie", lambda mid, slug: MovieRef("bookmyshow", "ET2", "The Paradise", "HYD", "hyderabad"))
     flow.infinity_vision_note([prasads])                           # not Marvel: nothing, whatever the theatre lists
     assert notes == []
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 7 · One category, two blocks (AMB) — and two same-named categories
+# ──────────────────────────────────────────────────────────────────────────
+#: AMB Cinemas: Gachibowli [AMBH], Jailer 2 (Telugu, ET00518675), 16 Oct 2026,
+#: 12:35 PM HDR BY BARCO, session 120193 — the categories exactly as the
+#: runner printed them (bms-diagnose run 38773226102, 15 Oct 2026). The seat
+#: map draws GOLD as two blocks of rows; the payload lists ONE GOLD with ONE
+#: status for both, so which block a free seat sits in is not in it.
+AMB_CATEGORIES = [
+    {"additionalData": "0", "areaCatCode": "0000000001", "availStatus": "0", "curPrice": "354.00", "priceCode": "0001", "priceDesc": "PLATINUM", "seatLayout": True},
+    {"additionalData": "0", "areaCatCode": "0000000002", "availStatus": "1", "categoryRange": "1|2|3|4|5|6", "curPrice": "295.00", "priceCode": "0002", "priceDesc": "GOLD", "seatLayout": True},
+    {"additionalData": "0", "areaCatCode": "0000000003", "availStatus": "3", "categoryRange": "1|2|3|4|5|6", "curPrice": "295.00", "priceCode": "0003", "priceDesc": "LOUNGERS", "seatLayout": True},
+]
+AMB_SHOWS = [
+    {"venue_code": "AMBH", "venue_name": "AMB Cinemas", "area": "Gachibowli", "time": "12:35 PM",
+     "time_code": "1235", "fmt": "HDR BY BARCO", "status": "3", "session_id": "120193"},
+]
+AMB_GOLD = "0000000002|GOLD"
+
+#: ALLU's two GOLD blocks (TWO_GOLDS) with the trailing dot dropped: the
+#: same name and the same price, told apart only by priceCode/areaCatCode —
+#: the case a name-and-price key would merge.
+SAME_NAME_GOLDS = [dict(c, priceDesc="3D GOLD") if c["priceCode"] == "0008" else dict(c) for c in TWO_GOLDS]
+GOLD_3, GOLD_5 = "0000000003|3D GOLD", "0000000005|3D GOLD"
+
+
+def amb(**status):
+    """AMB's categories with some statuses changed: ``amb(GOLD="0")``."""
+    return [dict(c, availStatus=status.get(c["priceDesc"], c["availStatus"])) for c in AMB_CATEGORIES]
+
+
+def amb_gold(**fields):
+    """AMB's categories with the GOLD entry's fields replaced."""
+    return [dict(c, **fields) if c["priceDesc"] == "GOLD" else dict(c) for c in AMB_CATEGORIES]
+
+
+def golds(three, five):
+    """SAME_NAME_GOLDS with the two GOLDs' statuses set, everything else sold out."""
+    by_code = {"0006": three, "0008": five}
+    return [dict(c, availStatus=by_code.get(c["priceCode"], "0")) for c in SAME_NAME_GOLDS]
+
+
+def test_amb_lists_one_gold_for_both_blocks_and_nothing_is_invented(provider_factory, listing_url):
+    snap = _snapshot(provider_factory, listing_url, AMB_SHOWS, AMB_CATEGORIES)
+    show = snap.shows_for("AMBH")[0]
+    assert [c.key for c in show.categories] == ["0000000001|PLATINUM", AMB_GOLD, "0000000003|LOUNGERS"]
+    assert [c.label for c in snap.venue("AMBH").categories] == [
+        "PLATINUM · ₹354 · area 1", "GOLD · ₹295 · area 2", "LOUNGERS · ₹295 · area 3"]
+    for c in show.categories:                    # no section the platform did not name
+        assert not any(word in c.label.lower() for word in ("upper", "lower", "row", "block"))
+
+
+def test_an_amb_gold_watch_follows_only_gold(make_monitor, provider_factory, listing_url):
+    watch = make_monitor(targets=[TheatreTarget("AMBH", "AMB Cinemas", "", ANY_FORMAT)])
+    watch.categories, watch.show_time = [AMB_GOLD], "12:35 PM"
+
+    def verdict(categories):
+        snap = _snapshot(provider_factory, listing_url, AMB_SHOWS, categories)
+        return evaluate_target(watch, watch.targets[0], snap).availability
+
+    assert verdict(amb()) is Availability.AVAILABLE                                  # "1" almost full
+    assert verdict(amb(GOLD="0")) is Availability.SOLD_OUT                           # LOUNGERS open
+    assert verdict(amb(GOLD="0", PLATINUM="3", LOUNGERS="3")) is Availability.SOLD_OUT
+    assert verdict(amb(GOLD="0", PLATINUM="0", LOUNGERS="0")) is Availability.SOLD_OUT
+
+
+def test_same_named_same_priced_golds_stay_two_sections(provider_factory, listing_url):
+    snap = _snapshot(provider_factory, listing_url, ALLU_LIVE, SAME_NAME_GOLDS)
+    gold = [c for c in snap.shows_for("ALLU")[0].categories if c.name == "3D GOLD"]
+    assert [c.key for c in gold] == [GOLD_3, GOLD_5] and {c.price for c in gold} == {"395.00"}
+    venue_labels = [c.label for c in snap.venue("ALLU").categories]
+    assert "3D GOLD · ₹395 · area 3" in venue_labels and "3D GOLD · ₹395 · area 5" in venue_labels
+    assert category_matches(GOLD_5, gold[1]) and not category_matches(GOLD_5, gold[0])
+    assert category_matches(GOLD_3, gold[0]) and not category_matches(GOLD_3, gold[1])
+
+
+def test_same_named_golds_alert_independently_once_each(make_monitor, provider_factory, monkeypatch, later):
+    """Two watches, one per GOLD: each is emailed once when its own section
+    opens (sold out → available), never for the other one, never twice —
+    with the keys read back from the store, as the worker sees them."""
+    target = [TheatreTarget("ALLU", "Allu Cinemas", "", "Dolby Cinema")]
+    three, five = make_monitor(targets=target), make_monitor(targets=list(target))
+    three.categories, five.categories = [GOLD_3], [GOLD_5]
+    upsert_monitor(three, mirror=False)
+    upsert_monitor(five, mirror=False)
+    assert {m.id: m.categories for m in load_monitors()} == {three.id: [GOLD_3], five.id: [GOLD_5]}
+    sent = []
+
+    def tick(minutes, a, b):
+        p = payload(ALLU_LIVE, golds(a, b))
+        _run(provider_factory([p, p]), monkeypatch, later(minutes), sent)
+        return [(c.monitor_id, c.categories) for _, c in sent]
+
+    opened_3, opened_5 = (three.id, ["3D GOLD · ₹395 · area 3"]), (five.id, ["3D GOLD · ₹395 · area 5"])
+    assert tick(0, "0", "0") == []                              # baseline, both closed
+    assert tick(10, "3", "0") == [opened_3]                     # area 3 opens: only its watch
+    assert tick(20, "3", "2") == [opened_3, opened_5]           # area 5 opens; area 3 stays quiet
+    assert tick(30, "3", "3") == tick(40, "3", "3") == [opened_3, opened_5]    # no repeats
+    assert tick(50, "0", "3") == [opened_3, opened_5]           # area 3 closes: area 5 says nothing
+    assert tick(60, "3", "3") == [opened_3, opened_5, opened_3]  # area 3 reopens: its watch again
+
+
+def test_a_missing_or_reshaped_section_never_alerts(make_monitor, provider_factory, monkeypatch, later, listing_url):
+    watch = make_monitor(targets=[TheatreTarget("AMBH", "AMB Cinemas", "", ANY_FORMAT)])
+    watch.categories = [AMB_GOLD]
+    upsert_monitor(watch, mirror=False)
+    sent = []
+    _run(provider_factory([payload(AMB_SHOWS, amb(GOLD="0"))]), monkeypatch, later(0), sent)
+    no_gold = [c for c in AMB_CATEGORIES if c["priceDesc"] != "GOLD"]
+    for step, categories in enumerate((no_gold, amb_gold(areaCatCode=""), amb_gold(areaCatCode="0000000009"),
+                                       amb_gold(availStatus="9"), amb_gold(availStatus=None)), 1):
+        snap = _snapshot(provider_factory, listing_url, AMB_SHOWS, categories)
+        assert evaluate_target(watch, watch.targets[0], snap).availability is Availability.NOT_BOOKABLE, step
+        _run(provider_factory([payload(AMB_SHOWS, categories)]), monkeypatch, later(10 * step), sent)
+    assert sent == []                                   # LOUNGERS was open the whole time
+
+
+def test_a_failed_read_between_checks_is_an_error_not_an_opening(make_monitor, provider_factory, monkeypatch, later):
+    watch = make_monitor(targets=[TheatreTarget("AMBH", "AMB Cinemas", "", ANY_FORMAT)])
+    watch.categories = [AMB_GOLD]
+    upsert_monitor(watch, mirror=False)
+    key = watch.targets[0].key
+    sent = []
+    _run(provider_factory([payload(AMB_SHOWS, amb(GOLD="0"))]), monkeypatch, later(0), sent)
+    _run(provider_factory([FakeResponse(403)] * 3), monkeypatch, later(10), sent)
+    state = get_state(watch.id)
+    assert state.consecutive_errors == 1 and state.targets[key].availability is Availability.SOLD_OUT
+    _run(provider_factory([payload(AMB_SHOWS, amb(GOLD="0"))]), monkeypatch, later(20), sent)
+    assert sent == []
+    _run(provider_factory([payload(AMB_SHOWS, amb(GOLD="2"))]), monkeypatch, later(30), sent)
+    assert len(sent) == 1 and sent[0][1].categories == ["GOLD · ₹295 · area 2"]
+
+
+def test_the_admin_picker_says_what_a_category_covers(seeded_with_categories, signed_in):
+    from ui.flow import CATEGORY_WATCH_KEY
+    from tests.test_app import run, text
+
+    signed_in.admin = True
+    app = run(**_wizard(seeded_with_categories))
+    picker = next(m for m in app.multiselect if m.key == CATEGORY_WATCH_KEY)
+    assert "either block counts" not in text(app)
+    app = picker.select("GOLD · ₹295 · area 2").run()
+    assert not app.exception and "two blocks as one category, a seat in either block counts" in text(app)
