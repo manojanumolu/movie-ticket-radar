@@ -62,7 +62,7 @@ BRANDING_DIR = ROOT / "branding"
 LOGIN_POSTERS = (
     "avengers_endgame",
     "interstellar",
-    "avatar",
+    "doraemon",
     "rrr",
     "baahubali",
     "spiderman_brand_new_day",

@@ -148,11 +148,11 @@ def test_missing_folders_mean_empty_lists_not_errors(tree):
 
 def test_posters_keep_the_fixed_order_and_append_extras(tree):
     posters = tree / "login" / "posters"
-    for key in ("rrr", "zzz_extra", "avatar", "aaa_extra"):
+    for key in ("rrr", "zzz_extra", "doraemon", "aaa_extra"):
         (posters / f"{key}.jpg").write_bytes(JPEG)
     (posters / "notes.txt").write_text("not an image")
     R.refresh()
-    assert [a.key for a in R.posters()] == ["avatar", "rrr", "aaa_extra", "zzz_extra"]
+    assert [a.key for a in R.posters()] == ["doraemon", "rrr", "aaa_extra", "zzz_extra"]
 
 
 def test_avatars_group_by_folder_and_unlisted_folders_sort_last(tree):

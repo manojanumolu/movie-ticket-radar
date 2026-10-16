@@ -482,7 +482,7 @@ def test_login_page_renders_while_unauthenticated(visitor):
     assert {b.key for b in app.button} >= {"auth_signin", "auth_forgot", "auth_google", "auth_to_signup"}
     text = body(app)
     for piece in ("Never Miss", "TICKETS", "DETECTED", "Don't have an account?", "Monitoring 24 / 7",
-                  "Secure & Private", "GOOD<br>MOVIES<br>FIND<br>YOU"):
+                  "Secure & Private", "GOOD <br>MOVIES <br>FIND <br>YOU"):
         assert piece in text, piece
     labels = {b.label for b in app.button}
     assert {"SIGN IN", "Continue with Google", "Forgot password?", "CREATE ACCOUNT"} <= labels

@@ -44,7 +44,7 @@ Posters — all JPEG, RGB, no alpha:
 |---|---|---|---|
 | avengers_endgame | 1000×1482 | 0.675 | 428 ⚠ |
 | interstellar | 440×697 | 0.631 | 64 |
-| avatar | 1086×1609 | 0.675 | 486 ⚠ (embedded ICC profile) |
+| doraemon | 480×640 | 0.750 | 58 |
 | rrr | 720×1280 | 0.562 | 136 |
 | baahubali | 335×597 | 0.561 | 37 |
 | spiderman_brand_new_day | 375×533 | 0.704 | 30 |
