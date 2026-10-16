@@ -76,6 +76,30 @@ for eyebrows, badges, timers and step numbers. Both from Google Fonts with
 superseded — the deployed app has shipped on Manrope / DM Mono and nothing
 technical argues for a change.
 
+| Role | Face | Example |
+|---|---|---|
+| Page and card headings, titles | Manrope 800 | "Select movie", movie titles |
+| Body, descriptions, metadata that is read | Manrope 500–600 | "What's on in Hyderabad right now.", "Telugu · 81 theatres" |
+| Buttons, navigation, inputs | Manrope 600–700 | step rail labels, "Back to Location" |
+| Eyebrows and field labels (upper-case, tracked) | DM Mono 500 | "SEARCH MOVIES", "1 · LOCATION", "COMING SOON" |
+| Badges, pills, counts, step numbers and ✓ pips | DM Mono 500 | "PROBLEM OCCURRED", "ADMIN", "2" |
+| Times and technical facts | DM Mono 400–500 | "17 Oct · 01:12 AM", "V2.6.0" |
+
+**How it is enforced.** The theme's last rule sets every element in `.stApp`
+to Manrope with `!important`, then lists the DM Mono classes. A rule that
+declares `--tr-mono` without being on that list silently renders in
+Manrope, so the same role ends up in two faces — the October 2026 audit
+found "Coming soon", the ✓ pips, avatar initials and the ADMIN badge split
+that way. Pop-overs and `st.dialog` render *outside* `.stApp`, where only
+their own rules apply. DM Mono has no 600/700: a mono rule never sets a
+heavier weight, or the browser fakes a bold. `tests/test_typography.py`
+checks all three. The login page is the exception by design: its labels
+have always rendered in Manrope and that is the approved look.
+
+If Google Fonts fails, Manrope falls back to Segoe UI / system-ui and DM
+Mono to Cascadia Mono / Consolas — the same pair everywhere, including
+pop-overs (verified by blocking the font host in a browser).
+
 ## 4. Assets
 
 Hand-prepared artwork lives in `static/` (the one folder Streamlit

@@ -291,7 +291,7 @@ __RAIL_RIG__
   transition:border-color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease), transform var(--tr-fast) var(--tr-ease); }
 [class*="st-key-tracct_top"]:hover .tr-acct-chip { border-color:rgba(255,51,85,.5); background:rgba(255,51,85,.08); transform:translateY(-1px); }
 .tr-acct-chip .av { width:38px; height:38px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
-  font-family:var(--tr-mono); font-size:15px; font-weight:500; color:#fff;
+  font-family:var(--tr-sans); font-size:15px; font-weight:500; color:#fff;
   background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
 .tr-acct-chip .av.has-avatar, .tr-acct-menu .av.has-avatar { padding:0; overflow:hidden; background:#150B10; border:1px solid rgba(255,51,85,.45);
   box-shadow:0 0 0 2px rgba(255,51,85,.12), 0 8px 20px -10px rgba(255,51,85,.9); }
@@ -308,7 +308,7 @@ __RAIL_RIG__
 [data-testid="stPopoverBody"] [data-testid="stVerticalBlock"] { gap:.15rem; }
 .tr-acct-menu { display:flex; align-items:center; gap:12px; padding:8px 12px 10px; border-bottom:1px solid var(--tr-border); margin-bottom:4px; min-width:0; }
 .tr-acct-menu .av { width:48px; height:48px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
-  font-family:var(--tr-mono); font-size:18px; color:#fff; background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
+  font-family:var(--tr-sans); font-size:18px; font-weight:500; color:#fff; background:linear-gradient(140deg,#FF3355,#B3123A); box-shadow:0 8px 20px -10px rgba(255,51,85,.9), inset 0 1px 0 rgba(255,255,255,.18); }
 .tr-acct-menu .n { font-size:13.5px; font-weight:700; color:var(--tr-text); overflow-wrap:anywhere; }
 .tr-acct-menu .m { font-size:11.5px; color:var(--tr-text-3); overflow-wrap:anywhere; margin-top:2px; }
 .tr-acct-menu .who { font-size:12px; color:var(--tr-text-2); overflow-wrap:anywhere; margin-top:3px; }
@@ -316,7 +316,7 @@ __RAIL_RIG__
    mono face the rest of the UI uses for facts. It is a label — every gate
    still asks Firebase's own claim. */
 .tr-admin-tag { display:inline-flex; align-items:center; margin-left:7px; padding:2px 6px 1px; border-radius:5px;
-  font-family:var(--tr-mono); font-size:9px; font-weight:600; letter-spacing:.18em; line-height:1.5; white-space:nowrap;
+  font-family:var(--tr-mono); font-size:9px; font-weight:500; letter-spacing:.18em; line-height:1.5; white-space:nowrap;
   color:#C8F6DF; background:linear-gradient(180deg,rgba(62,213,152,.20),rgba(62,213,152,.08));
   border:1px solid rgba(126,235,190,.42); box-shadow:0 4px 12px -8px rgba(62,213,152,.9); }
 .tr-admin-tag::before { content:""; width:5px; height:5px; margin-right:5px; border-radius:50%;
@@ -453,7 +453,7 @@ __NAV_ICONS__
 .tr-rule { display:flex; align-items:center; gap:10px; margin:6px 0 6px; min-width:0; }
 .tr-rule .tr-eyebrow { font-size:11px; letter-spacing:.22em; color:var(--tr-text-2); white-space:nowrap; }
 .tr-rule .line { height:1px; flex:1; background:var(--tr-border); }
-.tr-count { font-family:var(--tr-mono); font-size:10px; padding:2px 7px; border-radius:6px;
+.tr-count { font-family:var(--tr-mono); font-size:10px; font-weight:500; padding:2px 7px; border-radius:6px;
   background:rgba(255,255,255,.06); color:var(--tr-text-2); border:1px solid var(--tr-border); }
 .tr-rail-title .tr-count { background:rgba(255,51,85,.14); color:var(--tr-accent-soft); border-color:transparent; }
 
@@ -663,7 +663,7 @@ __NAV_ICONS__
 .tr-rail-title { display:flex; align-items:center; gap:9px; margin-bottom:12px; font-size:14px; font-weight:700; }
 /* "View details" on the rail card: a deliberate secondary action, quiet next to Stop. */
 [class*="st-key-detail_"] .stButton button {
-  min-height:38px; font-family:var(--tr-mono); font-size:11px; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
+  min-height:38px; font-family:var(--tr-sans); font-size:11px; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
   color:var(--tr-text-2); background:transparent; border:1px dashed rgba(255,255,255,.18); box-shadow:none;
 }
 [class*="st-key-detail_"] .stButton button p { font-weight:500; }
@@ -891,7 +891,7 @@ __NAV_ICONS__
 .tr-poster .t { font-size:13.5px; font-weight:800; letter-spacing:-.01em; line-height:1.25; overflow-wrap:anywhere;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; height:2.5em; }
 .tr-poster.compact .t { font-size:12px; }
-.tr-poster .m { font-family:var(--tr-mono); font-size:10px; letter-spacing:.04em; color:var(--tr-text-3); margin-top:auto; line-height:1.3;
+.tr-poster .m { font-family:var(--tr-sans); font-size:10px; letter-spacing:.04em; color:var(--tr-text-3); margin-top:auto; line-height:1.3;
   height:2.6em; display:flex; flex-direction:column; justify-content:flex-end; }
 .tr-poster .m span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
@@ -1467,14 +1467,19 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
   [class*="st-key-trgrid_feat"] [data-testid="stColumn"], [class*="st-key-trgrid_th"] [data-testid="stColumn"] { --tr-cols: 2; }
 }
 
-/* ── typography, last so it wins ───────────────────────────────────── */
+/* ── typography, last so it wins ───────────────────────────────────────
+   Manrope (500–800) for everything read; DM Mono (400/500) only for the
+   roles in the list below — eyebrows, field labels, badges, timers, step
+   numbers and pips, technical metadata. A rule that declares --tr-mono
+   without being listed here renders in Manrope: list it, or declare
+   --tr-sans (tests/test_typography.py checks the two agree). */
 .stApp :is(p, h1, h2, h3, h4, h5, h6, li, label, input, textarea, button, a, div, span, td, th, small, strong, b, em, summary) {
   font-family: var(--tr-sans) !important;
 }
 .stApp :is(.tr-eyebrow, .tr-summary-strip .k, .tr-metric .k, .tr-metric .v.mono, .tr-version, .tr-version *, .tr-badge, .tr-step-num,
-  .tr-interval .unit, .tr-throw .ab, .tr-summary .k, .tr-field-label, .tr-hero-mark,
+  .tr-interval:not(.choice) .unit, .tr-throw .ab, .tr-summary .k, .tr-field-label, .tr-hero-mark,
   .tr-hero-mark *, .tr-step-pip .n, .tr-live .foot, .tr-live .foot *, .tr-platform .soon, .tr-step-mobile,
-  .tr-rule .tr-eyebrow, .tr-pill:not(.connected), .tr-feat .k, .tr-count, .tr-row .r, .tr-history .when, .tr-auth-count, .tr-auth-diag, code, kbd, pre, .tr-mono) {
+  .tr-rule .tr-eyebrow, .tr-pill:not(.connected), .tr-feat .k, .tr-count, .tr-row .r, .tr-history .when, .tr-auth-count, .tr-auth-diag, .tr-loc.disabled .s, .tr-summary-strip .n, .tr-craft .tr-sub .by, .tr-admin-tag, code, kbd, pre, .tr-mono) {
   font-family: var(--tr-mono) !important;
 }
 .stApp :is([data-testid="stIconMaterial"], .material-symbols-rounded, span[data-testid="stIconMaterial"]) {

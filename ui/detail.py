@@ -288,6 +288,12 @@ CSS = "<style>" + radar.CSS + """
 .tr-det-eyebrow { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:-2px 0 12px;
   font-family:var(--tr-mono); font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:#FF8CA0; }
 .tr-det-eyebrow em { font-style:normal; letter-spacing:.1em; text-transform:none; color:var(--tr-text-4); }
+/* the dialog renders outside .stApp, where the theme's bare `span` rule would
+   set the eyebrow's label in Manrope; it is DM Mono like every eyebrow here.
+   The row keeps the 17px the two faces' baselines used to give it, so
+   nothing below moves. */
+.tr-det-eyebrow > span { font-family:var(--tr-mono); }
+.tr-det-eyebrow { min-height:17px; }
 /* header: poster as a small framed still, the film, the phase */
 .tr-det-head { display:flex; align-items:center; gap:18px; padding:0 0 18px; border-bottom:1px solid rgba(255,255,255,.08); }
 .tr-det-head .tr-thumb { width:66px; height:94px; border-radius:10px; border:1px solid rgba(255,255,255,.14);
