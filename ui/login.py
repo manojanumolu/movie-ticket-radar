@@ -85,12 +85,16 @@ LOGIN_ICONS = {
     "pin": C.ICON_PATHS["location"],
 }
 
+#: Google's multicolour "G" — the mark from Google Identity's sign-in
+#: branding guidelines (48-unit artboard), URL-encoded for a CSS data URI.
+#: ``xmlns`` is required: an SVG drawn as an image without it never renders.
 GOOGLE_G = (
-    "<svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true'>"
-    "<path fill='%234285F4' d='M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5c-.3 1.5-1.1 2.8-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.7z'/>"
-    "<path fill='%2334A853' d='M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1C3.3 21.3 7.3 24 12 24z'/>"
-    "<path fill='%23FBBC05' d='M5.3 14.3c-.5-1.5-.5-3.1 0-4.6V6.6H1.3c-1.7 3.4-1.7 7.4 0 10.8l4-3.1z'/>"
-    "<path fill='%23EA4335' d='M12 4.7c1.8 0 3.3.6 4.6 1.8l3.4-3.4C17.9 1.2 15.2 0 12 0 7.3 0 3.3 2.7 1.3 6.6l4 3.1c.9-2.9 3.6-5 6.7-5z'/></svg>"
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'>"
+    "<path fill='%23EA4335' d='M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'/>"
+    "<path fill='%234285F4' d='M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z'/>"
+    "<path fill='%23FBBC05' d='M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z'/>"
+    "<path fill='%2334A853' d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.45-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'/>"
+    "</svg>"
 )
 
 
@@ -338,6 +342,43 @@ a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outli
 [class*="st-key-auth_continue"] .stButton > button p { font-size:13px; font-weight:700; letter-spacing:.1em; }
 .tr-auth-diag { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.14em; color:var(--tr-text-4); text-align:center; margin-top:10px; line-height:1.6; overflow-wrap:anywhere; }
 
+/* ── form controls, as Streamlit 1.5x+ draws them ─────────────────────
+   A text input is a root (stTextInputRootElement) holding the <input> and,
+   for a password, a wrapper with the eye button. The theme paints the
+   field on the <input>, which stops short of the eye; here the root is
+   the field, so email and password are one identical box and the eye
+   sits inside it. Height, colours and radius are the ones already shown. */
+[class*="st-key-trauth_panel"] .stTextInput [data-testid="stTextInputRootElement"] { border-radius:12px !important;
+  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.04)), #101014 !important;
+  transition: border-color var(--tr-fast) var(--tr-ease), box-shadow var(--tr-fast) var(--tr-ease); }
+[class*="st-key-trauth_panel"] .stTextInput [data-testid="stTextInputRootElement"]:focus-within { border-color: rgba(255,51,85,.75) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 0 0 3px rgba(255,51,85,.16); }
+[class*="st-key-trauth_panel"] .stTextInput [data-testid="stTextInputRootElement"] input,
+[class*="st-key-trauth_panel"] .stTextInput [data-testid="stTextInputRootElement"] input:focus { background:transparent !important; border:none !important; box-shadow:none !important; border-radius:0 !important; }
+/* the eye: a 32px target inside the field's right edge, centred, always there */
+[class*="st-key-trauth_panel"] .stTextInput [data-testid="stTextInputRootElement"] > div { align-self:stretch; display:flex; align-items:center; padding-right:4px; }
+[class*="st-key-trauth_panel"] .stTextInput [data-testid="stTextInputRootElement"] button { width:32px; height:32px; padding:0 !important; display:flex; align-items:center; justify-content:center;
+  border-radius:8px; background:transparent; color:var(--tr-text-3); cursor:pointer; transition: color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease); }
+[class*="st-key-trauth_panel"] .stTextInput [data-testid="stTextInputRootElement"] button:hover { color:#fff; background:rgba(255,255,255,.07); }
+[class*="st-key-trauth_panel"] .stTextInput [data-testid="stTextInputRootElement"] button:focus-visible { outline:2px solid #FF8CA0; outline-offset:-2px; color:#fff; }
+/* Streamlit's "Press Enter to submit form" hint floats over the field's
+   right end, under the typed text and beside the eye */
+[class*="st-key-trauth_panel"] [data-testid="InputInstructions"] { display:none; }
+/* Forgot password: a quiet text link with a compact rounded surface on
+   hover and focus — never the Sign In key's gloss, which clipped into a
+   half-pill here. The margins keep its text, and the row's height, exactly
+   where they were (the row had 8px above a 26px link). */
+[class*="st-key-trauth_panel"] [class*="st-key-auth_forgot"] .stFormSubmitButton > button { padding:4px 10px !important; margin:5px -10px -3px -9px !important; min-height:0 !important;
+  border:1px solid transparent !important; border-radius:10px; overflow:visible; transition: background var(--tr-fast) var(--tr-ease), border-color var(--tr-fast) var(--tr-ease), color var(--tr-fast) var(--tr-ease); }
+[class*="st-key-trauth_panel"] [class*="st-key-auth_forgot"] .stFormSubmitButton > button::before { display:none; }
+[class*="st-key-trauth_panel"] [class*="st-key-auth_forgot"] .stFormSubmitButton > button p { letter-spacing:0; text-transform:none; }
+[class*="st-key-trauth_panel"] [class*="st-key-auth_forgot"] .stFormSubmitButton > button:hover { background:rgba(255,51,85,.10) !important; border-color:rgba(255,51,85,.28) !important; color:#FF8CA0; text-decoration:none; }
+[class*="st-key-trauth_panel"] [class*="st-key-auth_forgot"] .stFormSubmitButton > button:active { background:rgba(255,51,85,.16) !important; }
+[class*="st-key-trauth_panel"] [class*="st-key-auth_forgot"] .stFormSubmitButton > button:focus-visible { outline:2px solid #FF8CA0; outline-offset:2px; }
+/* Continue with Google: the "G" and the label centred together as one group */
+[class*="st-key-auth_google"] .stButton > button > div { flex:0 1 auto !important; width:auto !important; }
+[class*="st-key-auth_google"] .stButton > button:focus-visible { outline:2px solid rgba(255,255,255,.45); outline-offset:2px; }
+
 /* feedback */
 .tr-auth-alert { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:12px; font-size:13.5px; line-height:1.45; font-weight:500; margin:4px 0 2px;
   animation: tr-auth-rise .35s var(--tr-ease) both; }
@@ -495,6 +536,12 @@ __CRAFTS__
   .tr-auth-foot-text { font-size:13px; }
   .tr-auth-mhead .tr-radar.mini { width:96px !important; }
   .tr-auth-mstrip .credit { display:none; }
+}
+/* phones: the CTA's 56px min-height used to stretch the Forgot link into a
+   tall box; its surface stays compact and margins keep the row (8px + 56px)
+   and the text exactly where they were */
+@media (max-width: 768px) {
+  [class*="st-key-trauth_panel"] [class*="st-key-auth_forgot"] .stFormSubmitButton > button { margin:19.8px -10px 11.8px -9px !important; }
 }
 </style>
 """.replace("__MAIL__", _input_icon_uri("mail")).replace("__LOCK__", _input_icon_uri("lock")) \

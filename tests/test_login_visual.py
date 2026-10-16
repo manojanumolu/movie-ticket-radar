@@ -280,6 +280,46 @@ def test_the_stylesheet_is_one_payload_that_carries_the_radar_and_the_crafts_onc
     assert "backdrop-filter" not in panel and "transform" not in panel.split("/*")[0]   # charcoal, not glass; no containing block
 
 
+def test_the_password_eye_sits_inside_a_field_identical_to_the_email_field():
+    """Streamlit 1.5x+ draws a text input as a root holding the <input> and,
+    for a password, the eye button. The field's surface is on that root —
+    the same rule for both inputs — and the <input> is transparent, so the
+    eye is inside the box rather than past the end of it."""
+    root = '[class*="st-key-trauth_panel"] .stTextInput [data-testid="stTextInputRootElement"]'
+    field = login.CSS.split(root + " {")[1].split("}")[0]
+    assert "border-radius:12px" in field and "#101014" in field
+    assert root + ":focus-within {" in login.CSS
+    assert "background:transparent !important" in login.CSS.split(root + " input,")[1].split("}")[0]
+    eye = login.CSS.split(root + " button {")[1].split("}")[0]
+    assert "width:32px" in eye and "height:32px" in eye
+    assert root + " button:hover" in login.CSS and root + " button:focus-visible { outline:2px solid" in login.CSS
+    # every new input rule is scoped to the login panel: nothing reaches other pages
+    rules = re.sub(r"/\*.*?\*/", "", login.CSS, flags=re.S)                # declarations only, not comments
+    for line in rules.splitlines():
+        if 'stTextInputRootElement' in line:
+            selectors = [sel.strip() for sel in line.split("{")[0].split(",") if sel.strip()]
+            assert all(sel.startswith('[class*="st-key-trauth_panel"]') for sel in selectors), line
+
+
+def test_the_forgot_link_is_a_quiet_surface_not_a_clipped_gloss():
+    forgot = '[class*="st-key-trauth_panel"] [class*="st-key-auth_forgot"] .stFormSubmitButton > button'
+    assert forgot + "::before { display:none; }" in login.CSS
+    rule = login.CSS.split(forgot + " {")[1].split("}")[0]
+    assert "min-height:0 !important" in rule and "overflow:visible" in rule and "border-radius:10px" in rule
+    assert forgot + ":hover {" in login.CSS and forgot + ":focus-visible { outline:2px solid" in login.CSS
+    assert "letter-spacing:0" in login.CSS.split(forgot + " p {")[1].split("}")[0]
+
+
+def test_the_google_button_carries_the_official_multicolour_g():
+    g = login.GOOGLE_G
+    assert g.startswith("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'>")     # xmlns: or it never draws
+    for colour in ("%23EA4335", "%234285F4", "%23FBBC05", "%2334A853"):
+        assert g.count(colour) == 1, colour
+    assert "#" not in g                                          # every colour URL-encoded for the data URI
+    assert login.CSS.count(g) == 1                               # one icon, shared by the button and the live link
+    assert '[class*="st-key-auth_google"] .stButton > button > div { flex:0 1 auto !important; width:auto !important; }' in login.CSS
+
+
 def test_the_wait_is_a_line_at_once_and_a_veil_only_if_it_drags(monkeypatch):
     rendered = []
     placeholder = type("P", (), {"markdown": lambda self, m, **k: rendered.append(m)})()
