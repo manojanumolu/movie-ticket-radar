@@ -122,33 +122,28 @@ Rules:
 - The platform logos (`ui/assets/logo-*.png`, via `components.asset_uri`)
   are UI chrome, not brand artwork, and stay where they are.
 
-### The Login room (October 2026: two layers)
+### The Login room (Phase 1 refinement)
 
-The page is two layers, all of it CSS and inline SVG.
+The left column is one environment, layered back to front, all of it CSS
+and inline SVG: a projector cone from the top right (`.beam`), the radar's
+sweep continued across the room as a slow conic wedge on the same 6.5 s
+clock as the dish (`.scan`), a curved film strip — one path stroked five
+times: halo, band, sprocket holes, film, frame lines (`_strip`) — a faint
+aperture in the dark on the right (`_reel`), the radar, the six posters at
+three depths hung along the strip (`FAN`: the lead largest and in front,
+two flanking a step back, three lower and further back; corners may
+overlap, never more than 12 % of a card), the crafts in the negative
+space, the headline, and two rows of rim-lit theatre seats fading into the
+floor (`_seats`). No Charminar, no skyline, no photograph. Poster hover
+lifts the card: the deal-in animation uses `fill-mode: backwards` so it
+cannot keep holding `transform` against `:hover`.
 
-**Behind** (`_backdrop`, `.tr-auth-bg`): one `position:fixed` element the
-size of the viewport, `pointer-events:none`, `aria-hidden`. It holds the
-room's burgundy light, one radar dish centred behind the hand of posters —
-static rings, axes and tick rings in a single SVG (painted once), a single
-conic sweep turned by `transform` on the 6.5 s clock (`SWEEP_S`), contacts
-whose delay is their angle so they light as the sweep passes, and the 24
-crafts as faint marks on the rings (decoration only: no tooltips, nothing
-focusable). Its outer rings run on behind the panel and off the screen.
-Its centre (`--cx`/`--cy`) is computed from the same stage variables
-(`--tra-stage`, `--tra-panel`, `--tra-gap`, `--tra-hw`) that size the
-columns. Reduced motion freezes the sweep at a composed angle.
-
-**In front**: one centred stage (max 1240 px). The six posters at three
-depths (`FAN` in a 640×440 design box, drawn in percentages so the hand
-scales with its column and the screen's height; corners may overlap,
-never more than 12 % of a card) are right-aligned against a fixed-width
-dark-glass panel. The glass is on the panel's `::before`, so the panel
-itself never becomes a containing block for the fixed busy veil. The
-headline sits beneath the posters. Below 900 px the stage stacks: brand, a
-row of headline + three posters, then the form. No Charminar, no skyline,
-no photograph. Poster hover lifts the card: the deal-in animation uses
-`fill-mode: backwards` so it cannot keep holding `transform` against
-`:hover`.
+The room is not clipped at its own box (October 2026): the sweep (`.scan`,
+2600 px) and the dish's rings continued outward (`_field`, `FIELD_RINGS`)
+run on behind the posters, the panel and the page's edges. The page's
+container clips them — full width (the 1600 px column kept by padding), at
+least one screen tall, `flex-shrink:0` — so they never add a scrollbar.
+Doraemon hangs in what was Avatar's slot.
 
 ## 5. The radar
 

@@ -1,19 +1,14 @@
 """The entrance: sign in, create an account, reset a password.
 
-Two layers. Behind everything, fixed to the viewport, the room: its
-burgundy light and one radar the size of the screen — static rings, a
-single sweep turned by the compositor, contacts that light as it passes,
-the twenty-four crafts of filmmaking (``ui.crafts``) as faint marks on the
-dish. In front, one stage: a fanned hand of six fixed posters
-(``ui.assets_registry``, the brand's own files, never the catalogue's)
-set right against a dark-glass panel that holds the form, the headline
-beneath the posters. The dish is centred behind the hand, so its rings
-run on behind the panel and tie the two halves together. Everything on
-screen is the same HTML-in-markdown plus keyed-container technique the
-rest of the UI uses, so the page is still plain Streamlit: the inputs,
-buttons and reruns are Streamlit's, which is what lets ``AppTest`` drive
-it. Nothing here reads the catalogue, Firestore or a network for
-decoration.
+A cinematic room on the left — the radar (``ui.radar``) leading, a fanned
+hand of six fixed posters (``ui.assets_registry``, the brand's own files,
+never the catalogue's), the twenty-four crafts of filmmaking scattered in
+the dark (``ui.crafts``), the headline on the floor — and a charcoal panel
+on the right that holds the form. Everything on screen is the same
+HTML-in-markdown plus keyed-container technique the rest of the UI uses,
+so the page is still plain Streamlit: the inputs, buttons and reruns are
+Streamlit's, which is what lets ``AppTest`` drive it. Nothing here reads
+the catalogue, Firestore or a network for decoration.
 
 Three states share the panel and the visual:
 
@@ -31,11 +26,9 @@ Firebase is only ever spoken to from ``auth.firebase``; this module renders,
 validates what can be validated before a network call, and shows the one
 sentence ``AuthError`` carries. A raw Firebase message never reaches the page.
 
-On a phone (and a portrait tablet) the stage becomes a stack: the brand,
-one short row of headline and three posters, then the panel, which is the
-page — the form is reachable without scrolling. The radar stays behind,
-centred on those posters. The desktop composition is gone rather than
-squeezed.
+On a phone the room steps aside for a stack of its own: the brand, a short
+hero with a small radar and three posters, then the panel, which is the
+page. The desktop composition is gone rather than squeezed.
 
 Waiting is honest: a Firebase call puts one mono line with a tiny radar in
 the panel at once, and only if it drags past half a second does the room
@@ -121,72 +114,32 @@ def _input_icon_uri(name: str, color: str = "#8E8E98") -> str:
 # ──────────────────────────────────────────────────────────────────────────
 CSS = """
 <style>
-/* ── the frame: one stage, centred, its geometry in variables that the
-   fixed radar behind it reads too ─────────────────────────────────── */
-html, body, [data-testid="stAppViewContainer"], .stApp { background:#07070A !important; }
-.block-container { padding: 14px 32px 12px !important; max-width: 1304px !important; }
-[data-testid="stMainBlockContainer"] { padding-top: 14px !important; }
-[data-testid="stHeader"] { display:none !important; }
-/* the gate's zero-height slots (cookie writer, chrome) sit above the shell;
-   their flex gaps would push the whole stage down the screen */
-[data-testid="stVerticalBlock"]:has([class*="st-key-trauth_shell"]) { gap:0 !important; }
-[class*="st-key-trauth_shell"] {
-  --tra-pad:32px; --tra-panel:460px; --tra-gap:36px; --tra-top:104px;
-  --tra-stage:min(1240px, 100vw - 2 * var(--tra-pad));
-  --tra-wl:calc(var(--tra-stage) - var(--tra-panel) - var(--tra-gap));
-  /* the hand: as wide as its column allows, and short enough that hand,
-     headline and panel fit one laptop screen */
-  --tra-hw:min(640px, var(--tra-wl), max(430px, (100vh - 400px) * 1.4545));
-  position:relative; min-height:calc(100vh - 26px); gap:12px !important; }
-/* the stage sits between the top bar and the foot, centred in what is left */
-:is([class*="st-key-trauth_shell"] > div, [class*="st-key-trauth_shell"]) > [data-testid="stHorizontalBlock"] { gap:var(--tra-gap) !important; align-items:center; flex-wrap:nowrap; }
-[class*="st-key-trauth_shell"] > [data-testid="stLayoutWrapper"], [class*="st-key-trauth_shell"] > [data-testid="stHorizontalBlock"] { margin-block:auto; }
-:is([class*="st-key-trauth_shell"] > div, [class*="st-key-trauth_shell"]) > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex:1 1 0 !important; width:auto !important; min-width:0 !important; }
-:is([class*="st-key-trauth_shell"] > div, [class*="st-key-trauth_shell"]) > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex:0 0 var(--tra-panel) !important; width:var(--tra-panel) !important; min-width:0 !important; }
-
-/* ── layer 1: the room and its radar, fixed to the viewport, behind it all.
-   Static rings are painted once; only the sweep moves, and it moves by
-   transform, so the compositor turns it without repainting the page ── */
-.tr-auth-bg { position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden;
-  --cx:calc(50vw - var(--tra-stage) / 2 + var(--tra-wl) - var(--tra-hw) / 2);
-  --cy:calc(var(--tra-top) + max(0px, (100vh - 820px) / 2) + var(--tra-hw) * .34);
+/* ── the room: near-black, one projector's warmth low on the left, a cooler
+   spill high on the right — the light of a theatre before the film ────── */
+html, body, [data-testid="stAppViewContainer"], .stApp {
   background:
-    radial-gradient(1100px 700px at 4% 100%, rgba(255,51,85,.16), transparent 60%),
-    radial-gradient(900px 600px at 100% 0%, rgba(255,51,85,.08), transparent 58%),
-    radial-gradient(1600px 1000px at 50% 40%, #110D14, #07070A 78%); }
-.tr-auth-bg::after { content:""; position:absolute; inset:0; opacity:.35;
+    radial-gradient(1100px 700px at 6% 96%, rgba(255,51,85,.20), transparent 60%),
+    radial-gradient(800px 520px at 96% 4%, rgba(255,51,85,.09), transparent 58%),
+    radial-gradient(1600px 900px at 50% 40%, #0F0F15, #07070A 78%) !important;
+  background-attachment: fixed !important;
+}
+.block-container { padding: 1rem 2.4rem 1.6rem !important; max-width: 1600px !important; }
+/* the room's radar runs on past the room to the whole page. The page's own
+   container clips it: it spans the screen (the same 1600px content column,
+   kept by padding instead of max-width) and is at least one screen tall, so
+   the radar reaches every edge and never adds a scrollbar. flex-shrink:0 —
+   a clipping flex item may otherwise shrink below its content. */
+[data-testid="stMainBlockContainer"] { max-width:none !important; padding-left:max(2.4rem, calc((100% - 1600px) / 2 + 2.4rem)) !important;
+  padding-right:max(2.4rem, calc((100% - 1600px) / 2 + 2.4rem)) !important; overflow:clip; min-height:100vh; box-sizing:border-box; flex-shrink:0; }
+[data-testid="stMainBlockContainer"] { padding-top: .6rem !important; }
+[data-testid="stHeader"] { display: none !important; }
+[class*="st-key-trauth_shell"] { position: relative; }
+/* a fine film grain over the whole room; one tiny repeating gradient, no image */
+[class*="st-key-trauth_shell"]::before { content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.35;
   background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px); }
-.tr-auth-bg .dish { position:absolute; left:var(--cx); top:var(--cy); width:0; height:0; }
-.tr-auth-bg .dish > * { position:absolute; }
-.tr-auth-bg .glow { left:-760px; top:-760px; width:1520px; height:1520px; border-radius:50%;
-  background: radial-gradient(closest-side, rgba(255,51,85,.20), rgba(255,51,85,.07) 40%, rgba(255,51,85,.02) 70%, transparent); }
-.tr-auth-bg .rings { left:-1200px; top:-1200px; width:2400px; height:2400px; overflow:visible; }
-.tr-auth-bg .rings circle { fill:none; stroke:rgba(255,77,108,.22); stroke-width:1; }
-.tr-auth-bg .rings .faint { stroke:rgba(255,77,108,.12); }
-.tr-auth-bg .rings .ticks { stroke:rgba(255,107,133,.20); }
-.tr-auth-bg .rings .orbit { stroke:rgba(255,140,160,.12); stroke-dasharray:2 12; }
-.tr-auth-bg .rings line { stroke:rgba(255,255,255,.04); stroke-width:1; }
-.tr-auth-bg .sweep { left:-1150px; top:-1150px; width:2300px; height:2300px; border-radius:50%;
-  background: conic-gradient(from 0deg, transparent 0deg 288deg, rgba(255,51,85,.025) 310deg, rgba(255,51,85,.085) 345deg, rgba(255,77,108,.17) 359.4deg, transparent 360deg);
-  -webkit-mask-image: radial-gradient(closest-side, #000 22%, rgba(0,0,0,.6) 62%, transparent 100%);
-  mask-image: radial-gradient(closest-side, #000 22%, rgba(0,0,0,.6) 62%, transparent 100%);
-  animation: tr-radar-sweep 6.5s linear infinite; will-change:transform; }
-.tr-auth-bg .sweep::after { content:""; position:absolute; left:calc(50% - 1px); top:0; width:2px; height:50%;
-  background: linear-gradient(0deg, rgba(255,120,145,.8), rgba(255,51,85,.25) 40%, transparent 85%); }
-.tr-auth-bg .core { left:-5px; top:-5px; width:10px; height:10px; border-radius:50%; background:#FF3355;
-  box-shadow: 0 0 0 5px rgba(255,51,85,.14), 0 0 26px 6px rgba(255,51,85,.55); }
-/* contacts light as the sweep passes them: each one's delay is its angle */
-.tr-auth-bg .blip { width:8px; height:8px; margin:-4px 0 0 -4px; border-radius:50%; background:#FF6B85; opacity:0;
-  box-shadow: 0 0 12px 2px rgba(255,51,85,.8); animation: tr-radar-contact 6.5s linear infinite; }
-.tr-auth-bg .blip::after { content:""; position:absolute; inset:-7px; border-radius:50%; border:1px solid rgba(255,107,133,.75);
-  animation: tr-auth-ping 6.5s ease-out infinite; animation-delay:inherit; }
-/* the twenty-four crafts, faint marks on the dish: decoration, not controls */
-.tr-auth-bg .craft { width:22px; height:22px; margin:-11px 0 0 -11px; display:flex; align-items:center; justify-content:center; color:#FFC2CD; opacity:.2; }
-.tr-auth-bg .craft svg { display:block; }
-.tr-auth-bg .vignette { position:absolute; inset:0; background: radial-gradient(130% 110% at 50% 45%, transparent 55%, rgba(4,4,6,.55)); }
 
-/* ── layer 2: everything you read or touch sits above the room ─────── */
-.tr-auth-top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:4px 2px 4px; animation: tr-auth-fade .7s var(--tr-ease) both; }
+/* ── top bar ───────────────────────────────────────────────────────── */
+.tr-auth-top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:4px 2px 12px; animation: tr-auth-fade .7s var(--tr-ease) both; }
 .tr-auth-lockup { display:flex; align-items:center; gap:13px; }
 .tr-auth-lockup .mark { width:46px; height:46px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none;
   background: radial-gradient(circle at 40% 35%, rgba(255,120,140,.35), rgba(255,51,85,.08) 60%, transparent 70%);
@@ -200,9 +153,52 @@ html, body, [data-testid="stAppViewContainer"], .stApp { background:#07070A !imp
 .tr-auth-status .live i { width:7px; height:7px; border-radius:50%; background:#3ED598; box-shadow:0 0 0 3px rgba(62,213,152,.18), 0 0 12px rgba(62,213,152,.8); animation: tr-auth-live 2.2s ease-in-out infinite; }
 .tr-auth-status .sep { width:1px; height:12px; background:rgba(255,255,255,.14); }
 
-/* the scene: the hand of posters against the panel, the headline beneath */
-.tr-auth-scene { position:relative; z-index:1; display:flex; flex-direction:column; animation: tr-auth-fade 1s var(--tr-ease) both; }
-.tr-auth-posters { position:relative; z-index:2; width:var(--tra-hw); aspect-ratio:640 / 440; margin-left:auto; perspective:1600px; container-type:inline-size; }
+/* ── the cinematic zone ────────────────────────────────────────────── */
+.tr-auth-visual { --tr-copy-top:412px; position:relative; min-height:860px; isolation:isolate; overflow:visible; padding:var(--tr-copy-top) 24px 170px 8px; animation: tr-auth-fade 1s var(--tr-ease) both; }
+/* the projector: one cone of light from the top right, across the room */
+.tr-auth-visual .beam { position:absolute; right:-12%; top:-16%; width:96%; height:110%; z-index:0; pointer-events:none; opacity:.9;
+  background: conic-gradient(from 197deg at 94% 8%, transparent 0deg, rgba(255,107,133,.13) 14deg, rgba(255,51,85,.05) 30deg, rgba(255,51,85,.015) 44deg, transparent 56deg); filter: blur(14px); }
+.tr-auth-visual .glow { position:absolute; left:-18%; bottom:-10%; width:70%; height:50%; z-index:0; pointer-events:none;
+  background: radial-gradient(closest-side, rgba(255,51,85,.24), rgba(255,51,85,.05) 55%, transparent 75%); filter: blur(12px); animation: tr-auth-breathe 8s ease-in-out infinite; }
+/* the radar's sweep, continued across the room: the dish scans the posters */
+.tr-auth-visual .scan { position:absolute; left:165px; top:185px; width:2600px; height:2600px; margin:-1300px 0 0 -1300px; border-radius:50%; z-index:1; pointer-events:none; opacity:.9;
+  background: conic-gradient(from 0deg, transparent 0deg 286deg, rgba(255,51,85,.035) 330deg, rgba(255,51,85,.10) 359deg, transparent 360deg);
+  animation: tr-radar-sweep 6.5s linear infinite; }
+/* the dish's rings, continued outward from the radar across the whole page */
+.tr-auth-visual .field { position:absolute; left:165px; top:185px; width:4000px; height:4000px; margin:-2000px 0 0 -2000px; z-index:0; pointer-events:none; }
+.tr-auth-visual .field svg { display:block; width:100%; height:100%; }
+.tr-auth-visual .field circle { fill:none; stroke:#FF3355; stroke-width:1; }
+.tr-auth-visual .field line { stroke:#FF3355; stroke-width:1; opacity:.06; }
+/* the film strip: one curve that ties the radar to the posters */
+.tr-auth-strip { position:absolute; right:8px; top:0; width:600px; height:470px; z-index:1; pointer-events:none; }
+.tr-auth-strip svg { position:absolute; left:-460px; top:-110px; width:1180px; height:760px; overflow:visible; display:block; }
+.tr-auth-strip .halo { fill:none; stroke:rgba(255,51,85,.06); stroke-width:118; }
+.tr-auth-strip .band { fill:none; stroke:#1A1219; stroke-width:66; }
+.tr-auth-strip .holes { fill:none; stroke:rgba(255,120,145,.11); stroke-width:66; stroke-dasharray:7 15; }
+.tr-auth-strip .film { fill:none; stroke:#0F0B11; stroke-width:48; }
+.tr-auth-strip .frames { fill:none; stroke:rgba(255,255,255,.05); stroke-width:48; stroke-dasharray:1 118; }
+/* an aperture, out of focus, in the dark on the right */
+.tr-auth-reel { position:absolute; right:-170px; bottom:40px; width:520px; height:520px; z-index:0; pointer-events:none; opacity:.05; color:#FF8CA0; }
+.tr-auth-reel svg { width:100%; height:100%; display:block; }
+/* a row of seats: the house, in the foreground, fading into the floor */
+.tr-auth-seats { position:absolute; left:-4%; right:-4%; bottom:0; z-index:2; display:flex; flex-direction:column; gap:10px; pointer-events:none; padding-bottom:6px;
+  -webkit-mask-image: linear-gradient(180deg, #000 45%, transparent 100%); mask-image: linear-gradient(180deg, #000 45%, transparent 100%); }
+.tr-auth-seats .row { display:flex; justify-content:center; gap:12px; }
+.tr-auth-seats .row.back { transform:scale(.86); opacity:.6; }
+.tr-auth-seats i { width:68px; height:44px; border-radius:16px 16px 6px 6px; flex:none; position:relative;
+  background: linear-gradient(180deg,#3E0D1B 0%,#240811 50%,#12040A 100%); border-top:1px solid rgba(255,100,130,.42);
+  box-shadow: inset 0 -12px 18px -12px #000, inset 0 1px 0 rgba(255,140,160,.12), 0 -8px 26px -18px rgba(255,51,85,.9); }
+.tr-auth-seats i::after { content:""; position:absolute; left:8px; right:8px; bottom:-7px; height:9px; border-radius:0 0 5px 5px; background:#150409; border-top:1px solid rgba(255,90,120,.18); }
+.tr-auth-seats .row.front i { width:84px; height:58px; }
+.tr-auth-visual .floor { position:absolute; left:0; right:0; bottom:0; height:220px; z-index:1; pointer-events:none; background: linear-gradient(180deg, transparent, rgba(7,7,10,.75) 80%); }
+
+/* the radar, front and left; .scan above is centred on it */
+.tr-auth-visual .tr-radar.hero { position:absolute; left:0; top:20px; z-index:2; animation: tr-auth-rise 1s .1s var(--tr-ease) both; }
+.tr-auth-visual .tr-radar.hero .tag { left:2%; right:auto; top:auto; bottom:-6%; animation: tr-auth-rise .8s .7s var(--tr-ease) both; }
+.tr-auth-visual .tr-radar.hero .tag::before { left:50%; right:auto; top:-9px; width:1px; height:8px; }
+
+/* the posters: six at three depths, hung along the strip */
+.tr-auth-posters { position:absolute; right:8px; top:0; width:600px; height:470px; z-index:3; perspective:1600px; }
 .tr-auth-posters .hand { position:absolute; inset:0; transform: rotateY(-6deg) rotateX(2deg); transform-style:preserve-3d; transform-origin:60% 50%; }
 .tr-auth-poster { position:absolute; border-radius:12px; overflow:hidden; background:#150B10; border:1px solid rgba(255,255,255,.14);
   box-shadow: 0 30px 60px -22px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.05), 0 14px 40px -26px rgba(255,51,85,.6);
@@ -213,97 +209,80 @@ html, body, [data-testid="stAppViewContainer"], .stApp { background:#07070A !imp
 .tr-auth-poster::before { content:""; position:absolute; inset:0; z-index:1; pointer-events:none; border-radius:inherit;
   background: linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,0) 38%, rgba(0,0,0,0) 62%, rgba(0,0,0,.35)); }
 .tr-auth-poster::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none; background: linear-gradient(180deg, transparent 58%, rgba(6,6,9,.9)); }
-.tr-auth-poster .t { position:absolute; left:9px; right:9px; bottom:9px; z-index:2; font-family:var(--tr-mono); font-size:clamp(7.5px, 1.48cqi, 9.5px); letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.88);
+.tr-auth-poster .t { position:absolute; left:11px; right:11px; bottom:10px; z-index:2; font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.88);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 8px #000; }
 .tr-auth-poster:hover { transform: rotate(var(--rot)) translateY(-10px) scale(1.035); z-index:9 !important; filter:brightness(1.05);
   box-shadow: 0 40px 70px -24px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.25), 0 24px 60px -24px rgba(255,51,85,.9); }
 .tr-auth-poster.lead .sheen { position:absolute; inset:-40% -60%; z-index:1; pointer-events:none;
   background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.13) 50%, transparent 58%); animation: tr-auth-sheen 9s 2s ease-in-out infinite; }
-.tr-auth-posters .detect { position:absolute; right:0; top:4%; z-index:6; display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:9px;
-  font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.22em; line-height:1.55; color:#FF8CA0; white-space:nowrap;
-  background:rgba(16,8,12,.8); border:1px solid rgba(255,51,85,.5); box-shadow: 0 0 0 1px rgba(255,51,85,.1), 0 12px 30px -14px rgba(255,51,85,.8);
-  animation: tr-auth-fade .8s .9s var(--tr-ease) backwards; }
-.tr-auth-posters .detect i { width:7px; height:7px; flex:none; border-radius:50%; background:#FF3355; box-shadow:0 0 0 3px rgba(255,51,85,.2), 0 0 10px rgba(255,51,85,.9); animation: tr-auth-live 2.2s ease-in-out infinite; }
-.tr-auth-posters .credit { position:absolute; right:2px; bottom:0; font-family:var(--tr-mono); font-size:9px; letter-spacing:.24em; color:var(--tr-text-4); white-space:nowrap; }
-/* a smaller hand has no room beside Baahubali for the credit */
-@container (max-width: 600px) { .tr-auth-posters .credit { display:none; } }
+.tr-auth-posters .credit { position:absolute; right:0; bottom:-26px; font-family:var(--tr-mono); font-size:10px; letter-spacing:.3em; color:var(--tr-text-4); white-space:nowrap; }
 
 /* headline & the four promises */
-.tr-auth-copy { position:relative; z-index:3; margin-top:10px; animation: tr-auth-rise .9s .2s var(--tr-ease) both; }
-.tr-auth-copy .eyebrow { font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; color:#FF8CA0; margin-bottom:12px; display:flex; align-items:center; gap:12px; }
+.tr-auth-copy { position:relative; z-index:2; max-width:none; animation: tr-auth-rise .9s .2s var(--tr-ease) both; }
+.tr-auth-copy .eyebrow { font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; color:#FF8CA0; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
 .tr-auth-copy .eyebrow::before { content:""; width:28px; height:1px; background:rgba(255,107,133,.7); }
-.tr-auth-copy h1 { padding:0; font-size:clamp(42px, 3.7vw, 58px); line-height:1; letter-spacing:-.04em; font-weight:800; color:#fff; margin:0; text-shadow:0 2px 30px rgba(7,7,10,.8); }
+.tr-auth-copy h1 { font-size:60px; line-height:1; letter-spacing:-.04em; font-weight:800; color:#fff; margin:0; }
 .tr-auth-copy h1 em { font-style:normal; color:var(--tr-accent); }
-.tr-auth-copy .lede { font-size:16.5px; line-height:1.55; color:var(--tr-text-2); margin:16px 0 0; max-width:520px; font-weight:500; }
-.tr-auth-feats { display:flex; gap:6px; margin-top:18px; flex-wrap:wrap; }
-.tr-auth-feat { display:inline-flex; align-items:center; gap:7px; padding:6px 11px 6px 7px; border-radius:999px; border:1px solid rgba(255,255,255,.10); white-space:nowrap;
-  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.12em; color:var(--tr-text-2);
+.tr-auth-copy .lede { font-size:18px; line-height:1.55; color:var(--tr-text-2); margin:20px 0 0; max-width:560px; font-weight:500; }
+.tr-auth-feats { display:flex; gap:8px; margin-top:26px; flex-wrap:nowrap; }
+.tr-auth-feat { display:inline-flex; align-items:center; gap:8px; padding:7px 12px 7px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); font-family:var(--tr-mono); font-size:10px; letter-spacing:.16em; color:var(--tr-text-2);
   transition: border-color .25s var(--tr-ease), transform .25s var(--tr-ease), background .25s var(--tr-ease); }
 .tr-auth-feat .ic { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#FF6B85; background:rgba(255,51,85,.10); border:1px solid rgba(255,51,85,.35); }
 .tr-auth-feat:hover { border-color:rgba(255,51,85,.45); transform:translateY(-2px); background: linear-gradient(180deg, rgba(255,51,85,.10), rgba(255,51,85,.03)); }
+.tr-auth-mark { position:absolute; left:0; right:0; bottom:22px; z-index:3; font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; line-height:1.9; color:var(--tr-text-3); text-align:center; text-shadow:0 2px 14px #000; }
 
-/* ── the panel: dark glass over the radar — opaque enough that the sweep
-   never crosses the text, translucent enough to belong to the room ── */
+/* ── the panel ─────────────────────────────────────────────────────── */
 [class*="st-key-trauth_panel"] {
-  position:relative; z-index:3; padding:28px 32px 24px !important; border-radius:26px;
-  border:1px solid rgba(255,120,145,.16);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 50px 100px -40px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.05), 0 0 70px -24px rgba(255,51,85,.35);
+  position:relative; z-index:3; max-width:560px; margin-left:auto; padding:34px 34px 30px !important; border-radius:26px;
+  background: linear-gradient(168deg, #17131A 0%, #0F0D12 52%, #120E14 100%);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 50px 100px -40px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.05), 0 30px 90px -50px rgba(255,51,85,.55);
   /* opacity only, and never "both": a transform here — even the identity
      matrix a finished rise leaves behind — would pin the fixed veil inside
      the panel, and a filled animation makes the panel a backdrop root that
-     stops the veil's blur at its edge. "backwards" lets the effect end.
-     The glass lives on ::before for the same reason: a backdrop-filter on
-     the panel itself would be a containing block for the veil. */
+     stops the veil's blur at its edge. "backwards" lets the effect end. */
   animation: tr-auth-fade .9s .1s var(--tr-ease) backwards; gap:.55rem;
 }
-[class*="st-key-trauth_panel"]::before { content:""; position:absolute; inset:0; z-index:-1; border-radius:inherit; pointer-events:none;
-  background:
-    radial-gradient(520px 230px at 88% -4%, rgba(255,51,85,.15), transparent 60%),
-    radial-gradient(400px 200px at 0% 104%, rgba(255,51,85,.07), transparent 60%),
-    linear-gradient(168deg, rgba(25,18,24,.9) 0%, rgba(14,11,15,.92) 52%, rgba(18,13,17,.92) 100%);
-  -webkit-backdrop-filter: blur(18px) saturate(125%); backdrop-filter: blur(18px) saturate(125%); }
+[class*="st-key-trauth_panel"]::before { content:""; position:absolute; inset:0; border-radius:26px; pointer-events:none;
+  background: radial-gradient(560px 240px at 88% -4%, rgba(255,51,85,.16), transparent 60%), radial-gradient(400px 200px at 0% 104%, rgba(255,51,85,.07), transparent 60%); }
 [class*="st-key-trauth_panel"]::after { content:""; position:absolute; left:14%; right:14%; top:-1px; height:1px; pointer-events:none;
   background: linear-gradient(90deg, transparent, rgba(255,140,160,.75), transparent); }
-.tr-auth-brand { display:flex; align-items:center; gap:16px; justify-content:center; padding:0 0 14px; animation: tr-auth-rise .9s .15s var(--tr-ease) both; }
-.tr-auth-brand .lock { display:flex; align-items:center; gap:12px; }
-.tr-auth-brand .lock .tr-radar { width:44px; filter: drop-shadow(0 0 14px rgba(255,51,85,.55)); }
-.tr-auth-brand .lock .n { font-size:20px; font-weight:800; letter-spacing:.06em; color:#fff; }
+.tr-auth-brand { display:flex; align-items:center; gap:18px; justify-content:center; padding:2px 0 22px; animation: tr-auth-rise .9s .15s var(--tr-ease) both; }
+.tr-auth-brand .lock { display:flex; flex-direction:column; align-items:center; gap:10px; }
+.tr-auth-brand .lock .tr-radar { width:52px; filter: drop-shadow(0 0 14px rgba(255,51,85,.55)); }
+.tr-auth-brand .lock .n { font-size:21px; font-weight:800; letter-spacing:.06em; color:#fff; }
 .tr-auth-brand .lock .n em { font-style:normal; color:var(--tr-accent); }
-.tr-auth-brand .sep { width:1px; height:34px; background:rgba(255,255,255,.14); }
-.tr-auth-brand .tag { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.32em; line-height:1.65; color:var(--tr-text-3); }
-.tr-auth-brand .tag br:nth-of-type(odd) { display:none; }
-[class*="st-key-trauth_panel"] .tr-auth-h { padding:0; font-size:30px; font-weight:800; letter-spacing:-.035em; line-height:1.1; color:#fff; margin:0; }
-[class*="st-key-trauth_panel"] .tr-auth-p { font-size:15px; line-height:1.55; color:var(--tr-text-2); margin:10px 0 14px; font-weight:500; }
+.tr-auth-brand .sep { width:1px; height:64px; background:rgba(255,255,255,.14); }
+.tr-auth-brand .tag { font-family:var(--tr-mono); font-size:10.5px; letter-spacing:.34em; line-height:1.75; color:var(--tr-text-3); }
+.tr-auth-h { font-size:34px; font-weight:800; letter-spacing:-.035em; line-height:1.1; color:#fff; margin:0; }
+.tr-auth-p { font-size:15.5px; line-height:1.55; color:var(--tr-text-2); margin:10px 0 18px; font-weight:500; }
 .tr-auth-label { font-family:var(--tr-mono); font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--tr-text-3); margin:6px 0 -4px 2px; }
 
-/* inputs: a glyph on the left, a sunken field that holds the eye toggle
-   too, a red ring on focus. Streamlit 1.5x+ names the field
-   stTextInputRootElement; older ones drew it as a baseweb input. */
-[class*="st-key-trauth_panel"] .stTextInput :is([data-testid="stTextInputRootElement"], [data-baseweb="input"]) { min-height:54px; border-radius:14px !important; position:relative; overflow:hidden;
-  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.028)) !important; border:1px solid rgba(255,255,255,.13) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), inset 0 2px 8px rgba(0,0,0,.35); transition: border-color .18s var(--tr-ease), box-shadow .18s var(--tr-ease); }
-[class*="st-key-trauth_panel"] .stTextInput :is([data-testid="stTextInputRootElement"], [data-baseweb="input"]):focus-within { border-color: rgba(255,92,122,.9) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 0 3px rgba(255,51,85,.28), 0 8px 24px -14px rgba(255,51,85,.8) !important; }
-[class*="st-key-trauth_panel"] .stTextInput :is([data-testid="stTextInputRootElement"], [data-baseweb="input"])::before { content:""; position:absolute; left:17px; top:50%; width:20px; height:20px; margin-top:-10px;
-  background-repeat:no-repeat; background-size:20px 20px; opacity:.85; pointer-events:none; transition: opacity var(--tr-fast) var(--tr-ease); }
-[class*="st-key-trauth_panel"] .stTextInput :is([data-testid="stTextInputRootElement"], [data-baseweb="input"]):focus-within::before { opacity:1; }
-[class*="st-key-trauth_panel"] .stTextInput input, [class*="st-key-trauth_panel"] .stTextInput input:focus, [class*="st-key-trauth_panel"] .stTextInput [data-baseweb="base-input"] {
-  background:transparent !important; border:none !important; box-shadow:none !important; }
-[class*="st-key-trauth_panel"] .stTextInput input { min-height:52px; padding-left:50px !important; padding-right:14px !important; font-size:15px !important; color:#fff !important; caret-color:#FF6B85; }
-:is([class*="st-key-auth_email"], [class*="st-key-auth_su_email"], [class*="st-key-auth_reset_email"]) :is([data-testid="stTextInputRootElement"], [data-baseweb="input"])::before { background-image: __MAIL__; }
-:is([class*="st-key-auth_password"], [class*="st-key-auth_su_password"], [class*="st-key-auth_su_confirm"]) :is([data-testid="stTextInputRootElement"], [data-baseweb="input"])::before { background-image: __LOCK__; }
-[class*="st-key-auth_su_name"] :is([data-testid="stTextInputRootElement"], [data-baseweb="input"])::before { background-image: __USER__; }
-[class*="st-key-trauth_panel"] .stTextInput :is([data-testid="stTextInputRootElement"], [data-baseweb="input"]) button { margin-right:8px; border-radius:10px; background:transparent !important; color:var(--tr-text-3);
-  transition: color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease); }
-[class*="st-key-trauth_panel"] .stTextInput :is([data-testid="stTextInputRootElement"], [data-baseweb="input"]) button:hover { color:#fff; background:rgba(255,255,255,.06) !important; }
-[class*="st-key-trauth_panel"] .stTextInput :is([data-testid="stTextInputRootElement"], [data-baseweb="input"]) button:focus-visible { outline:2px solid #FF8CA0; outline-offset:-2px; color:#fff; }
+/* inputs: a glyph on the left, a sunken charcoal field, a red ring on focus */
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"],
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="base-input"] { min-height:56px; border-radius:14px !important; position:relative;
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.025)) !important; border-color: rgba(255,255,255,.11) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), inset 0 2px 6px rgba(0,0,0,.35); transition: border-color .18s var(--tr-ease), box-shadow .18s var(--tr-ease); }
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"]:focus-within { border-color: rgba(255,51,85,.65) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 0 0 3px rgba(255,51,85,.16), 0 8px 24px -14px rgba(255,51,85,.8); }
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"]::before { content:""; position:absolute; left:17px; top:50%; width:20px; height:20px; transform:translateY(-50%);
+  background-repeat:no-repeat; background-size:20px 20px; opacity:.8; pointer-events:none; transition: opacity var(--tr-fast) var(--tr-ease); }
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"] input { padding-left:50px !important; padding-right:14px !important; font-size:15px !important; }
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"]:focus-within::before { opacity:1; }
+[class*="st-key-auth_email"] [data-baseweb="input"]::before, [class*="st-key-auth_su_email"] [data-baseweb="input"]::before, [class*="st-key-auth_reset_email"] [data-baseweb="input"]::before { background-image: __MAIL__; }
+[class*="st-key-auth_password"] [data-baseweb="input"]::before, [class*="st-key-auth_su_password"] [data-baseweb="input"]::before, [class*="st-key-auth_su_confirm"] [data-baseweb="input"]::before { background-image: __LOCK__; }
+[class*="st-key-auth_su_name"] [data-baseweb="input"]::before { background-image: __USER__; }
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"] > div:last-child { padding-right:8px; }
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"] button { transition: color var(--tr-fast) var(--tr-ease), transform var(--tr-fast) var(--tr-ease); color:var(--tr-text-3); }
+[class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"] button:hover { color:#fff; transform:scale(1.08); }
 [class*="st-key-trauth_panel"] [data-testid="stForm"] { padding:0; border:none; }
 [class*="st-key-trauth_panel"] [data-testid="stForm"] [data-testid="stVerticalBlock"] { gap:.55rem; }
 
 /* the CTA: a glossy red key, and the Google button in the same box */
 [class*="st-key-trauth_panel"] .stFormSubmitButton > button, [class*="st-key-trauth_panel"] .stFormSubmitButton > button[kind*="primary"] {
   position:relative; overflow:hidden; background: linear-gradient(180deg,#FF6E88 0%,#FF3355 50%,#D6133F 100%); color:#fff; border:1px solid rgba(255,140,160,.5);
-  font-size:15px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; min-height:58px; border-radius:16px; margin-top:8px;
+  font-size:15px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; min-height:60px; border-radius:16px; margin-top:8px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -2px 0 rgba(0,0,0,.28), 0 20px 44px -16px rgba(255,51,85,.95), 0 0 0 4px rgba(255,51,85,.08);
   flex-direction: row-reverse; gap:12px; transition: transform .22s var(--tr-ease), box-shadow .22s var(--tr-ease), filter .22s var(--tr-ease); }
 [class*="st-key-trauth_panel"] .stFormSubmitButton > button::before { content:""; position:absolute; left:1px; right:1px; top:1px; height:48%; border-radius:15px 15px 40% 40%; pointer-events:none;
@@ -314,13 +293,12 @@ html, body, [data-testid="stAppViewContainer"], .stApp { background:#07070A !imp
   box-shadow: inset 0 2px 4px rgba(0,0,0,.35), 0 12px 30px -16px rgba(255,51,85,.8), 0 0 0 4px rgba(255,51,85,.08); }
 [class*="st-key-trauth_panel"] .stFormSubmitButton > button p { font-size:15px; font-weight:800; letter-spacing:.14em; position:relative; }
 [class*="st-key-trauth_panel"] .stFormSubmitButton > button [data-testid="stIconMaterial"] { font-size:22px; position:relative; }
-[class*="st-key-trauth_panel"] button:focus-visible, a.tr-auth-google:focus-visible { outline:2px solid #FF8CA0 !important; outline-offset:3px; }
-[class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { position:relative; overflow:hidden; min-height:54px; border-radius:16px; font-size:15px; font-weight:700; letter-spacing:0; text-transform:none; gap:12px;
+[class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { position:relative; overflow:hidden; min-height:58px; border-radius:16px; font-size:15.5px; font-weight:700; letter-spacing:0; text-transform:none; gap:12px;
   background: linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.035)); border:1px solid rgba(255,255,255,.14); color:#fff;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 14px 30px -18px rgba(0,0,0,.9); }
 [class*="st-key-auth_google"] .stButton > button::before, a.tr-auth-google::before { content:""; width:20px; height:20px; flex:none; background: url("data:image/svg+xml;utf8,__GOOGLE__") no-repeat center / 20px 20px; }
 [class*="st-key-auth_google"] .stButton > button:hover, a.tr-auth-google:hover { border-color: rgba(255,255,255,.3); background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05)); transform:translateY(-1px); }
-[class*="st-key-auth_google"] .stButton > button p { font-size:15px; font-weight:700; }
+[class*="st-key-auth_google"] .stButton > button p { font-size:15.5px; font-weight:700; }
 /* The live Google control is a real link — opened in a new tab, the one
    navigation the host's sandbox allows — drawn as the very same button:
    same box, same face, same hover. */
@@ -328,21 +306,20 @@ a.tr-auth-google { display:flex; align-items:center; justify-content:center; wid
   font-family: inherit; line-height:1.2; text-decoration:none !important; cursor:pointer; user-select:none;
   transition: border-color .18s var(--tr-ease), background .18s var(--tr-ease), transform .18s var(--tr-ease); }
 a.tr-auth-google:active { transform: scale(.995); }
-.tr-auth-or { display:flex; align-items:center; gap:14px; margin:8px 0 4px; font-family:var(--tr-mono); font-size:11px; letter-spacing:.24em; color:var(--tr-text-4); }
+a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outline-offset: 2px; }
+.tr-auth-or { display:flex; align-items:center; gap:14px; margin:10px 0 6px; font-family:var(--tr-mono); font-size:11px; letter-spacing:.24em; color:var(--tr-text-4); }
 .tr-auth-or::before, .tr-auth-or::after { content:""; flex:1; height:1px; background:rgba(255,255,255,.1); }
 
-/* text links, as buttons the tests can press — never the CTA's gloss */
+/* text links, as buttons the tests can press */
 [class*="st-key-auth_forgot"] .stFormSubmitButton, [class*="st-key-auth_forgot"] .stButton, [class*="st-key-auth_to_signup"] .stButton, [class*="st-key-auth_to_signin"] .stButton, [class*="st-key-auth_back"] .stButton { width:auto; display:inline-block; }
 [class*="st-key-auth_forgot"] .stFormSubmitButton > button, [class*="st-key-auth_forgot"] .stButton > button, [class*="st-key-auth_to_signup"] .stButton > button, [class*="st-key-auth_to_signin"] .stButton > button, [class*="st-key-auth_back"] .stButton > button {
-  background:none !important; border:none !important; box-shadow:none !important; padding:2px 4px; min-height:0; width:auto; margin-top:0; transform:none !important; filter:none !important;
+  background:none !important; border:none !important; box-shadow:none !important; padding:2px 2px; min-height:0; width:auto; transform:none !important;
   color:var(--tr-accent-soft); font-size:14px; font-weight:600; letter-spacing:0; text-transform:none; border-radius:6px; }
-[class*="st-key-auth_forgot"] .stFormSubmitButton > button::before { display:none; }
 [class*="st-key-auth_forgot"] .stFormSubmitButton > button:hover, [class*="st-key-auth_forgot"] .stButton > button:hover, [class*="st-key-auth_to_signup"] .stButton > button:hover, [class*="st-key-auth_to_signin"] .stButton > button:hover, [class*="st-key-auth_back"] .stButton > button:hover { color:#fff; text-decoration:underline; text-underline-offset:3px; }
-[class*="st-key-auth_forgot"] .stFormSubmitButton > button p, [class*="st-key-auth_forgot"] .stButton > button p, [class*="st-key-auth_to_signup"] .stButton > button p, [class*="st-key-auth_to_signin"] .stButton > button p, [class*="st-key-auth_back"] .stButton > button p { font-size:14px; font-weight:600; letter-spacing:0; }
-[class*="st-key-auth_forgot"] { display:flex; justify-content:flex-end; margin-top:-4px; }
-[class*="st-key-auth_forgot"] .stFormSubmitButton > button { min-height:0 !important; height:auto; padding:3px 4px !important; line-height:1.4; }
-[class*="st-key-trpair_auth_foot"] { margin-top:4px; }
-[class*="st-key-trpair_auth_foot"] [data-testid="stHorizontalBlock"] { justify-content:center; gap:6px !important; align-items:center; flex-wrap:nowrap !important; }
+[class*="st-key-auth_forgot"] .stFormSubmitButton > button p, [class*="st-key-auth_forgot"] .stButton > button p, [class*="st-key-auth_to_signup"] .stButton > button p, [class*="st-key-auth_to_signin"] .stButton > button p, [class*="st-key-auth_back"] .stButton > button p { font-size:14px; font-weight:600; }
+[class*="st-key-auth_forgot"] { display:flex; justify-content:flex-end; margin-top:-2px; }
+[class*="st-key-trpair_auth_foot"] { margin-top:8px; }
+[class*="st-key-trpair_auth_foot"] [data-testid="stHorizontalBlock"] { justify-content:center; gap:6px !important; align-items:center; }
 [class*="st-key-trpair_auth_foot"] [data-testid="stColumn"] { flex:0 0 auto !important; width:auto !important; min-width:0 !important; }
 .tr-auth-foot-text { font-size:14px; color:var(--tr-text-2); font-weight:500; text-align:right; white-space:nowrap; line-height:34px; }
 .tr-auth-hint { font-size:12.5px; color:var(--tr-text-3); margin:-2px 0 0 2px; line-height:1.45; }
@@ -384,7 +361,7 @@ a.tr-auth-google:active { transform: scale(.995); }
 .tr-auth-done { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px; padding:12px 14px; border-radius:14px; font-family:var(--tr-mono); font-size:12px; letter-spacing:.24em; color:#9FEBC9;
   background: rgba(62,213,152,.10); border:1px solid rgba(62,213,152,.4); animation: tr-auth-rise .3s var(--tr-ease) both; }
 .tr-auth-done .tr-radar { width:26px; flex:none; }
-.tr-auth-sent { text-align:center; padding:20px 8px 10px; animation: tr-auth-rise .5s var(--tr-ease) both; }
+.tr-auth-sent { text-align:center; padding:26px 8px 12px; animation: tr-auth-rise .5s var(--tr-ease) both; }
 .tr-auth-sent .ic { width:76px; height:76px; margin:0 auto 18px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#3ED598;
   background: radial-gradient(circle at 50% 40%, rgba(62,213,152,.22), rgba(62,213,152,.04) 70%); border:1px solid rgba(62,213,152,.45); box-shadow: 0 0 0 8px rgba(62,213,152,.05), 0 14px 40px -18px rgba(62,213,152,.9); }
 .tr-auth-sent h3 { font-size:24px; font-weight:800; letter-spacing:-.03em; color:#fff; margin:0 0 8px; }
@@ -415,124 +392,114 @@ a.tr-auth-google:active { transform: scale(.995); }
 .tr-auth-mhead { display:none; }
 
 /* ── foot ──────────────────────────────────────────────────────────── */
-.tr-auth-bottom { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:12px 2px 0; border-top:1px solid rgba(255,255,255,.07); animation: tr-auth-fade 1s .3s var(--tr-ease) both; }
+.tr-auth-bottom { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 2px 0; margin-top:8px; border-top:1px solid rgba(255,255,255,.07); animation: tr-auth-fade 1s .3s var(--tr-ease) both; }
 .tr-auth-bottom .items { display:flex; gap:28px; flex-wrap:wrap; }
-.tr-auth-bottom .item { display:inline-flex; align-items:center; gap:9px; font-size:13px; color:var(--tr-text-2); font-weight:600; }
+.tr-auth-bottom .item { display:inline-flex; align-items:center; gap:9px; font-size:13.5px; color:var(--tr-text-2); font-weight:600; }
 .tr-auth-bottom .item svg { color:#FF5573; }
-.tr-auth-bottom .sign { font-family:var(--tr-mono); font-size:11.5px; letter-spacing:.3em; color:var(--tr-text-3); white-space:nowrap; }
+.tr-auth-bottom .sign { font-family:var(--tr-mono); font-size:12px; letter-spacing:.3em; color:var(--tr-text-3); white-space:nowrap; }
 .tr-auth-bottom .sign em { font-style:normal; color:var(--tr-accent); }
 
 /* ── motion ────────────────────────────────────────────────────────── */
 @keyframes tr-auth-rise { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
 @keyframes tr-auth-fade { from { opacity:0; } to { opacity:1; } }
+@keyframes tr-auth-breathe { 0%,100% { opacity:.8; transform:scale(1); } 50% { opacity:1; transform:scale(1.06); } }
 @keyframes tr-auth-deal { from { opacity:0; transform: rotate(var(--rot)) translateY(34px); } to { opacity:1; transform: rotate(var(--rot)) translateY(0); } }
 @keyframes tr-auth-sheen { 0%, 70% { transform: translateX(-60%); } 100% { transform: translateX(60%); } }
 @keyframes tr-auth-live { 0%,100% { opacity:1; } 50% { opacity:.45; } }
-@keyframes tr-auth-ping { 0% { transform:scale(.5); opacity:.9; } 18%, 100% { transform:scale(2.6); opacity:0; } }
 __RADAR__
+__CRAFTS__
 @media (prefers-reduced-motion: reduce) {
   [class*="st-key-trauth_shell"] *, [class*="st-key-trauth_shell"] *::before, [class*="st-key-trauth_shell"] *::after { animation: none !important; transition: none !important; }
-  /* the radar holds still at a composed angle, its contacts lit */
-  .tr-auth-bg .sweep { transform: rotate(-42deg); }
-  .tr-auth-bg .blip { opacity:.7; }
   .tr-auth-veil { opacity:1; }
 }
 
-/* ── shorter laptop screens: the same composition, tighter ─────────── */
-@media (max-height: 900px) and (min-width: 901px) { .tr-auth-feats { display:none; } }
-@media (max-height: 800px) and (min-width: 901px) {
-  .tr-auth-copy .lede { display:none; }
-  [class*="st-key-trauth_panel"] { padding:20px 28px 14px !important; }
-  .tr-auth-brand { padding-bottom:8px; } .tr-auth-brand .lock .tr-radar { width:38px; }
-  [class*="st-key-trauth_panel"] .tr-auth-h { font-size:27px; } [class*="st-key-trauth_panel"] .tr-auth-p { margin:6px 0 8px; font-size:14.5px; }
-  [class*="st-key-trauth_panel"] .stTextInput :is([data-testid="stTextInputRootElement"], [data-baseweb="input"]) { min-height:50px; }
-  [class*="st-key-trauth_panel"] .stTextInput input { min-height:48px; }
-  [class*="st-key-trauth_panel"] .stFormSubmitButton > button { min-height:52px; }
-  [class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { min-height:50px; }
+/* ── laptops: the hand of posters scales down, the radar too ──────── */
+@media (max-width: 1440px) {
+  .tr-auth-posters, .tr-auth-strip { transform: scale(.82); transform-origin: 100% 0; }
+  .tr-auth-visual { --tr-copy-top:372px; min-height:820px; }
+  .tr-auth-feats { flex-wrap:wrap; }
+  .tr-auth-visual .tr-radar.hero { width:300px !important; }
+  .tr-auth-visual .scan, .tr-auth-visual .field { left:150px; top:170px; }
 }
-
-@media (max-height: 740px) and (min-width: 901px) {
-  .block-container { padding-top: 8px !important; padding-bottom: 6px !important; }
-  [class*="st-key-trauth_shell"] { gap:8px !important; --tra-top:84px; }
-  .tr-auth-lockup .mark { width:40px; height:40px; }
-  [class*="st-key-trauth_panel"] { padding:18px 26px 14px !important; gap:.45rem; }
-  [class*="st-key-trauth_panel"] [data-testid="stForm"] [data-testid="stVerticalBlock"] { gap:.45rem; }
-  [class*="st-key-trauth_panel"] .stTextInput :is([data-testid="stTextInputRootElement"], [data-baseweb="input"]) { min-height:46px; }
-  [class*="st-key-trauth_panel"] .stTextInput input { min-height:44px; }
-  [class*="st-key-trauth_panel"] .stFormSubmitButton > button { min-height:50px; }
-  [class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { min-height:46px; }
-  .tr-auth-or { margin:4px 0 2px; }
-  .tr-auth-bottom { padding-top:8px; }
+@media (max-width: 1280px) {
+  .tr-auth-posters, .tr-auth-strip { transform: scale(.72); }
+  .tr-auth-visual { --tr-copy-top:340px; min-height:780px; }
+  .tr-auth-visual .tr-radar.hero { width:270px !important; }
+  .tr-auth-visual .scan, .tr-auth-visual .field { left:135px; top:155px; }
+  .tr-auth-copy h1 { font-size:52px; }
 }
-
-/* ── small laptops and landscape tablets: side by side, scaled down ─ */
+/* ── tablets: the room keeps its radar and headline; the hand and the
+   constellation step aside so nothing crowds the form ──────────────── */
 @media (max-width: 1100px) {
-  [class*="st-key-trauth_shell"] { --tra-pad:20px; --tra-panel:400px; --tra-gap:24px; }
-  .block-container { padding: 12px 20px 12px !important; }
+  .block-container { padding: .9rem 1.4rem 1.4rem !important; }
+  .tr-auth-posters, .tr-auth-strip, .tr-auth-reel, .tr-crafts, .tr-auth-visual .beam { display:none; }
+  .tr-auth-visual { --tr-copy-top:300px; min-height:700px; padding:var(--tr-copy-top) 12px 170px 4px; }
+  .tr-auth-visual .scan { left:125px; top:145px; width:2000px; height:2000px; margin:-1000px 0 0 -1000px; }
+  .tr-auth-visual .field { left:125px; top:145px; }
+  .tr-auth-seats .row.back { display:none; }
+  .tr-auth-visual .tr-radar.hero { width:250px !important; }
+  .tr-auth-copy { max-width:none; }
+  .tr-auth-copy h1 { font-size:44px; }
+  .tr-auth-copy .lede { font-size:16px; }
   .tr-auth-status .city, .tr-auth-status .sep { display:none; }
-  .tr-auth-copy .lede, .tr-auth-feats { display:none; }
-  .tr-auth-posters .credit { display:none; }
-  [class*="st-key-trauth_panel"] { padding:20px 24px 16px !important; }
-  .tr-auth-bottom .items { gap:18px; }
+  [class*="st-key-trauth_panel"] { padding:26px 24px 24px !important; }
 }
 
-/* ── phones and portrait tablets: a deliberate stack — brand, a short row
-   of headline and three posters, then the form, which is the page ──── */
-@media (max-width: 900px) {
-  [class*="st-key-trauth_shell"] { min-height:0; }
-  .block-container { padding: 10px 16px 24px !important; }
-  [data-testid="stMainBlockContainer"] { padding-top: 10px !important; }
-  :is([class*="st-key-trauth_shell"] > div, [class*="st-key-trauth_shell"]) > [data-testid="stHorizontalBlock"] { flex-direction:column; align-items:stretch; gap:0 !important; }
-  :is([class*="st-key-trauth_shell"] > div, [class*="st-key-trauth_shell"]) > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { display:none !important; }
-  :is([class*="st-key-trauth_shell"] > div, [class*="st-key-trauth_shell"]) > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex:1 1 auto !important; width:100% !important; max-width:560px; margin:0 auto; }
-  .tr-auth-bg { --cx:calc(100vw - 92px); --cy:150px; }
-  .tr-auth-bg .sweep { left:-700px; top:-700px; width:1400px; height:1400px; }
-  .tr-auth-bg .glow { left:-420px; top:-420px; width:840px; height:840px; }
-  .tr-auth-top { padding:2px 0 4px; max-width:560px; width:100%; margin:0 auto; }
+/* ── phones: a deliberate stack — brand, a short hero, three posters,
+   the form. The desktop room is not squeezed; it is gone ───────────── */
+@media (max-width: 768px) {
+  .block-container { padding: .9rem 1rem 2rem !important; }
+  [data-testid="stMainBlockContainer"] { padding-top: .4rem !important; }
+  .tr-auth-top { padding:2px 0 10px; }
   .tr-auth-status { display:none; }
   .tr-auth-lockup .mark { width:40px; height:40px; }
   .tr-auth-lockup .name { font-size:21px; }
   .tr-auth-lockup .sub { font-size:8.5px; letter-spacing:.26em; }
-  .tr-auth-mhead { display:flex; align-items:center; justify-content:space-between; gap:12px; position:relative; padding:8px 2px 14px; animation: tr-auth-rise .7s var(--tr-ease) both; }
-  .tr-auth-mhead .eyebrow { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.28em; color:#FF8CA0; margin-bottom:8px; }
-  .tr-auth-mhead h1 { padding:0; font-size:clamp(28px, 8vw, 38px); line-height:1.02; letter-spacing:-.04em; font-weight:800; color:#fff; margin:0; text-shadow:0 2px 24px rgba(7,7,10,.9); }
+  [class*="st-key-trauth_shell"] > div > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { display:none !important; }
+  .tr-auth-mhead { display:block; position:relative; padding:12px 2px 18px; overflow:hidden; animation: tr-auth-rise .7s var(--tr-ease) both; }
+  .tr-auth-mhead .eyebrow { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.3em; color:#FF8CA0; margin-bottom:10px; }
+  .tr-auth-mhead h1 { font-size:clamp(30px, 8.6vw, 38px); line-height:1.02; letter-spacing:-.04em; font-weight:800; color:#fff; margin:0; max-width:62%; }
   .tr-auth-mhead h1 em { font-style:normal; color:var(--tr-accent); }
-  .tr-auth-mstrip { position:relative; flex:none; width:148px; height:104px; }
-  .tr-auth-mstrip .tr-auth-poster { position:absolute; width:62px; height:93px; border-radius:9px; animation:none; }
+  .tr-auth-mhead .lede { font-size:14.5px; line-height:1.5; color:var(--tr-text-2); margin:10px 0 0; max-width:34ch; }
+  .tr-auth-mhead .tr-radar.mini { position:absolute; right:2px; top:-2px; width:112px !important; opacity:.95; }
+  .tr-auth-mstrip { position:relative; height:118px; margin:18px 0 0; }
+  .tr-auth-mstrip .tr-auth-poster { position:absolute; width:72px; height:106px; border-radius:9px; animation:none; }
   .tr-auth-mstrip .tr-auth-poster .t { display:none; }
-  .tr-auth-mstrip .tr-auth-poster:nth-child(1) { left:0; top:9px; --rot:-7deg; z-index:1; }
-  .tr-auth-mstrip .tr-auth-poster:nth-child(2) { left:43px; top:0; --rot:-1deg; z-index:3; }
-  .tr-auth-mstrip .tr-auth-poster:nth-child(3) { left:86px; top:9px; --rot:6deg; z-index:2; }
-  [class*="st-key-trauth_panel"] { padding:22px 20px 20px !important; border-radius:22px; }
-  .tr-auth-brand { gap:14px; padding-bottom:12px; }
-  .tr-auth-brand .lock .tr-radar { width:36px; }
-  .tr-auth-brand .lock .n { font-size:17px; }
-  .tr-auth-brand .sep { height:30px; }
-  .tr-auth-brand .tag { font-size:9px; letter-spacing:.26em; line-height:1.6; }
-  [class*="st-key-trauth_panel"] .tr-auth-h { font-size:26px; }
-  [class*="st-key-trauth_panel"] .tr-auth-p { font-size:14.5px; margin-bottom:10px; }
-  [class*="st-key-trauth_panel"] .stTextInput input { font-size:16px !important; }   /* no iOS zoom */
-  [class*="st-key-trauth_panel"] .stFormSubmitButton > button { min-height:54px; font-size:14px; }
-  [class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { min-height:52px; font-size:14.5px; }
+  .tr-auth-mstrip .tr-auth-poster:nth-child(1) { left:0; top:8px; --rot:-7deg; z-index:1; }
+  .tr-auth-mstrip .tr-auth-poster:nth-child(2) { left:58px; top:0; --rot:-1deg; z-index:3; }
+  .tr-auth-mstrip .tr-auth-poster:nth-child(3) { left:120px; top:9px; --rot:6deg; z-index:2; }
+  .tr-auth-mstrip .credit { position:absolute; left:210px; top:34px; font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.22em; line-height:1.9; color:var(--tr-text-3); }
+  .tr-auth-mhead .tr-craft-strip { margin-top:14px; }
+  [class*="st-key-trauth_panel"] { max-width:none; margin:0; padding:22px 18px 20px !important; border-radius:20px; }
+  [class*="st-key-trauth_panel"]::before, [class*="st-key-trauth_panel"]::after { border-radius:20px; }
+  .tr-auth-brand { gap:14px; padding-bottom:16px; }
+  .tr-auth-brand .lock .tr-radar { width:44px; }
+  .tr-auth-brand .lock .n { font-size:18px; }
+  .tr-auth-brand .tag { font-size:9.5px; letter-spacing:.28em; }
+  .tr-auth-h { font-size:27px; }
+  .tr-auth-p { font-size:14.5px; margin-bottom:12px; }
+  [class*="st-key-trauth_panel"] .stTextInput [data-baseweb="input"] input { font-size:16px !important; }   /* no iOS zoom */
+  [class*="st-key-trauth_panel"] .stFormSubmitButton > button { min-height:56px; font-size:14px; }
+  [class*="st-key-auth_google"] .stButton > button, a.tr-auth-google { min-height:54px; font-size:14.5px; }
+  [class*="st-key-trpair_auth_foot"] [data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; }
   .tr-auth-foot-text { font-size:13.5px; }
   .tr-auth-veil .box { padding:26px 28px 24px; margin:0 16px; }
-  .tr-auth-bottom { flex-direction:column; align-items:flex-start; gap:12px; padding-top:14px; margin-top:8px; max-width:560px; margin-left:auto; margin-right:auto; width:100%; }
+  .tr-auth-bottom { flex-direction:column; align-items:flex-start; gap:12px; padding-top:14px; }
   .tr-auth-bottom .items { gap:12px 18px; }
   .tr-auth-bottom .item { font-size:12.5px; }
   .tr-auth-bottom .sign { font-size:10.5px; letter-spacing:.24em; }
 }
 @media (max-width: 400px) {
   [class*="st-key-trauth_panel"] { padding:20px 15px 18px !important; }
-  .tr-auth-brand .sep, .tr-auth-brand .tag { display:none; }
+  .tr-auth-brand { gap:10px; } .tr-auth-brand .sep { display:none; } .tr-auth-brand .tag { display:none; }
   .tr-auth-foot-text { font-size:13px; }
-  .tr-auth-mstrip { width:128px; height:92px; }
-  .tr-auth-mstrip .tr-auth-poster { width:54px; height:81px; }
-  .tr-auth-mstrip .tr-auth-poster:nth-child(2) { left:37px; } .tr-auth-mstrip .tr-auth-poster:nth-child(3) { left:74px; }
+  .tr-auth-mhead .tr-radar.mini { width:96px !important; }
+  .tr-auth-mstrip .credit { display:none; }
 }
 </style>
 """.replace("__MAIL__", _input_icon_uri("mail")).replace("__LOCK__", _input_icon_uri("lock")) \
    .replace("__USER__", _input_icon_uri("user")).replace("__GOOGLE__", GOOGLE_G) \
-   .replace("__RADAR__", radar.CSS)
+   .replace("__RADAR__", radar.CSS).replace("__CRAFTS__", crafts.CSS)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -551,34 +518,25 @@ def _topbar() -> str:
     </div>"""
 
 
-#: The hand's design box: every poster below is placed in these units and
-#: drawn in percentages of them, so the hand scales with its column (and
-#: with the screen's height) without a transform.
-HAND_W, HAND_H = 640, 440
-#: The six on a desktop: where each poster hangs in the 640×440 box —
+#: The six on a desktop: where each poster hangs in a 600×470 box —
 #: (left, top, width, height, rotation°, z, brightness, deal delay s).
 #: Three depths, not a fan: the lead (Avengers) is largest and in front;
 #: Interstellar and Doraemon flank it a step back; RRR, Baahubali and
 #: Spider-Man sit lower and further back. Overlaps are corners only, so
-#: every poster shows at least nine-tenths of itself. The top-right corner
-#: stays clear for the "tickets detected" tag, which sits against the
-#: panel. A seventh or eighth poster in the folder takes an
-#: :data:`EXTRA_SLOTS` place at the back.
+#: every poster shows at least nine-tenths of itself. A seventh or eighth
+#: poster in the folder takes an :data:`EXTRA_SLOTS` place at the back.
 FAN = {
-    "interstellar":            (34,  34, 124, 186, -9, 2, .84, .05),
-    "rrr":                     (122, 226, 118, 177, -4, 3, .90, .30),
-    "avengers_endgame":        (226, 10, 172, 258, -2, 5, 1.0, .12),
-    "doraemon":                (404, 66, 132, 198,  5, 4, .95, .20),
-    "baahubali":               (290, 262, 116, 174, 3, 4, .88, .38),
-    "spiderman_brand_new_day": (488, 232, 104, 156, 8, 3, .86, .46),
+    "interstellar":            (44,  52, 118, 177, -10, 2, .82, .05),
+    "rrr":                     (118, 224, 116, 174, -5, 3, .90, .30),
+    "avengers_endgame":        (214, 24, 164, 246,  -2, 5, 1.0, .12),
+    "doraemon":                (366, 84, 130, 195,   5, 4, .95, .20),
+    "baahubali":               (276, 284, 112, 168,  3, 4, .88, .38),
+    "spiderman_brand_new_day": (482, 236, 98, 147,   9, 3, .86, .46),
 }
-EXTRA_SLOTS = ((-12, 236, 96, 144, -14, 1, .7, .54), (556, 92, 84, 126, 12, 1, .7, .6))
+EXTRA_SLOTS = ((-30, 260, 96, 144, -16, 1, .7, .54), (500, 30, 90, 135, 12, 1, .7, .6))
 LEAD = "avengers_endgame"
 #: The three that fit a phone, front to back.
-PHONE_POSTERS = ("rrr", "avengers_endgame", "doraemon")
-#: Where the desktop hand shows; below it the phone stack takes over.
-DESKTOP_MEDIA = "(min-width: 901px)"
-PHONE_MEDIA = "(max-width: 900px)"
+PHONE_POSTERS = ("rrr", "avengers_endgame", "interstellar")
 
 
 #: A transparent pixel: what an ``<img>`` shows where its ``<picture>`` has
@@ -587,20 +545,14 @@ BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACw="
 CAPTIONS = {"spiderman_brand_new_day": "Spider-Man"}
 
 
-def _pct(value: float, total: float) -> str:
-    return f"{value / total * 100:.2f}%"
-
-
 def _poster_card(asset, slot=None, *, media: str, lead: bool = False) -> str:
-    """One card. ``slot`` is the hand's geometry in design units, written
-    as percentages of the hand; the phone strip positions its three by CSS
-    instead. ``media`` is the viewport that shows this card — the only one
-    that downloads it."""
+    """One card. ``slot`` is the hand's inline geometry; the phone strip
+    positions its three by CSS instead. ``media`` is the viewport that
+    shows this card — the only one that downloads it."""
     style = ""
     if slot:
         left, top, width, height, rot, z, dim, delay = slot
-        style = (f' style="left:{_pct(left, HAND_W)};top:{_pct(top, HAND_H)};'
-                 f'width:{_pct(width, HAND_W)};height:{_pct(height, HAND_H)};'
+        style = (f' style="left:{left}px;top:{top}px;width:{width}px;height:{height}px;'
                  f'--rot:{rot}deg;z-index:{z};--dim:{dim};--delay:{delay}s"')
     src = art.static_url(asset)
     sheen = '<span class="sheen"></span>' if lead else ""
@@ -622,74 +574,63 @@ def _hand() -> str:
         if slot is None:
             slot = EXTRA_SLOTS[extras % len(EXTRA_SLOTS)]
             extras += 1
-        cards.append(_poster_card(asset, slot, media=DESKTOP_MEDIA, lead=asset.key == LEAD))
+        cards.append(_poster_card(asset, slot, media="(min-width: 1101px)", lead=asset.key == LEAD))
     return (f'<div class="tr-auth-posters"><div class="hand">{"".join(cards)}</div>'
-            f'<div class="detect"><i></i><span>TICKETS<br>DETECTED</span></div>'
             f'<div class="credit">NOW PLAYING ACROSS HYDERABAD</div></div>')
 
 
-# ──────────────────────────────────────────────────────────────────────────
-# The room behind it all: one radar the size of the screen
-# ──────────────────────────────────────────────────────────────────────────
-#: Ring radii in px from the dish's centre, which sits behind the hand of
-#: posters; the outer rings run on behind the panel and off the screen.
-BG_RINGS = (150, 300, 450, 600, 780, 960, 1160)
-#: Tick rings: (radius, count, length) — dashed strokes, never 200 elements.
-BG_TICKS = ((175, 72, 6), (1060, 144, 8), (1060, 24, 18))
-BG_ORBIT = 690
-#: The sweep's period — the same clock as ``radar.CSS``'s dish.
-SWEEP_S = 6.5
-#: Contacts: (radius, clockwise degrees from straight up). Each one lights
-#: when the sweep reaches it, because its delay is its angle.
-BG_BLIPS = ((450, 52), (600, 128), (780, 232), (960, 306), (300, 196))
-#: The crafts sit on these rings, spaced by the golden angle.
-CRAFT_RINGS = (330, 520, 700, 880)
+#: The curve the posters hang from — one path, stroked five times: a soft
+#: red halo, the dark band, the sprocket holes (a dashed stroke that the
+#: narrower film stroke covers except at the edges), the film, and faint
+#: frame lines.
+STRIP_PATH = "M-40 640 C 220 610, 330 330, 560 250 S 860 60, 1010 190 S 1160 520, 1080 800"
 
 
-def _polar(radius: float, degrees: float) -> tuple[float, float]:
-    """A point ``radius`` px from the dish's centre, ``degrees`` clockwise
-    from straight up."""
-    rad = math.radians(degrees)
-    return radius * math.sin(rad), -radius * math.cos(rad)
+def _strip() -> str:
+    return f"""<div class="tr-auth-strip" aria-hidden="true"><svg viewBox="0 0 1180 760">
+      <path class="halo" d="{STRIP_PATH}"/><path class="band" d="{STRIP_PATH}"/>
+      <path class="holes" d="{STRIP_PATH}"/><path class="film" d="{STRIP_PATH}"/>
+      <path class="frames" d="{STRIP_PATH}"/>
+    </svg></div>"""
 
 
-def _dish_svg() -> str:
-    rings = "".join(f'<circle r="{r}" class="faint"/>' if i % 2 else f'<circle r="{r}"/>'
-                    for i, r in enumerate(BG_RINGS))
-    ticks = "".join(
-        f'<circle class="ticks" r="{r}" stroke-width="{w}" stroke-dasharray="1.6 {2 * math.pi * r / n - 1.6:.3f}"/>'
-        for r, n, w in BG_TICKS)
-    d = round(1200 / math.sqrt(2))
-    axes = (f'<line x1="-1200" y1="0" x2="1200" y2="0"/><line x1="0" y1="-1200" x2="0" y2="1200"/>'
-            f'<line x1="{-d}" y1="{-d}" x2="{d}" y2="{d}"/><line x1="{d}" y1="{-d}" x2="{-d}" y2="{d}"/>')
-    return (f'<svg class="rings" viewBox="-1200 -1200 2400 2400">{axes}{rings}{ticks}'
-            f'<circle class="orbit" r="{BG_ORBIT}"/></svg>')
+#: A projector's aperture: a ring, six holes, a hub — drawn once, oversized.
+REEL_HOLES = '<circle cx="318.0" cy="200.0" r="34"/><circle cx="259.0" cy="302.2" r="34"/><circle cx="141.0" cy="302.2" r="34"/><circle cx="82.0" cy="200.0" r="34"/><circle cx="141.0" cy="97.8" r="34"/><circle cx="259.0" cy="97.8" r="34"/>'
 
 
-def _backdrop() -> str:
-    """Layer one, fixed to the viewport and behind everything: the room's
-    light, the rings (static — painted once), the sweep (one element turned
-    by the compositor), contacts timed to the sweep, and the twenty-four
-    crafts as faint marks on the dish. All of it is decoration: hidden from
-    assistive tech, and it never takes a pointer."""
-    blips = []
-    for radius, degrees in BG_BLIPS:
-        x, y = _polar(radius, degrees)
-        blips.append(f'<i class="blip" style="left:{x:.0f}px;top:{y:.0f}px;'
-                     f'animation-delay:{degrees / 360 * SWEEP_S:.2f}s"></i>')
-    marks = []
-    for i, craft in enumerate(crafts.CRAFTS):
-        x, y = _polar(CRAFT_RINGS[i % len(CRAFT_RINGS)], (20 + i * 137.508) % 360)
-        marks.append(f'<span class="craft" style="left:{x:.0f}px;top:{y:.0f}px">{crafts.icon(craft, 18)}</span>')
-    return (f'<div class="tr-auth-bg" aria-hidden="true"><div class="dish">'
-            f'<div class="glow"></div>{_dish_svg()}<div class="sweep"></div>{"".join(blips)}'
-            f'<i class="core"></i>{"".join(marks)}</div><div class="vignette"></div></div>')
+def _reel() -> str:
+    return (f'<div class="tr-auth-reel" aria-hidden="true"><svg viewBox="0 0 400 400" fill="none" stroke="currentColor">'
+            f'<circle cx="200" cy="200" r="190" stroke-width="14"/><circle cx="200" cy="200" r="160" stroke-width="1.5"/>'
+            f'<g stroke-width="10">{REEL_HOLES}</g><circle cx="200" cy="200" r="30" stroke-width="12"/></svg></div>')
+
+
+#: The dish's rings continued past the radar: (radius px, opacity), fading
+#: with distance, out past the far corner of the widest screen.
+FIELD_RINGS = ((230, .16), (330, .14), (450, .12), (600, .11), (780, .10),
+               (990, .09), (1230, .08), (1500, .07), (1800, .06))
+
+
+def _field() -> str:
+    """The radar's background, extended to the whole page: static rings
+    and axes centred on the hero radar, drawn once, behind everything."""
+    rings = "".join(f'<circle r="{r}" opacity="{o}"/>' for r, o in FIELD_RINGS)
+    return ('<div class="field" aria-hidden="true"><svg viewBox="-2000 -2000 4000 4000">'
+            '<line x1="-2000" y1="0" x2="2000" y2="0"/><line x1="0" y1="-2000" x2="0" y2="2000"/>'
+            f'{rings}</svg></div>')
+
+
+def _seats() -> str:
+    """Two rows of the house, rim-lit from the screen."""
+    back = "".join("<i></i>" for _ in range(11))
+    front = "".join("<i></i>" for _ in range(9))
+    return f'<div class="tr-auth-seats" aria-hidden="true"><div class="row back">{back}</div><div class="row front">{front}</div></div>'
 
 
 def _phone_strip() -> str:
-    cards = [_poster_card(a, media=PHONE_MEDIA)
+    cards = [_poster_card(a, media="(max-width: 768px)")
              for a in (art.poster(k) for k in PHONE_POSTERS) if a is not None]
-    return f'<div class="tr-auth-mstrip">{"".join(cards)}</div>'
+    return (f'<div class="tr-auth-mstrip">{"".join(cards)}'
+            f'<div class="credit">NOW PLAYING<br>ACROSS<br>HYDERABAD</div></div>')
 
 
 def _feats() -> str:
@@ -699,36 +640,47 @@ def _feats() -> str:
     )
 
 
-def _scene() -> str:
-    """Layer two's left half: the hand of posters, set against the panel,
-    and the headline beneath it."""
-    return f"""<div class="tr-auth-scene">
+def _visual() -> str:
+    """The room, back to front: the projector's cone and the floor glow, the
+    radar's sweep continued across the room, the film strip, the aperture,
+    the radar, the posters hung along the strip, the crafts in the dark,
+    the headline, and the house's seats in the foreground."""
+    return f"""<div class="tr-auth-visual">
+      <div class="beam"></div><div class="glow"></div>{_field()}<div class="scan"></div>
+      {_strip()}
+      {_reel()}
+      {radar.svg(size=330, state="scanning", tag="TICKETS<br>DETECTED", cls="hero", label="TicketRadar radar, scanning")}
       {_hand()}
+      {crafts.constellation()}
       <div class="tr-auth-copy">
         <div class="eyebrow">HYDERABAD · EVERY SCREEN · EVERY RELEASE</div>
         <h1>Never Miss<br>the <em>Moment</em></h1>
         <p class="lede">We watch the ticket counters so you don't have to. The moment a show opens at your theatre, the alert is already in your inbox.</p>
         <div class="tr-auth-feats">{_feats()}</div>
       </div>
+      {_seats()}
+      <div class="floor"></div>
+      <div class="tr-auth-mark">SOME MOVIES ARE MEANT<br>TO BE EXPERIENCED TOGETHER</div>
     </div>"""
 
 
 def _mobile_head() -> str:
     return f"""<div class="tr-auth-mhead">
-      <div class="copy"><div class="eyebrow">HYDERABAD · EVERY RELEASE</div>
-        <h1>Never Miss<br>the <em>Moment</em></h1></div>
+      {radar.svg(size=124, state="scanning", cls="mini", label="TicketRadar radar, scanning")}
+      <div class="eyebrow">HYDERABAD · EVERY RELEASE</div>
+      <h1>Never Miss<br>the <em>Moment</em></h1>
+      <p class="lede">Instant email alerts the moment tickets go live.</p>
       {_phone_strip()}
+      {crafts.strip()}
     </div>"""
 
 
 def _brand() -> str:
-    # The spaces before each <br> are invisible here; on a phone, where
-    # every other break is hidden, they keep "GOOD MOVIES" two words.
     return f"""<div class="tr-auth-brand">
       <div class="lock">{radar.svg(size=52, state="idle", cls="mark brandmark", label="TicketRadar")}
         <div class="n">TICKET<em>RADAR</em></div></div>
       <div class="sep"></div>
-      <div class="tag">GOOD <br>MOVIES <br>FIND <br>YOU</div>
+      <div class="tag">GOOD<br>MOVIES<br>FIND<br>YOU</div>
     </div>"""
 
 
@@ -1342,12 +1294,10 @@ def render() -> None:
     """
     st.markdown(CSS, unsafe_allow_html=True)
     with st.container(key="trauth_shell"):
-        # The fixed room rides in the top bar's block: one markdown element,
-        # no extra gap in the shell's column.
-        C.html(_backdrop() + _topbar())
-        scene, panel = st.columns([1.16, 0.84], gap="large")
-        with scene:
-            C.html(_scene())
+        C.html(_topbar())
+        visual, panel = st.columns([1.16, 0.84], gap="large")
+        with visual:
+            C.html(_visual())
         with panel:
             C.html(_mobile_head())
             with st.container(key="trauth_panel"):

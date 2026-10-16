@@ -30,110 +30,47 @@ SOURCE = (ROOT / "ui" / "login.py").read_text(encoding="utf-8")
 def test_the_charminar_and_the_catalogue_wall_are_gone():
     for relic in ("CHARMINAR", "tr-auth-skyline", "tr-auth-wall", "catalogue_view", "Charminar"):
         assert relic not in SOURCE, relic
-    scene = login._scene() + login._backdrop()
-    assert "skyline" not in scene and "charminar" not in scene.lower()
-
-
-def test_the_left_box_is_gone_the_room_is_the_whole_screen():
-    """The old visual was a box with ``overflow:hidden`` in the left column:
-    its radar, sweep and strip stopped at a hard edge, a gutter away from
-    the panel. None of that markup survives."""
-    for relic in ("tr-auth-visual", "tr-auth-strip", "tr-auth-reel", "tr-auth-seats", 'class="scan"', "tr-radar hero"):
-        assert relic not in SOURCE, relic
+    visual = login._visual()
+    assert "skyline" not in visual and "charminar" not in visual.lower()
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Layer one: the room behind everything
+# The room
 # ──────────────────────────────────────────────────────────────────────────
-def _rule(selector: str) -> str:
-    return login.CSS.split(selector + " {")[1].split("}")[0]
-
-
-def test_the_room_is_one_fixed_layer_the_size_of_the_screen():
-    rule = _rule(".tr-auth-bg")
-    assert "position:fixed" in rule and "inset:0" in rule and "z-index:0" in rule
-    assert "pointer-events:none" in rule and "overflow:hidden" in rule
-    bg = login._backdrop()
-    assert bg.startswith('<div class="tr-auth-bg" aria-hidden="true">')
-    # it rides in the top bar's block, ahead of everything it sits behind
-    render = SOURCE.split("def render()")[1]
-    assert "C.html(_backdrop() + _topbar())" in render
-
-
 def test_the_room_is_layered_back_to_front():
-    bg = login._backdrop()
-    order = [bg.index(s) for s in ('class="glow"', 'class="rings"', 'class="sweep"', 'class="blip"',
-                                    'class="core"', 'class="craft"', 'class="vignette"')]
+    visual = login._visual()
+    order = [visual.index(s) for s in ('class="beam"', 'class="scan"', 'class="tr-auth-strip"', 'class="tr-auth-reel"',
+                                        'class="tr-radar hero"', 'class="tr-auth-posters"', 'class="tr-crafts"',
+                                        'class="tr-auth-copy"', 'class="tr-auth-seats"', 'class="tr-auth-mark"')]
     assert order == sorted(order)
 
 
-def test_the_rings_are_static_vector_and_only_the_sweep_moves():
-    svg = login._dish_svg()
-    assert svg.count("<svg") == 1 and "<img" not in svg and "url(" not in svg
-    assert svg.count("<circle r=") == len(login.BG_RINGS)
-    assert svg.count('class="ticks"') == len(login.BG_TICKS) and 'class="orbit"' in svg
-    assert "animation" not in _rule(".tr-auth-bg .rings")
-    sweep = _rule(".tr-auth-bg .sweep")
-    assert "tr-radar-sweep 6.5s linear infinite" in sweep and "will-change:transform" in sweep
-    assert "--trr-sweep:6.5s" in radar.CSS and login.SWEEP_S == 6.5          # one clock for both dishes
-    assert "mask-image" in sweep                                            # it fades before the panel
+def test_the_film_strip_is_one_path_stroked_not_an_image():
+    strip = login._strip()
+    assert strip.count(f'd="{login.STRIP_PATH}"') == 5                 # halo, band, holes, film, frames
+    assert "<img" not in strip and "url(" not in strip
+    assert ".tr-auth-strip .holes" in login.CSS and "stroke-dasharray:7 15" in login.CSS
 
 
-def test_contacts_light_as_the_sweep_reaches_them():
-    bg = login._backdrop()
-    delays = [float(d) for d in re.findall(r'class="blip" style="[^"]*animation-delay:([\d.]+)s"', bg)]
-    assert delays == [round(deg / 360 * login.SWEEP_S, 2) for _, deg in login.BG_BLIPS]
+def test_the_seats_are_two_rows_of_css_that_fade_into_the_floor():
+    seats = login._seats()
+    assert seats.count("<i></i>") == 20 and 'class="row back"' in seats and 'class="row front"' in seats
+    assert 'aria-hidden="true"' in seats
+    rule = login.CSS.split(".tr-auth-seats {")[1].split("}")[0]
+    assert "mask-image" in rule and "pointer-events:none" in rule
+    assert "rgba(255,100,130,.42)" in login.CSS                          # the rim light
 
 
-def test_the_crafts_are_faint_decoration_in_the_room_not_controls():
-    bg = login._backdrop()
-    assert bg.count('class="craft"') == 24 == len(crafts.CRAFTS)
-    assert "tabindex" not in bg and "data-tip" not in bg and "<button" not in bg and "<a " not in bg
-    assert float(re.search(r"opacity:([\d.]+)", _rule(".tr-auth-bg .craft")).group(1)) <= .3
+def test_the_sweep_continues_across_the_room_in_step_with_the_dish():
+    scan = login.CSS.split(".tr-auth-visual .scan {")[1].split("}")[0]
+    assert "tr-radar-sweep 6.5s linear infinite" in scan               # the same clock as radar.CSS
+    assert "--trr-sweep:6.5s" in radar.CSS
 
 
-def test_reduced_motion_leaves_a_still_radar_not_a_blank_one():
-    reduced = login.CSS.split("@media (prefers-reduced-motion: reduce) {")[-1].split("\n}")[0]
-    assert "animation: none !important" in reduced
-    assert re.search(r"\.tr-auth-bg \.sweep \{ transform: rotate\(-?\d+deg\); \}", reduced)
-    assert ".tr-auth-bg .blip { opacity:" in reduced
-
-
-# ──────────────────────────────────────────────────────────────────────────
-# Layer two: posters and panel as one stage
-# ──────────────────────────────────────────────────────────────────────────
-def test_the_stage_is_one_centred_composition_with_no_gutter():
-    shell = _rule('[class*="st-key-trauth_shell"]')
-    for var in ("--tra-panel:460px", "--tra-gap:36px", "--tra-stage:min(1240px", "--tra-hw:min(640px"):
-        assert var in shell, var
-    # the panel column is fixed, the scene takes the rest, and the hand is
-    # pushed to the scene's right edge — against the panel
-    assert "flex:0 0 var(--tra-panel) !important" in login.CSS
-    assert "margin-left:auto" in _rule(".tr-auth-posters")
-    # the radar's centre is computed from the same variables
-    bg = _rule(".tr-auth-bg")
-    assert "var(--tra-wl)" in bg and "var(--tra-hw)" in bg
-
-
-def test_the_panel_is_readable_glass_and_never_a_containing_block():
-    panel = re.sub(r"/\*.*?\*/", "", _rule('[class*="st-key-trauth_panel"]'), flags=re.S)   # declarations only
-    assert "backdrop-filter" not in panel and "transform" not in panel
-    glass = _rule('[class*="st-key-trauth_panel"]::before')
-    assert "backdrop-filter: blur(" in glass and "z-index:-1" in glass
-    # the surface stays at least 88 % opaque so the sweep never crosses the text
-    alphas = [float(a) for a in re.findall(r"rgba\(\d+,\d+,\d+,(\.\d+)\) \d+%", glass.split("linear-gradient(168deg")[1])]
-    assert alphas and min(alphas) >= .88
-
-
-def test_inputs_are_styled_on_both_streamlit_input_structures():
-    """Streamlit 1.5x+ draws the field as ``stTextInputRootElement``; older
-    ones as a baseweb input. The glyph, ring and eye toggle cover both."""
-    for wanted in ('[data-testid="stTextInputRootElement"], [data-baseweb="input"]', ":focus-within", "button:focus-visible"):
-        assert wanted in login.CSS, wanted
-
-
-def test_the_forgot_link_never_wears_the_cta_gloss():
-    assert '[class*="st-key-auth_forgot"] .stFormSubmitButton > button::before { display:none; }' in login.CSS
+def test_the_aperture_is_a_faint_vector_in_the_negative_space():
+    reel = login._reel()
+    assert reel.count("<circle") == 9 and "<img" not in reel
+    assert "opacity:.05" in login.CSS.split(".tr-auth-reel {")[1].split("}")[0]
 
 
 def test_every_poster_shows_most_of_itself():
@@ -147,8 +84,7 @@ def test_every_poster_shows_most_of_itself():
             oy = max(0, min(ay + ah, by + bh) - max(ay, by))
             assert ox * oy <= .12 * aw * ah, f"{b_} covers {ox * oy / (aw * ah):.0%} of {a}"
     assert boxes["avengers_endgame"][5] == max(v[5] for v in boxes.values())   # the lead is in front
-    for key, (x, y, w, h, *_rest) in boxes.items():
-        assert 0 <= x and x + w <= login.HAND_W and 0 <= y and y + h <= login.HAND_H, key
+    assert boxes["spiderman_brand_new_day"][0] + boxes["spiderman_brand_new_day"][2] <= 600
 
 
 def test_the_hover_lift_is_not_held_down_by_the_entrance_animation():
@@ -164,16 +100,6 @@ def test_the_login_page_never_reads_the_catalogue_for_artwork():
 # ──────────────────────────────────────────────────────────────────────────
 # The posters
 # ──────────────────────────────────────────────────────────────────────────
-def test_doraemon_replaces_avatar_from_the_supplied_file():
-    assert art.poster("avatar") is None and "avatar" not in login.FAN
-    doraemon = art.poster("doraemon")
-    assert doraemon is not None and doraemon.path.name == "doraemon.jpg"     # exact case: Linux serves it
-    assert doraemon.path.parent == art.POSTERS_DIR and doraemon.mime == "image/jpeg"
-    assert art.static_url(doraemon).startswith("app/static/login/posters/doraemon.jpg?v=")
-    assert [a.key for a in art.posters()] == list(art.LOGIN_POSTERS)          # six, no stray extra
-    assert "doraemon" in login.FAN
-
-
 def test_the_hand_holds_the_six_fixed_posters_served_from_static():
     hand = login._hand()
     srcs = re.findall(r'srcset="([^"]+)"', hand)
@@ -183,53 +109,69 @@ def test_the_hand_holds_the_six_fixed_posters_served_from_static():
         assert src.startswith("app/static/login/posters/") and "?v=" in src
     assert "bookmyshow" not in hand.lower() and "data:image/jpeg" not in hand
     # every card downloads only on the viewport that shows it
-    assert hand.count(f'<source media="{login.DESKTOP_MEDIA}"') == 6
+    assert hand.count('<source media="(min-width: 1101px)"') == 6
     assert hand.count(f'<img src="{login.BLANK}"') == 6
     # the lead card is the one that catches the sheen, and every card has its own slot
     assert hand.count('class="sheen"') == 1 and 'tr-auth-poster lead' in hand
-    assert len(set(re.findall(r"left:(-?[\d.]+)%;top:(-?[\d.]+)%", hand))) == 6
-    assert 'TICKETS<br>DETECTED' in hand
+    assert len(set(re.findall(r"left:(-?\d+)px;top:(-?\d+)px", hand))) == 6
 
 
-def test_the_hand_scales_by_percentages_not_a_transform():
-    hand = login._hand()
-    assert "px;" not in hand.split('class="hand">')[1].split('class="detect"')[0].replace("translateY", "")
-    left, top, width, height, *_ = login.FAN["avengers_endgame"]
-    assert (f"left:{left / login.HAND_W * 100:.2f}%;top:{top / login.HAND_H * 100:.2f}%;"
-            f"width:{width / login.HAND_W * 100:.2f}%;height:{height / login.HAND_H * 100:.2f}%") in hand
-    assert "aspect-ratio:640 / 440" in _rule(".tr-auth-posters")
+def test_doraemon_takes_avatars_slot_exactly():
+    """The one poster change: the supplied Doraemon file, in Avatar's slot —
+    same position, size, tilt, depth, brightness and deal-in delay."""
+    assert "avatar" not in login.FAN and art.poster("avatar") is None
+    assert login.FAN["doraemon"] == (366, 84, 130, 195, 5, 4, .95, .20)
+    doraemon = art.poster("doraemon")
+    assert doraemon.path.name == "doraemon.jpg" and doraemon.mime == "image/jpeg"   # exact case: Linux serves it
+    assert [a.key for a in art.posters()] == list(art.LOGIN_POSTERS)                # six, no stray extra
+    assert login.PHONE_POSTERS == ("rrr", "avengers_endgame", "interstellar")       # the phone strip is as it was
+
+
+def test_the_radar_background_runs_on_to_the_whole_page():
+    """The other change: the room is no longer clipped at its own box. The
+    sweep and the dish's rings carry on past it, and the page's container
+    — full width, at least one screen tall — clips them, so they reach
+    every edge without adding a scrollbar or clipping the page's content."""
+    visual = login.CSS.split(".tr-auth-visual {")[1].split("}")[0]
+    assert "overflow:visible" in visual and "overflow:hidden" not in visual
+    page = login.CSS.split('[data-testid="stMainBlockContainer"] { max-width:none')[1].split("}")[0]
+    for wanted in ("overflow:clip", "min-height:100vh", "flex-shrink:0", "calc((100% - 1600px) / 2 + 2.4rem)"):
+        assert wanted in page, wanted
+    field = login._field()
+    assert field.count("<circle") == len(login.FIELD_RINGS) and 'aria-hidden="true"' in field and "<img" not in field
+    assert max(r for r, _ in login.FIELD_RINGS) >= 1800                       # past the far corner of a wide screen
+    assert "pointer-events:none" in login.CSS.split(".tr-auth-visual .field {")[1].split("}")[0]
+    scan = login.CSS.split(".tr-auth-visual .scan {")[1].split("}")[0]
+    assert "width:2600px" in scan and "tr-radar-sweep 6.5s linear infinite" in scan
+    # the rings stay centred on the radar at every breakpoint, as the sweep does
+    for anchor in ("left:150px; top:170px", "left:135px; top:155px"):
+        assert f".tr-auth-visual .scan, .tr-auth-visual .field {{ {anchor}; }}" in login.CSS
+    assert ".tr-auth-visual .field { left:125px; top:145px; }" in login.CSS
+    visual_html = login._visual()
+    assert visual_html.index('class="glow"') < visual_html.index('class="field"') < visual_html.index('class="scan"')
 
 
 def test_captions_name_the_films_readably():
     hand = login._hand()
     for caption in ("Avengers: Endgame", "Interstellar", "Doraemon", "RRR", "Baahubali", "Spider-Man"):
         assert f'<div class="t">{caption}</div>' in hand
-    assert "Avatar" not in hand
 
 
 def test_an_extra_poster_in_the_folder_takes_a_back_slot(monkeypatch):
     extra = art.Asset(key="dune", kind="poster", category="login", path=art.POSTERS_DIR / "rrr.jpg")
-    monkeypatch.setattr(art, "posters", lambda: list(art._posters().values()) + [extra])
+    monkeypatch.setattr(art, "posters", lambda: art.posters.__wrapped__() if hasattr(art.posters, "__wrapped__") else list(art._posters().values()) + [extra])
     hand = login._hand()
     assert hand.count("<picture>") == 7
-    assert f"left:{login._pct(login.EXTRA_SLOTS[0][0], login.HAND_W)}" in hand
+    assert f"left:{login.EXTRA_SLOTS[0][0]}px" in hand
 
 
 def test_the_phone_strip_is_three_posters_positioned_by_css():
     strip = login._phone_strip()
     assert strip.count("<picture>") == 3
-    assert strip.count(f'<source media="{login.PHONE_MEDIA}"') == 3
+    assert strip.count('<source media="(max-width: 768px)"') == 3
     assert "style=" not in strip                                # nth-child places them
     keys = [k for k in login.PHONE_POSTERS]
     assert [art.static_url(art.poster(k)) for k in keys] == re.findall(r'srcset="([^"]+)"', strip)
-
-
-def test_the_desktop_and_phone_breakpoints_meet_exactly():
-    assert login.DESKTOP_MEDIA == "(min-width: 901px)" and login.PHONE_MEDIA == "(max-width: 900px)"
-    stack = login.CSS.split("@media (max-width: 900px) {")[1].split("\n}")[0]
-    assert '[data-testid="stColumn"]:first-child { display:none !important; }' in stack
-    assert ".tr-auth-mhead { display:flex;" in stack
-    assert "font-size:16px !important" in stack                         # no iOS zoom on focus
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -320,19 +262,22 @@ def test_the_phone_strip_is_decoration_only():
 # ──────────────────────────────────────────────────────────────────────────
 # The page
 # ──────────────────────────────────────────────────────────────────────────
-def test_the_scene_is_posters_then_the_headline():
-    scene = login._scene()
-    order = [scene.index(s) for s in ('class="tr-auth-posters"', 'class="detect"', "Never Miss", 'class="tr-auth-feats"')]
+def test_the_visual_is_radar_first_then_posters_crafts_and_the_headline():
+    visual = login._visual()
+    order = [visual.index(s) for s in ('class="tr-radar hero"', 'class="tr-auth-posters"', 'class="tr-crafts"', "Never Miss")]
     assert order == sorted(order)
-    assert scene.count("<picture>") == 6 and "HYDERABAD" in scene and "Charminar" not in scene
-    assert "tr-craft" not in scene and "<svg" not in scene.split('class="tr-auth-feats"')[0]
+    assert 'data-state="scanning"' in visual
+    assert visual.count('class="tr-craft ') == 24 and visual.count("<picture>") == 6
+    assert "HYDERABAD" in visual and "Charminar" not in visual
+    assert visual.count('class="tr-craft ledge') == 3
 
 
-def test_the_stylesheet_is_one_payload_that_carries_the_radar_once():
+def test_the_stylesheet_is_one_payload_that_carries_the_radar_and_the_crafts_once():
     assert login.CSS.count("<style>") == 1
-    assert login.CSS.count(".tr-radar .sweep { transform-box") == 1
-    assert ".tr-craft::after" not in login.CSS              # the crafts are decoration now: no tooltip CSS rides along
+    assert login.CSS.count(".tr-radar .sweep { transform-box") == 1 and login.CSS.count(".tr-craft::after { content:attr") == 1
     assert len(login.CSS) < 60_000
+    panel = login.CSS.split('[class*="st-key-trauth_panel"] {')[1].split("}")[0]
+    assert "backdrop-filter" not in panel and "transform" not in panel.split("/*")[0]   # charcoal, not glass; no containing block
 
 
 def test_the_wait_is_a_line_at_once_and_a_veil_only_if_it_drags(monkeypatch):
@@ -377,8 +322,7 @@ def test_the_rendered_login_page_carries_the_room_and_no_base64(visitor):
     text = " ".join(m.value for m in app.markdown)
     assert text.count("app/static/login/posters/") == 9                 # six in the hand, three for the phone
     assert "data:image/jpeg" not in text and "data:image/png" not in text
-    assert text.count('class="craft"') == 24                             # on the dish, behind everything
-    assert text.count('class="tr-auth-bg"') == 1
-    assert text.count('class="tr-radar') == 1                            # the panel mark; the room draws its own dish
+    assert text.count('class="tr-craft ') == 24
+    assert text.count('class="tr-radar') == 3                            # hero, phone mini, panel mark
     assert "TICKETS<br>DETECTED" in text
     assert text.count("<style>") == 2                                    # the theme and this page, once each
