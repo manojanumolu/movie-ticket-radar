@@ -119,7 +119,7 @@
             {
               "code": "0001",
               "name": "PLATINUM",
-              "availability": "SOLD_OUT",
+              "availability": "AVAILABLE",
               "price": "350.00",
               "area_code": "0000000002",
               "has_seat_layout": true
@@ -157,7 +157,6 @@
           "formats": [
             "Barco Flagship Laser Dolby Atmos",
             "HDR By Barco",
-            "M B LUXE",
             "Vip Screen"
           ],
           "categories": [
@@ -184,14 +183,6 @@
               "price": "295.00",
               "area_code": "0000000003",
               "has_seat_layout": true
-            },
-            {
-              "code": "0010",
-              "name": "SEMI RECLINER",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "0000000004",
-              "has_seat_layout": true
             }
           ]
         },
@@ -200,13 +191,14 @@
           "name": "Aparna Cinemas",
           "area": "Nallagandla",
           "formats": [
+            "4K Dolby 7.1",
             "Infinity Vision Dolby Atmos"
           ],
           "categories": [
             {
               "code": "GO",
               "name": "GOLD",
-              "availability": "SOLD_OUT",
+              "availability": "AVAILABLE",
               "price": "354.00",
               "area_code": "GO",
               "has_seat_layout": true
@@ -234,9 +226,9 @@
           "name": "Aparna Cinemas",
           "area": "Shamshabad",
           "formats": [
-            "Barco Dolby 7.1",
             "Barco Flat 7.1",
-            "Infinity Vision Dolby Atmos"
+            "Infinity Vision Dolby Atmos",
+            "Barco Dolby 7.1"
           ],
           "categories": [
             {
@@ -270,7 +262,32 @@
           "name": "Aradhana Theatre",
           "area": "Hyderabad",
           "formats": [],
-          "categories": []
+          "categories": [
+            {
+              "code": "0001",
+              "name": "BALCONY",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "0000000001",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "FIRST CLASS",
+              "availability": "AVAILABLE",
+              "price": "100.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0003",
+              "name": "SECOND CLASS",
+              "availability": "AVAILABLE",
+              "price": "50.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ]
         },
         {
           "code": "ARJU",
@@ -278,6 +295,14 @@
           "area": "Kukatpally",
           "formats": [],
           "categories": [
+            {
+              "code": "T007",
+              "name": "Second Class",
+              "availability": "AVAILABLE",
+              "price": "50.00",
+              "area_code": "AC00000007",
+              "has_seat_layout": true
+            },
             {
               "code": "T005",
               "name": "Balcony",
@@ -292,14 +317,6 @@
               "availability": "AVAILABLE",
               "price": "150.00",
               "area_code": "AC00000006",
-              "has_seat_layout": true
-            },
-            {
-              "code": "T007",
-              "name": "Second Class",
-              "availability": "AVAILABLE",
-              "price": "50.00",
-              "area_code": "AC00000007",
               "has_seat_layout": true
             },
             {
@@ -333,7 +350,7 @@
             {
               "code": "0001",
               "name": "RECLINERS",
-              "availability": "AVAILABLE",
+              "availability": "SOLD_OUT",
               "price": "354.00",
               "area_code": "0000000002",
               "has_seat_layout": true
@@ -1327,6 +1344,14 @@
               "has_seat_layout": true
             },
             {
+              "code": "MR",
+              "name": "PRIME PLUS ROWS",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "MR",
+              "has_seat_layout": true
+            },
+            {
               "code": "QR",
               "name": "PRIME ROWS",
               "availability": "AVAILABLE",
@@ -1340,14 +1365,6 @@
               "availability": "AVAILABLE",
               "price": "295.00",
               "area_code": "CR",
-              "has_seat_layout": true
-            },
-            {
-              "code": "MR",
-              "name": "PRIME PLUS ROWS",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "MR",
               "has_seat_layout": true
             }
           ]
@@ -2031,19 +2048,19 @@
           ],
           "categories": [
             {
-              "code": "RE",
-              "name": "RECLINER",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "RE",
-              "has_seat_layout": true
-            },
-            {
               "code": "CC",
               "name": "CLASSIC",
               "availability": "AVAILABLE",
               "price": "295.00",
               "area_code": "CC",
+              "has_seat_layout": true
+            },
+            {
+              "code": "RE",
+              "name": "RECLINER",
+              "availability": "AVAILABLE",
+              "price": "354.00",
+              "area_code": "RE",
               "has_seat_layout": true
             }
           ]
@@ -2065,14 +2082,6 @@
               "has_seat_layout": true
             },
             {
-              "code": "UR",
-              "name": "LOUNGER ROWS",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "UR",
-              "has_seat_layout": true
-            },
-            {
               "code": "CR",
               "name": "CLASSIC ROWS",
               "availability": "AVAILABLE",
@@ -2086,6 +2095,14 @@
               "availability": "AVAILABLE",
               "price": "295.00",
               "area_code": "QR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "UR",
+              "name": "LOUNGER ROWS",
+              "availability": "AVAILABLE",
+              "price": "354.00",
+              "area_code": "UR",
               "has_seat_layout": true
             }
           ]
@@ -2535,7 +2552,6 @@
         "20261019": {
           "AMBH": [
             "HDR By Barco",
-            "M B LUXE",
             "Barco Flagship Laser Dolby Atmos",
             "Vip Screen"
           ],
@@ -2564,7 +2580,8 @@
             "4DX"
           ],
           "AACN": [
-            "Infinity Vision Dolby Atmos"
+            "Infinity Vision Dolby Atmos",
+            "4K Dolby 7.1"
           ],
           "SRMO": [],
           "CTNR": [
@@ -2603,7 +2620,6 @@
           ],
           "BRKH": [],
           "CPHY": [
-            "Screen 3",
             "Screen 1",
             "Screen 2"
           ],
@@ -2644,7 +2660,6 @@
           ],
           "APNS": [
             "Infinity Vision Dolby Atmos",
-            "Barco Dolby 7.1",
             "Barco Flat 7.1"
           ],
           "ACHI": [
@@ -2743,7 +2758,8 @@
             "Laser Dolby Atmos"
           ],
           "AACN": [
-            "Infinity Vision Dolby Atmos"
+            "Infinity Vision Dolby Atmos",
+            "4K Dolby 7.1"
           ],
           "CTNR": [
             "Macro Xe"
@@ -3091,8 +3107,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 1284,
-      "resolved_at": "2026-10-19T02:54:18.201210+05:30"
+      "showtime_count": 1223,
+      "resolved_at": "2026-10-19T11:29:34.691989+05:30"
     },
     {
       "movie": {
@@ -3146,7 +3162,7 @@
             {
               "code": "0001",
               "name": "PLATINUM",
-              "availability": "SOLD_OUT",
+              "availability": "AVAILABLE",
               "price": "350.00",
               "area_code": "0000000002",
               "has_seat_layout": true
@@ -3206,17 +3222,9 @@
             {
               "code": "GO",
               "name": "GOLD",
-              "availability": "SOLD_OUT",
+              "availability": "AVAILABLE",
               "price": "354.00",
               "area_code": "GO",
-              "has_seat_layout": true
-            },
-            {
-              "code": "LO",
-              "name": "LOUNGES",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "LO",
               "has_seat_layout": true
             },
             {
@@ -3225,6 +3233,14 @@
               "availability": "AVAILABLE",
               "price": "295.00",
               "area_code": "EX",
+              "has_seat_layout": true
+            },
+            {
+              "code": "LO",
+              "name": "LOUNGES",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "LO",
               "has_seat_layout": true
             }
           ]
@@ -3326,6 +3342,30 @@
           ]
         },
         {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0001",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "VIP",
+              "availability": "AVAILABLE",
+              "price": "354.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
           "code": "CPMH",
           "name": "Cinepolis",
           "area": "Lulu Mall, Hyderabad",
@@ -3345,30 +3385,6 @@
               "code": "0002",
               "name": "VIP",
               "availability": "SOLD_OUT",
-              "price": "354.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "CTNR",
-          "name": "Cinepolis",
-          "area": "TNR North City, Suchitra, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "VIP",
-              "availability": "AVAILABLE",
               "price": "354.00",
               "area_code": "0000000003",
               "has_seat_layout": true
@@ -3846,50 +3862,47 @@
           "ALUC": [
             "Laser 4K Atmos"
           ],
-          "ACEV": [
-            "4K"
-          ],
+          "PVFS": [],
           "MMAH": [
             "Laser & 7.1",
             "Atmos + Laser"
           ],
-          "PVFS": [],
           "AACN": [
             "Infinity Vision Dolby Atmos"
           ],
+          "CTNR": [],
           "CPMH": [
             "2K Laser Dolby 7.1"
           ],
-          "CTNR": [],
           "ILKS": [],
-          "AMCA": [
-            "4K Dolby Atmos"
-          ],
           "IGMH": [
             "Atmos"
           ],
+          "AMCA": [
+            "4K Dolby Atmos"
+          ],
           "ABCS": [],
-          "CMMA": [],
           "PNNG": [],
+          "CMMA": [],
           "PVTS": [
+            "Atmos"
+          ],
+          "PVTP": [
             "Atmos"
           ],
           "ARMH": [
             "2K"
           ],
-          "PVTP": [
-            "Atmos"
-          ],
           "PIMH": [],
-          "MRAA": [],
           "IOMH": [],
+          "MRAA": [],
           "APNS": [
             "Barco Dolby 7.1"
           ],
-          "STHD": [],
           "PIIC": [
             "LUXE"
           ],
+          "STHD": [],
           "UKCC": [],
           "CPCL": [],
           "MTHY": [
@@ -4030,8 +4043,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 228,
-      "resolved_at": "2026-10-19T02:53:27.197751+05:30"
+      "showtime_count": 214,
+      "resolved_at": "2026-10-19T11:28:40.121136+05:30"
     },
     {
       "movie": {
@@ -4052,17 +4065,16 @@
           "name": "AAA Cinemas",
           "area": "Ameerpet",
           "formats": [
-            "Laser Dolby Atmos",
             "Laser Dolby Digital 7.1",
             "Led Screen Dolby Atmos"
           ],
           "categories": [
             {
-              "code": "0001",
-              "name": "RECLINER",
-              "availability": "AVAILABLE",
+              "code": "0007",
+              "name": "SEMI RECLINERS",
+              "availability": "SOLD_OUT",
               "price": "354.00",
-              "area_code": "0000000002",
+              "area_code": "0000000005",
               "has_seat_layout": true
             },
             {
@@ -4071,22 +4083,6 @@
               "availability": "AVAILABLE",
               "price": "295.00",
               "area_code": "0000000003",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0003",
-              "name": "LOUNGERS",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000004",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0007",
-              "name": "SEMI RECLINERS",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "0000000005",
               "has_seat_layout": true
             }
           ]
@@ -4096,24 +4092,16 @@
           "name": "ALLU Cinemas",
           "area": "Kokapet",
           "formats": [
-            "Laser 4K Atmos",
-            "Dolby Cinema"
+            "Dolby Cinema",
+            "Laser 4K Atmos"
           ],
           "categories": [
             {
               "code": "0001",
               "name": "PLATINUM",
-              "availability": "AVAILABLE",
+              "availability": "SOLD_OUT",
               "price": "350.00",
               "area_code": "0000000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000003",
               "has_seat_layout": true
             },
             {
@@ -4122,6 +4110,14 @@
               "availability": "SOLD_OUT",
               "price": "350.00",
               "area_code": "0000000004",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "0000000003",
               "has_seat_layout": true
             },
             {
@@ -4174,24 +4170,16 @@
           "name": "Aparna Cinemas",
           "area": "Nallagandla",
           "formats": [
-            "Infinity Vision Dolby Atmos",
-            "4K Dolby 7.1"
+            "4K Dolby 7.1",
+            "Infinity Vision Dolby Atmos"
           ],
           "categories": [
             {
               "code": "GO",
               "name": "GOLD",
-              "availability": "AVAILABLE",
+              "availability": "SOLD_OUT",
               "price": "350.00",
               "area_code": "GO",
-              "has_seat_layout": true
-            },
-            {
-              "code": "LO",
-              "name": "LOUNGES",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "LO",
               "has_seat_layout": true
             },
             {
@@ -4201,6 +4189,14 @@
               "price": "295.00",
               "area_code": "EX",
               "has_seat_layout": true
+            },
+            {
+              "code": "LO",
+              "name": "LOUNGES",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "LO",
+              "has_seat_layout": true
             }
           ]
         },
@@ -4209,8 +4205,8 @@
           "name": "Aparna Cinemas",
           "area": "Shamshabad",
           "formats": [
-            "Infinity Vision Dolby Atmos",
             "Barco Flat 7.1",
+            "Infinity Vision Dolby Atmos",
             "Vip Screen"
           ],
           "categories": [
@@ -4245,8 +4241,8 @@
           "name": "ART CINEMAS",
           "area": "Vanasthalipuram",
           "formats": [
-            "4K Atmos",
-            "4K"
+            "4K",
+            "4K Atmos"
           ],
           "categories": [
             {
@@ -4298,8 +4294,8 @@
           "name": "Asian Cineplanet Multiplex",
           "area": "Kompally",
           "formats": [
-            "Screen 2",
             "Screen 1",
+            "Screen 2",
             "Screen 3"
           ],
           "categories": [
@@ -4358,7 +4354,7 @@
             {
               "code": "0002",
               "name": "RECLINERS",
-              "availability": "AVAILABLE",
+              "availability": "SOLD_OUT",
               "price": "354.00",
               "area_code": "0000000002",
               "has_seat_layout": true
@@ -4396,11 +4392,11 @@
               "has_seat_layout": true
             },
             {
-              "code": "GL",
-              "name": "GOLD",
+              "code": "PB",
+              "name": "PREMIUM BALCONY",
               "availability": "AVAILABLE",
               "price": "150.00",
-              "area_code": "GL",
+              "area_code": "PB",
               "has_seat_layout": true
             },
             {
@@ -4409,14 +4405,6 @@
               "availability": "AVAILABLE",
               "price": "50.00",
               "area_code": "SL",
-              "has_seat_layout": true
-            },
-            {
-              "code": "PB",
-              "name": "PREMIUM BALCONY",
-              "availability": "AVAILABLE",
-              "price": "150.00",
-              "area_code": "PB",
               "has_seat_layout": true
             }
           ]
@@ -4620,7 +4608,7 @@
             {
               "code": "0004",
               "name": "THIRD CLASS",
-              "availability": "AVAILABLE",
+              "availability": "SOLD_OUT",
               "price": "50.00",
               "area_code": "0000000005",
               "has_seat_layout": true
@@ -4830,9 +4818,8 @@
           "name": "Cineverse Multiplex",
           "area": "Uppal",
           "formats": [
-            "4K Rgb Laser Large Screen Dolby Atmos",
-            "7.1 Dolby",
-            "4K Rgb Laser Large Screen Dolby 7.1"
+            "4K Rgb Laser Large Screen Dolby 7.1",
+            "7.1 Dolby"
           ],
           "categories": [
             {
@@ -4944,6 +4931,54 @@
           ]
         },
         {
+          "code": "VRKC",
+          "name": "Indra Venkataramana Padmavati Cinema",
+          "area": "Kachiguda",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0003",
+              "name": "Premium",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0001",
+              "name": "Elite Recliners",
+              "availability": "AVAILABLE",
+              "price": "235.00",
+              "area_code": "0000000001",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "Elite Sofa",
+              "availability": "AVAILABLE",
+              "price": "175.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0005",
+              "name": "Economy",
+              "availability": "AVAILABLE",
+              "price": "50.00",
+              "area_code": "0000000004",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0004",
+              "name": "Prime",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "0000000005",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
           "code": "IGMH",
           "name": "INOX",
           "area": "GSM Mall, Hyderabad",
@@ -5034,19 +5069,19 @@
               "has_seat_layout": true
             },
             {
-              "code": "QR",
-              "name": "PRIME ROWS",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "QR",
-              "has_seat_layout": true
-            },
-            {
               "code": "CR",
               "name": "CLASSIC ROWS",
               "availability": "AVAILABLE",
               "price": "295.00",
               "area_code": "CR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "QR",
+              "name": "PRIME ROWS",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "QR",
               "has_seat_layout": true
             }
           ]
@@ -5106,14 +5141,6 @@
               "has_seat_layout": true
             },
             {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "CR",
-              "has_seat_layout": true
-            },
-            {
               "code": "MR",
               "name": "PRIME PLUS ROWS",
               "availability": "AVAILABLE",
@@ -5127,6 +5154,14 @@
               "availability": "AVAILABLE",
               "price": "295.00",
               "area_code": "QR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "CR",
               "has_seat_layout": true
             }
           ]
@@ -5160,8 +5195,8 @@
           "name": "JP Cinemas",
           "area": "Chandanagar",
           "formats": [
-            "Dolby Atmos Rgb Laser",
-            "Dolby 7.1"
+            "Dolby 7.1",
+            "Dolby Atmos Rgb Laser"
           ],
           "categories": [
             {
@@ -5375,7 +5410,7 @@
             {
               "code": "0002",
               "name": "GOLD",
-              "availability": "AVAILABLE",
+              "availability": "SOLD_OUT",
               "price": "235.00",
               "area_code": "0000000001",
               "has_seat_layout": true
@@ -5407,6 +5442,22 @@
           ]
         },
         {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0026",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "0000000019",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
           "code": "MRAA",
           "name": "Miraj Cinemas",
           "area": "A2A Central Mall, Balanagar",
@@ -5428,22 +5479,6 @@
               "availability": "AVAILABLE",
               "price": "350.00",
               "area_code": "0000000001",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "MRAD",
-          "name": "Miraj Cinemas",
-          "area": "Anand Mall and Movies, Narsingi",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0026",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000019",
               "has_seat_layout": true
             }
           ]
@@ -5546,8 +5581,8 @@
           "name": "Movietime Cinemas",
           "area": "SKY Mall, Erragadda X Road",
           "formats": [
-            "Laser + Atmos",
-            "Dolby 7.1"
+            "Dolby 7.1",
+            "Laser + Atmos"
           ],
           "categories": [
             {
@@ -5629,7 +5664,7 @@
             {
               "code": "RY",
               "name": "RECLINER",
-              "availability": "SOLD_OUT",
+              "availability": "AVAILABLE",
               "price": "354.00",
               "area_code": "RY",
               "has_seat_layout": true
@@ -5747,7 +5782,7 @@
             {
               "code": "RE",
               "name": "RECLINER",
-              "availability": "SOLD_OUT",
+              "availability": "AVAILABLE",
               "price": "354.00",
               "area_code": "RE",
               "has_seat_layout": true
@@ -5847,19 +5882,19 @@
           ],
           "categories": [
             {
-              "code": "BR",
-              "name": "RECLINER ROWS",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "BR",
-              "has_seat_layout": true
-            },
-            {
               "code": "UR",
               "name": "LOUNGER ROWS",
               "availability": "AVAILABLE",
               "price": "354.00",
               "area_code": "UR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "BR",
+              "name": "RECLINER ROWS",
+              "availability": "AVAILABLE",
+              "price": "354.00",
+              "area_code": "BR",
               "has_seat_layout": true
             },
             {
@@ -5890,18 +5925,10 @@
           ],
           "categories": [
             {
-              "code": "YR",
-              "name": "ROYAL ROWS",
-              "availability": "AVAILABLE",
-              "price": "708.00",
-              "area_code": "YR",
-              "has_seat_layout": true
-            },
-            {
               "code": "BR",
               "name": "RECLINER ROWS",
               "availability": "AVAILABLE",
-              "price": "600.00",
+              "price": "708.00",
               "area_code": "BR",
               "has_seat_layout": true
             },
@@ -5909,7 +5936,7 @@
               "code": "QR",
               "name": "PRIME ROWS",
               "availability": "AVAILABLE",
-              "price": "350.00",
+              "price": "470.00",
               "area_code": "QR",
               "has_seat_layout": true
             },
@@ -5917,8 +5944,16 @@
               "code": "UR",
               "name": "LOUNGERS ROWS",
               "availability": "AVAILABLE",
-              "price": "350.00",
+              "price": "470.00",
               "area_code": "UR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "YR",
+              "name": "ROYAL ROWS",
+              "availability": "AVAILABLE",
+              "price": "708.00",
+              "area_code": "YR",
               "has_seat_layout": true
             }
           ]
@@ -6094,19 +6129,19 @@
           "formats": [],
           "categories": [
             {
-              "code": "T004",
-              "name": "Box",
-              "availability": "AVAILABLE",
-              "price": "150.00",
-              "area_code": "AC00000004",
-              "has_seat_layout": true
-            },
-            {
               "code": "T005",
               "name": "Balcony",
               "availability": "AVAILABLE",
               "price": "150.00",
               "area_code": "AC00000005",
+              "has_seat_layout": true
+            },
+            {
+              "code": "T004",
+              "name": "Box",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "AC00000004",
               "has_seat_layout": true
             }
           ]
@@ -6154,7 +6189,7 @@
             {
               "code": "T005",
               "name": "Box B",
-              "availability": "SOLD_OUT",
+              "availability": "AVAILABLE",
               "price": "175.00",
               "area_code": "AC00000005",
               "has_seat_layout": true
@@ -6383,122 +6418,6 @@
         }
       ],
       "listings": {
-        "20261018": {
-          "AMBH": [
-            "Barco Flagship Laser Dolby Atmos"
-          ],
-          "PRHN": [
-            "Barco 4K Laser"
-          ],
-          "ACAS": [
-            "Laser Dolby Atmos"
-          ],
-          "ALUC": [
-            "Laser 4K Atmos"
-          ],
-          "ACEV": [
-            "4K Atmos"
-          ],
-          "MMAH": [
-            "Atmos",
-            "Atmos + Laser"
-          ],
-          "PVFS": [],
-          "AACN": [
-            "Infinity Vision Dolby Atmos"
-          ],
-          "GPRH": [],
-          "CTNR": [
-            "Macro Xe"
-          ],
-          "ILKS": [],
-          "CPMH": [
-            "2K Laser Dolby 7.1"
-          ],
-          "IGMH": [],
-          "MMCA": [],
-          "AMCA": [
-            "Dolby 7.1"
-          ],
-          "CVMU": [
-            "7.1 Dolby",
-            "4K Rgb Laser Large Screen Dolby Atmos"
-          ],
-          "ASHN": [
-            "4K Dolby 7.1"
-          ],
-          "CPHY": [
-            "Screen 2"
-          ],
-          "ABCS": [],
-          "PNNG": [
-            "Atmos"
-          ],
-          "CMMA": [],
-          "PVTS": [
-            "Atmos"
-          ],
-          "ISTN": [],
-          "ARMH": [
-            "2K"
-          ],
-          "AKYJ": [],
-          "JJPP": [
-            "Dolby Atmos Rgb Laser"
-          ],
-          "ACHI": [
-            "2K"
-          ],
-          "PVTP": [
-            "Atmos"
-          ],
-          "PIMH": [],
-          "SNKH": [],
-          "IOMH": [
-            "Atmos"
-          ],
-          "APNS": [
-            "Infinity Vision Dolby Atmos"
-          ],
-          "MCSS": [],
-          "PVHM": [
-            "Atmos"
-          ],
-          "PVUM": [],
-          "MRAA": [],
-          "IPRS": [],
-          "PIIC": [
-            "LUXE",
-            "PXL"
-          ],
-          "TVHY": [
-            "Dolby 7.1 Extreme"
-          ],
-          "MRAD": [],
-          "PVYH": [],
-          "MRRG": [],
-          "MCKT": [],
-          "INMH": [],
-          "MRGT": [
-            "Atmos"
-          ],
-          "INHY": [],
-          "IVNM": [],
-          "AMCM": [],
-          "PRCX": [],
-          "STHD": [],
-          "CPCL": [],
-          "UKCC": [],
-          "PSMJ": [
-            "Laser + Atmos"
-          ],
-          "MTHY": [
-            "Recliner"
-          ],
-          "CPLK": [
-            "Dolby 7.1"
-          ]
-        },
         "20261019": {
           "AMBH": [
             "Barco Flagship Laser Dolby Atmos",
@@ -6511,16 +6430,16 @@
             "Shashikala Air Conditioned"
           ],
           "ALUC": [
-            "Laser 4K Atmos",
-            "Dolby Cinema"
+            "Dolby Cinema",
+            "Laser 4K Atmos"
           ],
           "ACEV": [
             "4K",
             "4K Atmos"
           ],
           "ACAS": [
-            "Laser Dolby Digital 7.1",
-            "Led Screen Dolby Atmos"
+            "Led Screen Dolby Atmos",
+            "Laser Dolby Digital 7.1"
           ],
           "PVFS": [],
           "AACN": [
@@ -6584,8 +6503,8 @@
             "2K Air Cooled"
           ],
           "JJPP": [
-            "Dolby 7.1",
-            "Dolby Atmos Rgb Laser"
+            "Dolby Atmos Rgb Laser",
+            "Dolby 7.1"
           ],
           "PVTP": [
             "Atmos"
@@ -6602,7 +6521,6 @@
           ],
           "APNS": [
             "Infinity Vision Dolby Atmos",
-            "Vip Screen",
             "Barco Flat 7.1"
           ],
           "PVHM": [
@@ -6622,49 +6540,50 @@
           ],
           "PVYH": [],
           "MCKT": [],
-          "SPCB": [],
+          "VRKC": [],
           "INMH": [],
+          "SPCB": [],
           "TVHY": [
             "Dolby 7.1 Extreme"
           ],
-          "MRRG": [],
           "INHY": [],
-          "IVNM": [],
+          "MRRG": [],
           "MRGT": [
             "Atmos"
           ],
+          "IVNM": [],
           "PRCX": [
             "Atmos"
           ],
           "SCHC": [],
           "AMCM": [],
           "STHD": [],
-          "UKCC": [],
           "CPCL": [],
+          "UKCC": [],
           "PSMJ": [
             "Laser + Atmos",
             "Dolby 7.1"
           ],
+          "VAJA": [],
           "MTHY": [
             "Recliner"
           ],
-          "VAJA": [],
           "TRHY": [
             "Air Cooled"
           ],
           "RKMH": [],
-          "BJNG": [],
           "CPLK": [
             "Dolby 7.1"
           ],
+          "BJNG": [],
           "SRKR": [],
-          "KTKT": [],
           "SRCH": [
             "Gold 4K & Dolby 7.1"
           ],
           "RCNH": [
             "Dolby Atmos"
           ],
+          "KTKT": [],
           "SNIB": [],
           "SLRT": [],
           "LKMT": [],
@@ -6751,8 +6670,8 @@
           "HMHD": [],
           "ISTN": [],
           "AKYJ": [],
-          "ARMH": [
-            "2K"
+          "INKM": [
+            "2K Air Cooled"
           ],
           "JJPP": [
             "Dolby 7.1",
@@ -6761,14 +6680,16 @@
           "PVTP": [
             "Atmos"
           ],
-          "INKM": [
-            "2K Air Cooled"
+          "ARMH": [
+            "2K"
           ],
           "PIMH": [],
           "IOMH": [
             "Atmos"
           ],
-          "SNKH": [],
+          "ACHI": [
+            "2K"
+          ],
           "APNS": [
             "Infinity Vision Dolby Atmos",
             "Vip Screen",
@@ -6777,26 +6698,31 @@
           "PVHM": [
             "Atmos"
           ],
-          "MCSS": [],
+          "SNKH": [],
           "PVUM": [],
           "IPRS": [],
-          "MRAA": [
-            "Atmos"
-          ],
+          "MCSS": [],
           "PIIC": [
             "PXL",
             "LUXE"
           ],
           "MRAD": [],
-          "SPCB": [],
+          "MRAA": [
+            "Atmos"
+          ],
           "PVYH": [],
           "MCKT": [],
+          "VRKC": [],
+          "INMH": [],
+          "SPCB": [],
           "TVHY": [
             "Dolby 7.1 Extreme"
           ],
-          "INMH": [],
           "INHY": [],
           "MRRG": [],
+          "MRGT": [
+            "Atmos"
+          ],
           "IVNM": [],
           "PRCX": [
             "Atmos"
@@ -6809,10 +6735,10 @@
             "Laser + Atmos",
             "Dolby 7.1"
           ],
+          "VAJA": [],
           "MTHY": [
             "Recliner"
           ],
-          "VAJA": [],
           "TRHY": [
             "Air Cooled"
           ],
@@ -6833,10 +6759,170 @@
           "SLRT": [],
           "LKMT": [],
           "SKTA": []
+        },
+        "20261021": {
+          "AMBH": [
+            "Barco Flagship Laser Dolby Atmos"
+          ],
+          "PRHN": [
+            "Barco 4K Laser"
+          ],
+          "ACPM": [
+            "Shashikala Air Conditioned"
+          ],
+          "ALUC": [
+            "Dolby Cinema"
+          ],
+          "ACEV": [
+            "4K",
+            "4K Atmos"
+          ],
+          "ACAS": [
+            "Laser Dolby Digital 7.1",
+            "Led Screen Dolby Atmos"
+          ],
+          "PVFS": [],
+          "AACN": [
+            "Infinity Vision Dolby Atmos",
+            "4K Dolby 7.1"
+          ],
+          "SRMO": [],
+          "CTNR": [
+            "Macro Xe"
+          ],
+          "ILKS": [
+            "PXL"
+          ],
+          "MMAH": [
+            "Atmos + Laser",
+            "Atmos"
+          ],
+          "IGMH": [
+            "Atmos"
+          ],
+          "GPRH": [],
+          "CPMH": [
+            "2K Laser Dolby 7.1"
+          ],
+          "CVMU": [
+            "4K Rgb Laser Large Screen Dolby 7.1",
+            "7.1 Dolby"
+          ],
+          "ASHN": [
+            "4K Dolby 7.1"
+          ],
+          "SRCM": [
+            "Christie 4K Laser"
+          ],
+          "MAHM": [],
+          "AMCA": [
+            "Dolby 7.1"
+          ],
+          "CPHY": [
+            "Screen 2",
+            "Screen 3",
+            "Screen 1"
+          ],
+          "ABCS": [],
+          "SMMR": [],
+          "GOKU": [],
+          "PNNG": [
+            "Atmos"
+          ],
+          "SSRM": [
+            "4K Laser Dolby 7.1"
+          ],
+          "CMMA": [],
+          "PVTS": [
+            "Atmos"
+          ],
+          "ISTN": [],
+          "HMHD": [],
+          "AKYJ": [],
+          "JJPP": [
+            "Dolby Atmos Rgb Laser",
+            "Dolby 7.1"
+          ],
+          "INKM": [
+            "2K Air Cooled"
+          ],
+          "PVTP": [
+            "Atmos"
+          ],
+          "PIMH": [],
+          "ARMH": [
+            "2K"
+          ],
+          "IOMH": [
+            "Atmos"
+          ],
+          "APNS": [
+            "Infinity Vision Dolby Atmos",
+            "Vip Screen",
+            "Barco Flat 7.1"
+          ],
+          "ACHI": [
+            "2K"
+          ],
+          "PVHM": [
+            "Atmos"
+          ],
+          "PVUM": [],
+          "SNKH": [],
+          "IPRS": [],
+          "MRAD": [],
+          "MCSS": [],
+          "PVYH": [],
+          "MRAA": [
+            "Atmos"
+          ],
+          "SPCB": [],
+          "MCKT": [],
+          "INMH": [],
+          "TVHY": [
+            "Dolby 7.1 Extreme"
+          ],
+          "INHY": [],
+          "MRRG": [],
+          "AMCM": [],
+          "IVNM": [],
+          "PRCX": [
+            "Atmos"
+          ],
+          "STHD": [],
+          "UKCC": [],
+          "CPCL": [],
+          "VAJA": [],
+          "PSMJ": [
+            "Laser + Atmos",
+            "Dolby 7.1"
+          ],
+          "MTHY": [
+            "Recliner"
+          ],
+          "TRHY": [
+            "Air Cooled"
+          ],
+          "RKMH": [],
+          "CPLK": [
+            "Dolby 7.1"
+          ],
+          "BJNG": [],
+          "SRKR": [],
+          "SRCH": [
+            "Gold 4K & Dolby 7.1"
+          ],
+          "KTKT": [],
+          "RCNH": [
+            "Dolby Atmos"
+          ],
+          "SNIB": [],
+          "LKMT": [],
+          "SLRT": [],
+          "SKTA": []
         }
       },
       "bookable_dates": [
-        "20261018",
         "20261019",
         "20261020",
         "20261021",
@@ -6844,10 +6930,11 @@
       ],
       "closed_dates": [
         "20261023",
-        "20261024"
+        "20261024",
+        "20261025"
       ],
-      "showtime_count": 813,
-      "resolved_at": "2026-10-18T21:56:33.746579+05:30"
+      "showtime_count": 1044,
+      "resolved_at": "2026-10-19T11:28:04.034113+05:30"
     },
     {
       "movie": {
@@ -6963,7 +7050,8 @@
           "name": "Aparna Cinemas",
           "area": "Nallagandla",
           "formats": [
-            "4K Dolby 7.1"
+            "4K Dolby 7.1",
+            "Infinity Vision Dolby Atmos"
           ],
           "categories": [
             {
@@ -7453,19 +7541,19 @@
               "has_seat_layout": true
             },
             {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CR",
-              "has_seat_layout": true
-            },
-            {
               "code": "QR",
               "name": "PRIME ROWS",
               "availability": "AVAILABLE",
               "price": "199.00",
               "area_code": "QR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CR",
               "has_seat_layout": true
             }
           ]
@@ -7567,19 +7655,19 @@
           ],
           "categories": [
             {
-              "code": "0003",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000004",
-              "has_seat_layout": true
-            },
-            {
               "code": "0002",
               "name": "SOFA",
               "availability": "AVAILABLE",
               "price": "200.00",
               "area_code": "0000000003",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0003",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000004",
               "has_seat_layout": true
             }
           ]
@@ -7596,22 +7684,6 @@
               "availability": "AVAILABLE",
               "price": "175.00",
               "area_code": "0000000004",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "MCSS",
-          "name": "Miraj Cinemas",
-          "area": "Shalini Shivani, Kothapet",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0004",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000002",
               "has_seat_layout": true
             }
           ]
@@ -7699,12 +7771,28 @@
           ]
         },
         {
+          "code": "MCSS",
+          "name": "Miraj Cinemas",
+          "area": "Shalini Shivani, Kothapet",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0004",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
           "code": "MMAH",
           "name": "MovieMax",
           "area": "AMR, ECIL Secunderabad",
           "formats": [
-            "Atmos",
-            "Dolby 7.1"
+            "Dolby 7.1",
+            "Atmos"
           ],
           "categories": [
             {
@@ -7810,7 +7898,7 @@
             {
               "code": "RY",
               "name": "RECLINER",
-              "availability": "AVAILABLE",
+              "availability": "SOLD_OUT",
               "price": "299.00",
               "area_code": "RY",
               "has_seat_layout": true
@@ -7950,30 +8038,6 @@
           ]
         },
         {
-          "code": "PRCX",
-          "name": "PVR",
-          "area": "RK Cineplex, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "RE",
-              "name": "RECLINER",
-              "availability": "AVAILABLE",
-              "price": "299.00",
-              "area_code": "RE",
-              "has_seat_layout": true
-            },
-            {
-              "code": "CC",
-              "name": "CLASSIC",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CC",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
           "code": "PVHM",
           "name": "PVR ICON",
           "area": "Hitech, Madhapur, Hyderabad",
@@ -8004,19 +8068,19 @@
               "has_seat_layout": true
             },
             {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CR",
-              "has_seat_layout": true
-            },
-            {
               "code": "QR",
               "name": "PRIME ROWS",
               "availability": "AVAILABLE",
               "price": "199.00",
               "area_code": "QR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CR",
               "has_seat_layout": true
             }
           ]
@@ -8068,10 +8132,18 @@
           "name": "Tivoli Cinemas",
           "area": "Secunderabad",
           "formats": [
-            "Laser Dolby 7.1",
-            "Screen 3"
+            "Screen 3",
+            "Laser Dolby 7.1"
           ],
           "categories": [
+            {
+              "code": "0003",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            },
             {
               "code": "0004",
               "name": "GOLD UPPER",
@@ -8086,14 +8158,6 @@
               "availability": "AVAILABLE",
               "price": "200.00",
               "area_code": "0000000005",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0003",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000003",
               "has_seat_layout": true
             }
           ]
@@ -8129,8 +8193,8 @@
             "M B LUXE"
           ],
           "PRHN": [],
-          "ACPM": [
-            "Lalitha Air Conditioned"
+          "ACAS": [
+            "Laser Dolby Digital 7.1"
           ],
           "ALUC": [
             "Laser 4K Atmos"
@@ -8138,82 +8202,76 @@
           "ACEV": [
             "4K"
           ],
-          "ACAS": [
-            "Laser Dolby Digital 7.1"
+          "MMAH": [
+            "Dolby 7.1"
           ],
           "PVFS": [],
           "AACN": [
-            "4K Dolby 7.1"
+            "4K Dolby 7.1",
+            "Infinity Vision Dolby Atmos"
           ],
-          "MMAH": [
-            "Atmos",
-            "Dolby 7.1"
-          ],
+          "GPRH": [],
           "CTNR": [],
           "ILKS": [],
-          "GPRH": [],
-          "IGMH": [],
           "CPMH": [
             "2K Laser Dolby 7.1"
           ],
+          "IGMH": [],
           "MMCA": [],
+          "AMCA": [
+            "4K Dolby Atmos"
+          ],
           "CVMU": [
             "7.1 Dolby"
           ],
           "ASHN": [
             "4K Dolby 7.1"
           ],
-          "AMCA": [
-            "4K Dolby Atmos"
-          ],
           "CPHY": [
-            "Screen 4",
-            "Screen 3"
+            "Screen 3",
+            "Screen 4"
           ],
           "ABCS": [],
-          "CMMA": [],
           "PNNG": [],
+          "CMMA": [],
           "PVTS": [
             "Atmos"
           ],
+          "ISTN": [],
           "ARMH": [
             "2K"
           ],
-          "ISTN": [],
           "AKYJ": [],
-          "MCSS": [],
           "JJPP": [
             "Dolby 7.1"
-          ],
-          "PVTP": [
-            "Atmos"
           ],
           "MRAA": [
             "Atmos"
           ],
+          "PVTP": [
+            "Atmos"
+          ],
           "PIMH": [],
-          "IOMH": [],
           "VRKC": [],
+          "IOMH": [],
           "APNS": [
             "Barco Dolby 7.1"
           ],
-          "PVHM": [],
           "TVHY": [
-            "Laser Dolby 7.1",
             "Screen 3"
           ],
+          "PVHM": [],
           "PVUM": [],
-          "IPRS": [],
           "MRRG": [],
+          "IPRS": [],
           "MRAD": [],
-          "PVYH": [],
           "SUDA": [
             "4K Dolby Atmos"
           ],
+          "PVYH": [],
           "INHY": [],
-          "IVNM": [],
           "MRGT": [],
-          "PRCX": [],
+          "IVNM": [],
           "UKCC": [],
           "CPCL": [],
           "PSMJ": [
@@ -8315,14 +8373,13 @@
           "INHY": [],
           "IVNM": [],
           "MRGT": [],
-          "PRCX": [],
           "UKCC": [],
           "CPCL": [],
-          "PSMJ": [
-            "Dolby 7.1"
-          ],
           "MTHY": [
             "Recliner"
+          ],
+          "PSMJ": [
+            "Dolby 7.1"
           ],
           "CPLK": [
             "Recliners"
@@ -8412,7 +8469,6 @@
           "MTHY": [
             "Recliner"
           ],
-          "PRCX": [],
           "UKCC": [],
           "PSMJ": [
             "Dolby 7.1"
@@ -8433,8 +8489,362 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 245,
-      "resolved_at": "2026-10-19T02:54:42.420056+05:30"
+      "showtime_count": 228,
+      "resolved_at": "2026-10-19T11:30:00.590118+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00429213",
+        "title": "Rajini: The Jailer 2",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/rajini-the-jailer-2-et00429213-1791879746.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/rajini-the-jailer-2-hindi/buytickets/ET00429213",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "AMBH",
+          "name": "AMB Cinemas",
+          "area": "Gachibowli",
+          "formats": [
+            "Barco Flagship Laser Dolby Atmos"
+          ],
+          "categories": [
+            {
+              "code": "0001",
+              "name": "PLATINUM",
+              "availability": "AVAILABLE",
+              "price": "354.00",
+              "area_code": "0000000001",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0003",
+              "name": "LOUNGERS",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "CPHY",
+          "name": "Asian Cineplanet Multiplex",
+          "area": "Kompally",
+          "formats": [
+            "Screen 3",
+            "Screen 2"
+          ],
+          "categories": [
+            {
+              "code": "0004",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "0000000004",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "AMCA",
+          "name": "Asian M Cube Mall",
+          "area": "Attapur",
+          "formats": [
+            "4K Dolby Atmos",
+            "Dolby 7.1"
+          ],
+          "categories": [
+            {
+              "code": "0002",
+              "name": "RECLINERS",
+              "availability": "SOLD_OUT",
+              "price": "354.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0001",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "0000000001",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "CPLK",
+          "name": "CONNPLEX Luxuriance Cinemas",
+          "area": "Mpm Mall, Banjara Hil",
+          "formats": [
+            "Dolby 7.1"
+          ],
+          "categories": [
+            {
+              "code": "0001",
+              "name": "MILLER",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0003",
+              "name": "LOUNGER",
+              "availability": "AVAILABLE",
+              "price": "295.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "KTKT",
+          "name": "Kumar Theatre",
+          "area": "Kachiguda",
+          "formats": [],
+          "categories": [
+            {
+              "code": "T002",
+              "name": "Dress Circle",
+              "availability": "AVAILABLE",
+              "price": "100.00",
+              "area_code": "AC00000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "T003",
+              "name": "Balcony",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "AC00000003",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "MCBH",
+          "name": "Metro Cinema",
+          "area": "Bahadurpura",
+          "formats": [],
+          "categories": [
+            {
+              "code": "T001",
+              "name": "Balcony",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "AC00000001",
+              "has_seat_layout": true
+            },
+            {
+              "code": "T002",
+              "name": "Silver",
+              "availability": "AVAILABLE",
+              "price": "100.00",
+              "area_code": "AC00000002",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "RMKN",
+          "name": "Ramakrishna 35mm",
+          "area": "Abids",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0001",
+              "name": "PREMIUM RECLINER",
+              "availability": "AVAILABLE",
+              "price": "235.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "PREMIUM SOFA",
+              "availability": "AVAILABLE",
+              "price": "175.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0003",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "0000000004",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0004",
+              "name": "SILVER",
+              "availability": "AVAILABLE",
+              "price": "50.00",
+              "area_code": "0000000005",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "RCNH",
+          "name": "ROONGTA CINEMAS",
+          "area": "NOVUM, NAMPALLY",
+          "formats": [
+            "Dolby Atmos"
+          ],
+          "categories": [
+            {
+              "code": "SO",
+              "name": "SOFA (Non-Reclining)",
+              "availability": "AVAILABLE",
+              "price": "225.00",
+              "area_code": "SO",
+              "has_seat_layout": true
+            },
+            {
+              "code": "EX",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "175.00",
+              "area_code": "EX",
+              "has_seat_layout": true
+            },
+            {
+              "code": "RE",
+              "name": "ROYAL EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "175.00",
+              "area_code": "RE",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "SSRJ",
+          "name": "Sree Sai Raja Theatre",
+          "area": "Musheerabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "T001",
+              "name": "Balcony",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "AC00000001",
+              "has_seat_layout": true
+            },
+            {
+              "code": "T002",
+              "name": "Dress Circle",
+              "availability": "AVAILABLE",
+              "price": "100.00",
+              "area_code": "AC00000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "T003",
+              "name": "Third Class",
+              "availability": "AVAILABLE",
+              "price": "50.00",
+              "area_code": "AC00000003",
+              "has_seat_layout": true
+            }
+          ]
+        }
+      ],
+      "listings": {
+        "20261019": {
+          "AMCA": [
+            "4K Dolby Atmos",
+            "Dolby 7.1"
+          ],
+          "CPHY": [
+            "Screen 3"
+          ],
+          "SSRJ": [],
+          "CPLK": [
+            "Dolby 7.1"
+          ],
+          "RMKN": [],
+          "KTKT": [],
+          "RCNH": [
+            "Dolby Atmos"
+          ],
+          "MCBH": []
+        },
+        "20261020": {
+          "AMBH": [
+            "Barco Flagship Laser Dolby Atmos"
+          ],
+          "AMCA": [
+            "4K Dolby Atmos",
+            "Dolby 7.1"
+          ],
+          "CPHY": [
+            "Screen 3"
+          ],
+          "CPLK": [
+            "Dolby 7.1"
+          ],
+          "RMKN": [],
+          "SSRJ": [],
+          "RCNH": [
+            "Dolby Atmos"
+          ],
+          "KTKT": [],
+          "MCBH": []
+        },
+        "20261021": {
+          "AMBH": [
+            "Barco Flagship Laser Dolby Atmos"
+          ],
+          "AMCA": [
+            "4K Dolby Atmos"
+          ],
+          "CPHY": [
+            "Screen 3",
+            "Screen 2"
+          ],
+          "CPLK": [
+            "Dolby 7.1"
+          ],
+          "RMKN": [],
+          "SSRJ": [],
+          "RCNH": [
+            "Dolby Atmos"
+          ],
+          "KTKT": [],
+          "MCBH": []
+        }
+      },
+      "bookable_dates": [
+        "20261019",
+        "20261020",
+        "20261021",
+        "20261022"
+      ],
+      "closed_dates": [
+        "20261023",
+        "20261024",
+        "20261025"
+      ],
+      "showtime_count": 81,
+      "resolved_at": "2026-10-19T11:29:57.425835+05:30"
     },
     {
       "movie": {
@@ -8515,8 +8925,8 @@
           "name": "Aparna Cinemas",
           "area": "Nallagandla",
           "formats": [
-            "4K Dolby 7.1",
-            "Infinity Vision Dolby Atmos"
+            "Infinity Vision Dolby Atmos",
+            "4K Dolby 7.1"
           ],
           "categories": [
             {
@@ -9320,23 +9730,19 @@
           "ACAS": [
             "Laser Dolby Digital 7.1"
           ],
-          "ACEV": [
-            "4K"
-          ],
           "PVFS": [],
+          "AACN": [
+            "Infinity Vision Dolby Atmos"
+          ],
           "MMAH": [
             "Laser & 7.1",
             "Dolby 7.1"
           ],
-          "AACN": [
-            "4K Dolby 7.1",
-            "Infinity Vision Dolby Atmos"
-          ],
           "CTNR": [],
+          "ILKS": [],
           "CPMH": [
             "2K Laser Dolby 7.1"
           ],
-          "ILKS": [],
           "IGMH": [],
           "AMCA": [
             "Dolby 7.1"
@@ -9346,35 +9752,34 @@
             "Screen 3"
           ],
           "ABCS": [],
-          "CMMA": [],
           "PNNG": [],
+          "CMMA": [],
           "PVTS": [
             "Atmos"
           ],
-          "MCSS": [],
           "ISTN": [],
+          "MCSS": [],
           "PVTP": [
             "Atmos"
           ],
+          "PIMH": [],
           "TVHY": [
             "Laser Dolby 7.1"
           ],
-          "PIMH": [],
           "IOMH": [],
-          "STHD": [],
           "APNS": [
-            "Barco Flat 7.1",
             "Barco Dolby 7.1"
           ],
+          "STHD": [],
           "PVHM": [],
-          "CPCL": [],
           "PVUM": [],
+          "CPCL": [],
           "IPRS": [],
-          "MTHY": [
-            "Recliner"
-          ],
           "PIIC": [
             "LUXE"
+          ],
+          "MTHY": [
+            "Recliner"
           ],
           "MRAD": [],
           "INMH": [],
@@ -9543,8 +9948,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 223,
-      "resolved_at": "2026-10-19T02:54:00.669243+05:30"
+      "showtime_count": 217,
+      "resolved_at": "2026-10-19T11:29:15.815737+05:30"
     },
     {
       "movie": {
@@ -9685,19 +10090,19 @@
           ],
           "categories": [
             {
-              "code": "0001",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000001",
-              "has_seat_layout": true
-            },
-            {
               "code": "0002",
               "name": "RECLINERS",
               "availability": "SOLD_OUT",
               "price": "250.00",
               "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0001",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000001",
               "has_seat_layout": true
             }
           ]
@@ -10113,7 +10518,7 @@
             {
               "code": "RY",
               "name": "RECLINER",
-              "availability": "SOLD_OUT",
+              "availability": "AVAILABLE",
               "price": "299.00",
               "area_code": "RY",
               "has_seat_layout": true
@@ -10267,19 +10672,19 @@
           "formats": [],
           "categories": [
             {
-              "code": "BR",
-              "name": "RECLINER ROWS",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "BR",
-              "has_seat_layout": true
-            },
-            {
               "code": "UR",
               "name": "LOUNGER ROWS",
               "availability": "AVAILABLE",
               "price": "354.00",
               "area_code": "UR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "BR",
+              "name": "RECLINER ROWS",
+              "availability": "AVAILABLE",
+              "price": "354.00",
+              "area_code": "BR",
               "has_seat_layout": true
             },
             {
@@ -10613,362 +11018,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 195,
-      "resolved_at": "2026-10-19T02:55:02.679943+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00429213",
-        "title": "Rajini: The Jailer 2",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Hindi",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/rajini-the-jailer-2-et00429213-1791879746.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/rajini-the-jailer-2-hindi/buytickets/ET00429213",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "AMBH",
-          "name": "AMB Cinemas",
-          "area": "Gachibowli",
-          "formats": [
-            "Barco Flagship Laser Dolby Atmos"
-          ],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "PLATINUM",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "0000000001",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0003",
-              "name": "LOUNGERS",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "CPHY",
-          "name": "Asian Cineplanet Multiplex",
-          "area": "Kompally",
-          "formats": [
-            "Screen 3",
-            "Screen 2"
-          ],
-          "categories": [
-            {
-              "code": "0004",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000004",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "AMCA",
-          "name": "Asian M Cube Mall",
-          "area": "Attapur",
-          "formats": [
-            "4K Dolby Atmos",
-            "Dolby 7.1"
-          ],
-          "categories": [
-            {
-              "code": "0002",
-              "name": "RECLINERS",
-              "availability": "SOLD_OUT",
-              "price": "354.00",
-              "area_code": "0000000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0001",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000001",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "CPLK",
-          "name": "CONNPLEX Luxuriance Cinemas",
-          "area": "Mpm Mall, Banjara Hil",
-          "formats": [
-            "Dolby 7.1"
-          ],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "MILLER",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0003",
-              "name": "LOUNGER",
-              "availability": "AVAILABLE",
-              "price": "295.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "KTKT",
-          "name": "Kumar Theatre",
-          "area": "Kachiguda",
-          "formats": [],
-          "categories": [
-            {
-              "code": "T002",
-              "name": "Dress Circle",
-              "availability": "AVAILABLE",
-              "price": "100.00",
-              "area_code": "AC00000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "T003",
-              "name": "Balcony",
-              "availability": "AVAILABLE",
-              "price": "150.00",
-              "area_code": "AC00000003",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "MCBH",
-          "name": "Metro Cinema",
-          "area": "Bahadurpura",
-          "formats": [],
-          "categories": [
-            {
-              "code": "T001",
-              "name": "Balcony",
-              "availability": "AVAILABLE",
-              "price": "150.00",
-              "area_code": "AC00000001",
-              "has_seat_layout": true
-            },
-            {
-              "code": "T002",
-              "name": "Silver",
-              "availability": "AVAILABLE",
-              "price": "100.00",
-              "area_code": "AC00000002",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "RMKN",
-          "name": "Ramakrishna 35mm",
-          "area": "Abids",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "PREMIUM RECLINER",
-              "availability": "AVAILABLE",
-              "price": "235.00",
-              "area_code": "0000000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "PREMIUM SOFA",
-              "availability": "AVAILABLE",
-              "price": "175.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0003",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "150.00",
-              "area_code": "0000000004",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0004",
-              "name": "SILVER",
-              "availability": "AVAILABLE",
-              "price": "50.00",
-              "area_code": "0000000005",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "RCNH",
-          "name": "ROONGTA CINEMAS",
-          "area": "NOVUM, NAMPALLY",
-          "formats": [
-            "Dolby Atmos"
-          ],
-          "categories": [
-            {
-              "code": "SO",
-              "name": "SOFA (Non-Reclining)",
-              "availability": "AVAILABLE",
-              "price": "225.00",
-              "area_code": "SO",
-              "has_seat_layout": true
-            },
-            {
-              "code": "EX",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "175.00",
-              "area_code": "EX",
-              "has_seat_layout": true
-            },
-            {
-              "code": "RE",
-              "name": "ROYAL EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "175.00",
-              "area_code": "RE",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "SSRJ",
-          "name": "Sree Sai Raja Theatre",
-          "area": "Musheerabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "T003",
-              "name": "Third Class",
-              "availability": "AVAILABLE",
-              "price": "50.00",
-              "area_code": "AC00000003",
-              "has_seat_layout": true
-            },
-            {
-              "code": "T001",
-              "name": "Balcony",
-              "availability": "AVAILABLE",
-              "price": "150.00",
-              "area_code": "AC00000001",
-              "has_seat_layout": true
-            },
-            {
-              "code": "T002",
-              "name": "Dress Circle",
-              "availability": "AVAILABLE",
-              "price": "100.00",
-              "area_code": "AC00000002",
-              "has_seat_layout": true
-            }
-          ]
-        }
-      ],
-      "listings": {
-        "20261019": {
-          "AMBH": [
-            "Barco Flagship Laser Dolby Atmos"
-          ],
-          "AMCA": [
-            "4K Dolby Atmos",
-            "Dolby 7.1"
-          ],
-          "CPHY": [
-            "Screen 3"
-          ],
-          "CPLK": [
-            "Dolby 7.1"
-          ],
-          "RMKN": [],
-          "SSRJ": [],
-          "RCNH": [
-            "Dolby Atmos"
-          ],
-          "KTKT": [],
-          "MCBH": []
-        },
-        "20261020": {
-          "AMCA": [
-            "4K Dolby Atmos",
-            "Dolby 7.1"
-          ],
-          "CPHY": [
-            "Screen 3"
-          ],
-          "SSRJ": [],
-          "CPLK": [
-            "Dolby 7.1"
-          ],
-          "RMKN": [],
-          "KTKT": [],
-          "RCNH": [
-            "Dolby Atmos"
-          ],
-          "MCBH": []
-        },
-        "20261021": {
-          "AMBH": [
-            "Barco Flagship Laser Dolby Atmos"
-          ],
-          "AMCA": [
-            "4K Dolby Atmos"
-          ],
-          "CPHY": [
-            "Screen 3",
-            "Screen 2"
-          ],
-          "CPLK": [
-            "Dolby 7.1"
-          ],
-          "RMKN": [],
-          "SSRJ": [],
-          "RCNH": [
-            "Dolby Atmos"
-          ],
-          "KTKT": [],
-          "MCBH": []
-        }
-      },
-      "bookable_dates": [
-        "20261019",
-        "20261020",
-        "20261021",
-        "20261022"
-      ],
-      "closed_dates": [
-        "20261023",
-        "20261024",
-        "20261025"
-      ],
-      "showtime_count": 85,
-      "resolved_at": "2026-10-19T02:54:39.310312+05:30"
+      "showtime_count": 188,
+      "resolved_at": "2026-10-19T11:30:22.189873+05:30"
     },
     {
       "movie": {
@@ -11584,19 +11635,19 @@
           "formats": [],
           "categories": [
             {
-              "code": "UR",
-              "name": "LOUNGER ROWS",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "UR",
-              "has_seat_layout": true
-            },
-            {
               "code": "BR",
               "name": "RECLINER ROWS",
               "availability": "AVAILABLE",
               "price": "354.00",
               "area_code": "BR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "UR",
+              "name": "LOUNGER ROWS",
+              "availability": "AVAILABLE",
+              "price": "354.00",
+              "area_code": "UR",
               "has_seat_layout": true
             },
             {
@@ -11780,8 +11831,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 163,
-      "resolved_at": "2026-10-19T02:53:49.818433+05:30"
+      "showtime_count": 157,
+      "resolved_at": "2026-10-19T11:29:03.185527+05:30"
     },
     {
       "movie": {
@@ -12373,6 +12424,14 @@
               "has_seat_layout": true
             },
             {
+              "code": "QR",
+              "name": "PRIME ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "QR",
+              "has_seat_layout": true
+            },
+            {
               "code": "CR",
               "name": "CLASSIC ROWS",
               "availability": "AVAILABLE",
@@ -12386,14 +12445,6 @@
               "availability": "AVAILABLE",
               "price": "199.00",
               "area_code": "MR",
-              "has_seat_layout": true
-            },
-            {
-              "code": "QR",
-              "name": "PRIME ROWS",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "QR",
               "has_seat_layout": true
             }
           ]
@@ -12529,6 +12580,30 @@
           ]
         },
         {
+          "code": "MRAD",
+          "name": "Miraj Cinemas",
+          "area": "Anand Mall and Movies, Narsingi",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0026",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000019",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0191",
+              "name": "SOFA",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000032",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
           "code": "MRGT",
           "name": "Miraj Cinemas",
           "area": "Geeta, Chandanagar",
@@ -12550,30 +12625,6 @@
               "availability": "AVAILABLE",
               "price": "200.00",
               "area_code": "0000000001",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "MRAD",
-          "name": "Miraj Cinemas",
-          "area": "Anand Mall and Movies, Narsingi",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0026",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000019",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0191",
-              "name": "SOFA",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000032",
               "has_seat_layout": true
             }
           ]
@@ -12865,14 +12916,6 @@
           "formats": [],
           "categories": [
             {
-              "code": "BR",
-              "name": "RECLINER ROWS",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "BR",
-              "has_seat_layout": true
-            },
-            {
               "code": "UR",
               "name": "LOUNGER ROWS",
               "availability": "AVAILABLE",
@@ -12881,11 +12924,11 @@
               "has_seat_layout": true
             },
             {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
+              "code": "BR",
+              "name": "RECLINER ROWS",
               "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CR",
+              "price": "354.00",
+              "area_code": "BR",
               "has_seat_layout": true
             },
             {
@@ -12894,6 +12937,14 @@
               "availability": "AVAILABLE",
               "price": "199.00",
               "area_code": "QR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CR",
               "has_seat_layout": true
             }
           ]
@@ -13015,23 +13066,20 @@
             "Barco Flagship Laser Dolby Atmos"
           ],
           "PRHN": [],
-          "ACPM": [
-            "Chandrakala Air Cooled"
+          "ACAS": [
+            "Laser Dolby Digital 7.1"
           ],
           "ACEV": [
             "4K"
           ],
           "PVFS": [],
-          "ACAS": [
-            "Laser Dolby Digital 7.1"
-          ],
-          "CTNR": [],
-          "ILKS": [],
           "MMAH": [
             "Atmos"
           ],
-          "IGMH": [],
+          "CTNR": [],
+          "ILKS": [],
           "GPRH": [],
+          "IGMH": [],
           "CPMH": [
             "2K Laser Dolby 7.1"
           ],
@@ -13039,62 +13087,59 @@
           "CVMU": [
             "7.1 Dolby"
           ],
-          "CPHY": [
-            "Screen 4"
-          ],
           "ASHN": [
             "4K Dolby 7.1"
           ],
+          "CPHY": [
+            "Screen 4"
+          ],
           "ABCS": [],
+          "PNNG": [],
           "ARMH": [
             "2K"
           ],
-          "PNNG": [],
           "PVTS": [
             "Atmos"
           ],
-          "MCSS": [],
           "ISTN": [],
+          "MCSS": [],
           "AKYJ": [],
-          "MRAA": [],
           "JJPP": [
             "Dolby 7.1"
           ],
+          "MRAA": [],
           "PIMH": [],
+          "IOMH": [],
           "TVHY": [
             "Screen 3"
           ],
-          "IOMH": [],
           "APNS": [
             "Barco Flat 7.1"
           ],
-          "MRRG": [],
           "PVHM": [],
+          "MRRG": [],
           "PVUM": [],
+          "IPRS": [],
           "SUDA": [
             "4K Dolby Atmos"
           ],
-          "IPRS": [],
           "PIIC": [
             "LUXE"
           ],
+          "MRAD": [],
           "MRGT": [
             "Atmos"
           ],
-          "MRAD": [],
           "PVYH": [],
-          "CPCL": [],
           "INMH": [],
+          "CPCL": [],
           "INHY": [],
+          "IVNM": [],
           "MTHY": [
             "Recliner"
           ],
-          "IVNM": [],
           "PRCX": [],
           "UKCC": [],
-          "PSMJ": [
-            "Dolby 7.1"
-          ],
           "CPLK": [
             "Recliners"
           ]
@@ -13283,8 +13328,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 193,
-      "resolved_at": "2026-10-19T02:54:35.545634+05:30"
+      "showtime_count": 189,
+      "resolved_at": "2026-10-19T11:29:54.242053+05:30"
     },
     {
       "movie": {
@@ -13864,19 +13909,19 @@
               "has_seat_layout": true
             },
             {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CR",
-              "has_seat_layout": true
-            },
-            {
               "code": "QR",
               "name": "PRIME ROWS",
               "availability": "AVAILABLE",
               "price": "199.00",
               "area_code": "QR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CR",
               "has_seat_layout": true
             }
           ]
@@ -13986,19 +14031,19 @@
           ],
           "categories": [
             {
-              "code": "0002",
-              "name": "SOFA",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            },
-            {
               "code": "0003",
               "name": "GOLD",
               "availability": "AVAILABLE",
               "price": "200.00",
               "area_code": "0000000004",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "SOFA",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000003",
               "has_seat_layout": true
             }
           ]
@@ -14052,30 +14097,6 @@
           ]
         },
         {
-          "code": "MRRG",
-          "name": "Miraj Cinemas",
-          "area": "Raghavendra, Malkajgiri",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0002",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "235.00",
-              "area_code": "0000000001",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0013",
-              "name": "EXECUTIVEP",
-              "availability": "AVAILABLE",
-              "price": "175.00",
-              "area_code": "0000000006",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
           "code": "MRGT",
           "name": "Miraj Cinemas",
           "area": "Geeta, Chandanagar",
@@ -14111,6 +14132,30 @@
               "availability": "AVAILABLE",
               "price": "200.00",
               "area_code": "0000000032",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "MRRG",
+          "name": "Miraj Cinemas",
+          "area": "Raghavendra, Malkajgiri",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0002",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "235.00",
+              "area_code": "0000000001",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0013",
+              "name": "EXECUTIVEP",
+              "availability": "AVAILABLE",
+              "price": "175.00",
+              "area_code": "0000000006",
               "has_seat_layout": true
             }
           ]
@@ -14420,19 +14465,19 @@
               "has_seat_layout": true
             },
             {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CR",
-              "has_seat_layout": true
-            },
-            {
               "code": "QR",
               "name": "PRIME ROWS",
               "availability": "AVAILABLE",
               "price": "199.00",
               "area_code": "QR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CR",
               "has_seat_layout": true
             }
           ]
@@ -14487,61 +14532,57 @@
             "2K Laser Dolby 7.1"
           ],
           "MMCA": [],
-          "CPHY": [
-            "Screen 4"
-          ],
+          "ABCS": [],
           "CVMU": [
             "7.1 Dolby"
           ],
           "ASHN": [
             "4K Dolby 7.1"
           ],
-          "ABCS": [],
-          "PNNG": [],
           "CMMA": [],
-          "INKM": [
-            "2K Air Cooled"
-          ],
+          "PNNG": [],
           "PVTS": [
             "Atmos"
           ],
+          "INKM": [
+            "2K Air Cooled"
+          ],
           "ISTN": [],
+          "AKYJ": [],
           "ARMH": [
             "2K"
           ],
-          "AKYJ": [],
           "JJPP": [
             "Dolby 7.1"
           ],
-          "MCSS": [],
           "PVTP": [
             "Atmos"
           ],
+          "MCSS": [],
           "PIMH": [],
+          "IOMH": [],
           "DVRR": [
             "4K Dolby Atmos"
           ],
-          "IOMH": [],
           "APNS": [
             "Barco Dolby 7.1"
           ],
-          "MRAA": [],
           "PVHM": [],
+          "MRAA": [],
           "PVUM": [],
-          "MRRG": [],
           "IPRS": [],
+          "MRGT": [],
           "PIIC": [
             "LUXE"
           ],
-          "MRGT": [],
           "MRAD": [],
-          "PVYH": [],
           "CPCL": [],
+          "PVYH": [],
           "INMH": [],
-          "INHY": [],
           "MTHY": [
             "Recliner"
           ],
+          "INHY": [],
           "IVNM": [],
           "PRCX": [],
           "PSMJ": [
@@ -14740,8 +14781,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 254,
-      "resolved_at": "2026-10-19T02:53:43.788573+05:30"
+      "showtime_count": 244,
+      "resolved_at": "2026-10-19T11:28:55.978905+05:30"
     },
     {
       "movie": {
@@ -14762,7 +14803,32 @@
           "name": "Aradhana Theatre",
           "area": "Hyderabad",
           "formats": [],
-          "categories": []
+          "categories": [
+            {
+              "code": "0001",
+              "name": "BALCONY",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "0000000001",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "FIRST CLASS",
+              "availability": "AVAILABLE",
+              "price": "100.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0003",
+              "name": "SECOND CLASS",
+              "availability": "AVAILABLE",
+              "price": "50.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ]
         },
         {
           "code": "ACPM",
@@ -14893,7 +14959,7 @@
             {
               "code": "0001",
               "name": "LOWER BALCONY",
-              "availability": "AVAILABLE",
+              "availability": "SOLD_OUT",
               "price": "200.00",
               "area_code": "0000000002",
               "has_seat_layout": true
@@ -15352,7 +15418,7 @@
         "20261029"
       ],
       "showtime_count": 21,
-      "resolved_at": "2026-10-19T02:53:58.923041+05:30"
+      "resolved_at": "2026-10-19T11:29:13.965658+05:30"
     },
     {
       "movie": {
@@ -15608,30 +15674,6 @@
           ]
         },
         {
-          "code": "CMMA",
-          "name": "Cinepolis",
-          "area": "Mantra Mall, Attapur",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "NORMAL",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000000",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "VIP",
-              "availability": "AVAILABLE",
-              "price": "300.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
           "code": "IGMH",
           "name": "INOX",
           "area": "GSM Mall, Hyderabad",
@@ -15702,6 +15744,14 @@
               "has_seat_layout": true
             },
             {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "249.00",
+              "area_code": "CR",
+              "has_seat_layout": true
+            },
+            {
               "code": "MR",
               "name": "PRIME PLUS ROWS",
               "availability": "AVAILABLE",
@@ -15715,14 +15765,6 @@
               "availability": "AVAILABLE",
               "price": "249.00",
               "area_code": "QR",
-              "has_seat_layout": true
-            },
-            {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "249.00",
-              "area_code": "CR",
               "has_seat_layout": true
             }
           ]
@@ -16011,7 +16053,7 @@
               "code": "YR",
               "name": "ROYAL ROWS",
               "availability": "AVAILABLE",
-              "price": "550.00",
+              "price": "600.00",
               "area_code": "YR",
               "has_seat_layout": true
             }
@@ -16080,18 +16122,14 @@
           "IGMH": [],
           "ABCS": [],
           "PNNG": [],
-          "CMMA": [],
-          "TVHY": [
-            "Laser Dolby 7.1"
-          ],
           "PVTS": [
             "Atmos"
           ],
-          "JJPP": [
-            "Dolby 7.1"
-          ],
           "MTHY": [
             "Recliner"
+          ],
+          "JJPP": [
+            "Dolby 7.1"
           ],
           "PIMH": [],
           "IOMH": [],
@@ -16136,21 +16174,20 @@
           "ABCS": [],
           "IGMH": [],
           "PNNG": [],
-          "CMMA": [],
+          "TVHY": [
+            "Laser Dolby 7.1"
+          ],
           "PVTS": [
             "Atmos"
           ],
           "JJPP": [
             "Dolby 7.1"
           ],
-          "TVHY": [
-            "Laser Dolby 7.1"
-          ],
-          "PIMH": [],
-          "IOMH": [],
           "MTHY": [
             "Recliner"
           ],
+          "PIMH": [],
+          "IOMH": [],
           "APNS": [
             "Vip Screen"
           ],
@@ -16189,20 +16226,19 @@
           "IGMH": [],
           "ABCS": [],
           "PNNG": [],
-          "CMMA": [],
-          "TVHY": [
-            "Laser Dolby 7.1"
-          ],
           "PVTS": [
             "Atmos"
+          ],
+          "TVHY": [
+            "Laser Dolby 7.1"
           ],
           "JJPP": [
             "Dolby 7.1"
           ],
+          "PIMH": [],
           "MTHY": [
             "Recliner"
           ],
-          "PIMH": [],
           "IOMH": [],
           "APNS": [
             "Vip Screen"
@@ -16224,8 +16260,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 96,
-      "resolved_at": "2026-10-19T02:52:54.893661+05:30"
+      "showtime_count": 89,
+      "resolved_at": "2026-10-19T11:28:07.380746+05:30"
     },
     {
       "movie": {
@@ -16379,7 +16415,7 @@
         "20261025"
       ],
       "showtime_count": 15,
-      "resolved_at": "2026-10-19T02:54:06.232026+05:30"
+      "resolved_at": "2026-10-19T11:29:23.192288+05:30"
     },
     {
       "movie": {
@@ -16613,8 +16649,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 34,
-      "resolved_at": "2026-10-19T02:54:32.443184+05:30"
+      "showtime_count": 32,
+      "resolved_at": "2026-10-19T11:29:50.078660+05:30"
     },
     {
       "movie": {
@@ -16635,7 +16671,32 @@
           "name": "Aradhana Theatre",
           "area": "Hyderabad",
           "formats": [],
-          "categories": []
+          "categories": [
+            {
+              "code": "0001",
+              "name": "BALCONY",
+              "availability": "SOLD_OUT",
+              "price": "150.00",
+              "area_code": "0000000001",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "FIRST CLASS",
+              "availability": "SOLD_OUT",
+              "price": "100.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0003",
+              "name": "SECOND CLASS",
+              "availability": "SOLD_OUT",
+              "price": "50.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ]
         },
         {
           "code": "ARJU",
@@ -17190,7 +17251,7 @@
         "20261029"
       ],
       "showtime_count": 24,
-      "resolved_at": "2026-10-19T02:54:03.907078+05:30"
+      "resolved_at": "2026-10-19T11:29:19.874342+05:30"
     },
     {
       "movie": {
@@ -17470,19 +17531,19 @@
           "formats": [],
           "categories": [
             {
-              "code": "BR",
-              "name": "RECLINER ROWS",
-              "availability": "AVAILABLE",
-              "price": "354.00",
-              "area_code": "BR",
-              "has_seat_layout": true
-            },
-            {
               "code": "UR",
               "name": "LOUNGER ROWS",
               "availability": "AVAILABLE",
               "price": "354.00",
               "area_code": "UR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "BR",
+              "name": "RECLINER ROWS",
+              "availability": "AVAILABLE",
+              "price": "354.00",
+              "area_code": "BR",
               "has_seat_layout": true
             },
             {
@@ -17529,21 +17590,14 @@
             "Vip Screen"
           ],
           "PRHN": [],
-          "MMAH": [
-            "Dolby 7.1"
-          ],
           "ALUC": [
             "Laser 4K Atmos"
           ],
           "PVFS": [],
-          "CTNR": [],
           "ILKS": [],
           "PNNG": [],
           "ISTN": [],
-          "IOMH": [],
-          "PIIC": [
-            "LUXE"
-          ]
+          "IOMH": []
         },
         "20261020": {
           "AMBH": [
@@ -17601,8 +17655,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 36,
-      "resolved_at": "2026-10-19T02:54:09.239601+05:30"
+      "showtime_count": 33,
+      "resolved_at": "2026-10-19T11:29:26.280074+05:30"
     },
     {
       "movie": {
@@ -17783,19 +17837,19 @@
           ],
           "categories": [
             {
-              "code": "RE",
-              "name": "RECLINER",
-              "availability": "AVAILABLE",
-              "price": "249.00",
-              "area_code": "RE",
-              "has_seat_layout": true
-            },
-            {
               "code": "CC",
               "name": "CLASSIC",
               "availability": "AVAILABLE",
               "price": "149.00",
               "area_code": "CC",
+              "has_seat_layout": true
+            },
+            {
+              "code": "RE",
+              "name": "RECLINER",
+              "availability": "AVAILABLE",
+              "price": "249.00",
+              "area_code": "RE",
               "has_seat_layout": true
             }
           ]
@@ -17861,9 +17915,7 @@
           "STHD": [],
           "ISTN": [],
           "PIMH": [],
-          "PVHM": [
-            "Atmos"
-          ],
+          "PVHM": [],
           "PIIC": [
             "LUXE"
           ]
@@ -17921,8 +17973,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 35,
-      "resolved_at": "2026-10-19T02:53:31.021597+05:30"
+      "showtime_count": 33,
+      "resolved_at": "2026-10-19T11:28:43.356051+05:30"
     },
     {
       "movie": {
@@ -18155,21 +18207,15 @@
       ],
       "listings": {
         "20261019": {
-          "ACEV": [
-            "4K Atmos"
-          ],
           "PVFS": [],
-          "ABCS": [],
           "ILKS": [
             "Playhouse"
           ],
+          "ABCS": [],
           "IGMH": [],
-          "CPCL": [],
           "PNNG": [
             "Playhouse"
-          ],
-          "AKYJ": [],
-          "PVYH": []
+          ]
         },
         "20261020": {
           "ACEV": [
@@ -18217,8 +18263,303 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 27,
-      "resolved_at": "2026-10-19T02:53:46.811370+05:30"
+      "showtime_count": 23,
+      "resolved_at": "2026-10-19T11:29:00.021240+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00507738",
+        "title": "Hanuman Ansh",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0001",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "VIP",
+              "availability": "AVAILABLE",
+              "price": "350.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "ISTN",
+          "name": "INOX",
+          "area": "Sattva Necklace Mall, Kavadiguda",
+          "formats": [],
+          "categories": [
+            {
+              "code": "RY",
+              "name": "Royal",
+              "availability": "AVAILABLE",
+              "price": "249.00",
+              "area_code": "RY",
+              "has_seat_layout": true
+            },
+            {
+              "code": "EX",
+              "name": "Executive",
+              "availability": "AVAILABLE",
+              "price": "149.00",
+              "area_code": "EX",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "INMH",
+          "name": "INOX",
+          "area": "Maheshwari Parmeshwari Mall, Kachiguda",
+          "formats": [],
+          "categories": [
+            {
+              "code": "EX",
+              "name": "Executive",
+              "availability": "AVAILABLE",
+              "price": "105.00",
+              "area_code": "EX",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "RY",
+              "name": "RECLINER",
+              "availability": "SOLD_OUT",
+              "price": "249.00",
+              "area_code": "RY",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CC",
+              "name": "CLASSIC",
+              "availability": "AVAILABLE",
+              "price": "149.00",
+              "area_code": "CC",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "PNNG",
+          "name": "PVR",
+          "area": "Next Galleria Mall, Panjagutta",
+          "formats": [
+            "Playhouse"
+          ],
+          "categories": [
+            {
+              "code": "CL",
+              "name": "CLASSIC",
+              "availability": "AVAILABLE",
+              "price": "149.00",
+              "area_code": "CL",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "ILKS",
+          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
+          "area": "",
+          "formats": [
+            "Playhouse"
+          ],
+          "categories": [
+            {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "149.00",
+              "area_code": "CR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "QR",
+              "name": "PRIME ROWS",
+              "availability": "AVAILABLE",
+              "price": "149.00",
+              "area_code": "QR",
+              "has_seat_layout": true
+            }
+          ]
+        }
+      ],
+      "listings": {
+        "20261019": {
+          "PVFS": [],
+          "CTNR": [],
+          "ILKS": [
+            "Playhouse"
+          ],
+          "PNNG": [
+            "Playhouse"
+          ],
+          "ISTN": [],
+          "INMH": []
+        },
+        "20261020": {
+          "PVFS": [],
+          "CTNR": [],
+          "ILKS": [
+            "Playhouse"
+          ],
+          "PNNG": [
+            "Playhouse"
+          ],
+          "ISTN": [],
+          "INMH": []
+        },
+        "20261021": {
+          "PVFS": [],
+          "CTNR": [],
+          "ILKS": [
+            "Playhouse"
+          ],
+          "PNNG": [
+            "Playhouse"
+          ],
+          "ISTN": [],
+          "INMH": []
+        }
+      },
+      "bookable_dates": [
+        "20261019",
+        "20261020",
+        "20261021",
+        "20261022"
+      ],
+      "closed_dates": [
+        "20261023",
+        "20261024",
+        "20261025"
+      ],
+      "showtime_count": 23,
+      "resolved_at": "2026-10-19T11:30:43.288383+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00520716",
+        "title": "Hanuman Ansh",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-telugu-et00520716-1791191588.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh-telugu/buytickets/ET00520716",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "TVHY",
+          "name": "Tivoli Cinemas",
+          "area": "Secunderabad",
+          "formats": [
+            "Laser Dolby 7.1"
+          ],
+          "categories": [
+            {
+              "code": "0014",
+              "name": "RECLINER",
+              "availability": "AVAILABLE",
+              "price": "300.00",
+              "area_code": "0000000006",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0003",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0015",
+              "name": "LOUNGERS",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000007",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0004",
+              "name": "GOLD UPPER",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000004",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0005",
+              "name": "GOLD LOWER",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000005",
+              "has_seat_layout": true
+            }
+          ]
+        }
+      ],
+      "listings": {
+        "20261019": {
+          "TVHY": [
+            "Laser Dolby 7.1"
+          ]
+        },
+        "20261020": {
+          "TVHY": [
+            "Laser Dolby 7.1"
+          ]
+        },
+        "20261021": {
+          "TVHY": [
+            "Laser Dolby 7.1"
+          ]
+        }
+      },
+      "bookable_dates": [
+        "20261019",
+        "20261020",
+        "20261021"
+      ],
+      "closed_dates": [
+        "20261022",
+        "20261023",
+        "20261024",
+        "20261025"
+      ],
+      "showtime_count": 6,
+      "resolved_at": "2026-10-19T11:28:32.382284+05:30"
     },
     {
       "movie": {
@@ -18531,303 +18872,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 32,
-      "resolved_at": "2026-10-19T02:54:45.471542+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00507738",
-        "title": "Hanuman Ansh",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Hindi",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-et00507738-1787130927.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh/buytickets/ET00507738",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "CTNR",
-          "name": "Cinepolis",
-          "area": "TNR North City, Suchitra, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "VIP",
-              "availability": "AVAILABLE",
-              "price": "350.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "ISTN",
-          "name": "INOX",
-          "area": "Sattva Necklace Mall, Kavadiguda",
-          "formats": [],
-          "categories": [
-            {
-              "code": "RY",
-              "name": "Royal",
-              "availability": "AVAILABLE",
-              "price": "249.00",
-              "area_code": "RY",
-              "has_seat_layout": true
-            },
-            {
-              "code": "EX",
-              "name": "Executive",
-              "availability": "AVAILABLE",
-              "price": "149.00",
-              "area_code": "EX",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "INMH",
-          "name": "INOX",
-          "area": "Maheshwari Parmeshwari Mall, Kachiguda",
-          "formats": [],
-          "categories": [
-            {
-              "code": "EX",
-              "name": "Executive",
-              "availability": "AVAILABLE",
-              "price": "105.00",
-              "area_code": "EX",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "PVFS",
-          "name": "PVR",
-          "area": "Nexus Mall Kukatpally, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "RY",
-              "name": "RECLINER",
-              "availability": "SOLD_OUT",
-              "price": "249.00",
-              "area_code": "RY",
-              "has_seat_layout": true
-            },
-            {
-              "code": "CC",
-              "name": "CLASSIC",
-              "availability": "AVAILABLE",
-              "price": "149.00",
-              "area_code": "CC",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "PNNG",
-          "name": "PVR",
-          "area": "Next Galleria Mall, Panjagutta",
-          "formats": [
-            "Playhouse"
-          ],
-          "categories": [
-            {
-              "code": "CL",
-              "name": "CLASSIC",
-              "availability": "AVAILABLE",
-              "price": "149.00",
-              "area_code": "CL",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "ILKS",
-          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
-          "area": "",
-          "formats": [
-            "Playhouse"
-          ],
-          "categories": [
-            {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "149.00",
-              "area_code": "CR",
-              "has_seat_layout": true
-            },
-            {
-              "code": "QR",
-              "name": "PRIME ROWS",
-              "availability": "AVAILABLE",
-              "price": "149.00",
-              "area_code": "QR",
-              "has_seat_layout": true
-            }
-          ]
-        }
-      ],
-      "listings": {
-        "20261019": {
-          "PVFS": [],
-          "CTNR": [],
-          "ILKS": [
-            "Playhouse"
-          ],
-          "PNNG": [
-            "Playhouse"
-          ],
-          "ISTN": [],
-          "INMH": []
-        },
-        "20261020": {
-          "PVFS": [],
-          "CTNR": [],
-          "ILKS": [
-            "Playhouse"
-          ],
-          "PNNG": [
-            "Playhouse"
-          ],
-          "ISTN": [],
-          "INMH": []
-        },
-        "20261021": {
-          "PVFS": [],
-          "CTNR": [],
-          "ILKS": [
-            "Playhouse"
-          ],
-          "PNNG": [
-            "Playhouse"
-          ],
-          "ISTN": [],
-          "INMH": []
-        }
-      },
-      "bookable_dates": [
-        "20261019",
-        "20261020",
-        "20261021",
-        "20261022"
-      ],
-      "closed_dates": [
-        "20261023",
-        "20261024",
-        "20261025"
-      ],
-      "showtime_count": 24,
-      "resolved_at": "2026-10-19T02:55:24.717504+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00520716",
-        "title": "Hanuman Ansh",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Telugu",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/hanuman-ansh-telugu-et00520716-1791191588.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/hanuman-ansh-telugu/buytickets/ET00520716",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "TVHY",
-          "name": "Tivoli Cinemas",
-          "area": "Secunderabad",
-          "formats": [
-            "Laser Dolby 7.1"
-          ],
-          "categories": [
-            {
-              "code": "0014",
-              "name": "RECLINER",
-              "availability": "AVAILABLE",
-              "price": "300.00",
-              "area_code": "0000000006",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0003",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0015",
-              "name": "LOUNGERS",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000007",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0004",
-              "name": "GOLD UPPER",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000004",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0005",
-              "name": "GOLD LOWER",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000005",
-              "has_seat_layout": true
-            }
-          ]
-        }
-      ],
-      "listings": {
-        "20261019": {
-          "TVHY": [
-            "Laser Dolby 7.1"
-          ]
-        },
-        "20261020": {
-          "TVHY": [
-            "Laser Dolby 7.1"
-          ]
-        },
-        "20261021": {
-          "TVHY": [
-            "Laser Dolby 7.1"
-          ]
-        }
-      },
-      "bookable_dates": [
-        "20261019",
-        "20261020",
-        "20261021"
-      ],
-      "closed_dates": [
-        "20261022",
-        "20261023",
-        "20261024",
-        "20261025"
-      ],
-      "showtime_count": 6,
-      "resolved_at": "2026-10-19T02:53:21.133861+05:30"
+      "showtime_count": 31,
+      "resolved_at": "2026-10-19T11:30:04.750705+05:30"
     },
     {
       "movie": {
@@ -18914,19 +18960,19 @@
               "has_seat_layout": true
             },
             {
-              "code": "QR",
-              "name": "PRIME ROWS",
-              "availability": "AVAILABLE",
-              "price": "149.00",
-              "area_code": "QR",
-              "has_seat_layout": true
-            },
-            {
               "code": "CR",
               "name": "CLASSIC ROWS",
               "availability": "AVAILABLE",
               "price": "149.00",
               "area_code": "CR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "QR",
+              "name": "PRIME ROWS",
+              "availability": "AVAILABLE",
+              "price": "149.00",
+              "area_code": "QR",
               "has_seat_layout": true
             }
           ]
@@ -18961,7 +19007,7 @@
         "20261025"
       ],
       "showtime_count": 9,
-      "resolved_at": "2026-10-19T02:55:10.525792+05:30"
+      "resolved_at": "2026-10-19T11:30:28.459671+05:30"
     },
     {
       "movie": {
@@ -19074,30 +19120,6 @@
           ]
         },
         {
-          "code": "PVFS",
-          "name": "PVR",
-          "area": "Nexus Mall Kukatpally, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "RY",
-              "name": "RECLINER",
-              "availability": "SOLD_OUT",
-              "price": "249.00",
-              "area_code": "RY",
-              "has_seat_layout": true
-            },
-            {
-              "code": "CC",
-              "name": "CLASSIC",
-              "availability": "AVAILABLE",
-              "price": "149.00",
-              "area_code": "CC",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
           "code": "PVTS",
           "name": "PVR",
           "area": "Atrium Gachibowli, Hyderabad",
@@ -19135,6 +19157,30 @@
               "availability": "AVAILABLE",
               "price": "249.00",
               "area_code": "RE",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CC",
+              "name": "CLASSIC",
+              "availability": "AVAILABLE",
+              "price": "149.00",
+              "area_code": "CC",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "RY",
+              "name": "RECLINER",
+              "availability": "SOLD_OUT",
+              "price": "249.00",
+              "area_code": "RY",
               "has_seat_layout": true
             },
             {
@@ -19190,8 +19236,6 @@
       ],
       "listings": {
         "20261019": {
-          "PVFS": [],
-          "CTNR": [],
           "ILKS": [],
           "IGMH": [],
           "PVTS": [
@@ -19237,8 +19281,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 24,
-      "resolved_at": "2026-10-19T02:53:52.887204+05:30"
+      "showtime_count": 22,
+      "resolved_at": "2026-10-19T11:29:06.329890+05:30"
     },
     {
       "movie": {
@@ -19637,14 +19681,11 @@
       ],
       "listings": {
         "20261019": {
-          "AMBH": [
-            "Barco Flagship Laser Dolby Atmos"
-          ],
           "PRHN": [],
-          "ABCS": [],
           "AACN": [
             "Vip Screen"
           ],
+          "ABCS": [],
           "CTNR": [],
           "ILKS": [],
           "IGMH": [],
@@ -19745,8 +19786,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 56,
-      "resolved_at": "2026-10-19T02:54:53.937847+05:30"
+      "showtime_count": 55,
+      "resolved_at": "2026-10-19T11:30:13.156049+05:30"
     },
     {
       "movie": {
@@ -19863,8 +19904,7 @@
         "20261019": {
           "ILKS": [],
           "IGMH": [],
-          "IOMH": [],
-          "PVYH": []
+          "IOMH": []
         },
         "20261020": {
           "ILKS": [],
@@ -19890,8 +19930,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 12,
-      "resolved_at": "2026-10-19T02:55:07.446688+05:30"
+      "showtime_count": 11,
+      "resolved_at": "2026-10-19T11:30:25.349636+05:30"
     },
     {
       "movie": {
@@ -19982,7 +20022,7 @@
         "20261025"
       ],
       "showtime_count": 6,
-      "resolved_at": "2026-10-19T02:53:40.762560+05:30"
+      "resolved_at": "2026-10-19T11:28:52.850270+05:30"
     },
     {
       "movie": {
@@ -20053,6 +20093,14 @@
               "has_seat_layout": true
             },
             {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "105.00",
+              "area_code": "CR",
+              "has_seat_layout": true
+            },
+            {
               "code": "MR",
               "name": "PRIME PLUS ROWS",
               "availability": "AVAILABLE",
@@ -20066,14 +20114,6 @@
               "availability": "AVAILABLE",
               "price": "105.00",
               "area_code": "QR",
-              "has_seat_layout": true
-            },
-            {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "105.00",
-              "area_code": "CR",
               "has_seat_layout": true
             }
           ]
@@ -20107,8 +20147,7 @@
         "20261019": {
           "AKYJ": [],
           "IOMH": [],
-          "PVYH": [],
-          "IVNM": []
+          "PVYH": []
         },
         "20261020": {
           "AKYJ": [],
@@ -20134,8 +20173,8 @@
         "20261024",
         "20261025"
       ],
-      "showtime_count": 12,
-      "resolved_at": "2026-10-19T02:55:13.578534+05:30"
+      "showtime_count": 11,
+      "resolved_at": "2026-10-19T11:30:31.614214+05:30"
     },
     {
       "movie": {
@@ -20253,252 +20292,7 @@
         "20261025"
       ],
       "showtime_count": 9,
-      "resolved_at": "2026-10-19T02:53:55.936412+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00519781",
-        "title": "Dorothy (Telugu)",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Telugu",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/dorothy-telugu-et00519781-1790680862.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/dorothy-telugu/buytickets/ET00519781",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "AMBH",
-          "name": "AMB Cinemas",
-          "area": "Gachibowli",
-          "formats": [
-            "M B LUXE"
-          ],
-          "categories": [
-            {
-              "code": "0010",
-              "name": "SEMI RECLINER",
-              "availability": "AVAILABLE",
-              "price": "350.00",
-              "area_code": "0000000004",
-              "has_seat_layout": true
-            }
-          ]
-        }
-      ],
-      "listings": {
-        "20261019": {
-          "AMBH": [
-            "M B LUXE"
-          ]
-        },
-        "20261020": {
-          "AMBH": [
-            "M B LUXE"
-          ]
-        },
-        "20261021": {
-          "AMBH": [
-            "M B LUXE"
-          ]
-        }
-      },
-      "bookable_dates": [
-        "20261019",
-        "20261020",
-        "20261021"
-      ],
-      "closed_dates": [
-        "20261022",
-        "20261023",
-        "20261024",
-        "20261025"
-      ],
-      "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:54:49.148299+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00509483",
-        "title": "Shaun the Sheep: The Beast of Mossy Bottom",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "English",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/shaun-the-sheep-the-beast-of-mossy-bottom-et00509483-1785239880.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/shaun-the-sheep-the-beast-of-mossy-bottom/buytickets/ET00509483",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "PVFS",
-          "name": "PVR",
-          "area": "Nexus Mall Kukatpally, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "RY",
-              "name": "RECLINER",
-              "availability": "AVAILABLE",
-              "price": "299.00",
-              "area_code": "RY",
-              "has_seat_layout": true
-            },
-            {
-              "code": "CC",
-              "name": "CLASSIC",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CC",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "PNNG",
-          "name": "PVR",
-          "area": "Next Galleria Mall, Panjagutta",
-          "formats": [
-            "Playhouse"
-          ],
-          "categories": [
-            {
-              "code": "CL",
-              "name": "CLASSIC",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CL",
-              "has_seat_layout": true
-            }
-          ]
-        },
-        {
-          "code": "ILKS",
-          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
-          "area": "",
-          "formats": [
-            "Playhouse"
-          ],
-          "categories": [
-            {
-              "code": "QR",
-              "name": "PRIME ROWS",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "QR",
-              "has_seat_layout": true
-            },
-            {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CR",
-              "has_seat_layout": true
-            }
-          ]
-        }
-      ],
-      "listings": {
-        "20261019": {
-          "PVFS": [],
-          "ILKS": [
-            "Playhouse"
-          ],
-          "PNNG": [
-            "Playhouse"
-          ]
-        },
-        "20261020": {
-          "PVFS": [],
-          "ILKS": [
-            "Playhouse"
-          ],
-          "PNNG": [
-            "Playhouse"
-          ]
-        },
-        "20261021": {
-          "ILKS": [
-            "Playhouse"
-          ],
-          "PNNG": [
-            "Playhouse"
-          ]
-        }
-      },
-      "bookable_dates": [
-        "20261019",
-        "20261020",
-        "20261021"
-      ],
-      "closed_dates": [
-        "20261022",
-        "20261023",
-        "20261024",
-        "20261025"
-      ],
-      "showtime_count": 8,
-      "resolved_at": "2026-10-19T02:53:37.708584+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00520054",
-        "title": "Impure",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "English",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/impure-et00520054-1790770765.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/impure/buytickets/ET00520054",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "PNNG",
-          "name": "PVR",
-          "area": "Next Galleria Mall, Panjagutta",
-          "formats": [],
-          "categories": [
-            {
-              "code": "CL",
-              "name": "CLASSIC",
-              "availability": "AVAILABLE",
-              "price": "149.00",
-              "area_code": "CL",
-              "has_seat_layout": true
-            }
-          ]
-        }
-      ],
-      "listings": {
-        "20261019": {
-          "PNNG": []
-        },
-        "20261020": {
-          "PNNG": []
-        },
-        "20261021": {
-          "PNNG": []
-        }
-      },
-      "bookable_dates": [
-        "20261019",
-        "20261020",
-        "20261021"
-      ],
-      "closed_dates": [
-        "20261022",
-        "20261023",
-        "20261024",
-        "20261025"
-      ],
-      "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:53:34.696686+05:30"
+      "resolved_at": "2026-10-19T11:29:10.148363+05:30"
     },
     {
       "movie": {
@@ -20606,7 +20400,252 @@
         "20261025"
       ],
       "showtime_count": 6,
-      "resolved_at": "2026-10-19T02:55:18.506656+05:30"
+      "resolved_at": "2026-10-19T11:30:36.822986+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00509483",
+        "title": "Shaun the Sheep: The Beast of Mossy Bottom",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/shaun-the-sheep-the-beast-of-mossy-bottom-et00509483-1785239880.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/shaun-the-sheep-the-beast-of-mossy-bottom/buytickets/ET00509483",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "PVFS",
+          "name": "PVR",
+          "area": "Nexus Mall Kukatpally, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "RY",
+              "name": "RECLINER",
+              "availability": "AVAILABLE",
+              "price": "299.00",
+              "area_code": "RY",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CC",
+              "name": "CLASSIC",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CC",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "PNNG",
+          "name": "PVR",
+          "area": "Next Galleria Mall, Panjagutta",
+          "formats": [
+            "Playhouse"
+          ],
+          "categories": [
+            {
+              "code": "CL",
+              "name": "CLASSIC",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CL",
+              "has_seat_layout": true
+            }
+          ]
+        },
+        {
+          "code": "ILKS",
+          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
+          "area": "",
+          "formats": [
+            "Playhouse"
+          ],
+          "categories": [
+            {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "QR",
+              "name": "PRIME ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "QR",
+              "has_seat_layout": true
+            }
+          ]
+        }
+      ],
+      "listings": {
+        "20261019": {
+          "PVFS": [],
+          "ILKS": [
+            "Playhouse"
+          ],
+          "PNNG": [
+            "Playhouse"
+          ]
+        },
+        "20261020": {
+          "PVFS": [],
+          "ILKS": [
+            "Playhouse"
+          ],
+          "PNNG": [
+            "Playhouse"
+          ]
+        },
+        "20261021": {
+          "ILKS": [
+            "Playhouse"
+          ],
+          "PNNG": [
+            "Playhouse"
+          ]
+        }
+      },
+      "bookable_dates": [
+        "20261019",
+        "20261020",
+        "20261021"
+      ],
+      "closed_dates": [
+        "20261022",
+        "20261023",
+        "20261024",
+        "20261025"
+      ],
+      "showtime_count": 8,
+      "resolved_at": "2026-10-19T11:28:49.693625+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00519781",
+        "title": "Dorothy (Telugu)",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Telugu",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/dorothy-telugu-et00519781-1790680862.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/dorothy-telugu/buytickets/ET00519781",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "AMBH",
+          "name": "AMB Cinemas",
+          "area": "Gachibowli",
+          "formats": [
+            "M B LUXE"
+          ],
+          "categories": [
+            {
+              "code": "0010",
+              "name": "SEMI RECLINER",
+              "availability": "AVAILABLE",
+              "price": "350.00",
+              "area_code": "0000000004",
+              "has_seat_layout": true
+            }
+          ]
+        }
+      ],
+      "listings": {
+        "20261019": {
+          "AMBH": [
+            "M B LUXE"
+          ]
+        },
+        "20261020": {
+          "AMBH": [
+            "M B LUXE"
+          ]
+        },
+        "20261021": {
+          "AMBH": [
+            "M B LUXE"
+          ]
+        }
+      },
+      "bookable_dates": [
+        "20261019",
+        "20261020",
+        "20261021"
+      ],
+      "closed_dates": [
+        "20261022",
+        "20261023",
+        "20261024",
+        "20261025"
+      ],
+      "showtime_count": 3,
+      "resolved_at": "2026-10-19T11:30:08.682205+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00520054",
+        "title": "Impure",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/impure-et00520054-1790770765.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/impure/buytickets/ET00520054",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "PNNG",
+          "name": "PVR",
+          "area": "Next Galleria Mall, Panjagutta",
+          "formats": [],
+          "categories": [
+            {
+              "code": "CL",
+              "name": "CLASSIC",
+              "availability": "AVAILABLE",
+              "price": "149.00",
+              "area_code": "CL",
+              "has_seat_layout": true
+            }
+          ]
+        }
+      ],
+      "listings": {
+        "20261019": {
+          "PNNG": []
+        },
+        "20261020": {
+          "PNNG": []
+        },
+        "20261021": {
+          "PNNG": []
+        }
+      },
+      "bookable_dates": [
+        "20261019",
+        "20261020",
+        "20261021"
+      ],
+      "closed_dates": [
+        "20261022",
+        "20261023",
+        "20261024",
+        "20261025"
+      ],
+      "showtime_count": 3,
+      "resolved_at": "2026-10-19T11:28:46.602902+05:30"
     },
     {
       "movie": {
@@ -20631,7 +20670,7 @@
             {
               "code": "RY",
               "name": "ROYAL",
-              "availability": "AVAILABLE",
+              "availability": "SOLD_OUT",
               "price": "299.00",
               "area_code": "RY",
               "has_seat_layout": true
@@ -20670,7 +20709,7 @@
         "20261025"
       ],
       "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:52:57.931777+05:30"
+      "resolved_at": "2026-10-19T11:28:10.533528+05:30"
     },
     {
       "movie": {
@@ -20726,7 +20765,7 @@
         "20261025"
       ],
       "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:54:59.589537+05:30"
+      "resolved_at": "2026-10-19T11:30:18.851991+05:30"
     },
     {
       "movie": {
@@ -20789,7 +20828,7 @@
       ],
       "closed_dates": [],
       "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:53:04.020897+05:30"
+      "resolved_at": "2026-10-19T11:28:16.759801+05:30"
     },
     {
       "movie": {
@@ -20852,7 +20891,7 @@
       ],
       "closed_dates": [],
       "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:53:07.023034+05:30"
+      "resolved_at": "2026-10-19T11:28:19.891644+05:30"
     },
     {
       "movie": {
@@ -20915,70 +20954,7 @@
       ],
       "closed_dates": [],
       "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:53:14.282918+05:30"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00319080",
-        "title": "Spider-Man: No Way Home",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "English",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/spider-man-no-way-home-et00319080-07-12-2021-07-26-23.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/spider-man-no-way-home-3d/buytickets/ET00319080",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "CTNR",
-          "name": "Cinepolis",
-          "area": "TNR North City, Suchitra, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "150.00",
-              "area_code": "0000000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "VIP",
-              "availability": "AVAILABLE",
-              "price": "300.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            }
-          ]
-        }
-      ],
-      "listings": {
-        "20261023": {
-          "CTNR": []
-        },
-        "20261024": {
-          "CTNR": []
-        },
-        "20261025": {
-          "CTNR": []
-        }
-      },
-      "bookable_dates": [
-        "20261023",
-        "20261024",
-        "20261025",
-        "20261026",
-        "20261027",
-        "20261028",
-        "20261029"
-      ],
-      "closed_dates": [],
-      "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:53:17.977531+05:30"
+      "resolved_at": "2026-10-19T11:28:26.154917+05:30"
     },
     {
       "movie": {
@@ -21041,7 +21017,70 @@
       ],
       "closed_dates": [],
       "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:53:10.663849+05:30"
+      "resolved_at": "2026-10-19T11:28:23.042129+05:30"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
+        "event_code": "ET00319080",
+        "title": "Spider-Man: No Way Home",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "English",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/spider-man-no-way-home-et00319080-07-12-2021-07-26-23.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/spider-man-no-way-home-3d/buytickets/ET00319080",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0001",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "VIP",
+              "availability": "AVAILABLE",
+              "price": "300.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ]
+        }
+      ],
+      "listings": {
+        "20261023": {
+          "CTNR": []
+        },
+        "20261024": {
+          "CTNR": []
+        },
+        "20261025": {
+          "CTNR": []
+        }
+      },
+      "bookable_dates": [
+        "20261023",
+        "20261024",
+        "20261025",
+        "20261026",
+        "20261027",
+        "20261028",
+        "20261029"
+      ],
+      "closed_dates": [],
+      "showtime_count": 3,
+      "resolved_at": "2026-10-19T11:28:29.300182+05:30"
     },
     {
       "movie": {
@@ -21104,7 +21143,7 @@
       ],
       "closed_dates": [],
       "showtime_count": 3,
-      "resolved_at": "2026-10-19T02:53:01.004874+05:30"
+      "resolved_at": "2026-10-19T11:28:13.613400+05:30"
     },
     {
       "movie": {
@@ -21168,15 +21207,15 @@
         "20261025"
       ],
       "showtime_count": 12,
-      "resolved_at": "2026-10-19T02:53:24.203859+05:30"
+      "resolved_at": "2026-10-19T11:28:36.201323+05:30"
     }
   ],
-  "updated_at": "2026-10-19T02:55:26.400496+05:30",
+  "updated_at": "2026-10-19T11:30:44.966274+05:30",
   "sync": {
     "hyderabad": {
       "status": "OK",
       "message": "",
-      "at": "2026-10-19T02:55:26.400483+05:30",
+      "at": "2026-10-19T11:30:44.966263+05:30",
       "movie_count": 41
     }
   }
