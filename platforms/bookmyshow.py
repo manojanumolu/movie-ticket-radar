@@ -478,6 +478,12 @@ class BookMyShowProvider:
         # `requests` outright (platforms/http.py documents the evidence).
         self._session = session if session is not None else build_session(sleeper)
         self._sleep = sleeper
+        #: Each listed row's own dimension ("2D", "3D"…) as the city listing
+        #: gave it, by event code. Filled by the QUICKBOOK strategy, read by
+        #: the catalogue sync (``monitor.catalogue``) so the Showtime Explorer
+        #: can say "2D" for a base event's shows — its showtimes name only the
+        #: screen. Nothing else reads it; ``MovieRef`` is unchanged.
+        self.base_dimensions: dict[str, str] = {}
 
     @property
     def transport(self) -> str:
@@ -776,6 +782,9 @@ class BookMyShowProvider:
                 code = _text(child.get("EventCode")).upper()
                 if not EVENT_CODE_RE.match(code) or code in out:
                     continue
+                dimension = clean_format(_text(child.get("EventDimension")))
+                if dimension:
+                    self.base_dimensions[code] = dimension
                 title = group_title or _text(child.get("EventName"))
                 if not title:
                     continue

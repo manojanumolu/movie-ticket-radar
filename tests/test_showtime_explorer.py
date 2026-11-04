@@ -400,7 +400,7 @@ def test_a_refusal_pauses_live_reads_and_falls_back_honestly():
     rd = make_reader(bms, clock=clock)
     w = S.Wanted(ramayana(variants=()), "m")
     first = S.read_one(w, TOMORROW, rd=rd)
-    assert first.origin == S.FAILED and "refused" in first.error
+    assert first.origin == S.FAILED and "refused" in first.error and "paused" in first.error
     calls = len(bms.calls)
     assert S.read_one(w, TOMORROW, rd=rd).origin == S.FAILED
     assert len(bms.calls) == calls                                 # circuit open: not asked again
@@ -412,9 +412,9 @@ def test_a_refusal_pauses_live_reads_and_falls_back_honestly():
 def test_rate_limits_and_timeouts_are_failures_not_empty_listings():
     w = S.Wanted(ramayana(variants=()), "m")
     md = S.read_one(w, TOMORROW, rd=make_reader(FakeBMS({"ET00900001": 429})))
-    assert md.origin == S.FAILED and "429" in md.error
+    assert md.origin == S.FAILED and md.error == "BookMyShow is rate-limiting requests right now"
     md = S.read_one(w, TOMORROW, rd=make_reader(FakeBMS({"ET00900001": "garbage"})))
-    assert md.origin == S.FAILED and "isn't JSON" in md.error
+    assert md.origin == S.FAILED and md.error == "BookMyShow sent a response that couldn't be read"
 
     class Timeout:
         def get(self, *a, **k):
@@ -423,7 +423,7 @@ def test_rate_limits_and_timeouts_are_failures_not_empty_listings():
             raise requests.Timeout("timed out")
 
     md = S.read_one(w, TOMORROW, rd=make_reader(Timeout()))
-    assert md.origin == S.FAILED and "Timeout" in md.error
+    assert md.origin == S.FAILED and md.error == "BookMyShow didn't respond in time"
 
 
 def test_the_request_budget_is_enforced():
@@ -435,7 +435,7 @@ def test_the_request_budget_is_enforced():
     bms = FakeBMS({"ET00900001": payload(RAMAYANA_SHOWS)})
     rd = make_reader(bms, bucket=S.TokenBucket(capacity=0, rate=0.001, sleeper=lambda s: None))
     md = S.read_one(S.Wanted(ramayana(variants=()), "m"), TOMORROW, rd=rd)
-    assert md.origin == S.FAILED and "allowance" in md.error and bms.calls == []
+    assert md.origin == S.FAILED and "request limit" in md.error and bms.calls == []
 
 
 def test_a_theatre_query_is_capped_and_says_what_it_skipped():
@@ -521,10 +521,10 @@ def test_freshness_labels():
     now = datetime(2026, 9, 25, 22, 20, tzinfo=IST)
     live = S.MovieDay("m", TOMORROW, [], S.LIVE, now)
     old = S.MovieDay("m", TOMORROW, [], S.CACHED, datetime(2026, 9, 25, 22, 10, tzinfo=IST))
-    failed = S.MovieDay("m", TOMORROW, [], S.FAILED, None, error="HTTP 429 (rate limited)")
+    failed = S.MovieDay("m", TOMORROW, [], S.FAILED, None, error="BookMyShow is rate-limiting requests right now")
     assert ux_freshness([live])[0] == "ok" and "Live" in ux_freshness([live])[1]
     assert ux_freshness([old])[0] == "cached" and "Cached" in ux_freshness([old])[1]
-    assert ux_freshness([failed])[0] == "bad" and "429" in ux_freshness([failed])[2]
+    assert ux_freshness([failed])[0] == "bad" and "rate-limiting" in ux_freshness([failed])[2]
     assert ux_freshness([live, failed])[0] == "warn"
 
 
@@ -562,8 +562,11 @@ def test_titles_group_languages_and_theatres():
 def test_the_theatre_directory_and_films_at_a_theatre():
     th = {t.code: t for t in catalog.theatres(ENTRIES)}
     assert th["AMBH"].label == "AMB Cinemas · Gachibowli" and th["AMBH"].facts.locality == "Gachibowli"
-    films = [w.movie.event_code for w in catalog.films_at(ENTRIES, "AMBH", TOMORROW)]
-    assert films == ["ET00900001", "ET00900005"]
+    films = catalog.films_at(ENTRIES, "AMBH", TOMORROW)
+    # listed there that day first; then a film AMB has played but the last sync
+    # did not list for that day (BookMyShow may have added it since)
+    assert [(w.movie.event_code, w.listed) for w in films] == [
+        ("ET00900001", True), ("ET00900005", True), ("ET00900004", False)]
     # a date beyond the per-date listings falls back to the films' theatre lists
     later = [w.movie.event_code for w in catalog.films_at(ENTRIES, "AMBH", "20261001")]
     assert later == ["ET00900001", "ET00900004", "ET00900005"]
@@ -706,7 +709,9 @@ def test_switching_mode_keeps_common_filters_and_clears_city_ones(page_env):
     app = ok(box.select("AMB Cinemas · Gachibowli").run())
     html = body(app)
     # every film the catalogue lists at AMB tomorrow, and only AMB's shows
-    assert "Ramayana" in html and "Kantara" in html and "Jailer 2" not in html
+    # Jailer 2 was not in the catalogue's listing for AMB that day, but BookMyShow
+    # lists a show there now — it is read and shown, never silently missed
+    assert "Ramayana" in html and "Kantara" in html and "Jailer 2" in html and "8:15" in html
     assert "Asian Jyothi" not in html and "9:45" in html
     assert not any(k.key == "sx_area" for k in app.multiselect)    # city filters aren't offered for one theatre
 

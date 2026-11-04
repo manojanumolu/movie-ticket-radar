@@ -349,6 +349,8 @@ def store_snapshot(snapshot: Snapshot, *, mirror: bool = True) -> dict[str, Any]
     if previous is not None:
         known = movie_from_entry(previous)
         merged = dict(entry["movie"])
+        if previous.get("dimension"):
+            entry["dimension"] = previous["dimension"]   # the listing's, not the showtimes'
         for field in ("title", "poster_url", "language", "source_url", "variants"):
             # The listing wins: it is what the user saw and clicked. Resolving
             # detail adds theatres and formats — it must never rename a movie
@@ -418,6 +420,9 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
 
     say(f"{len(movies)} movie(s) listed in {region_slug}")
 
+    # The listing's own dimension per row ("2D"…), kept beside the movie for
+    # the Showtime Explorer; absent when the listing strategy gives none.
+    dimensions = dict(getattr(provider, "base_dimensions", None) or {})
     # Keep whatever detail we already have; only re-read what we must.
     existing = {movie_from_entry(e).id: e for e in list_entries(region_slug, platform)}
     entries: list[dict[str, Any]] = []
@@ -440,6 +445,8 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
             entries.append(prior)
         else:
             entries.append(entry_from_movie(movie))
+        if dimensions.get(movie.event_code):
+            entries[-1]["dimension"] = dimensions[movie.event_code]
 
     _upsert(entries, region_slug=region_slug, mirror=mirror, platform=platform)
 
