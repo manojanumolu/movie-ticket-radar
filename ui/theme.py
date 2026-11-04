@@ -411,6 +411,10 @@ __NAV_ICONS__
    Streamlit draws a skeleton bar for it — which, on a fresh load, was the
    only thing on the page. There is nothing to preview; draw nothing. */
 [class*="st-key-tr_chrome"] [data-testid="stSkeleton"] { display:none !important; }
+/* The only thing in this slot that can raise an alert is Streamlit's own "trouble
+   loading the component" notice about the hidden auth bridge. The gate's recovery
+   screen says the same thing in plain language and offers a way out. */
+[class*="st-key-tr_chrome"] [data-testid="stAlert"] { display:none !important; }
 [class*="st-key-tr_chrome"] iframe { display:block; height:0 !important; min-height:0 !important; border:0; }
 
 /* ── hero ──────────────────────────────────────────────────────────── */

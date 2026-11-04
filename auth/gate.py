@@ -86,6 +86,8 @@ def require_user() -> AuthUser:
             # On a return from Google this mints nothing: the cookie the
             # link was made with is the one about to be compared.
             login.prepare_google()
+            # A frame that is out of time is replaced on this very run.
+            session.watch_bridge()
         # Queue any pending cookie write, then run the bridge once. The bridge
         # performs the writes and brings back what the browser holds — on
         # Community Cloud that is the only way the cookie ever reaches Python.
@@ -108,16 +110,23 @@ def require_user() -> AuthUser:
         user = session.restore()
         if user is None and session.BRIDGE_ENABLED and not session.bridge_answered():
             # The browser has not answered yet. Rendering the login page now
-            # would be a guess, so wait for the component's reply instead —
-            # bounded, so a browser that never answers still reaches login.
-            runs = int(st.session_state.get(session.BRIDGE_RUNS_KEY, 0)) + 1
-            st.session_state[session.BRIDGE_RUNS_KEY] = runs
-            if runs <= session.BRIDGE_MAX_RUNS:
-                print(f"[auth] gate: waiting for the browser bridge (run {runs})", flush=True)
+            # would be a guess, and no answer is not a session either. Nobody
+            # gets in on this path: it ends with the beat, the recovery screen,
+            # or, if the person asks for it, the login page.
+            if not session.bridge_skipped():
+                runs = int(st.session_state.get(session.BRIDGE_RUNS_KEY, 0)) + 1
+                st.session_state[session.BRIDGE_RUNS_KEY] = runs
+                print(f"[auth] gate: waiting for the browser bridge (run {runs} "
+                      f"mount={session.bridge_mount()})", flush=True)
                 with _page.container:
-                    _restoring()
+                    if session.bridge_needs_recovery():
+                        _recovery()
+                    else:
+                        _restoring()
+                    if session.bridge_deadline() is not None:
+                        _bridge_watchdog()
                 st.stop()
-            print("[auth] gate: bridge never answered; showing login", flush=True)
+            print("[auth] gate: no browser answer; login page by request", flush=True)
         if user is None:
             # Back from Google? The browser has answered, so the state cookie
             # is readable; a genuine return signs in and reruns, anything
@@ -140,6 +149,30 @@ def require_user() -> AuthUser:
     return user
 
 
+@st.fragment(run_every=session.BRIDGE_TICK_SECONDS)
+def _bridge_watchdog() -> None:
+    """What makes the wait end.
+
+    A frame that never loads never answers, and no answer means no rerun: a
+    wait that only counted script runs stayed on its first run for as long as
+    the tab was open. This asks the page to check the clock on a timer, and
+    it is drawn only while a deadline is pending, so the checks stop when the
+    schedule ends. It decides nothing about who is signed in: it either does
+    nothing or asks for one normal run of the gate.
+    """
+    if session.bridge_due():
+        st.rerun(scope="app")
+
+
+def _recovery() -> None:
+    """The wait has gone on too long to keep calling it a wait. Still closed:
+    no app, no account, and the buttons only choose what happens next."""
+    from ui import restoring
+
+    restoring.recovery(on_retry=session.retry_bridge, on_sign_in=session.skip_bridge_wait,
+                       retrying=session.bridge_deadline() is not None)
+
+
 def _restoring() -> None:
     """The beat while the browser is asked what it holds.
 
@@ -152,13 +185,13 @@ def _restoring() -> None:
     own radar, sweeping, and two lines that settle on what is actually
     happening.
 
-    It is a cover, never a delay. Nothing here waits, polls, sleeps or asks
-    for a rerun: it is one CSS animation on one block of markup, and the run
-    that finishes the restore replaces it with the app wherever the sweep
-    happens to be. The login page still stays out of this path — showing a
-    sign-in form to somebody already signed in is the bug it exists to
-    avoid — and there is nothing private on screen: the radar and the brand
-    are both on the login page.
+    It is a cover, never a delay. The beat itself waits for nothing: it is
+    one CSS animation on one block of markup, and the run that finishes the
+    restore replaces it with the app wherever the sweep happens to be. Ending
+    the wait is :func:`_bridge_watchdog`'s job. The login page still stays out
+    of this path — showing a sign-in form to somebody already signed in is the
+    bug it exists to avoid — and there is nothing private on screen: the radar
+    and the brand are both on the login page.
 
     ``st.markdown`` runs a fragment through a Markdown parser first and an
     indented line becomes a code block, so the markup is built in
