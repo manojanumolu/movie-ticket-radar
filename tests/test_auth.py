@@ -1181,7 +1181,7 @@ def test_the_sidebar_is_navigation_only_and_the_account_control_is_top_right():
     side = " ".join(m.value for m in app.sidebar.markdown)
     assert '<div class="tr-logo">' in side and "Ticket<em>Radar</em>" in side
     [nav] = app.sidebar.radio
-    assert nav.key == "page" and list(nav.options) == ["Home", "My Monitors", "History", "Settings"]
+    assert nav.key == "page" and list(nav.options) == ["Home", "Showtime Explorer", "My Monitors", "History", "Settings"]
     assert nav.value == "Home"
     assert "tr-quote" in side and "tr-version" in side
     # Nothing about the account in the sidebar: no chip, no menu, no buttons.

@@ -136,9 +136,9 @@ def test_stopping_five_monitors_in_a_row_stays_on_my_monitors(make_monitor):
 
 
 def test_the_navigation_options_never_change_so_the_browser_selection_stays_valid(make_monitor):
-    """The root cause, pinned: the radio's options are the same four strings
+    """The root cause, pinned: the radio's options are the same five strings
     whatever the active count — the count lives in a CSS variable."""
-    pages = ["Home", "My Monitors", "History", "Settings"]
+    pages = ["Home", "Showtime Explorer", "My Monitors", "History", "Settings"]
     app = run("My Monitors")
     assert list(app.radio(key="page").options) == pages
     for _ in range(3):

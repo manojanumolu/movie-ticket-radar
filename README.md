@@ -15,6 +15,7 @@ a booking page open and refreshing.
 - **Availability alerts by email** — a notification when tickets go live, and when new showtimes appear; no repeat mail for the same news.
 - **Live status** — the open dashboard updates on its own as checks land.
 - **Secure sign-in** — email/password or Google, with each person's monitors and history kept private to their account.
+- **Showtime Explorer** — find showtimes across Hyderabad by movie or by theatre, for any date and time window, filtered by area, operator, theatre type, language and format (see `docs/showtime-explorer.md`).
 - **Monitor and history management** — start, stop, extend and delete monitors; see what the radar has found.
 
 Currently supports BookMyShow listings, starting with Hyderabad.

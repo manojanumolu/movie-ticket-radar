@@ -31,8 +31,8 @@ from ui.theme import CSS, NAV_ICONS, _nav_css
 # ──────────────────────────────────────────────────────────────────────────
 def test_each_navigation_item_gets_its_own_icon_by_wrapper_position():
     css = _nav_css()
-    names = list(NAV_ICONS)                                    # home, monitors, history, settings
-    assert len(names) == 4
+    names = list(NAV_ICONS)                         # home, explorer, monitors, history, settings
+    assert len(names) == 5
     uris = []
     for index, name in enumerate(names, start=1):
         # the wrapper's position is what tells the items apart
@@ -42,15 +42,16 @@ def test_each_navigation_item_gets_its_own_icon_by_wrapper_position():
         uris.append(rule.group(1))
         # …and the active colour for the same position
         assert f':nth-child({index}) label:has(input:checked)::before' in css
-    assert len(set(uris)) == 4, "two navigation items share an icon"
+    assert len(set(uris)) == 5, "two navigation items share an icon"
     # the whole theme carries these rules, so the page gets them on every run
-    for index in range(1, 5):
+    for index in range(1, 6):
         assert f":nth-child({index}) label::before" in CSS
 
 
-def test_the_four_icons_are_the_intended_glyphs():
-    assert list(NAV_ICONS) == ["home", "monitors", "history", "settings"]
-    home, monitors, history, settings = NAV_ICONS.values()
+def test_the_five_icons_are_the_intended_glyphs():
+    assert list(NAV_ICONS) == ["home", "explorer", "monitors", "history", "settings"]
+    home, explorer, monitors, history, settings = NAV_ICONS.values()
+    assert "M7.5 4.5v15M16.5 4.5v15" in explorer[0]            # the film frame the movie step uses
     assert "M4 10.5 12 4l8 6.5" in home[0]                     # a house
     assert "<rect" in monitors[0] and "<circle" in monitors[0]  # a screen with a lens
     assert "3.5 12a8.5 8.5" in history[0] and "12 8v4.4" in history[0]   # a clock with an arrow

@@ -391,6 +391,21 @@ def _sibling_events(children: list[dict[str, Any]], primary: dict[str, Any]) -> 
     return tuple(out)
 
 
+@dataclass
+class DayRead:
+    """What :meth:`BookMyShowProvider.read_day` learned about one film on one
+    date. ``errors`` holds ``(event_code, message)`` for each premium sibling
+    that could not be read — those shows are missing, and the caller says so."""
+
+    movie: MovieRef
+    date_code: str
+    venues: list[Venue]
+    showtimes: list[Showtime]
+    errors: list[tuple[str, str]]
+    events: int
+    fetched_at: Any = None
+
+
 @dataclass(frozen=True)
 class ListingResult:
     """What one listing strategy came back with.
@@ -976,6 +991,69 @@ class BookMyShowProvider:
             fetched_at=now_ist(),
         )
 
+    def read_day(self, movie: MovieRef, date_code: str) -> "DayRead":
+        """One film's listing on one date — its base event and every premium
+        sibling — with each event's failure kept, not swallowed.
+
+        The Showtime Explorer's read. It is :meth:`fetch` for a single date
+        with two differences, both about honesty: a sibling that fails is
+        reported in ``errors`` (``fetch`` only needs the shows it got), and
+        shows BookMyShow answered for a *different* date — it falls back to
+        its default date when the one asked for is not open — are dated as
+        it dated them, so the caller can tell them apart. Monitoring never
+        calls this; ``fetch`` is unchanged.
+
+        Raises :class:`PlatformError` (or ``PlatformBlocked``) only when the
+        base event itself could not be read: then nothing is known.
+        """
+        region = region_for(movie.region_slug)
+        events = [(movie.event_code, "", movie)] + [
+            (code, dict(movie.variants).get(code, ""),
+             replace(movie, event_code=code, variants=(), source_url=self._sibling_url(movie, code)))
+            for code in movie.variant_codes
+        ]
+        showtimes: list[Showtime] = []
+        venues: dict[str, Venue] = {}
+        errors: list[tuple[str, str]] = []
+        for index, (code, label, ref) in enumerate(events):
+            if index:
+                self._sleep(1.0)  # the same politeness gap fetch() keeps between events
+            try:
+                payload = self._get(code, date_code, region)
+            except PlatformBlocked:
+                if index == 0:
+                    raise
+                errors.append((code, "BookMyShow refused this request (bot check)."))
+                continue
+            except PlatformError as exc:
+                if index == 0:
+                    raise
+                errors.append((code, str(exc)))
+                continue
+            data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+            answered = self._answered_date(data)
+            snap = self._snapshot(payload, ref, default_format=label)
+            for v in snap.venues:
+                venues.setdefault(v.code, v)
+            for show in snap.showtimes:
+                # An undated show belongs to whichever date the response says it answered.
+                if not show.date_code and answered:
+                    show = replace(show, date_code=answered)
+                showtimes.append(show)
+        return DayRead(movie=movie, date_code=date_code, venues=list(venues.values()),
+                       showtimes=showtimes, errors=errors, events=len(events), fetched_at=now_ist())
+
+    def _answered_date(self, data: dict[str, Any]) -> str:
+        """The date the response is for: the date strip's selected entry."""
+        for widget in _dicts(data.get("topStickyWidgets")):
+            if widget.get("type") != "horizontal-block-list":
+                continue
+            for item in _dicts(widget.get("data")):
+                code = _text(item.get("id"))
+                if DATE_CODE_RE.match(code) and _text(item.get("styleId")) == "date-selected":
+                    return code
+        return ""
+
     def _sibling_url(self, movie: MovieRef, code: str) -> str:
         """The sibling's own booking page: the base page with its code swapped.
 
@@ -1246,6 +1324,7 @@ __all__ = [
     "API_URL",
     "AVAIL_STATUS",
     "BookMyShowProvider",
+    "DayRead",
     "DEFAULT_CITY",
     "REGIONS",
     "INFINITY_VISION",

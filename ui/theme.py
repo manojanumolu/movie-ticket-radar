@@ -55,6 +55,9 @@ def _svg_uri(paths: str, stroke: str, width: str = "1.7") -> str:
 NAV_ICONS = {
     "home": ("<path d='M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19z'/>"
              "<path d='M9.5 20.5v-6h5v6'/>", "1.8"),
+    # Showtime Explorer: the film frame the wizard's movie step uses (ui.components ICON_PATHS["movie"]).
+    "explorer": ("<rect x='3' y='4.5' width='18' height='15' rx='2.2'/>"
+                 "<path d='M7.5 4.5v15M16.5 4.5v15M3 9.5h4.5M3 14.5h4.5M16.5 9.5H21M16.5 14.5H21'/>", "1.7"),
     "monitors": ("<rect x='3' y='4.5' width='18' height='13' rx='2'/><circle cx='12' cy='11' r='2.6'/>"
                  "<path d='M8 21h8'/>", "1.7"),
     "history": ("<path d='M3.5 12a8.5 8.5 0 1 0 2.6-6.1'/><path d='M3.2 4.6v3.9h3.9'/>"
@@ -381,6 +384,10 @@ __RAIL_RIG__
   clip:rect(0,0,0,0) !important; clip-path:inset(50%) !important;
 }
 [data-testid="stSidebar"] [role="radiogroup"] label > div > div > div:first-child:not([data-testid]) { display:none; }
+/* Streamlit 1.66 draws the option's ring one wrapper shallower (label > div >
+   div, beside the label's markdown) — the rule above hid only its inner dot,
+   leaving an empty ring next to every item. The ::before icon is the control. */
+[data-testid="stSidebar"] [role="radiogroup"] label > div > div:first-child:not([data-testid]) { display:none; }
 [data-testid="stSidebar"] [role="radiogroup"] label [data-testid="stMarkdownContainer"] { width:100%; min-width:0; }
 [data-testid="stSidebar"] [role="radiogroup"] label [data-testid="stMarkdownContainer"] p {
   font-size:14.5px; font-weight:600; letter-spacing:-.01em; color:inherit; display:flex; align-items:center; gap:10px; width:100%; line-height:1; white-space:nowrap;
@@ -389,11 +396,12 @@ __RAIL_RIG__
   margin-left:auto; font-family:var(--tr-mono); font-size:10.5px; padding:3px 7px; border-radius:6px;
   background:rgba(255,51,85,.14); color:#FF6B85; border:none; line-height:1;
 }
-/* The active-monitor count on "My Monitors" (item 2). It is drawn from a CSS
-   variable the page sets each run — never from the option's label, whose
-   text is the radio's stored identity in the browser; see app.sidebar(). */
-[data-testid="stSidebar"] [role="radiogroup"] > :nth-child(2) label [data-testid="stMarkdownContainer"] p::after,
-[data-testid="stSidebar"] [role="radiogroup"] > label:nth-of-type(2) [data-testid="stMarkdownContainer"] p::after {
+/* The active-monitor count on "My Monitors" (item 3, after Home and Showtime
+   Explorer). It is drawn from a CSS variable the page sets each run — never
+   from the option's label, whose text is the radio's stored identity in the
+   browser; see app.sidebar(). */
+[data-testid="stSidebar"] [role="radiogroup"] > :nth-child(3) label [data-testid="stMarkdownContainer"] p::after,
+[data-testid="stSidebar"] [role="radiogroup"] > label:nth-of-type(3) [data-testid="stMarkdownContainer"] p::after {
   content:var(--tr-nav-count, none); margin-left:auto; font-family:var(--tr-mono); font-size:10.5px;
   padding:3px 7px; border-radius:6px; background:rgba(255,51,85,.14); color:#FF6B85; line-height:1;
 }
@@ -1318,6 +1326,161 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 .tr-cta-help { display:flex; gap:9px; align-items:flex-start; font-size:12.5px; line-height:1.5; color:var(--tr-text-3); padding-top:12px; }
 .tr-cta-help svg { margin-top:2px; }
 
+/* ── Showtime Explorer ───────────────────────────────────────────────
+   Built from the pieces above, not beside them: the mode tiles are the
+   location tile's selected state laid out sideways, the date strip is the
+   choice tiles, the time and filter fields are the theme's own inputs. The
+   controls sit in one card (trcard_sx_query); the results sit on the page
+   itself, separated by hairlines — no card per show, no card per theatre. */
+.tr-sx-mode {
+  position:relative; display:flex; align-items:center; gap:14px; min-height:84px; padding:16px 44px 16px 18px;
+  border-radius:16px; box-sizing:border-box; height:100%; min-width:0;
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012)), var(--tr-sunken);
+  border:1px solid rgba(255,255,255,.10); box-shadow: var(--tr-hi), 0 14px 30px -22px rgba(0,0,0,.9);
+  transition:border-color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease), box-shadow var(--tr-fast) var(--tr-ease), transform var(--tr-fast) var(--tr-ease);
+}
+.tr-sx-mode .ic { width:40px; height:40px; flex:none; border-radius:12px; display:flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,.05); border:1px solid var(--tr-border); color:var(--tr-text-3);
+  transition:all var(--tr-fast) var(--tr-ease); }
+.tr-sx-mode .tx { min-width:0; }
+.tr-sx-mode .t { font-size:17px; font-weight:800; letter-spacing:-.025em; color:var(--tr-text-2); line-height:1.2; }
+.tr-sx-mode .s { font-size:12.5px; color:var(--tr-text-3); margin-top:3px; line-height:1.4; font-weight:500; }
+.tr-sx-mode .tick { position:absolute; top:50%; right:16px; margin-top:-11px; width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; background:var(--tr-accent); box-shadow:0 4px 14px rgba(255,51,85,.7);
+  opacity:0; transform:scale(.6); transition:opacity var(--tr-fast) var(--tr-ease), transform var(--tr-fast) var(--tr-ease); }
+.tr-sx-mode.selected {
+  border:1.5px solid var(--tr-accent);
+  background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,0) 45%), linear-gradient(135deg,rgba(255,51,85,.20),rgba(255,51,85,.04)), var(--tr-raised);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 22px 50px -24px rgba(255,51,85,.85), 0 0 0 4px rgba(255,51,85,.06);
+}
+.tr-sx-mode.selected .ic { background:rgba(255,51,85,.14); border-color:rgba(255,51,85,.4); color:var(--tr-accent-soft); }
+.tr-sx-mode.selected .t { color:var(--tr-text); }
+.tr-sx-mode.selected .tick { opacity:1; transform:scale(1); }
+[class*="st-key-pick_sxmode_"]:hover .tr-sx-mode:not(.selected) { border-color:var(--tr-border-hover); background:var(--tr-raised); transform:translateY(-1px); }
+[class*="st-key-pick_sxmode_"]:hover .tr-sx-mode:not(.selected) .ic { color:var(--tr-text-2); }
+[class*="st-key-trgrid_sxmode"] { margin-bottom:4px; }
+[class*="st-key-trcard_sx_query"] > [data-testid="stVerticalBlock"] { gap:.55rem; }
+[class*="st-key-trcard_sx_query"] .tr-field-label { margin-top:8px; }
+[class*="st-key-pick_sxdate_"]:hover .tr-interval:not(.selected),
+[class*="st-key-pick_sxview_"]:hover .tr-sx-seg:not(.selected) { border-color:var(--tr-border-hover); background:var(--tr-raised); }
+/* Time inputs: the theme's glass, a touch shorter than the search field. */
+[class*="st-key-trpair_sxwin"] [data-testid="stWidgetLabel"] p { font-size:12px !important; }
+[class*="st-key-trpair_sxwin"] .stTimeInput [data-baseweb="select"] > div { min-height:46px; border-radius:12px !important; }
+/* Quick windows: small chips under the inputs; the active one is tinted, not a CTA. */
+[class*="st-key-sxpresets"] [data-testid="stHorizontalBlock"] { gap:6px !important; }
+[class*="st-key-sxpresets"] .stButton button, [class*="st-key-sxpresets"] .stButton button[kind="primary"] {
+  min-height:34px; padding:5px 10px; border-radius:9px; font-size:12px; font-weight:700; letter-spacing:0; text-transform:none;
+  color:var(--tr-text-3); background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.10); box-shadow:none; text-shadow:none; }
+[class*="st-key-sxpresets"] .stButton button p, [class*="st-key-sxpresets"] .stButton button[kind="primary"] p { font-size:12px; font-weight:700; }
+[class*="st-key-sxpresets"] .stButton button:hover { color:#fff; border-color:var(--tr-border-hover); background:rgba(255,255,255,.06); transform:none; box-shadow:none; }
+[class*="st-key-sxpresets"] .stButton button[kind="primary"] { color:var(--tr-accent-soft); background:rgba(255,51,85,.12); border-color:rgba(255,51,85,.45); }
+/* Filters: compact fields, no magnifier — they choose, they don't search. */
+[class*="st-key-sxfilters"] { margin-top:4px; padding-top:12px; border-top:1px solid var(--tr-border); }
+[class*="st-key-sxfilters"] .stSelectbox .react-aria-ComboBox::before, [class*="st-key-sxfilters"] .stSelectbox [data-baseweb="select"]::before { display:none; }
+[class*="st-key-sxfilters"] .stSelectbox .react-aria-ComboBox > [role="group"] { min-height:46px; padding-left:14px !important; border-radius:12px !important; }
+[class*="st-key-sxfilters"] .stSelectbox .react-aria-ComboBox > [role="group"]::after { border-radius:12px 12px 40% 40%; }
+[class*="st-key-sxfilters"] .stSelectbox .react-aria-ComboBox input { height:44px; font-size:14px !important; }
+[class*="st-key-sxfilters"] .stSelectbox [data-baseweb="select"] > div { min-height:46px; padding-left:12px; }
+[class*="st-key-sxfilters"] .stMultiSelect [data-baseweb="select"] > div { min-height:46px; border-radius:12px !important; }
+/* Streamlit 1.66: the multiselect is a react-aria ComboBox and the time
+   input a segmented DateField. Both get the selectbox's own glass, so every
+   field on the panel reads as one family. */
+[class*="st-key-sxfilters"] .stMultiSelect .react-aria-ComboBox > [role="group"],
+[class*="st-key-trpair_sxwin"] [data-testid="stTimeInputTimeDisplay"] [role="group"] {
+  position:relative; min-height:46px; border-radius:12px !important; box-sizing:border-box; display:flex; align-items:center;
+  padding:3px 6px 3px 14px; border:1px solid rgba(255,255,255,.20) !important;
+  background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.05)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 14px 32px -16px rgba(0,0,0,.95);
+  transition:border-color var(--tr-fast) var(--tr-ease), box-shadow var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease);
+}
+[class*="st-key-sxfilters"] .stMultiSelect .react-aria-ComboBox > [role="group"]:hover,
+[class*="st-key-trpair_sxwin"] [data-testid="stTimeInputTimeDisplay"] [role="group"]:hover {
+  border-color:rgba(255,255,255,.32) !important; background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.06)) !important; }
+[class*="st-key-sxfilters"] .stMultiSelect .react-aria-ComboBox > [role="group"]:focus-within,
+[class*="st-key-trpair_sxwin"] [data-testid="stTimeInputTimeDisplay"] [role="group"]:focus-within {
+  border-color:rgba(255,51,85,.85) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 0 0 4px rgba(255,51,85,.18), 0 16px 38px -14px rgba(255,51,85,.6); }
+[class*="st-key-sxfilters"] .stMultiSelect .react-aria-ComboBox[data-disabled] > [role="group"] { opacity:.55; }
+[class*="st-key-sxfilters"] .stMultiSelect input { background:transparent !important; border:none !important; box-shadow:none !important;
+  color:var(--tr-text) !important; font-size:14px !important; font-weight:600 !important; min-height:36px; }
+[class*="st-key-sxfilters"] .stMultiSelect button { background:transparent !important; color:var(--tr-text-2) !important; }
+[class*="st-key-trpair_sxwin"] [data-testid="stTimeInputTimeDisplay"] [role="group"] [role="spinbutton"],
+[class*="st-key-trpair_sxwin"] [data-testid="stTimeInputTimeDisplay"] [role="group"] [data-type="literal"] {
+  font-size:15.5px; font-weight:700; color:var(--tr-text); padding:2px 1px; border-radius:5px; }
+[class*="st-key-trpair_sxwin"] [data-testid="stTimeInputTimeDisplay"] [role="spinbutton"]:focus { background:rgba(255,51,85,.22); outline:none; color:#fff; }
+[class*="st-key-trpair_sxwin"] [data-testid="stTimeInputTimeDisplay"], [class*="st-key-trpair_sxwin"] [data-testid="stTimeInputTimeDisplay"] > div { background:transparent !important; border:none !important; }
+[class*="st-key-sxfilters"] [data-baseweb="tag"] { background:rgba(255,51,85,.14) !important; border:1px solid rgba(255,51,85,.35) !important;
+  border-radius:7px !important; color:var(--tr-accent-soft) !important; }
+[class*="st-key-sxfilters"] [data-baseweb="tag"] span { color:var(--tr-accent-soft) !important; font-size:12.5px; font-weight:700; }
+[class*="st-key-sxfilters"] [data-tag] { background:rgba(255,51,85,.14) !important; border:1px solid rgba(255,51,85,.38) !important;
+  border-radius:7px !important; color:var(--tr-accent-soft) !important; }
+[class*="st-key-sxfilters"] [data-tag] span { color:var(--tr-accent-soft) !important; font-size:12.5px; font-weight:700; }
+[class*="st-key-sxfilters"] [data-tag] button { color:var(--tr-accent-soft) !important; }
+[class*="st-key-sxfilters"] input::placeholder { color:var(--tr-text-3) !important; font-size:13.5px; }
+
+/* results head: the count, then the view switch */
+.tr-sx-count { font-size:15px; color:var(--tr-text-3); font-weight:600; letter-spacing:-.01em; padding-top:6px; }
+.tr-sx-count b { font-size:24px; font-weight:800; color:var(--tr-text); letter-spacing:-.035em; margin-right:2px; }
+.tr-sx-seg { text-align:center; padding:9px 10px; border-radius:11px; font-size:13px; font-weight:700; color:var(--tr-text-3);
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.10); white-space:nowrap;
+  transition:all var(--tr-fast) var(--tr-ease); }
+.tr-sx-seg.selected { color:#fff; border-color:rgba(255,51,85,.6);
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0)), linear-gradient(90deg,rgba(255,51,85,.22),rgba(255,51,85,.06));
+  box-shadow: var(--tr-hi), 0 10px 24px -16px rgba(255,51,85,.8); }
+/* freshness: one quiet line, its colour paired with its words */
+.tr-sx-fresh { display:flex; gap:11px; align-items:flex-start; min-width:0; }
+.tr-sx-fresh .dot { width:8px; height:8px; border-radius:50%; flex:none; margin-top:6px; background:var(--tr-text-4); }
+.tr-sx-fresh.ok .dot { background:var(--tr-success); box-shadow:0 0 12px var(--tr-success); animation:tr-pulse 1.8s ease-in-out infinite; }
+.tr-sx-fresh.cached .dot, .tr-sx-fresh.warn .dot { background:var(--tr-warning); }
+.tr-sx-fresh.snap .dot { background:var(--tr-neutral); }
+.tr-sx-fresh.bad .dot { background:var(--tr-danger); box-shadow:0 0 12px var(--tr-danger); }
+.tr-sx-fresh > div { min-width:0; }
+.tr-sx-fresh .h { font-size:13.5px; font-weight:700; color:var(--tr-text); overflow-wrap:anywhere; }
+.tr-sx-fresh.bad .h { color:#FF8A8A; }
+.tr-sx-fresh .w { font-size:12px; color:var(--tr-text-3); margin-top:2px; }
+.tr-sx-fresh .d { font-size:12px; color:var(--tr-text-3); margin-top:4px; line-height:1.5; overflow-wrap:anywhere; }
+[class*="st-key-sx_refresh"] .stButton button { min-height:40px; font-size:12.5px; }
+/* time-first list */
+.tr-sx-list { margin-top:2px; }
+.tr-sx-hour { display:flex; align-items:center; gap:10px; margin:16px 0 2px; }
+.tr-sx-hour .tr-eyebrow { font-size:10.5px; letter-spacing:.2em; color:var(--tr-text-3); white-space:nowrap; }
+.tr-sx-hour .line { height:1px; flex:1; background:var(--tr-border); }
+.tr-sx-row { display:grid; grid-template-columns:104px minmax(0,1fr) auto auto; gap:6px 18px; align-items:center;
+  padding:12px 10px; border-radius:12px; border-bottom:1px solid rgba(255,255,255,.05);
+  transition:background var(--tr-fast) var(--tr-ease); }
+.tr-sx-row:hover { background:var(--tr-glass); }
+.tr-sx-row .t { white-space:nowrap; }
+.tr-sx-row .t b { font-size:22px; font-weight:800; letter-spacing:-.035em; color:var(--tr-text); }
+.tr-sx-row .t span { font-size:11px; font-weight:700; color:var(--tr-text-3); margin-left:4px; letter-spacing:.04em; }
+.tr-sx-row .m { min-width:0; }
+.tr-sx-row .n { font-size:14.5px; font-weight:700; letter-spacing:-.01em; line-height:1.3; overflow-wrap:anywhere; }
+.tr-sx-row .s { font-size:12px; color:var(--tr-text-3); margin-top:2px; overflow-wrap:anywhere; }
+.tr-sx-row .f { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; min-width:0; max-width:280px; }
+.tr-sx-book { display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border-radius:9px; white-space:nowrap;
+  font-size:12.5px; font-weight:700; text-decoration:none !important; color:var(--tr-accent-soft) !important;
+  background:rgba(255,51,85,.08); border:1px solid rgba(255,51,85,.40);
+  transition:background var(--tr-fast) var(--tr-ease), color var(--tr-fast) var(--tr-ease), border-color var(--tr-fast) var(--tr-ease); }
+.tr-sx-book:hover { background:rgba(255,51,85,.18); color:#fff !important; border-color:rgba(255,51,85,.7); }
+.tr-sx-book.off { color:var(--tr-text-4) !important; background:transparent; border:1px dashed rgba(255,255,255,.14); }
+/* grouped: a heading per theatre (or film), its times as a row of links */
+.tr-sx-group { padding:16px 4px 18px; border-bottom:1px solid var(--tr-border); }
+.tr-sx-group .h { display:flex; align-items:center; gap:12px; min-width:0; }
+.tr-sx-group .b { min-width:0; }
+.tr-sx-group .n { font-size:16px; font-weight:800; letter-spacing:-.02em; overflow-wrap:anywhere; }
+.tr-sx-group .s { font-size:12px; color:var(--tr-text-3); margin-top:2px; overflow-wrap:anywhere; }
+.tr-sx-group .times { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.tr-sx-time { display:inline-flex; flex-direction:column; gap:1px; padding:8px 13px; border-radius:10px; min-width:0; max-width:100%;
+  text-decoration:none !important; background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+  border:1px solid rgba(255,255,255,.13); box-shadow: var(--tr-hi); transition:all var(--tr-fast) var(--tr-ease); }
+a.tr-sx-time:hover { border-color:rgba(255,51,85,.6); background:rgba(255,51,85,.10); transform:translateY(-1px); }
+.tr-sx-time b { font-size:14px; font-weight:800; color:var(--tr-text); letter-spacing:-.01em; white-space:nowrap; }
+.tr-sx-time { min-width:92px; }
+.tr-sx-time span { font-size:10.5px; color:var(--tr-text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; }
+.tr-sx-time.sold { opacity:.5; }
+.tr-sx-notes { margin-top:16px; display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--tr-text-4); line-height:1.5; }
+.tr-sx-empty { margin-top:4px; }
+.tr-sx-empty .p { max-width:420px !important; }
+[class*="st-key-sx_more"] .stButton button { min-height:40px; font-size:12.5px; }
+
 /* ── mobile (≤768px): one column, on purpose ───────────────────────────
    Streamlit's own breakpoint for stacking columns is 640px; 768px is its
    `md` breakpoint and the width below which the sidebar becomes an overlay,
@@ -1453,6 +1616,48 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 }
 @media (max-width: 600px) {
   [class*="st-key-trgrid_movie"] [data-testid="stColumn"], [class*="st-key-trgrid_pop"] [data-testid="stColumn"] { --tr-cols: 2; }
+}
+/* Showtime Explorer on tablets and phones */
+@media (max-width: 1100px) {
+  [class*="st-key-sxfilters"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+  [class*="st-key-sxfilters"] [data-testid="stColumn"] { flex: 1 1 calc(33% - 1rem) !important; min-width: 180px !important; }
+}
+@media (max-width: 768px) {
+  [class*="st-key-trgrid_sxmode"] [data-testid="stColumn"] { --tr-cols: 2; }
+  [class*="st-key-trgrid_sxdate"] [data-testid="stColumn"] { --tr-cols: 4; }
+  [class*="st-key-trgrid_sxview"] [data-testid="stColumn"] { --tr-cols: 2; }
+  .tr-sx-mode { flex-direction: column; align-items: flex-start; gap: 9px; padding: 13px 13px 12px; min-height: 0; }
+  .tr-sx-mode .ic { width: 34px; height: 34px; border-radius: 10px; }
+  .tr-sx-mode .t { font-size: 15px; }
+  .tr-sx-mode .s { font-size: 11.5px; }
+  .tr-sx-mode .tick { top: 13px; right: 12px; margin-top: 0; }
+  [class*="st-key-sxpresets"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+  [class*="st-key-sxpresets"] [data-testid="stColumn"] { flex: 1 1 calc(33% - 6px) !important; width: auto !important; min-width: 0 !important; }
+  /* two filters to a row on a phone: five stacked fields were a screen of controls */
+  [class*="st-key-sxfilters"] [data-testid="stColumn"] { flex: 1 1 calc(50% - .6rem) !important; width: auto !important; min-width: 0 !important; }
+  .tr-sx-row { grid-template-columns: 72px minmax(0,1fr) auto; gap: 6px 12px; padding: 11px 4px; }
+  .tr-sx-row .t b { font-size: 19px; }
+  .tr-sx-row .t span { display: block; margin: 0; font-size: 10.5px; }
+  .tr-sx-row .m { grid-column: 2 / span 2; }
+  .tr-sx-row .f { grid-column: 2; justify-content: flex-start; max-width: none; }
+  .tr-sx-row .tr-sx-book { grid-column: 3; }
+  .tr-sx-count b { font-size: 21px; }
+}
+@media (max-width: 480px) {
+  [class*="st-key-trpair_sxhead"] [data-testid="stHorizontalBlock"],
+  [class*="st-key-trpair_sxfresh"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+  [class*="st-key-trpair_sxhead"] [data-testid="stColumn"],
+  [class*="st-key-trpair_sxfresh"] [data-testid="stColumn"] { flex: 1 1 100% !important; width: 100% !important; }
+  .tr-sx-mode .s { display: none; }
+  /* the view switch stays one row of two, whatever wraps around it */
+  [class*="st-key-trpair_sxview"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
+  [class*="st-key-trpair_sxview"] [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+  [class*="st-key-sxfilters"] .stSelectbox .react-aria-ComboBox > [role="group"] > button { display: inline-flex; }
+  [class*="st-key-sxfilters"] .stMultiSelect .react-aria-ComboBox > [role="group"] { padding-left: 10px; padding-right: 2px; }
+  [class*="st-key-sxfilters"] [data-testid="stMultiSelectTagsContainer"], [class*="st-key-sxfilters"] [data-testid="stMultiSelectTagsContainer"] input { padding-left: 0 !important; margin-left: 0 !important; }
+  [class*="st-key-sxfilters"] input::placeholder { font-size: 13px !important; }
+  [class*="st-key-sxfilters"] .stSelectbox .react-aria-ComboBox > [role="group"] { padding-left: 10px !important; }
+  .tr-sx-time { min-width: 0; }
 }
 @media (max-width: 480px) {
   /* two full-width buttons read better than two cramped ones */
