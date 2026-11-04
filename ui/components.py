@@ -144,7 +144,9 @@ def scroll_to_top(token: str) -> None:
             "var p=window.parent;"
             "if(p&&p.innerWidth<=768){"
             "var sb=d.querySelector('[data-testid=\"stSidebar\"]');"
-            "if(sb&&sb.getAttribute('aria-expanded')==='true'){"
+            # Streamlit 1.66 marks an open sidebar with data-collapsed="false"
+            # rather than aria-expanded; either one means "close it".
+            "if(sb&&(sb.getAttribute('aria-expanded')==='true'||sb.getAttribute('data-collapsed')==='false')){"
             "var btn=d.querySelector('[data-testid=\"stSidebarCollapseButton\"] button')||"
             "d.querySelector('[data-testid=\"stSidebar\"] button[aria-label*=\"close\" i]');"
             "if(btn){btn.click();}"

@@ -80,7 +80,10 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # The Showtime Explorer's snapshot: the times this same sync read
+          # (explorer/snapshot.py). Absent until the first sync writes it.
           git add data/catalogue.json
+          if [ -f data/showtimes.json ]; then git add data/showtimes.json; fi
           if git diff --cached --quiet; then
             echo "Catalogue unchanged"
             exit 0

@@ -194,6 +194,23 @@ def no_live_discovery(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_live_explorer():
+    """The Showtime Explorer's live reads (``explorer.source``) are refused by
+    default — the way a blocked host is — so no test can reach BookMyShow
+    through it. Tests of the Explorer install their own reader."""
+    from explorer import source
+    from platforms.base import PlatformError
+
+    class Unreachable:
+        def read_day(self, movie, date_code):
+            raise PlatformError("no BookMyShow in tests")
+
+    source.install(source.LiveReader(lambda bucket, slots: Unreachable()))
+    yield
+    source.install(None)
+
+
+@pytest.fixture(autouse=True)
 def owner_identities():
     """The worker's owner check (``monitor.policy``) without Firebase.
 

@@ -444,6 +444,8 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
     _upsert(entries, region_slug=region_slug, mirror=mirror, platform=platform)
 
     detailed = failed = 0
+    #: This sync's reads, kept for the Showtime Explorer's snapshot (below).
+    read: list[Snapshot] = []
     city_read = getattr(provider, "city_snapshots", None)
     if detail and city_read is not None:
         # A provider that reads per cinema (PVR INOX) answers for every film
@@ -482,11 +484,15 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
                 say(f"  {movie.title or movie.event_code}: unexpected {type(exc).__name__}")
                 continue
             store_snapshot(snapshot, mirror=False)
+            read.append(snapshot)
             detailed += 1
             say(
                 f"  {snapshot.movie.title}: {len(snapshot.venues)} theatre(s), "
                 f"{len(snapshot.showtimes)} showtime(s)"
             )
+
+    if detail and platform == "bookmyshow":
+        record_explorer_snapshot(region_slug, read, entries, mirror=mirror, say=say)
 
     _record_sync(region_slug, SyncStatus.OK, "", movie_count=len(entries), mirror=mirror, platform=platform)
     return {
@@ -496,6 +502,23 @@ def sync_region(region_slug: str, platform: str = "bookmyshow", *, mirror: bool 
         "detailed": detailed,
         "failed": failed,
     }
+
+
+def record_explorer_snapshot(region_slug: str, snapshots: list[Snapshot], entries: list[dict[str, Any]],
+                             *, mirror: bool, say: Callable[[str], None]) -> None:
+    """Keep the times this sync just read for the Showtime Explorer
+    (``explorer.snapshot``). The responses are already in hand — nothing
+    more is requested — and it is strictly best-effort: whatever goes wrong
+    here is logged and the catalogue, written above, is untouched."""
+    try:
+        from explorer import snapshot as explorer_snapshot
+
+        kept = explorer_snapshot.record(region_slug, snapshots,
+                                        listed_ids={movie_from_entry(e).id for e in entries},
+                                        mirror=mirror)
+        say(f"showtimes snapshot: {len(snapshots)} film(s) re-read, {kept} kept")
+    except Exception as exc:  # noqa: BLE001 - the Explorer's snapshot must never fail a sync
+        say(f"showtimes snapshot not written ({type(exc).__name__}: {exc})")
 
 
 def sale_dates_for_catalogue() -> list[str]:

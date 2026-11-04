@@ -76,6 +76,7 @@ from platforms.http import HAS_CURL_CFFI  # noqa: E402
 from ui import account  # noqa: E402
 from ui import avatar  # noqa: E402
 from ui import detail  # noqa: E402
+from ui import explorer  # noqa: E402
 from ui import home  # noqa: E402
 from ui import catalogue_view as cv  # noqa: E402
 from ui import components as C  # noqa: E402
@@ -241,11 +242,11 @@ def cached_github_status() -> tuple[bool, str]:
 # ──────────────────────────────────────────────────────────────────────────
 # Sidebar
 # ──────────────────────────────────────────────────────────────────────────
-PAGES = ["Home", "My Monitors", "History", "Settings"]
+PAGES = ["Home", "Showtime Explorer", "My Monitors", "History", "Settings"]
 
 
 def sidebar(active_count: int) -> str:
-    """The navigation. Its four option labels never change.
+    """The navigation. Its five option labels never change.
 
     The active-monitor count next to *My Monitors* used to be part of the
     option's label (``format_func`` → "My Monitors `3`"). Streamlit 1.64
@@ -1143,6 +1144,10 @@ def main() -> None:
 
         if page == "Home":
             page_home(monitors, states, history, settings)
+        elif page == "Showtime Explorer":
+            # Browsing only: reads the catalogue and BookMyShow's listings,
+            # writes nothing a monitor owns (ui/explorer.py).
+            explorer.page()
         elif page == "My Monitors":
             page_monitors(monitors, states)
         elif page == "History":
