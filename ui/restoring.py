@@ -10,8 +10,8 @@ This is the same few seconds, drawn on purpose: the radar that is the app's
 own mark, sweeping; one cinematic line; then the honest one, *Restoring your
 session…*; and a thin progress bar that never claims to be finished.
 
-Nothing here waits. There is no timer, no fragment, no poll, no sleep and no
-rerun asked for: the whole thing is one CSS animation on one block of markup,
+Nothing here waits: there is no timer, fragment, poll or sleep in this file, and
+the clock that ends the wait lives in ``auth.gate``. The whole thing is one CSS animation on one block of markup,
 and the moment the real restore answers, the gate renders the app instead and
 this is gone — mid-sweep if that is where it is. The animation is the *cover*
 for work already happening, never a reason for it to take longer. Its steps
@@ -40,6 +40,17 @@ LEAD = "Waiting for the next showtime."
 STATUS = "Restoring your session…"
 
 
+#: What the screen says when the wait has run out. True to the moment: nobody
+#: has been signed in, and nothing has been lost.
+RECOVERY_TITLE = "We couldn't restore your session"
+RECOVERY_BODY = ("This browser didn't respond in time, so you haven't been signed in. "
+                 "Your account and monitors aren't affected.")
+RECOVERY_HINT = "If trying again doesn't help, reload this page or check your connection."
+RECOVERY_RETRYING = "Still trying in the background…"
+RECOVERY_RETRY = "Try again"
+RECOVERY_SIGN_IN = "Go to sign-in"
+
+
 def markup() -> str:
     """The whole screen as one block of HTML, stylesheet included.
 
@@ -66,6 +77,38 @@ def screen() -> None:
     with st.sidebar:
         C.logo()
     C.html(markup())
+
+
+def recovery_markup(*, retrying: bool) -> str:
+    """The recovery screen's words and the radar at rest. ``role="alert"``, so a
+    screen reader hears it, which the beat's polite status would not force."""
+    still = f'<div class="tr-boot-still">{C.e(RECOVERY_RETRYING)}</div>' if retrying else ""
+    return (
+        CSS
+        + '<div class="tr-boot tr-boot-recovery" role="alert">'
+        + '<div class="tr-boot-stage">'
+        + radar.svg(size=132, state="idle", cls="boot", label="")
+        + '</div>'
+        + f'<div class="tr-boot-title">{C.e(RECOVERY_TITLE)}</div>'
+        + f'<div class="tr-boot-body">{C.e(RECOVERY_BODY)}</div>'
+        + f'<div class="tr-boot-hint">{C.e(RECOVERY_HINT)}</div>'
+        + still
+        + '</div>'
+    )
+
+
+def recovery(*, on_retry, on_sign_in, retrying: bool) -> None:
+    """Draw the recovery screen. Both buttons are callbacks so one click is one
+    run; neither can sign anybody in. ``retrying`` is true while another
+    automatic attempt is still scheduled."""
+    with st.sidebar:
+        C.logo()
+    C.html(recovery_markup(retrying=retrying))
+    with st.container(key="tr_boot_actions"):
+        st.button(RECOVERY_RETRY, key="tr_boot_retry", type="primary",
+                  use_container_width=True, on_click=on_retry)
+        st.button(RECOVERY_SIGN_IN, key="tr_boot_sign_in",
+                  use_container_width=True, on_click=on_sign_in)
 
 
 #: Folded into one payload with the radar's own rules, so the beat is a
@@ -99,8 +142,15 @@ CSS = "<style>" + radar.CSS + """
 @keyframes tr-boot-status { 0%,52% { opacity:0; transform:translateY(6px); } 66%,100% { opacity:1; transform:none; } }
 @keyframes tr-boot-bar { 0% { transform:scaleX(.04); } 35% { transform:scaleX(.55); }
   70% { transform:scaleX(.82); } 100% { transform:scaleX(.94); } }
+.tr-boot-recovery { min-height:0; padding:7vh 16px 20px; }
+.tr-boot-title { margin-top:26px; font-size:20px; font-weight:700; letter-spacing:-.018em; color:var(--tr-text-1, #F2F2F4); }
+.tr-boot-body { margin-top:10px; max-width:440px; font-size:14.5px; line-height:1.55; color:var(--tr-text-2, #C9C9D2); }
+.tr-boot-hint { margin-top:8px; max-width:440px; font-size:13px; line-height:1.5; color:var(--tr-text-3, #8E8E98); }
+.tr-boot-still { margin-top:12px; font-size:12.5px; color:#FF8CA0; }
+[class*="st-key-tr_boot_actions"] { width:min(300px, 100%); margin:0 auto; }
 @media (max-width: 768px) {
   .tr-boot { min-height:56vh; padding-top:12px; }
+  .tr-boot-recovery { min-height:0; padding-top:4vh; }
   .tr-boot-stage { width:106px; height:106px; }
   .tr-boot-stage .tr-radar { width:106px !important; }
   .tr-boot-lines .l { font-size:14px; }
@@ -114,4 +164,5 @@ CSS = "<style>" + radar.CSS + """
 }
 </style>"""
 
-__all__ = ["CSS", "LEAD", "STATUS", "markup", "screen"]
+__all__ = ["CSS", "LEAD", "RECOVERY_BODY", "RECOVERY_HINT", "RECOVERY_RETRY", "RECOVERY_RETRYING",
+           "RECOVERY_SIGN_IN", "RECOVERY_TITLE", "STATUS", "markup", "recovery", "recovery_markup", "screen"]

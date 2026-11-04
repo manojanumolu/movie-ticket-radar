@@ -445,14 +445,43 @@ def _cookie_jar() -> dict[str, str]:
 BRIDGE_JAR_KEY = "auth_bridge_jar"
 BRIDGE_RUNS_KEY = "auth_bridge_runs"
 BRIDGE_OPS_KEY = "auth_cookie_ops"
-#: How many runs the gate will wait for the browser to answer before giving up
-#: and showing the login page. The component answers on its first render, so
-#: this is a safety net against a browser that never replies — never a loop.
-BRIDGE_MAX_RUNS = 3
+#: Cookie writes handed to a frame that has not answered yet. A frame that
+#: never loaded never carried them out, so they go to its replacement too —
+#: otherwise a retry would lose the Google ``state`` cookie and that sign-in
+#: would end in a mismatch. Server-side, and not kept across a session reset.
+BRIDGE_UNACKED_KEY = "auth_bridge_unacked"
+#: The watchdog's bookkeeping: which frame is mounted (only ever goes up: it
+#: names the frame), where we are in the schedule, and since when.
+BRIDGE_MOUNT_KEY = "auth_bridge_mount"
+BRIDGE_STEP_KEY = "auth_bridge_step"
+BRIDGE_STEP_AT_KEY = "auth_bridge_step_at"
+BRIDGE_SINCE_KEY = "auth_bridge_since"
+#: The person chose the login page over waiting. It is the login page: nothing
+#: about it signs anybody in.
+BRIDGE_SKIP_KEY = "auth_bridge_skip"
+#: How long each mounted frame gets to answer, in seconds. A healthy one takes
+#: well under two. The frame's asset is one HTTP GET that can fail, and a failed
+#: iframe never retries by itself; nothing else in the app can notice, because
+#: no answer also means no rerun. So this is measured on the server's clock and
+#: a stale frame is replaced. Windows grow so a slow asset still gets a chance,
+#: since replacing a frame abandons its request. The last frame stays mounted,
+#: so an answer that arrives even later still restores the session.
+BRIDGE_MOUNT_SECONDS: tuple[float, ...] = (8.0, 12.0, 15.0, 30.0, 30.0, 30.0, 30.0)
+#: After this many unanswered frames the wait stops pretending (35 s by the
+#: schedule above) and says so. Retries carry on behind the recovery screen.
+BRIDGE_RECOVERY_AFTER = 3
+#: How often the page checks the clock while it waits. Checks only the clock;
+#: never calls Firebase.
+BRIDGE_TICK_SECONDS = 2
 #: A browser bridge needs a browser. ``AppTest`` has none, so the suite turns
 #: this off and the gate decides from the server-side readers alone; the tests
 #: that exercise the bridge itself turn it back on.
 BRIDGE_ENABLED = True
+
+
+def _now() -> float:
+    """The watchdog's clock, on its own so a test can move it."""
+    return time.time()
 
 
 def _bridge_component():
@@ -490,7 +519,8 @@ def run_bridge(*, signal: str = "") -> dict | None:
     private websocket every widget value uses — and is never logged or put
     on screen.
     """
-    ops = st.session_state.pop(BRIDGE_OPS_KEY, [])
+    answered_before = bridge_answered()
+    ops = list(st.session_state.get(BRIDGE_UNACKED_KEY, [])) + st.session_state.pop(BRIDGE_OPS_KEY, [])
     try:
         value = _bridge_component()(
             ops=ops,
@@ -499,16 +529,124 @@ def run_bridge(*, signal: str = "") -> dict | None:
             # Changes whenever there is work to do, so a repeat write is still
             # a new render rather than a no-op.
             nonce=(len(ops) or bool(signal)) and time.time() or 0,
-            key="tr_auth_bridge",
+            key=bridge_key(),
             default=None,
         )
     except Exception as exc:  # noqa: BLE001 - the gate must survive anything here
         print(f"[auth] bridge unavailable: {type(exc).__name__}", flush=True)
-        return None
+        value = None
     if isinstance(value, dict):
+        st.session_state.pop(BRIDGE_UNACKED_KEY, None)
         st.session_state[BRIDGE_JAR_KEY] = value
+        if not answered_before:
+            _log_bridge_answered()
         return value
+    # Anything else — nothing yet, or something that is not the bridge's own
+    # shape — is no answer. It never counts as a session, or as "no session".
+    if ops:
+        st.session_state[BRIDGE_UNACKED_KEY] = ops
     return None
+
+
+def _log_bridge_answered() -> None:
+    """How long the browser took. This is the line that tells a slow asset from
+    a dead one next time; numbers only, like every line here."""
+    since = st.session_state.get(BRIDGE_SINCE_KEY)
+    elapsed = f"{_now() - float(since):.1f}s" if since is not None else "first_run"
+    print(f"[auth] bridge: answered mount={bridge_mount()} after={elapsed}", flush=True)
+
+
+# ── The watchdog: a frame that does not answer is replaced, on a fixed schedule ─
+def bridge_mount() -> int:
+    return int(st.session_state.get(BRIDGE_MOUNT_KEY, 0) or 0)
+
+
+def bridge_key() -> str:
+    """The frame's element key. The frontend reuses the iframe while this stays
+    the same and mounts a new one, with a new request, when it changes
+    (measured on 1.64 and 1.66.1). Stable once a frame has answered, because
+    the mount number only moves while nothing has."""
+    mount = bridge_mount()
+    return "tr_auth_bridge" if mount == 0 else f"tr_auth_bridge_{mount}"
+
+
+def bridge_deadline() -> float | None:
+    """When the current frame's time is up. None when no check is due: not
+    started, answered, the person went to the login page, or the schedule is
+    finished."""
+    at = st.session_state.get(BRIDGE_STEP_AT_KEY)
+    if at is None or bridge_answered() or st.session_state.get(BRIDGE_SKIP_KEY):
+        return None
+    step = int(st.session_state.get(BRIDGE_STEP_KEY, 0) or 0)
+    if step >= len(BRIDGE_MOUNT_SECONDS):
+        return None
+    return float(at) + BRIDGE_MOUNT_SECONDS[step]
+
+
+def bridge_due() -> bool:
+    """Is the current frame out of time? Reads the clock and nothing else."""
+    deadline = bridge_deadline()
+    return deadline is not None and _now() >= deadline
+
+
+def watch_bridge() -> None:
+    """Start the clock, or act on it. Runs before the frame is rendered, so a
+    replacement goes out on this same run. Mounting a frame is one GET of a
+    static file: no Firebase call, no page reload, and a fixed number of them."""
+    if not BRIDGE_ENABLED or bridge_answered() or st.session_state.get(BRIDGE_SKIP_KEY):
+        return
+    now = _now()
+    if st.session_state.get(BRIDGE_STEP_AT_KEY) is None:
+        st.session_state[BRIDGE_STEP_KEY] = 0
+        st.session_state[BRIDGE_STEP_AT_KEY] = now
+        st.session_state[BRIDGE_SINCE_KEY] = now
+        return
+    if not bridge_due():
+        return
+    step = int(st.session_state.get(BRIDGE_STEP_KEY, 0) or 0) + 1
+    st.session_state[BRIDGE_STEP_KEY] = step
+    since = float(st.session_state.get(BRIDGE_SINCE_KEY, now) or now)
+    if step >= len(BRIDGE_MOUNT_SECONDS):
+        # Out of retries. The last frame stays up, so a very late answer still
+        # restores; nothing else happens until somebody asks.
+        print(f"[auth] bridge: no answer after {now - since:.1f}s; "
+              f"schedule finished at mount={bridge_mount()}", flush=True)
+        return
+    st.session_state[BRIDGE_MOUNT_KEY] = bridge_mount() + 1
+    st.session_state[BRIDGE_STEP_AT_KEY] = now
+    print(f"[auth] bridge: no answer after {now - since:.1f}s; "
+          f"mounting a new frame mount={bridge_mount()}", flush=True)
+
+
+def bridge_needs_recovery() -> bool:
+    """Has the wait gone on long enough to say so?"""
+    return int(st.session_state.get(BRIDGE_STEP_KEY, 0) or 0) >= BRIDGE_RECOVERY_AFTER
+
+
+def bridge_skipped() -> bool:
+    return bool(st.session_state.get(BRIDGE_SKIP_KEY))
+
+
+def retry_bridge() -> None:
+    """The person pressed Try again: a new frame and a fresh schedule.
+
+    Deliberately leaves ``auth_restore_tried`` alone: this asks the browser
+    again and does not earn another exchange with Google."""
+    now = _now()
+    st.session_state[BRIDGE_MOUNT_KEY] = bridge_mount() + 1
+    st.session_state[BRIDGE_STEP_KEY] = 0
+    st.session_state[BRIDGE_STEP_AT_KEY] = now
+    st.session_state[BRIDGE_SINCE_KEY] = now
+    st.session_state.pop(BRIDGE_SKIP_KEY, None)
+    print(f"[auth] bridge: retry requested mount={bridge_mount()}", flush=True)
+
+
+def skip_bridge_wait() -> None:
+    """The person pressed Go to sign-in. Grants nothing: it only stops the wait,
+    and the login page asks Firebase the same as ever. The frame stays mounted,
+    so if the browser answers after all the session is restored from there."""
+    st.session_state[BRIDGE_SKIP_KEY] = True
+    print(f"[auth] bridge: went to sign-in without an answer mount={bridge_mount()}", flush=True)
 
 
 def bridge_jar() -> dict[str, str]:
@@ -589,6 +727,8 @@ def cookie_report() -> dict[str, object]:
     report["runtime_cookies"] = len(_parse_cookie_header(runtime_raw))
 
     jar = _cookie_jar()
+    report["bridge_answered"] = bridge_answered()
+    report["bridge_mount"] = bridge_mount()
     report["jar"] = len(jar)
     report["session_cookie"] = COOKIE in jar
     report["started_cookie"] = SESSION_STARTED_COOKIE in jar
@@ -827,7 +967,13 @@ __all__ = [
     "GOOGLE_SIGNAL",
     "POPUP_DONE_KEY",
     "allow_restore_again",
+    "bridge_due",
     "bridge_has_opener",
+    "bridge_needs_recovery",
+    "bridge_skipped",
+    "retry_bridge",
+    "skip_bridge_wait",
+    "watch_bridge",
     "clear_oauth_state",
     "current_uid",
     "google_signal_pending",

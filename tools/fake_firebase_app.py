@@ -58,6 +58,9 @@ def _install_fake() -> None:
     fake.add("ravi@example.com", "Popcorn2026", uid="uid-ravi", name="Ravi Teja")
     fake.add("sita@example.com", "Interval99", uid="uid-sita", name="Sita Devi")
     fake.add("newbie@example.com", "Trailer2026", uid="uid-newbie", name="New Person", verified=False)
+    # Firebase's own record says this one is an administrator.
+    fake.add("admin@example.com", "Popcorn2026", uid="uid-admin", name="Ada Admin")
+    fake.set_claims("admin@example.com", {"admin": True})
     # A throwaway account for exercising Delete account in a browser.
     fake.add("disposable@example.com", "Popcorn2026", uid="uid-disposable", name="Disposable One")
     firebase._post = fake
@@ -151,7 +154,18 @@ def _simulate_blind_first_run() -> None:
     auth_session._cookie_jar = blind_one_run
 
 
+def _compress_bridge_schedule() -> None:
+    """``TR_BRIDGE_SCHEDULE=2,2,3,3``: the watchdog's windows in seconds, so a
+    browser test of a dead bridge does not take minutes. Harness only."""
+    raw = os.environ.get("TR_BRIDGE_SCHEDULE")
+    if raw:
+        from auth import session as auth_session
+
+        auth_session.BRIDGE_MOUNT_SECONDS = tuple(float(x) for x in raw.split(","))
+
+
 _install_fake()
 _simulate_streamlit_cloud()
+_compress_bridge_schedule()
 _simulate_blind_first_run()
 runpy.run_path(str(ROOT / "app.py"), run_name="__main__")
