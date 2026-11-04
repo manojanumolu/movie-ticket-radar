@@ -62,7 +62,8 @@ def titles(entries: list[dict[str, Any]]) -> list[Title]:
             continue
         key = " ".join(movie.title.casefold().split())
         g = groups.setdefault(key, {"title": movie.title, "rows": [], "venues": set(), "rank": rank})
-        g["rows"].append(Wanted(movie=movie, movie_id=movie.id, title=g["title"], poster=movie.poster_url))
+        g["rows"].append(Wanted(movie=movie, movie_id=movie.id, title=g["title"], poster=movie.poster_url,
+                                base_format=str(entry.get("dimension") or "")))
         g["venues"].update(v.code for v in venues_from_entry(entry))
     out = []
     for key, g in groups.items():
@@ -82,20 +83,32 @@ def theatres(entries: list[dict[str, Any]]) -> list[Theatre]:
 
 
 def films_at(entries: list[dict[str, Any]], venue_code: str, date_code: str) -> list[Wanted]:
-    """The catalogue rows worth reading for one theatre on one date."""
-    out = []
+    """The catalogue rows worth reading for one theatre on one date.
+
+    Listed first: the films the catalogue's per-date listing places at this
+    theatre on this date (or, past the dates it swept, whose theatre list
+    includes it). Then, ``listed=False``, the films that have played this
+    theatre but were not listed there on this date when the catalogue was last
+    synced — BookMyShow adds shows between syncs, and reading these (each read
+    is city-wide and cached) is how a newly added show still turns up. A read
+    that finds nothing at this theatre simply adds nothing.
+    """
+    listed: list[Wanted] = []
+    maybe: list[Wanted] = []
     for entry in entries:
         movie = movie_from_entry(entry)
         if movie.platform != "bookmyshow":
             continue
         listings = listings_from_entry(entry)
-        if date_code in listings:
-            listed = venue_code in listings[date_code]
-        else:
-            listed = any(v.code == venue_code for v in venues_from_entry(entry))
-        if listed:
-            out.append(Wanted(movie=movie, movie_id=movie.id, title=movie.title, poster=movie.poster_url))
-    return out
+        known_here = (any(v.code == venue_code for v in venues_from_entry(entry))
+                      or any(venue_code in venues for venues in listings.values()))
+        if not known_here:
+            continue
+        on_date = venue_code in listings[date_code] if date_code in listings else True
+        w = Wanted(movie=movie, movie_id=movie.id, title=movie.title, poster=movie.poster_url,
+                   base_format=str(entry.get("dimension") or ""), listed=on_date)
+        (listed if on_date else maybe).append(w)
+    return listed + maybe
 
 
 __all__ = ["Theatre", "Title", "films_at", "theatres", "titles"]

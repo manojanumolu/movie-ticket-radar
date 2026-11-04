@@ -34,6 +34,7 @@ from explorer.classify import MULTIPLEX, SINGLE_SCREEN, UNKNOWN
 from ui import catalogue_view as cv
 from ui import components as C
 from ui import flow
+from ui import radar
 
 MODES = {
     "movie": ("By movie", "Find where and when a movie is playing.", "movie"),
@@ -213,19 +214,37 @@ def _filters(mode: str, shows: list[Q.ExplorerShow], languages: list[str]) -> No
         _multiselect(fmt_col, "Format", "sx_fmt", opts["formats"], "All formats")
 
 
+def _keep(key: str) -> None:
+    """A search box's ``on_change``: remember the choice in a key this page owns.
+    Streamlit forgets a widget's value on any run that does not draw it, and
+    each mode's box is not drawn in the other mode — so without this, going
+    to By theatre and back lost the movie (and the other way round)."""
+    _ui_only()
+    st.session_state[f"{key}_keep"] = st.session_state.get(key)
+
+
+def _kept_index(key: str, labels: list[str]) -> int | None:
+    kept = st.session_state.get(f"{key}_keep")
+    if key not in st.session_state and kept in labels:
+        return labels.index(kept)
+    return None
+
+
 def _searchbox(mode: str, titles: list[catalog.Title], theatres: list[catalog.Theatre]):
     if mode == "movie":
         C.html('<div class="tr-field-label">Movie</div>')
         labels = [t.label for t in titles]
         _clean_single("sx_movie", labels)
-        choice = st.selectbox("Movie", labels, index=None, key="sx_movie", label_visibility="collapsed",
-                              placeholder="Search movies playing in Hyderabad…", on_change=_ui_only)
+        choice = st.selectbox("Movie", labels, index=_kept_index("sx_movie", labels), key="sx_movie",
+                              label_visibility="collapsed", placeholder="Search movies playing in Hyderabad…",
+                              on_change=_keep, args=("sx_movie",))
         return next((t for t in titles if t.label == choice), None)
     C.html('<div class="tr-field-label">Theatre</div>')
     labels = [t.label for t in theatres]
     _clean_single("sx_theatre", labels)
-    choice = st.selectbox("Theatre", labels, index=None, key="sx_theatre", label_visibility="collapsed",
-                          placeholder="Search theatres in Hyderabad — name or area…", on_change=_ui_only)
+    choice = st.selectbox("Theatre", labels, index=_kept_index("sx_theatre", labels), key="sx_theatre",
+                          label_visibility="collapsed", placeholder="Search theatres in Hyderabad — name or area…",
+                          on_change=_keep, args=("sx_theatre",))
     return next((t for t in theatres if t.label == choice), None)
 
 
@@ -383,9 +402,16 @@ def group_markup(groups: list[Q.Group], mode: str) -> str:
     return "".join(parts)
 
 
-def _empty(title: str, text: str) -> None:
-    C.html(f'<div class="tr-state empty tr-sx-empty"><div class="ring">{C.icon("clock", 18)}</div>'
+def _empty(title: str, text: str, kind: str = "") -> None:
+    """The page's empty states. ``kind`` "warn" (incomplete) or "bad" (couldn't
+    read) changes the glyph and its colour, never only the colour."""
+    glyph = {"warn": "warning", "bad": "error"}.get(kind, "clock")
+    C.html(f'<div class="tr-state empty tr-sx-empty {C.e(kind)}"><div class="ring">{C.icon(glyph, 18)}</div>'
            f'<div class="h">{C.e(title)}</div><div class="p">{C.e(text)}</div></div>')
+
+
+def shows_title(result: dict) -> str:
+    return result.get("venue_name") or "This theatre"
 
 
 def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -> None:
@@ -426,21 +452,32 @@ def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -
                                   on_click=_set_view, args=(key,))
     _fresh_strip(days, date_code, window)
 
-    if all(d.origin == S.FAILED for d in days):
-        _empty("No showtimes to show", "BookMyShow couldn't be read and there is no earlier read for this "
-               "selection. Nothing is shown rather than a guess — try Refresh in a minute.")
+    failed = [d for d in days if d.origin == S.FAILED]
+    if days and len(failed) == len(days):
+        _empty("BookMyShow couldn't be read", f"{failed[0].error or 'No answer'}, and there is no earlier read "
+               "for this selection. Nothing is shown rather than a guess — try Refresh in a minute.", kind="bad")
         return
     if not out.shows:
         name, sub = date_label(date_code)
-        if not shows or out.wrong_date == len(shows):
-            _empty("Nothing listed for this date", f"BookMyShow lists no shows for this selection on {name} {sub}"
-                   " — it may not have opened bookings yet.")
+        # What this selection actually has, before the time window and filters:
+        # for one theatre, only that theatre's shows (a theatre read is city-wide).
+        venue = result.get("venue", "")
+        on_date = [s for s in shows if s.date_code == date_code and (not venue or s.venue_code == venue)]
+        if failed:
+            _empty("Results may be incomplete",
+                   f"BookMyShow couldn't be read for {len(failed)} of {len(days)} film"
+                   f"{'s' if len(days) != 1 else ''} ({failed[0].error}). None of the ones it did read has a "
+                   "show matching this selection — try Refresh before relying on that.", kind="warn")
+        elif not on_date:
+            where = f"{shows_title(result)} lists" if venue else "BookMyShow lists"
+            _empty("Nothing listed for this date", f"{where} no shows for this selection on {name} {sub}"
+                   " — bookings may not have opened yet.")
         elif out.already_started and not (out.outside_window or out.filtered_out):
             _empty("Today's shows have started", "Every show listed for today in this selection has already "
                    "begun. Pick tomorrow or a later date to see what's next.")
         else:
-            _empty("No shows match", "Nothing in this time window matches your filters. Widen the window or "
-                   "clear a filter.")
+            _empty("No shows match", f"{len(on_date)} show{'s' if len(on_date) != 1 else ''} listed for {name} "
+                   f"{sub}, none in this time window with these filters. Widen the window or clear a filter.")
         _notes(out, days)
         return
 
@@ -464,18 +501,95 @@ def _notes(out: Q.FilterResult, days: list[S.MovieDay]) -> None:
     if out.unreadable_time:
         notes.append(f"{out.unreadable_time} show{'s' if out.unreadable_time != 1 else ''} had no readable "
                      "time and aren't placed in the window.")
+    failed = [d for d in days if d.origin == S.FAILED]
+    if failed and len(failed) < len(days):
+        notes.append(f"BookMyShow couldn't be read for {len(failed)} film{'s' if len(failed) != 1 else ''} "
+                     f"({failed[0].error}), so shows may be missing — try Refresh.")
+    if any(d.missing for d in days):
+        notes.append("Some premium-format listings (3D, IMAX, 4DX…) couldn't be read, so their shows may be missing.")
     skipped = [d for d in days if d.skipped]
     if skipped:
-        notes.append(f"{len(skipped)} more film{'s' if len(skipped) != 1 else ''} at this theatre weren't read "
-                     "live (to keep requests to BookMyShow bounded) — pick a language to narrow the list.")
+        notes.append(f"{len(skipped)} more film{'s' if len(skipped) != 1 else ''} weren't read live, to keep "
+                     "requests to BookMyShow bounded — pick a language to narrow the list.")
     notes.append("A listed show isn't a promise of seats — BookMyShow confirms availability when you book.")
     C.html('<div class="tr-sx-notes">' + "".join(f"<div>{C.e(n)}</div>" for n in notes) + "</div>")
 
 
+#: The Explorer's atmosphere: Home's own radar (``ui.radar``) — the same mark,
+#: rings, sweep and glow, nothing drawn anew — once at hero size in the hero's
+#: top-right, as Home has it, and once large and faint behind the page so the
+#: rings carry on behind the results; plus Home's room light. No reel, no film
+#: strip. Transform and opacity only (``radar.CSS``'s own keyframes); nothing
+#: blurred; pointer-transparent; ``prefers-reduced-motion`` stills it all.
+AMBIENCE_CSS = "<style>" + radar.CSS + """
+@keyframes tr-sx-breathe { 0%,100% { opacity:.65; transform:scale(1); } 50% { opacity:1; transform:scale(1.05); } }
+[class*="st-key-trsx_root"] { position:relative; isolation:isolate; }
+[class*="st-key-trsx_root"] > [data-testid="stElementContainer"],
+[class*="st-key-trsx_root"] > [data-testid="stLayoutWrapper"] { position:relative; z-index:1; }
+[class*="st-key-trsx_root"] > [data-testid="stElementContainer"]:has(> .stMarkdown .tr-sx-ambience) {
+  position:absolute; inset:0; width:100%; height:100%; margin:0; z-index:0; pointer-events:none; }
+.tr-sx-ambience { position:absolute; left:-60px; right:-60px; top:-140px; bottom:-120px; pointer-events:none; overflow:hidden; }
+.tr-sx-ambience::before { content:""; position:absolute; right:-12%; top:-6%; width:80%; height:62%; opacity:.85;
+  background: conic-gradient(from 200deg at 92% 4%, transparent 0deg, rgba(255,107,133,.10) 14deg, rgba(255,51,85,.04) 30deg,
+  rgba(255,51,85,.01) 44deg, transparent 56deg);
+  /* Home softens this layer's box edges with a blur; a mask does it without one */
+  -webkit-mask-image: radial-gradient(ellipse 70% 80% at 92% 4%, #000 40%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 80% at 92% 4%, #000 40%, transparent 100%); }
+.tr-sx-ambience::after { content:""; position:absolute; left:-8%; top:46%; width:52%; height:40%;
+  background: radial-gradient(closest-side, rgba(255,51,85,.11), rgba(255,51,85,.03) 55%, transparent 75%);
+  animation: tr-sx-breathe 9s ease-in-out infinite; }
+.tr-sx-ambience .tr-radar.sxbg { position:absolute; right:-18%; top:640px; opacity:.2; }
+.tr-sx-ambience .tr-radar.sxbg .r1, .tr-sx-ambience .tr-radar.sxbg .core { opacity:.5; }
+[class*="st-key-trsx_hero"] { position:relative; }
+[class*="st-key-trsx_hero"] > [data-testid="stElementContainer"]:has(> .stMarkdown .tr-sx-hero-radar) {
+  position:absolute; inset:0 auto auto 0; width:100%; height:0; margin:0; z-index:2; }
+.tr-sx-hero-radar { position:absolute; left:0; right:0; top:0; height:200px; border-radius:22px; overflow:hidden; pointer-events:none; }
+.tr-sx-hero-radar .scan { position:absolute; right:-520px; top:-540px; width:1200px; height:1200px; border-radius:50%; opacity:.6;
+  background: conic-gradient(from 0deg, transparent 0deg 292deg, rgba(255,51,85,.022) 334deg, rgba(255,51,85,.06) 359deg, transparent 360deg);
+  animation: tr-radar-sweep 11s linear infinite; }
+.tr-sx-hero-radar .tr-radar.sxhero { position:absolute; right:46px; top:22px; filter: drop-shadow(0 0 14px rgba(255,51,85,.32)); }
+.tr-radar.sxhero .ring { stroke-width:1.6; } .tr-radar.sxhero .r4 { opacity:.34; } .tr-radar.sxhero .r3 { opacity:.42; }
+[class*="st-key-trsx_hero"] .tr-hero-inner { min-height:150px; }
+[class*="st-key-trsx_hero"] .tr-hero-inner > div:first-child { align-self:flex-start; }
+.tr-sx-empty.warn { border-color:rgba(232,178,92,.34); }
+.tr-sx-empty.warn .ring { color:var(--tr-warning); border-color:rgba(232,178,92,.4); }
+.tr-sx-empty.bad { border-color:rgba(255,92,92,.34); }
+.tr-sx-empty.bad .ring { color:var(--tr-danger); border-color:rgba(255,92,92,.4); }
+@media (max-width: 1200px) { .tr-sx-hero-radar .tr-radar.sxhero { width:88px !important; right:34px; } }
+@media (max-width: 768px) {
+  .tr-sx-hero-radar { display:none; }
+  [class*="st-key-trsx_hero"] .tr-hero-inner { min-height:0; }
+  .tr-sx-ambience .tr-radar.sxbg { right:-60%; top:1100px; opacity:.14; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tr-sx-ambience::after, .tr-sx-hero-radar .scan { animation:none !important; }
+}
+</style>"""
+
+
+def ambience() -> None:
+    """The room behind the page, drawn first so everything sits on top of it."""
+    C.html(AMBIENCE_CSS + '<div class="tr-sx-ambience" aria-hidden="true">'
+           + radar.svg(size="min(78vw, 980px)", state="idle", cls="sxbg", label="") + "</div>")
+
+
+def hero() -> None:
+    with st.container(key="trsx_hero"):
+        C.html('<div class="tr-sx-hero-radar" aria-hidden="true"><div class="scan"></div>'
+               + radar.svg(size=104, state="idle", cls="sxhero", label="") + "</div>")
+        C.hero("Showtime Explorer", "Find your movie. Find your theatre. Find your time.",
+               "Showtimes across Hyderabad, read from BookMyShow.")
+
+
 def page() -> None:
     _boot()
-    C.hero("Showtime Explorer", "Find your movie. Find your theatre. Find your time.",
-           "Showtimes across Hyderabad, read from BookMyShow.")
+    with st.container(key="trsx_root"):
+        ambience()
+        hero()
+        _page_body()
+
+
+def _page_body() -> None:
     slug = "hyderabad"
     view = cv.view(slug, "bookmyshow")
     titles = catalog.titles(view.entries)
@@ -505,7 +619,7 @@ def page() -> None:
                 wanted = [w for w in films if not chosen or w.movie.language in chosen]
             result = _load(mode, wanted, date_code) if wanted else None
             if result is not None and mode == "theatre":
-                result = {**result, "venue": target.code}
+                result = {**result, "venue": target.code, "venue_name": target.name}
             shows = [s for d in (result or {}).get("days", []) for s in d.shows]
             _filters(mode, shows, languages)
 

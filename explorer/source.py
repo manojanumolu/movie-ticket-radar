@@ -57,6 +57,7 @@ from explorer.query import ExplorerShow, parse_minutes
 from monitor.models import Availability, MovieRef
 from platforms.base import PlatformBlocked, PlatformError
 from platforms.bookmyshow import BookMyShowProvider, is_bookmyshow_url, split_venue_name
+from urllib.parse import urlparse
 
 #: A live read is served from cache for this long; after it, a new film/date
 #: selection reads again. Refresh can always read sooner (``COOLDOWN``).
@@ -162,8 +163,51 @@ def _booking_url(provider: BookMyShowProvider, movie: MovieRef, venue_code: str,
     return ""
 
 
+def _formats(screen: str, event_format: str, base_format: str) -> tuple[str, ...]:
+    """A show's format names, dimension first: the premium sibling's own label
+    ("3D", "4DX 3D") or, for the base event, the city listing's dimension
+    ("2D") — then the screen BookMyShow named ("HDR By Barco")."""
+    return tuple(dict.fromkeys(f for f in (event_format or base_format, screen) if f))
+
+
+_POSTER_HOSTS = ("in.bmscdn.com", "assets-in.bmscdn.com")
+
+
+def safe_poster(url: str) -> str:
+    """Only BookMyShow's own image CDN, over https; anything else draws no image."""
+    try:
+        parsed = urlparse((url or "").strip())
+    except ValueError:
+        return ""
+    return url if parsed.scheme == "https" and (parsed.netloc or "").lower() in _POSTER_HOSTS else ""
+
+
+#: What a failure is called on the page. The provider's own messages can carry
+#: a network library's exception text (proxy hosts, addresses); none of that is
+#: shown — only which kind of failure it was. The full text stays server-side.
+_REASONS = (
+    (("allowance",), "The Explorer's own request limit was reached — try again shortly"),
+    (("paused",), "BookMyShow refused recent requests, so live refresh is paused for a few minutes"),
+    (("bot check", "http 403", "http 401"), "BookMyShow refused the request (its bot check)"),
+    (("429", "rate limit"), "BookMyShow is rate-limiting requests right now"),
+    (("timeout", "timed out"), "BookMyShow didn't respond in time"),
+    (("server error",), "BookMyShow had a server error"),
+    (("could not reach", "connection"), "BookMyShow couldn't be reached"),
+    (("isn't json", "not json", "unexpected"), "BookMyShow sent a response that couldn't be read"),
+    (("404", "no listing"), "BookMyShow has no listing for this film on that date"),
+)
+
+
+def public_reason(message: str) -> str:
+    text = (message or "").lower()
+    for needles, reason in _REASONS:
+        if any(n in text for n in needles):
+            return reason
+    return "BookMyShow couldn't be reached"
+
+
 def shows_from_day(day, movie: MovieRef, movie_id: str, *, title: str = "", poster: str = "",
-                   provider: BookMyShowProvider | None = None) -> list[ExplorerShow]:
+                   provider: BookMyShowProvider | None = None, base_format: str = "") -> list[ExplorerShow]:
     """Turn a provider read into Explorer shows. Theatre facts come from the
     theatre's own BookMyShow name and area (``explorer.classify``)."""
     provider = provider or BookMyShowProvider(session=object())
@@ -179,15 +223,16 @@ def shows_from_day(day, movie: MovieRef, movie_id: str, *, title: str = "", post
             event_code=movie.event_code, venue_code=s.venue_code, venue_name=name, area=area,
             locality=facts.locality, operator=facts.operator, theatre_type=facts.theatre_type,
             date_code=s.date_code, time_label=s.time_label,
-            minutes=parse_minutes(s.time_code, s.time_label), formats=s.format_labels,
+            minutes=parse_minutes(s.time_code, s.time_label),
+            formats=_formats(s.format_label, s.event_format, base_format),
             session_id=s.session_id, booking_url=_booking_url(provider, movie, s.venue_code, s.date_code),
-            sold_out=s.availability is Availability.SOLD_OUT, poster_url=poster,
+            sold_out=s.availability is Availability.SOLD_OUT, poster_url=safe_poster(poster),
         ))
     return out
 
 
 def shows_from_snapshot(rec: dict[str, Any], movie: MovieRef, movie_id: str, *, title: str = "",
-                        poster: str = "") -> list[ExplorerShow]:
+                        poster: str = "", base_format: str = "") -> list[ExplorerShow]:
     provider = BookMyShowProvider(session=object())
     venues = rec.get("venues") if isinstance(rec.get("venues"), dict) else {}
     out = []
@@ -204,9 +249,9 @@ def shows_from_snapshot(rec: dict[str, Any], movie: MovieRef, movie_id: str, *, 
             event_code=movie.event_code, venue_code=str(code), venue_name=str(name), area=str(area),
             locality=facts.locality, operator=facts.operator, theatre_type=facts.theatre_type,
             date_code=str(date_code), time_label=str(label), minutes=parse_minutes(str(time_code), str(label)),
-            formats=tuple(dict.fromkeys(f for f in (str(fmt), str(event_fmt)) if f)),
+            formats=_formats(str(fmt), str(event_fmt), base_format),
             session_id=str(session), booking_url=_booking_url(provider, movie, str(code), str(date_code)),
-            sold_out=bool(sold), poster_url=poster,
+            sold_out=bool(sold), poster_url=safe_poster(poster),
         ))
     return out
 
@@ -329,6 +374,11 @@ class Wanted:
     movie_id: str
     title: str = ""
     poster: str = ""
+    #: The city listing's dimension for this row's own event ("2D"), when known.
+    base_format: str = ""
+    #: By theatre: True when the catalogue lists this film at the theatre on
+    #: the date; False when it is read in case the theatre has added it since.
+    listed: bool = True
 
     @property
     def events(self) -> int:
@@ -339,7 +389,8 @@ def _snapshot_day(w: Wanted, date_code: str, error: str, data: dict | None) -> M
     rec = snap_store.movie_record(w.movie_id, data=data)
     if rec is None:
         return MovieDay(w.movie_id, date_code, [], FAILED, None, error=error)
-    shows = shows_from_snapshot(rec, w.movie, w.movie_id, title=w.title, poster=w.poster)
+    shows = shows_from_snapshot(rec, w.movie, w.movie_id, title=w.title, poster=w.poster,
+                                base_format=w.base_format)
     return MovieDay(w.movie_id, date_code, shows, SNAPSHOT, parse_iso(rec.get("read_at")), error=error)
 
 
@@ -351,12 +402,15 @@ def read_one(w: Wanted, date_code: str, *, force: bool = False, live: bool = Tru
     try:
         entry, from_cache = rd.read(w.movie, date_code, force=force)
     except PlatformError as exc:
-        return _snapshot_day(w, date_code, str(exc), snapshot_data)
+        print(f"[explorer] live read failed: {type(exc).__name__}", flush=True)
+        return _snapshot_day(w, date_code, public_reason(str(exc)), snapshot_data)
     except Exception as exc:  # noqa: BLE001 - a parser surprise is a failed read, not a crash
-        return _snapshot_day(w, date_code, f"Unexpected {type(exc).__name__} reading BookMyShow.", snapshot_data)
-    shows = shows_from_day(entry.day, w.movie, w.movie_id, title=w.title, poster=w.poster)
+        print(f"[explorer] live read failed: unexpected {type(exc).__name__}", flush=True)
+        return _snapshot_day(w, date_code, "BookMyShow sent a response that couldn't be read", snapshot_data)
+    shows = shows_from_day(entry.day, w.movie, w.movie_id, title=w.title, poster=w.poster,
+                           base_format=w.base_format)
     origin = CACHED if from_cache and rd.age(entry) >= FRESH_FOR else LIVE
-    missing = [f"{code}: {msg}" for code, msg in entry.day.errors]
+    missing = [public_reason(msg) for _code, msg in entry.day.errors]
     return MovieDay(w.movie_id, date_code, shows, origin, entry.read_at, missing=missing)
 
 
@@ -392,5 +446,6 @@ def read_many(wanted: list[Wanted], date_code: str, *, force: bool = False, live
 __all__ = [
     "BLOCK_PAUSE", "BUDGET", "BudgetExhausted", "CACHED", "CACHE_TTL", "COOLDOWN", "FAILED", "FRESH_FOR",
     "GatedSession", "IN_FLIGHT", "LIVE", "LiveReader", "MAX_EVENTS", "MovieDay", "SNAPSHOT", "TokenBucket",
-    "Wanted", "install", "read_many", "read_one", "reader", "shows_from_day", "shows_from_snapshot",
+    "Wanted", "install", "public_reason", "read_many", "read_one", "reader", "safe_poster", "shows_from_day",
+    "shows_from_snapshot",
 ]
