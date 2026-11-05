@@ -33,6 +33,7 @@ from html import escape
 from monitor.models import Availability, Monitor
 from monitor.state import MonitorState
 from ui import components as C
+from content import home_dialogues
 from ui import crafts
 from ui import radar
 from ui.theme import _svg_uri
@@ -88,40 +89,26 @@ LINES: dict[str, tuple[str, str, str]] = {
 TELUGU_SIX: tuple[str, ...] = ("direction", "cinematography", "screenwriting",
                                "producing", "acting", "editing")
 
-#: The hero's rotating line: one dialogue at a time, in its original language
-#: (romanised, in the same spelling the marks and the Explorer already use),
-#: with its English translation underneath and the film, year and language.
-#: Only approved lines whose wording and meaning are certain are here; the
-#: marks keep all twenty-four of theirs, untouched. (quote, English, film,
-#: year, language)
-HERO_LINES: tuple[tuple[str, str, str, int, str], ...] = (
-    ("Pushpa... Pushpa Raj... Thaggede Le!", "Pushpa... Pushpa Raj... I won't back down!",
-     "Pushpa: The Rise", 2021, "Telugu"),
-    ("Kitne aadmi the?", "How many men were there?", "Sholay", 1975, "Hindi"),
-    ("Okka sari commit aithe... naa maata nene vinanu!", "Once I commit, I don't listen even to myself.",
-     "Pokiri", 2006, "Telugu"),
-    ("En vazhi thani vazhi.", "My way is a way of its own.", "Padayappa", 1999, "Tamil"),
-    ("Naakkonchem thikka undi... kaani daaniko lekkundi!", "I'm a little crazy... but there's a method to it.",
-     "Gabbar Singh", 2012, "Telugu"),
-    ("Nee po mone Dinesha.", "Off you go, Dinesha, my boy.", "Narasimham", 2000, "Malayalam"),
-    ("Mere paas maa hai.", "I have Mother.", "Deewaar", 1975, "Hindi"),
-    ("Mogambo khush hua.", "Mogambo is pleased.", "Mr. India", 1987, "Hindi"),
-)
+#: The hero's rotating line: famous cinema from around the world, one line at
+#: a time — the original words in Roman letters, then film, year, speaker
+#: and language. No translations. The collection lives in
+#: ``content.home_dialogues``, apart from the 24 marks' own lines
+#: (:data:`LINES`), which this does not read or change.
+HERO_LINES = home_dialogues.DIALOGUES
 #: How long each line holds the hero, in seconds.
-HERO_LINE_SECONDS = 6
+HERO_LINE_SECONDS = 5
 
 
 def hero_lines() -> str:
     """Every line stacked in one fixed slot, each shown in turn by its own CSS
     delay — no script, no rerun, the slot never changes size. Hidden from
-    assistive technology: a sentence that changes every six seconds is noise
+    assistive technology: a sentence that changes every few seconds is noise
     to a screen reader, and the marks carry their lines in their own labels."""
     spans = "".join(
         f'<span class="ln" style="animation-delay:{i * HERO_LINE_SECONDS}s">'
-        f'<span class="q">“{escape(q)}”</span>'
-        f'<span class="en"><b>English</b>{escape(en)}</span>'
-        f'<span class="by">{escape(film)} ({year}) · {escape(lang)}</span></span>'
-        for i, (q, en, film, year, lang) in enumerate(HERO_LINES))
+        f'<span class="q">“{escape(d.line)}”</span>'
+        f'<span class="by">{escape(d.credit)}</span></span>'
+        for i, d in enumerate(HERO_LINES))
     return f'<div class="tr-hero-lines" aria-hidden="true">{spans}</div>'
 
 
@@ -601,17 +588,12 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 /* ── the hero's rotating line: one fixed slot under the copy ──────────── */
 .tr-hero-lines {{ position:relative; height:54px; margin-top:9px; overflow:hidden; pointer-events:none; }}
 .tr-hero-lines .ln {{ position:absolute; left:0; right:0; top:0; display:flex; flex-direction:column; gap:2px; opacity:0; }}
-.tr-hero-lines .ln > span {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
 .tr-hero-lines .q {{ font-size:13.5px; line-height:18px; font-style:italic; font-weight:600; color:var(--tr-text-2); }}
-.tr-hero-lines .en {{ font-size:12px; line-height:16px; color:var(--tr-text-3); }}
-.tr-hero-lines .en b {{ margin-right:7px; font-family:var(--tr-mono); font-size:9px; font-weight:500; letter-spacing:.16em;
-  text-transform:uppercase; color:var(--tr-text-4); }}
 .tr-hero-lines .by {{ font-family:var(--tr-mono); font-size:9.5px; line-height:13px; letter-spacing:.18em; text-transform:uppercase;
   color:var(--tr-accent-soft); opacity:.85; }}
 {_hero_lines_css()}
 @media (max-width: 768px) {{
   .tr-hero-lines {{ height:96px; }}
-  .tr-hero-lines .ln > span {{ white-space:normal; }}
 }}
 @media (prefers-reduced-motion: reduce) {{
   .tr-hero-lines .ln {{ animation:none; }}
