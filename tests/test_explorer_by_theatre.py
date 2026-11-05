@@ -442,9 +442,15 @@ def test_the_atmosphere_is_cheap_quiet_and_out_of_the_way():
 def test_home_login_radar_and_auth_are_untouched():
     """The Explorer's work changes none of these. (Home itself changed once, on
     purpose: its big reel's glow became a static halo — see
-    tests/test_sidebar_ambience.py — and its radar is the same code.)"""
+    tests/test_sidebar_ambience.py — and its radar is the same code. The Login
+    page gained one thing since: the symbols' key under the panel, an addition
+    that removes and rewrites nothing of the sign-in code.)"""
     import subprocess
 
     changed = subprocess.run(["git", "diff", "--name-only", "b37d93d", "--", "ui/radar.py",
-                              "ui/login.py", "ui/crafts.py", "auth/"], capture_output=True, text=True).stdout
+                              "ui/crafts.py", "auth/"], capture_output=True, text=True).stdout
     assert changed.strip() == ""
+    diff = subprocess.run(["git", "diff", "-U0", "080ce6e", "--", "ui/login.py"],
+                          capture_output=True, text=True, check=True).stdout
+    removed = [ln for ln in diff.splitlines() if ln.startswith("-") and not ln.startswith("---")]
+    assert removed == [], removed                                        # added to, never rewritten

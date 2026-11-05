@@ -91,54 +91,35 @@ def _nav_css() -> str:
     return "\n".join(rules)
 
 
-#: The rail's film mechanism, in pixels from the rail's top-left corner, as
-#: the reference composition has it: a large reel at the upper left (behind the
-#: logo's lower edge and the first navigation rows), a smaller reel at the
-#: lower right (in the empty rail under the version line), and one strip of
-#: film wound between them — out of the large reel to the lower right, a gentle
-#: bulge through the rail's right-hand gutter, back across behind the quote,
-#: and into the small reel. ``film`` is that strip's centre line, drawn from
-#: hub to hub so each end runs under its reel's disc and the film is seen to
-#: leave one reel and enter the other. On a phone the rail is 300px wide, not
-#: 244, and the whole rig moves right by ``phone_shift``.
+#: The rail's two reels — Home's own drawing (``ui.home.reel_svg``) — where the
+#: reference composition has them: a large reel at the upper left (behind the
+#: logo's lower edge and the first navigation rows) and a smaller one at the
+#: lower right (in the empty rail under the version line). Nothing is drawn
+#: between them, and they stand still: decoration in a navigation rail should
+#: not move while a person reads it. On a phone the rail is 300px wide, not
+#: 244, and both move right by ``phone_shift``.
 RAIL_RIG = {
     "top": {"left": -4, "top": 134, "size": 124},      # the large reel, upper left
     "bottom": {"left": 134, "top": 588, "size": 104},  # the small reel, lower right, below the version line
-    "film": {"d": "M58 196 C 120 238, 226 250, 224 336 C 222 420, 102 462, 104 556 C 105 610, 150 634, 186 640",
-             "width": 20, "pitch": 15},
     "phone_shift": 28,
 }
-#: One turn of the large reel, in seconds. The small reel and the film move at
-#: the same rim speed, so the three read as one mechanism.
-RAIL_TURN = 48
-
-
-def rail_speed() -> float:
-    """Pixels per second at the reels' rims (``reel_svg`` draws r=190 of 200)."""
-    return 2 * 3.14159 * (RAIL_RIG["top"]["size"] / 2 * 0.95) / RAIL_TURN
 
 
 def _rail_rig_css() -> str:
-    top, bottom, film = RAIL_RIG["top"], RAIL_RIG["bottom"], RAIL_RIG["film"]
-    bottom_turn = round(RAIL_TURN * bottom["size"] / top["size"], 1)
-    film_loop = round(film["pitch"] / rail_speed(), 2)
     out = []
-    for name, reel in (("top", top), ("bottom", bottom)):
-        turn = RAIL_TURN if name == "top" else bottom_turn
+    for name in ("top", "bottom"):
+        reel = RAIL_RIG[name]
         rim = round(reel["size"] * 0.95)
         inset = (reel["size"] - rim) / 2
         out.append(f".tr-side-ambience .tr-reel.{name} {{ left: {reel['left']}px; top: {reel['top']}px; "
-                   f"width: {reel['size']}px; height: {reel['size']}px; animation: tr-side-reel {turn}s linear infinite; }}")
+                   f"width: {reel['size']}px; height: {reel['size']}px; }}")
         out.append(f".tr-side-ambience .tr-disc.{name} {{ left: {reel['left'] + inset}px; top: {reel['top'] + inset}px; "
                    f"width: {rim}px; height: {rim}px; }}")
-    out.append(f".tr-side-ambience .tr-film .perf, .tr-side-ambience .tr-film .frames "
-               f"{{ animation: tr-side-film {film_loop}s linear infinite; }}")
-    out.append(f"@keyframes tr-side-film {{ to {{ stroke-dashoffset: -{film['pitch']}; }} }}")
     return "\n".join(out)
 
 
 def _rail_phone_css() -> str:
-    """The rig's phone rule, set inside the theme's one phone block."""
+    """The reels' phone rule, set inside the theme's one phone block."""
     return f".tr-side-ambience .tr-side-rig {{ transform: translateX({RAIL_RIG['phone_shift']}px); }}"
 
 
@@ -248,23 +229,16 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   min-width: 244px !important; width: 244px !important;
   position: relative; isolation: isolate;
 }
-/* Sidebar ambience — the rail's film mechanism, behind everything in it.
+/* Sidebar ambience — two still reels, behind everything in the rail.
 
    Two of Home's reels (``ui.home.reel_svg``: rim, ring, six cut-outs, hub,
-   pin) — a large one at the upper left, a small one at the lower right — and
-   one strip of film wound between them (``ui.home.rail_film_svg``), drawn the
-   way Home draws its own film strip: one curve stroked in layers — the dark
-   band, a dashed stroke for the perforations, a narrower band over it that
-   leaves them only at the edges, and the frames down the middle. Each reel
-   stands on a dark disc that the film's ends run under, so the film is seen
-   to leave one reel and enter the other. Flat and 2D: no glow, no gloss, no
-   filter. The reels turn and the film runs at one rim speed — slowly. The
-   markup rides in the footer's html block (``app.sidebar``) and is fixed
-   here: ``position: fixed`` inside the rail — whose backdrop-filter makes it
-   the containing block — is the rail's box, so it never adds scrollable
-   width, and ``overflow: hidden`` clips whatever runs past the edge.
-   Pointer-transparent at z-index 0 under the content (lifted to 1 below). */
-@keyframes tr-side-reel { to { transform: rotate(360deg); } }
+   pin) — a large one at the upper left, a small one at the lower right — each
+   on a dark disc, and nothing between them. Flat and 2D: no glow, no gloss,
+   no filter, no motion. The markup rides in the footer's html block
+   (``app.sidebar``) and is fixed here: ``position: fixed`` inside the rail —
+   whose backdrop-filter makes it the containing block — is the rail's box,
+   so it never adds scrollable width, and ``overflow: hidden`` clips whatever
+   runs past the edge. Pointer-transparent, under the content. */
 /* z-index -1: under the rail's words. The ambience is positioned and its
    neighbours (the navigation, the quote) are not, so at z-index 0 it painted
    over them — invisible while the reels were bare strokes, plain the moment a
@@ -275,7 +249,7 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   pointer-events: none; overflow: hidden; color: #FF8CA0;
 }
 .tr-side-ambience .tr-side-rig { position: absolute; inset: 0; }
-.tr-side-ambience .tr-reel { position: absolute; transform-origin: 50% 50%; will-change: transform; }
+.tr-side-ambience .tr-reel { position: absolute; }
 .tr-side-ambience .tr-reel .rim { opacity: .2; }
 .tr-side-ambience .tr-reel .sheen { opacity: 0; }
 .tr-side-ambience .tr-reel .ring { opacity: .12; }
@@ -283,13 +257,6 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
 .tr-side-ambience .tr-reel .hub { opacity: .2; }
 .tr-side-ambience .tr-reel .pin { opacity: .35; }
 .tr-side-ambience .tr-disc { position: absolute; border-radius: 50%; background: #150C12; opacity: .92; }
-.tr-side-ambience .tr-film { position: absolute; left: 0; top: 0; overflow: visible; }
-.tr-side-ambience .tr-film path { fill: none; }
-.tr-side-ambience .tr-film .edge { stroke: #FF8CA0; stroke-opacity: .14; stroke-width: 21; }
-.tr-side-ambience .tr-film .band { stroke: #170D13; stroke-width: 20; }
-.tr-side-ambience .tr-film .perf { stroke: #FF8CA0; stroke-opacity: .38; stroke-width: 16; stroke-dasharray: 2.2 2.8; }
-.tr-side-ambience .tr-film .film { stroke: #170D13; stroke-width: 10.5; }
-.tr-side-ambience .tr-film .frames { stroke: #FF6B85; stroke-opacity: .17; stroke-width: 8.5; stroke-dasharray: 11 4; }
 __RAIL_RIG__
 /* off-canvas (a phone's collapsed rail) there is nothing to see */
 [data-testid="stSidebar"][aria-expanded="false"] .tr-side-ambience,
@@ -645,15 +612,6 @@ __NAV_ICONS__
 @keyframes tr-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.82)} }
 @keyframes tr-spin  { to { transform:rotate(360deg) } }
 @keyframes tr-sweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
-
-/* Asked for stillness, the reels stay — they just stop moving. */
-@media (prefers-reduced-motion: reduce) {
-  .tr-side-ambience .tr-reel.top, .tr-side-ambience .tr-reel.bottom,
-  .tr-side-ambience .tr-film .perf, .tr-side-ambience .tr-film .frames {
-    animation: none;
-    transform: none;
-  }
-}
 
 /* ── step rail: a journey, with a connector between pips ───────────── */
 .tr-steps { display:flex; gap:8px; margin:4px 0 6px; flex-wrap:wrap; }
@@ -1804,4 +1762,4 @@ def inject() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
 
 
-__all__ = ["CSS", "FONTS", "NAV_ICONS", "RAIL_RIG", "RAIL_TURN", "TOKENS", "inject", "rail_speed"]
+__all__ = ["CSS", "FONTS", "NAV_ICONS", "RAIL_RIG", "TOKENS", "inject"]

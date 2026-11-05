@@ -225,13 +225,15 @@ def logo(*, css: str = "") -> None:
     )
 
 
-def hero(title: str, lede: str, sub: str) -> None:
+def hero(title: str, lede: str, sub: str, after: str = "") -> None:
+    """The page's hero. ``after`` is markup the caller built (and escaped)
+    to sit under the copy — Home's rotating line."""
     html(
         f"""<div class="tr-hero"><div class="tr-hero-inner">
           <div>
             <h1>{e(title)}</h1>
             <div class="tr-hero-lede">{e(lede)}</div>
-            <div class="tr-hero-sub">{e(sub)}</div>
+            <div class="tr-hero-sub">{e(sub)}</div>{after}
           </div>
           <div class="tr-hero-mark"><span>Some stories</span><span>are worth</span><b>the wait</b></div>
         </div></div>"""
