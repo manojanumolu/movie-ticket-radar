@@ -105,7 +105,10 @@ def test_hyderabad_is_claimed_only_where_the_theatre_data_says_so():
 
 
 def test_the_theatre_data_and_monitoring_are_untouched():
+    # explorer/ (the Explorer's own data layer) is left out: later Explorer
+    # features extend it. Theatre data, monitoring, the BookMyShow provider,
+    # auth, notifications, Login, theme, crafts, flow and the workflows are not.
     changed = subprocess.run(["git", "diff", "--name-only", "f6b73dd", "--", "config/", "monitor/", "platforms/",
-                              "explorer/", "auth/", "notifications/", "ui/login.py", "ui/theme.py", "ui/crafts.py",
+                              "auth/", "notifications/", "ui/login.py", "ui/theme.py", "ui/crafts.py",
                               "ui/flow.py", ".github/"], capture_output=True, text=True, check=True).stdout
     assert changed.strip() == ""

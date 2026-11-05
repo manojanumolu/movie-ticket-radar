@@ -139,6 +139,7 @@ class Filters:
     languages: tuple[str, ...] = ()
     formats: tuple[str, ...] = ()
     venue_code: str = ""                   # theatre mode: this theatre only
+    title_key: str = ""                    # theatre mode, one film: that film only (``catalog.title_key``)
     hide_started_before: datetime | None = None   # today: shows already begun
 
 
@@ -184,6 +185,8 @@ def apply(shows: Iterable[ExplorerShow], f: Filters) -> FilterResult:
     out = FilterResult(shows=[], duplicates=dupes)
     for show in unique:
         if f.venue_code and show.venue_code != f.venue_code:
+            continue
+        if f.title_key and " ".join(show.movie_title.casefold().split()) != f.title_key:
             continue
         if show.date_code != f.date_code:
             out.wrong_date += 1
@@ -251,6 +254,22 @@ def group_by_movie(shows: Iterable[ExplorerShow]) -> list[Group]:
             for mid, items in buckets.items()]
 
 
+#: The heading for shows whose catalogue row names no language.
+NO_LANGUAGE = "Language not listed"
+
+
+def group_by_language(shows: Iterable[ExplorerShow]) -> list[Group]:
+    """One film at one theatre, cut by language: each language in order of
+    its first show, its shows in time order. A row BookMyShow lists with no
+    language stays apart under :data:`NO_LANGUAGE` — never guessed."""
+    buckets: dict[str, list[ExplorerShow]] = {}
+    for show in sort_by_time(shows):
+        buckets.setdefault(show.language or NO_LANGUAGE, []).append(show)
+    return [Group(key=lang, title=lang, subtitle=items[0].movie_title, shows=tuple(items),
+                  booking_url=items[0].booking_url, poster_url=items[0].poster_url)
+            for lang, items in buckets.items()]
+
+
 def by_hour(shows: Iterable[ExplorerShow]) -> list[tuple[str, list[ExplorerShow]]]:
     """The time-first list cut into hour bands — "9 AM", "10 AM" — for scanning."""
     out: list[tuple[str, list[ExplorerShow]]] = []
@@ -284,12 +303,14 @@ __all__ = [
     "FilterResult",
     "Filters",
     "Group",
+    "NO_LANGUAGE",
     "PRESETS",
     "WindowError",
     "apply",
     "by_hour",
     "dedupe_shows",
     "fmt_clock",
+    "group_by_language",
     "group_by_movie",
     "group_by_theatre",
     "minutes_of",

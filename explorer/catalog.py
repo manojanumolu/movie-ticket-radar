@@ -111,4 +111,44 @@ def films_at(entries: list[dict[str, Any]], venue_code: str, date_code: str) -> 
     return listed + maybe
 
 
-__all__ = ["Theatre", "Title", "films_at", "theatres", "titles"]
+def title_key(title: str) -> str:
+    """The identity two catalogue rows share when they are the same film in
+    different languages — the same key :func:`titles` groups by."""
+    return " ".join((title or "").casefold().split())
+
+
+@dataclass(frozen=True)
+class FilmAt:
+    """One film at one theatre, every language row of it together."""
+
+    key: str
+    title: str
+    languages: tuple[str, ...]
+    rows: tuple[Wanted, ...]
+    listed: bool                     # the catalogue lists it here on the date
+
+    @property
+    def label(self) -> str:
+        """The same on every date, so changing the date never drops the pick."""
+        return " · ".join([self.title, ", ".join(self.languages)] if self.languages else [self.title])
+
+
+def films_by_title(films: list[Wanted]) -> list[FilmAt]:
+    """``films_at``'s rows gathered into films: one entry per title, with each
+    language row kept as its own BookMyShow event. Films listed on the date
+    come first, in catalogue order."""
+    groups: dict[str, dict[str, Any]] = {}
+    for w in films:
+        key = title_key(w.title or w.movie.title)
+        if not key:
+            continue
+        g = groups.setdefault(key, {"title": w.title or w.movie.title, "rows": [], "listed": False})
+        g["rows"].append(w)
+        g["listed"] = g["listed"] or w.listed
+    out = [FilmAt(key=k, title=g["title"], rows=tuple(g["rows"]), listed=g["listed"],
+                  languages=tuple(dict.fromkeys(w.movie.language for w in g["rows"] if w.movie.language)))
+           for k, g in groups.items()]
+    return sorted(out, key=lambda f: not f.listed)
+
+
+__all__ = ["FilmAt", "Theatre", "Title", "films_at", "films_by_title", "theatres", "title_key", "titles"]

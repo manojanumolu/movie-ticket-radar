@@ -269,6 +269,28 @@ def _searchbox(mode: str, titles: list[catalog.Title], theatres: list[catalog.Th
     return next((t for t in theatres if t.label == choice), None)
 
 
+def _pick_film() -> None:
+    """The "Find a movie" box's ``on_change``: remember the film, and open its
+    shows grouped by language — the view that answers "when is it playing in
+    my language?" at a glance."""
+    _keep("sx_film")
+    st.session_state["sx_limit"] = PAGE_SIZE
+    if st.session_state.get("sx_film"):
+        st.session_state["sx_view"] = "group"
+
+
+def _filmbox(films: list[catalog.FilmAt]) -> catalog.FilmAt | None:
+    """By theatre: narrow the theatre to one film. Only films the catalogue
+    knows at this theatre are offered; none chosen keeps every film."""
+    _label("movie", "Find a movie")
+    labels = [f.label for f in films]
+    _clean_single("sx_film", labels)
+    choice = st.selectbox("Find a movie", labels, index=_kept_index("sx_film", labels), key="sx_film",
+                          label_visibility="collapsed", placeholder="All movies at this theatre — or search one…",
+                          on_change=_pick_film, disabled=not labels)
+    return next((f for f in films if f.label == choice), None)
+
+
 def _clean_single(key: str, labels: list[str]) -> None:
     if st.session_state.get(key) is not None and st.session_state.get(key) not in labels:
         st.session_state[key] = None
@@ -460,12 +482,19 @@ def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -
         languages=tuple(st.session_state.get("sx_lang") or ()),
         formats=tuple(st.session_state.get("sx_fmt") or ()),
         venue_code=result.get("venue", ""),
+        title_key=(result.get("film_at").key if result.get("film_at") is not None else ""),
         hide_started_before=now_ist() if today else None,
     )
     out = Q.apply(shows, filt)
     venues = {s.venue_code for s in out.shows}
 
     film = result.get("film")
+    film_at: catalog.FilmAt | None = result.get("film_at")
+    if film_at is not None:
+        poster = next((S.safe_poster(w.poster) for w in film_at.rows if S.safe_poster(w.poster)), "")
+        C.html(f'<div class="tr-sx-film">{C.thumb(poster)}<div class="b"><span class="tr-eyebrow">'
+               f'At {C.e(shows_title(result))}</span><div class="n">{C.e(film_at.title)}</div>'
+               f'<div class="s">{C.e(" · ".join(film_at.languages) or Q.NO_LANGUAGE)}</div></div></div>')
     if film is not None:
         poster = next((S.safe_poster(w.poster) for w in film.rows if S.safe_poster(w.poster)), "")
         C.html(f'<div class="tr-sx-film">{C.thumb(poster)}<div class="b"><span class="tr-eyebrow">Now showing</span>'
@@ -475,11 +504,13 @@ def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -
         head, toggle = st.columns([3, 2], gap="small", vertical_alignment="center")
         with head:
             count = len(out.shows)
-            extra = f" · {len(venues)} theatre{'s' if len(venues) != 1 else ''}" if mode == "movie" else ""
+            langs = {s.language or Q.NO_LANGUAGE for s in out.shows}
+            extra = (f" · {len(venues)} theatre{'s' if len(venues) != 1 else ''}" if mode == "movie" else
+                     f" · {len(langs)} language{'s' if len(langs) != 1 else ''}" if film_at is not None else "")
             C.html(f'<div class="tr-sx-count"><b>{count}</b> showtime{"s" if count != 1 else ""}{C.e(extra)}</div>')
         with toggle:
             view = st.session_state.get("sx_view", "time")
-            group_name = "By theatre" if mode == "movie" else "By movie"
+            group_name = "By theatre" if mode == "movie" else "By language" if film_at is not None else "By movie"
             with st.container(key="trpair_sxview"):
                 a, b = st.columns(2, gap="small")
                 for col, key, label in ((a, "time", "By time"), (b, "group", group_name)):
@@ -506,6 +537,10 @@ def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -
                    f"BookMyShow couldn't be read for {len(failed)} of {len(days)} film"
                    f"{'s' if len(days) != 1 else ''} ({failed[0].error}). None of the ones it did read has a "
                    "show matching this selection — try Refresh before relying on that.", kind="warn")
+        elif not on_date and film_at is not None:
+            _empty(f"{film_at.title} isn't playing here on this date",
+                   f"BookMyShow lists no {film_at.title} shows at {shows_title(result)} on {name} {sub} — "
+                   "bookings may not have opened yet, or try another date.")
         elif not on_date:
             where = f"{shows_title(result)} lists" if venue else "BookMyShow lists"
             _empty("Nothing listed for this date", f"{where} no shows for this selection on {name} {sub}"
@@ -521,7 +556,8 @@ def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -
 
     limit = st.session_state.get("sx_limit", PAGE_SIZE)
     if st.session_state.get("sx_view") == "group":
-        groups = Q.group_by_theatre(out.shows) if mode == "movie" else Q.group_by_movie(out.shows)
+        groups = (Q.group_by_theatre(out.shows) if mode == "movie" else
+                  Q.group_by_language(out.shows) if film_at is not None else Q.group_by_movie(out.shows))
         C.html(group_markup(groups, mode))
     else:
         C.html(time_rows_markup(out.shows[:limit], mode))
@@ -789,8 +825,12 @@ def _page_body() -> None:
     mode = st.session_state.get("sx_mode", "movie")
 
     _modes(mode)
+    film: catalog.FilmAt | None = None
     with st.container(border=True, key="trcard_sx_query"):
         target = _searchbox(mode, titles, theatres)
+        if mode == "theatre" and target is not None:
+            here = catalog.films_at(view.entries, target.code, st.session_state["sx_date"])
+            film = _filmbox(catalog.films_by_title(here))
         _dates(st.session_state["sx_date"])
         window = _window()
         date_code = st.session_state["sx_date"]
@@ -805,13 +845,13 @@ def _page_body() -> None:
                 chosen = set(st.session_state.get("sx_lang") or ()) & set(languages)
                 wanted = [w for w in target.rows if not chosen or w.movie.language in chosen]
             else:
-                films = catalog.films_at(view.entries, target.code, date_code)
+                films = list(film.rows) if film is not None else catalog.films_at(view.entries, target.code, date_code)
                 languages = sorted({w.movie.language for w in films if w.movie.language}, key=str.casefold)
                 chosen = set(st.session_state.get("sx_lang") or ()) & set(languages)
                 wanted = [w for w in films if not chosen or w.movie.language in chosen]
             result = _load(mode, wanted, date_code) if wanted else None
             if result is not None and mode == "theatre":
-                result = {**result, "venue": target.code, "venue_name": target.name}
+                result = {**result, "venue": target.code, "venue_name": target.name, "film_at": film}
             elif result is not None:
                 result = {**result, "film": target}
             shows = [s for d in (result or {}).get("days", []) for s in d.shows]
@@ -831,7 +871,8 @@ def _page_body() -> None:
         return
     if not wanted:
         name, sub = date_label(date_code)
-        _empty("Nothing listed here", f"The catalogue has no film listed at {target.name} for {name} {sub}"
+        what = film.title if film is not None else "film"
+        _empty("Nothing listed here", f"The catalogue has no {what} listed at {target.name} for {name} {sub}"
                + (" in the chosen languages." if st.session_state.get("sx_lang") else "."))
         return
     _results(mode, result, window, date_code)
