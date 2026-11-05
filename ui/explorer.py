@@ -34,6 +34,7 @@ from explorer.classify import MULTIPLEX, SINGLE_SCREEN, UNKNOWN
 from ui import catalogue_view as cv
 from ui import components as C
 from ui import flow
+from content import explorer_dialogues, format_directory as fmtdir
 from ui import crafts, radar
 from ui import home as home_ui
 
@@ -552,22 +553,23 @@ def _notes(out: Q.FilterResult, days: list[S.MovieDay]) -> None:
     C.html('<div class="tr-sx-notes">' + "".join(f"<div>{C.e(n)}</div>" for n in notes) + "</div>")
 
 
-#: A tribute line, under the hero's copy: ten short lines from Indian cinema,
-#: each with its film and language, one at a time. Short excerpts only.
-LINES: tuple[tuple[str, str, str], ...] = (
-    ("Pushpa... Pushpa Raj. Thaggede le!", "Pushpa: The Rise", "Telugu"),
-    ("Kitne aadmi the?", "Sholay", "Hindi"),
-    ("En vazhi thani vazhi.", "Padayappa", "Tamil"),
-    ("Nee po mone Dinesha.", "Narasimham", "Malayalam"),
-    ("Powerful people come from powerful places.", "KGF: Chapter 1", "Kannada"),
-    ("Okkasari commit aithe, naa maata nene vinanu.", "Pokiri", "Telugu"),
-    ("Mere paas maa hai.", "Deewaar", "Hindi"),
-    ("I am waiting.", "Thuppakki", "Tamil"),
-    ("Mogambo khush hua.", "Mr. India", "Hindi"),
-    ("Violence, violence, violence. I don't like it.", "KGF: Chapter 2", "Kannada"),
-)
+#: The tribute line under the hero's copy: recent Indian cinema, one line at
+#: a time — the original words in Roman letters, then film, year, speaker
+#: and language. No translations. The collection lives in
+#: ``content.explorer_dialogues``, apart from Home's.
+LINES = explorer_dialogues.DIALOGUES
 #: How long each line holds the slot, in seconds.
 LINE_SECONDS = 6
+
+
+def _line_keyframes() -> str:
+    """Each line holds the slot for its slice of the loop; opacity and a 3px
+    rise only, never layout."""
+    shown = 100 / len(LINES)
+    fade = 1.2 / (len(LINES) * LINE_SECONDS) * 100
+    return (f"@keyframes tr-sx-line {{ 0% {{ opacity:0; transform:translateY(3px); }} "
+            f"{fade:.2f}% {{ opacity:1; transform:none; }} {shown - fade:.2f}% {{ opacity:1; transform:none; }} "
+            f"{shown:.2f}%, 100% {{ opacity:0; transform:translateY(-3px); }} }}")
 
 #: The Explorer's atmosphere: Home's own radar (``ui.radar``) — the same mark,
 #: rings, sweep and glow, nothing drawn anew — once at hero size in the hero's
@@ -609,31 +611,72 @@ AMBIENCE_CSS = "<style>" + radar.CSS + crafts.CSS + """
 .tr-sx-empty.warn .ring { color:var(--tr-warning); border-color:rgba(232,178,92,.4); }
 .tr-sx-empty.bad { border-color:rgba(255,92,92,.34); }
 .tr-sx-empty.bad .ring { color:var(--tr-danger); border-color:rgba(255,92,92,.4); }
-/* Home's craft marks, decorative here: the band above the hero, a ledge below the results */
+/* Home's craft marks, at Home's positions: the band above the hero, a ledge
+   below the results. Each explains one cinema format (``content.format_directory``)
+   in Home's own card, on hover, keyboard focus or a tap. */
 .tr-sx-crafts { position:relative; pointer-events:none; }
-.tr-sx-crafts .tr-craft { opacity:.42; pointer-events:none; }
+.tr-sx-crafts .tr-craft { opacity:.42; pointer-events:auto; cursor:default; outline:none;
+  transition: opacity .18s var(--tr-ease), color .18s var(--tr-ease), transform .18s var(--tr-ease); }
 .tr-sx-crafts .tr-craft::before, .tr-sx-crafts .tr-craft::after { display:none; }
-.tr-sx-crafts .tr-craft .tr-ic { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.tr-sx-crafts .tr-craft .tr-ic, .tr-sx-fxstrip .tr-craft .tr-ic { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
 .tr-sx-crafts.band { position:absolute; left:0; right:250px; top:-108px; height:96px; }
 .tr-sx-crafts.foot { height:150px; margin-top:18px; }
+.tr-sx-crafts .tr-craft:hover, .tr-sx-crafts .tr-craft:focus, .tr-sx-crafts .tr-craft:focus-visible,
+.tr-sx-fxstrip .tr-craft:hover, .tr-sx-fxstrip .tr-craft:focus, .tr-sx-fxstrip .tr-craft:focus-visible { opacity:1; color:#FF8CA0; z-index:6; }
+.tr-sx-crafts .tr-craft:focus-visible, .tr-sx-fxstrip .tr-craft:focus-visible { box-shadow:0 0 0 2px rgba(255,51,85,.6); }
+.tr-sx-crafts .tr-sub, .tr-sx-fxstrip .tr-sub { position:absolute; bottom:calc(100% + 12px); left:50%; transform:translate(-50%, 4px); z-index:6;
+  display:flex; flex-direction:column; gap:4px; padding:10px 14px 9px; border-radius:11px; white-space:normal; width:max-content;
+  max-width:min(320px, calc(100vw - 32px)); text-align:left; pointer-events:none; opacity:0; visibility:hidden;
+  background: linear-gradient(168deg, #17131A, #0F0D12); border:1px solid rgba(255,255,255,.12);
+  box-shadow: 0 18px 40px -16px rgba(0,0,0,1), 0 0 0 1px rgba(255,51,85,.10);
+  transition: opacity .18s var(--tr-ease), transform .18s var(--tr-ease), visibility .18s; }
+.tr-sx-crafts .tr-craft:hover .tr-sub, .tr-sx-crafts .tr-craft:focus .tr-sub, .tr-sx-crafts .tr-craft:focus-visible .tr-sub {
+  opacity:1; visibility:visible; transform:translate(-50%, 0); }
+.tr-sx-crafts .tr-craft.tip-r .tr-sub { left:-4px; transform:translate(0, 4px); }
+.tr-sx-crafts .tr-craft.tip-l .tr-sub { left:auto; right:-4px; transform:translate(0, 4px); }
+.tr-sx-crafts .tr-craft.tip-r:hover .tr-sub, .tr-sx-crafts .tr-craft.tip-r:focus .tr-sub,
+.tr-sx-crafts .tr-craft.tip-l:hover .tr-sub, .tr-sx-crafts .tr-craft.tip-l:focus .tr-sub { transform:translate(0, 0); }
+.tr-sx-crafts .tr-craft.tip-b .tr-sub { bottom:auto; top:calc(100% + 12px); }
+.tr-sx-crafts .tr-sub .t, .tr-sx-fxstrip .tr-sub .t { font-size:13.5px; font-weight:700; line-height:1.3; color:#F2F2F4; }
+.tr-sx-crafts .tr-sub .g, .tr-sx-fxstrip .tr-sub .g { font-family:var(--tr-mono); font-size:9.5px; letter-spacing:.18em; text-transform:uppercase; color:#FF8CA0; }
+.tr-sx-crafts .tr-sub .d, .tr-sx-fxstrip .tr-sub .d { font-size:12.5px; line-height:1.45; color:#C8C8D0; }
+.tr-sx-crafts .tr-sub .h, .tr-sx-fxstrip .tr-sub .h { font-size:11px; line-height:1.4; color:var(--tr-text-3); border-top:1px solid rgba(255,255,255,.08); padding-top:5px; }
+@keyframes tr-sx-nod { 0% { transform:scale(1); } 45% { transform:scale(1.16) rotate(-6deg); } 100% { transform:scale(1); } }
+.tr-sx-crafts .tr-craft:hover .tr-ic, .tr-sx-crafts .tr-craft:focus .tr-ic,
+.tr-sx-fxstrip .tr-craft:hover .tr-ic, .tr-sx-fxstrip .tr-craft:focus .tr-ic { animation: tr-sx-nod .5s var(--tr-ease) 1; }
+/* the phone's strip of the same 24 marks: the strip scrolls, so each card is
+   anchored to the box around it, full width under the strip, never clipped */
+.tr-sx-fxstrip { display:none; }
 /* the tribute line: one fixed slot under the hero's copy, one line at a time */
-@keyframes tr-sx-line { 0% { opacity:0; transform:translateY(3px); } 2% { opacity:1; transform:none; }
-  8.5% { opacity:1; transform:none; } 10%, 100% { opacity:0; transform:translateY(-3px); } }
-.tr-sx-lines { position:relative; height:20px; margin-top:16px; overflow:hidden; }
-.tr-sx-lines .ln { position:absolute; left:0; top:0; white-space:nowrap; opacity:0; font-size:12.5px; font-style:italic;
-  font-weight:500; color:var(--tr-text-3); animation: tr-sx-line """ + str(len(LINES) * LINE_SECONDS) + """s linear infinite; }
-.tr-sx-lines .by { margin-left:10px; font-style:normal; font-size:9.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--tr-accent-soft); opacity:.8; }
+.tr-sx-lines { position:relative; height:50px; margin-top:12px; overflow:hidden; pointer-events:none; }
+.tr-sx-lines .ln { position:absolute; left:0; right:0; top:0; display:flex; flex-direction:column; gap:3px; opacity:0;
+  animation: tr-sx-line """ + str(len(LINES) * LINE_SECONDS) + """s linear infinite; }
+.tr-sx-lines .q { font-size:12.5px; line-height:17px; font-style:italic; font-weight:500; color:var(--tr-text-3); }
+.tr-sx-lines .by { font-size:9.5px; line-height:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--tr-accent-soft); opacity:.8; }
+""" + _line_keyframes() + """
 @media (max-width: 1200px) { .tr-sx-hero-radar .tr-radar.sxhero { width:88px !important; right:34px; } }
 @media (max-width: 768px) {
   .tr-sx-hero-radar, .tr-sx-crafts { display:none; }
-  .tr-sx-lines { height:54px; margin-top:12px; }
-  .tr-sx-lines .ln { white-space:normal; }
+  .tr-sx-lines { height:90px; margin-top:12px; }
+  .tr-sx-fxstrip { display:block; position:relative; margin-top:18px; }
+  /* the strip's block sits above the results' blocks, so an open card is never under them */
+  [class*="st-key-trsx_root"] > [data-testid="stElementContainer"]:has(.tr-sx-fxstrip) { z-index:3; }
+  .tr-sx-fxstrip .row { display:flex; gap:8px; padding:6px 4px 10px; overflow-x:auto; scrollbar-width:none;
+    border-bottom:1px solid rgba(255,255,255,.06); }
+  .tr-sx-fxstrip .row::-webkit-scrollbar { display:none; }
+  .tr-sx-fxstrip .tr-craft { position:static; flex-shrink:0; margin:0; width:34px; height:34px; opacity:.55; outline:none; }
+  .tr-sx-fxstrip .tr-craft::before, .tr-sx-fxstrip .tr-craft::after { display:none; }
+  /* upward: the version line that follows the page would paint over a card opening below */
+  .tr-sx-fxstrip .tr-craft .tr-sub { left:0; right:0; top:auto; bottom:calc(100% + 6px); width:auto; max-width:none; transform:none !important; z-index:10; }
+  .tr-sx-fxstrip .tr-craft:hover .tr-sub, .tr-sx-fxstrip .tr-craft:focus .tr-sub, .tr-sx-fxstrip .tr-craft:focus-visible .tr-sub { opacity:1; visibility:visible; }
   [class*="st-key-trsx_hero"] .tr-hero-inner { min-height:0; }
   .tr-sx-ambience .tr-radar.sxbg { right:-60%; top:1100px; opacity:.14; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tr-sx-ambience::after, .tr-sx-hero-radar .scan, .tr-sx-lines .ln { animation:none !important; }
   .tr-sx-lines .ln:first-child { opacity:1; }
+  .tr-sx-crafts .tr-craft .tr-ic, .tr-sx-fxstrip .tr-craft .tr-ic { animation:none !important; }
+  .tr-sx-crafts .tr-craft, .tr-sx-crafts .tr-sub, .tr-sx-fxstrip .tr-sub { transition:none; }
 }
 </style>"""
 
@@ -648,21 +691,56 @@ CRAFT_ROWS = {
 }
 
 
+def _side(x: float, zone: str) -> str:
+    """Which way a card opens so it stays inside the window: a mark in the
+    outer third anchors its card to its own edge (a format card is wider
+    than Home's dialogue card), and the band, above the hero at the very top
+    of the page, always opens downward."""
+    side = "tip-l" if x > 66 else "tip-r" if x < 34 else ""
+    return f"{side} tip-b".strip() if zone == "band" else side
+
+
+def _format_mark(key: str, x: float | None = None, y: float | None = None, zone: str = "") -> str:
+    """One craft mark carrying its format's card: name, category and group,
+    what it is, and whether TicketRadar's Hyderabad data names it. The card
+    is a real child element (hover, focus and a tap reveal it, in CSS); its
+    text is spoken once, through the mark's ``aria-label``."""
+    f = fmtdir.BY_CRAFT[key]
+    where = fmtdir.availability(f)
+    label = f"{f.name} — {f.category}, {f.group}. {f.description} {where}."
+    positioned = x is not None
+    side = _side(x, zone) if positioned else ""
+    cls = f"tr-craft {side}".strip()
+    style = f' style="left:{x}%;top:{y:.0f}%"' if positioned else ""
+    return (f'<span class="{cls}"{style} tabindex="0" role="img" aria-label="{C.e(label)}">'
+            f'{home_ui._icon(crafts.BY_KEY[key])}'
+            f'<span class="tr-sub" aria-hidden="true"><span class="t">{C.e(f.name)}</span>'
+            f'<span class="g">{C.e(f.category)} · {C.e(f.group)}</span>'
+            f'<span class="d">{C.e(f.description)}</span><span class="h">{C.e(where)}</span></span></span>')
+
+
 def craft_zone(zone: str) -> str:
-    """Home's craft marks (``ui.crafts`` paths, ``ui.home``'s own markup for the
-    icon), decorative here: no tooltip, no focus, nothing to hit."""
-    marks = "".join(f'<span class="tr-craft" style="left:{x}%;top:{y:.0f}%">{home_ui._icon(crafts.BY_KEY[k])}</span>'
-                    for k, x, y in CRAFT_ROWS[zone])
-    return f'<div class="tr-sx-crafts {zone}" aria-hidden="true">{marks}</div>'
+    """Home's craft marks at their places (``ui.crafts`` paths, ``ui.home``'s
+    markup for the icon), each explaining one cinema format."""
+    marks = "".join(_format_mark(k, x, y, zone) for k, x, y in CRAFT_ROWS[zone])
+    return (f'<div class="tr-sx-crafts {zone}" role="group" aria-label="Cinema formats, explained">'
+            f'{marks}</div>')
+
+
+def format_strip() -> str:
+    """The phone's strip of the same 24 marks, in the same order."""
+    keys = [k for zone in ("band", "foot") for k, _x, _y in CRAFT_ROWS[zone]]
+    return ('<div class="tr-sx-fxstrip" role="group" aria-label="Cinema formats, explained"><div class="row">'
+            + "".join(_format_mark(k) for k in keys) + '</div></div>')
 
 
 def lines_markup() -> str:
     """The rotating tribute: every line in one fixed slot, each shown in turn by
     its own CSS delay — no script, no rerun, no layout shift."""
     spans = "".join(
-        f'<span class="ln" style="animation-delay:{i * LINE_SECONDS}s">“{C.e(q)}”'
-        f'<span class="by tr-mono">{C.e(film)} · {C.e(lang)}</span></span>'
-        for i, (q, film, lang) in enumerate(LINES))
+        f'<span class="ln" style="animation-delay:{i * LINE_SECONDS}s"><span class="q">“{C.e(d.line)}”</span>'
+        f'<span class="by tr-mono">{C.e(d.credit)}</span></span>'
+        for i, d in enumerate(LINES))
     return f'<div class="tr-sx-lines" aria-hidden="true">{spans}</div>'
 
 
@@ -692,7 +770,7 @@ def page() -> None:
         ambience()
         hero()
         _page_body()
-        C.html(craft_zone("foot"))
+        C.html(craft_zone("foot") + format_strip())
 
 
 @st.cache_resource(show_spinner=False, max_entries=4)
