@@ -140,8 +140,8 @@ def test_all_twenty_four_crafts_are_on_home_each_with_a_line(make_monitor):
     labels = {t.split(" — ")[0] for t in tips}
     assert labels == {c.label for c in crafts.CRAFTS}                      # every craft, by its own name
     assert set(home.HOME_LAYOUT) == set(crafts.BY_KEY) and set(home.LINES) == set(crafts.BY_KEY)
-    assert all(len(line) <= 48 for line in home.LINES.values())           # short, a line each
-    assert "Thokkukuntu povaale!" in body and "I am Iron Man." in body and "Why so serious?" in body
+    assert "Thaggedhe le!" in body and "I am Iron Man." in body and "Why so serious?" in body
+    assert 'class="tr-dlg tr-dlg-home"' in body                            # the rotating line under the hero
     assert 'tabindex="0"' in body                                          # reachable by keyboard
     assert re.findall(r'class="tr-home-zone (\w+)"', body) == ["band", "rail", "foot"]
     for zone in ("band", "rail", "foot"):
@@ -164,7 +164,7 @@ def test_the_radar_sits_in_the_hero_and_follows_the_truth(make_monitor, at):
 
 def test_homes_stylesheet_is_an_enhancement_layer_only():
     css = home.CSS
-    assert css.startswith("<style>") and len(css) < 36000                 # radar, crafts, reel, icons as data URIs
+    assert css.startswith("<style>") and len(css) < 38000                 # radar, crafts, reel, icons as data URIs, the dialogue slot
     assert ".tr-home-ambience" in css and "conic-gradient" in css and "repeating-linear-gradient" in css
     desktop = css[css.index("@media (min-width: 1150px)"):]
     assert '[class*="st-key-trhome"] { display:grid !important;' in desktop

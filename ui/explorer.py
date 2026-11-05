@@ -34,8 +34,7 @@ from explorer.classify import MULTIPLEX, SINGLE_SCREEN, UNKNOWN
 from ui import catalogue_view as cv
 from ui import components as C
 from ui import flow
-from ui import crafts, radar
-from ui import home as home_ui
+from ui import dialogues, formats, radar
 
 MODES = {
     "movie": ("By movie", "Find where and when a movie is playing.", "movie"),
@@ -552,22 +551,10 @@ def _notes(out: Q.FilterResult, days: list[S.MovieDay]) -> None:
     C.html('<div class="tr-sx-notes">' + "".join(f"<div>{C.e(n)}</div>" for n in notes) + "</div>")
 
 
-#: A tribute line, under the hero's copy: ten short lines from Indian cinema,
-#: each with its film and language, one at a time. Short excerpts only.
-LINES: tuple[tuple[str, str, str], ...] = (
-    ("Pushpa... Pushpa Raj. Thaggede le!", "Pushpa: The Rise", "Telugu"),
-    ("Kitne aadmi the?", "Sholay", "Hindi"),
-    ("En vazhi thani vazhi.", "Padayappa", "Tamil"),
-    ("Nee po mone Dinesha.", "Narasimham", "Malayalam"),
-    ("Powerful people come from powerful places.", "KGF: Chapter 1", "Kannada"),
-    ("Okkasari commit aithe, naa maata nene vinanu.", "Pokiri", "Telugu"),
-    ("Mere paas maa hai.", "Deewaar", "Hindi"),
-    ("I am waiting.", "Thuppakki", "Tamil"),
-    ("Mogambo khush hua.", "Mr. India", "Hindi"),
-    ("Violence, violence, violence. I don't like it.", "KGF: Chapter 2", "Kannada"),
-)
-#: How long each line holds the slot, in seconds.
-LINE_SECONDS = 6
+#: The tribute line under the hero's copy: Indian cinema from the audited
+#: collection (``ui.dialogues``), one line at a time, each with its film,
+#: year and language.
+ROTATION = dialogues.EXPLORER_ROTATION
 
 #: The Explorer's atmosphere: Home's own radar (``ui.radar``) — the same mark,
 #: rings, sweep and glow, nothing drawn anew — once at hero size in the hero's
@@ -575,7 +562,8 @@ LINE_SECONDS = 6
 #: rings carry on behind the results; plus Home's room light. No reel, no film
 #: strip. Transform and opacity only (``radar.CSS``'s own keyframes); nothing
 #: blurred; pointer-transparent; ``prefers-reduced-motion`` stills it all.
-AMBIENCE_CSS = "<style>" + radar.CSS + crafts.CSS + """
+AMBIENCE_CSS = ("<style>" + radar.CSS + dialogues.CSS + dialogues.rotation_css("tr-dlg-sx", len(ROTATION))
+                + formats.CSS + """
 @keyframes tr-sx-breathe { 0%,100% { opacity:.65; transform:scale(1); } 50% { opacity:1; transform:scale(1.05); } }
 [class*="st-key-trsx_root"] { position:relative; isolation:isolate; }
 [class*="st-key-trsx_root"] > [data-testid="stElementContainer"],
@@ -609,61 +597,18 @@ AMBIENCE_CSS = "<style>" + radar.CSS + crafts.CSS + """
 .tr-sx-empty.warn .ring { color:var(--tr-warning); border-color:rgba(232,178,92,.4); }
 .tr-sx-empty.bad { border-color:rgba(255,92,92,.34); }
 .tr-sx-empty.bad .ring { color:var(--tr-danger); border-color:rgba(255,92,92,.4); }
-/* Home's craft marks, decorative here: the band above the hero, a ledge below the results */
-.tr-sx-crafts { position:relative; pointer-events:none; }
-.tr-sx-crafts .tr-craft { opacity:.42; pointer-events:none; }
-.tr-sx-crafts .tr-craft::before, .tr-sx-crafts .tr-craft::after { display:none; }
-.tr-sx-crafts .tr-craft .tr-ic { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
-.tr-sx-crafts.band { position:absolute; left:0; right:250px; top:-108px; height:96px; }
-.tr-sx-crafts.foot { height:150px; margin-top:18px; }
-/* the tribute line: one fixed slot under the hero's copy, one line at a time */
-@keyframes tr-sx-line { 0% { opacity:0; transform:translateY(3px); } 2% { opacity:1; transform:none; }
-  8.5% { opacity:1; transform:none; } 10%, 100% { opacity:0; transform:translateY(-3px); } }
-.tr-sx-lines { position:relative; height:20px; margin-top:16px; overflow:hidden; }
-.tr-sx-lines .ln { position:absolute; left:0; top:0; white-space:nowrap; opacity:0; font-size:12.5px; font-style:italic;
-  font-weight:500; color:var(--tr-text-3); animation: tr-sx-line """ + str(len(LINES) * LINE_SECONDS) + """s linear infinite; }
-.tr-sx-lines .by { margin-left:10px; font-style:normal; font-size:9.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--tr-accent-soft); opacity:.8; }
+/* the tribute line's slot sits under the hero's copy (``ui.dialogues``) */
+.tr-dlg-sx { max-width:640px; }
 @media (max-width: 1200px) { .tr-sx-hero-radar .tr-radar.sxhero { width:88px !important; right:34px; } }
 @media (max-width: 768px) {
-  .tr-sx-hero-radar, .tr-sx-crafts { display:none; }
-  .tr-sx-lines { height:54px; margin-top:12px; }
-  .tr-sx-lines .ln { white-space:normal; }
+  .tr-sx-hero-radar { display:none; }
   [class*="st-key-trsx_hero"] .tr-hero-inner { min-height:0; }
   .tr-sx-ambience .tr-radar.sxbg { right:-60%; top:1100px; opacity:.14; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tr-sx-ambience::after, .tr-sx-hero-radar .scan, .tr-sx-lines .ln { animation:none !important; }
-  .tr-sx-lines .ln:first-child { opacity:1; }
+  .tr-sx-ambience::after, .tr-sx-hero-radar .scan { animation:none !important; }
 }
-</style>"""
-
-
-#: Home's twenty-four crafts, as Home places them: eight in the band above the
-#: hero (Home's ``band`` coordinates), sixteen in a two-row ledge under the
-#: results (Home's ``rail`` and ``foot`` coordinates, one row each).
-CRAFT_ROWS = {
-    "band": [(k, x, y) for k, (z, x, y) in home_ui.HOME_LAYOUT.items() if z == "band"],
-    "foot": ([(k, x, y * 0.5) for k, (z, x, y) in home_ui.HOME_LAYOUT.items() if z == "rail"]
-             + [(k, x, 50 + y * 0.5) for k, (z, x, y) in home_ui.HOME_LAYOUT.items() if z == "foot"]),
-}
-
-
-def craft_zone(zone: str) -> str:
-    """Home's craft marks (``ui.crafts`` paths, ``ui.home``'s own markup for the
-    icon), decorative here: no tooltip, no focus, nothing to hit."""
-    marks = "".join(f'<span class="tr-craft" style="left:{x}%;top:{y:.0f}%">{home_ui._icon(crafts.BY_KEY[k])}</span>'
-                    for k, x, y in CRAFT_ROWS[zone])
-    return f'<div class="tr-sx-crafts {zone}" aria-hidden="true">{marks}</div>'
-
-
-def lines_markup() -> str:
-    """The rotating tribute: every line in one fixed slot, each shown in turn by
-    its own CSS delay — no script, no rerun, no layout shift."""
-    spans = "".join(
-        f'<span class="ln" style="animation-delay:{i * LINE_SECONDS}s">“{C.e(q)}”'
-        f'<span class="by tr-mono">{C.e(film)} · {C.e(lang)}</span></span>'
-        for i, (q, film, lang) in enumerate(LINES))
-    return f'<div class="tr-sx-lines" aria-hidden="true">{spans}</div>'
+</style>""")
 
 
 def ambience() -> None:
@@ -675,13 +620,13 @@ def ambience() -> None:
 def hero() -> None:
     with st.container(key="trsx_hero"):
         C.html('<div class="tr-sx-hero-radar" aria-hidden="true"><div class="scan"></div>'
-               + radar.svg(size=104, state="idle", cls="sxhero", label="") + "</div>" + craft_zone("band"))
+               + radar.svg(size=104, state="idle", cls="sxhero", label="") + "</div>")
         # ``C.hero``'s own markup, with the tribute line in the copy's empty space
         C.html('<div class="tr-hero"><div class="tr-hero-inner"><div>'
                '<h1>Showtime Explorer</h1>'
                '<div class="tr-hero-lede">Find your movie. Find your theatre. Find your time.</div>'
                '<div class="tr-hero-sub">Showtimes across Hyderabad, read from BookMyShow.</div>'
-               + lines_markup() + '</div>'
+               + dialogues.rotation_markup(ROTATION, "tr-dlg-sx") + '</div>'
                '<div class="tr-hero-mark"><span>Some stories</span><span>are worth</span><b>the wait</b></div>'
                '</div></div>')
 
@@ -692,7 +637,7 @@ def page() -> None:
         ambience()
         hero()
         _page_body()
-        C.html(craft_zone("foot"))
+        C.html(formats.section())         # educational: never read by monitoring or the provider
 
 
 @st.cache_resource(show_spinner=False, max_entries=4)
