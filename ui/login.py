@@ -440,18 +440,6 @@ a.tr-auth-google:focus-visible { outline: 2px solid rgba(255,255,255,.35); outli
 .tr-auth-bottom .sign { font-family:var(--tr-mono); font-size:12px; letter-spacing:.3em; color:var(--tr-text-3); white-space:nowrap; }
 .tr-auth-bottom .sign em { font-style:normal; color:var(--tr-accent); }
 
-/* ── the symbols' key, under the panel: quiet, never ahead of the form ── */
-.tr-auth-legend { max-width:560px; margin:14px 0 0 auto; padding:14px 18px 16px; border-radius:18px;
-  border:1px solid rgba(255,255,255,.07); background:rgba(255,255,255,.018); animation: tr-auth-fade .9s .3s var(--tr-ease) backwards; }
-.tr-auth-legend .h { font-family:var(--tr-mono); font-size:10px; letter-spacing:.26em; text-transform:uppercase; color:var(--tr-text-3); margin-bottom:10px; }
-.tr-auth-legend ul { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px 14px; }
-.tr-auth-legend li { display:flex; align-items:flex-start; gap:10px; margin:0; }
-.tr-auth-legend .ic { width:30px; height:30px; flex-shrink:0; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
-  color:#FF8CA0; background:rgba(255,51,85,.08); border:1px solid rgba(255,51,85,.22); }
-.tr-auth-legend .tx { display:flex; flex-direction:column; gap:1px; min-width:0; }
-.tr-auth-legend .tx b { font-size:12.5px; font-weight:700; color:var(--tr-text-2); }
-.tr-auth-legend .tx span { font-size:11.5px; line-height:1.35; color:var(--tr-text-3); }
-
 /* ── motion ────────────────────────────────────────────────────────── */
 @keyframes tr-auth-rise { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
 @keyframes tr-auth-fade { from { opacity:0; } to { opacity:1; } }
@@ -505,8 +493,6 @@ __CRAFTS__
   [data-testid="stMainBlockContainer"] { padding-top: .4rem !important; }
   .tr-auth-top { padding:2px 0 10px; }
   .tr-auth-status { display:none; }
-  .tr-auth-legend { margin:12px auto 0; padding:12px 14px 14px; }
-  .tr-auth-legend ul { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
   .tr-auth-lockup .mark { width:40px; height:40px; }
   .tr-auth-lockup .name { font-size:21px; }
   .tr-auth-lockup .sub { font-size:8.5px; letter-spacing:.26em; }
@@ -754,33 +740,6 @@ def _bottom() -> str:
       </div>
       <div class="sign">Lights. &nbsp;Tickets. &nbsp;<em>Action.</em></div>
     </div>"""
-
-
-#: What the app's symbols mean — a small key under the sign-in panel. Each
-#: icon is the one the app itself uses for that idea.
-SYMBOLS = (
-    (("<circle cx='12' cy='12' r='8.5'/><circle cx='12' cy='12' r='1.6'/><circle cx='12' cy='7.3' r='1.8'/>"
-      "<circle cx='16.1' cy='14.4' r='1.8'/><circle cx='7.9' cy='14.4' r='1.8'/>"),
-     "Film reel", "Cinema and movie discovery"),
-    (crafts.BY_KEY["projection"].paths, "Projector", "Watching for showtime releases"),
-    (C.ICON_PATHS["radar"], "Radar", "Monitoring ticket availability"),
-    (C.ICON_PATHS["format"], "Premium formats", "Discovering special cinema experiences"),
-    ("<path d='M4 5.5h16v10H10l-4 3.5v-3.5H4z'/><path d='M9 9.3v2.2M12.6 9.3v2.2'/>",
-     "Film dialogue", "Celebrating world cinema"),
-)
-
-
-def _legend() -> str:
-    items = "".join(
-        f'<li><span class="ic">{_svg(paths)}</span><span class="tx"><b>{C.e(name)}</b>'
-        f'<span>{C.e(meaning)}</span></span></li>' for paths, name, meaning in SYMBOLS)
-    return (f'<div class="tr-auth-legend"><div class="h">What our symbols mean</div>'
-            f'<ul>{items}</ul></div>')
-
-
-def _svg(paths: str) -> str:
-    return (f'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" '
-            f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{paths}</svg>')
 
 
 def _alert(kind: str, message: str) -> None:
@@ -1401,7 +1360,6 @@ def render() -> None:
                     _reset_sent()
                 else:
                     _signin()
-            C.html(_legend())
         C.html(_bottom())
 
 

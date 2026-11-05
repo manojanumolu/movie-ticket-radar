@@ -33,7 +33,8 @@ from html import escape
 from monitor.models import Availability, Monitor
 from monitor.state import MonitorState
 from ui import components as C
-from ui import crafts, dialogues, radar
+from ui import crafts
+from ui import radar
 from ui.theme import _svg_uri
 
 #: The rail's column never goes below this on a desktop.
@@ -41,29 +42,98 @@ RAIL_MIN = 320
 #: Where Home stops being a single column and becomes the dashboard grid.
 DESKTOP_MIN = 1150
 
-#: One line of cinema per craft, from the audited collection in
-#: ``ui.dialogues`` — shown as a subtitle card when a mark is hovered,
-#: focused or tapped. Home only: the Login constellation keeps the crafts'
-#: own names and blurbs (``Craft.tip``). Deterministic: the same mark always
-#: says the same thing. The band, the first zone drawn, is Indian cinema
-#: (Telugu first, as Hyderabad reads it); the rail is world cinema in its own
-#: languages; the foot is Hollywood. The phone strip follows the same order.
-LINES: dict[str, str] = {
-    # ── the band: India ─────────────────────────────────────────────────
-    "direction": "pushpa", "cinematography": "pokiri", "screenwriting": "gabbar_singh",
-    "producing": "baahubali", "acting": "sholay", "editing": "padayappa",
-    "projection": "narasimham", "distribution": "meghe_dhaka_tara",
-    # ── the rail: the world, in its own languages ──────────────────────
-    "production_design": "la_haine", "art_direction": "life_is_beautiful", "costume_design": "seven_samurai",
-    "makeup": "memories_of_murder", "hair": "secret_in_their_eyes", "set_design": "farewell_my_concubine",
-    "casting": "breathless", "color_grading": "castle_in_the_sky",
-    # ── the foot: Hollywood ────────────────────────────────────────────
-    "sound": "casablanca", "music": "star_wars", "sound_mixing": "endgame", "lighting": "dark_knight",
-    "visual_effects": "terminator", "special_effects": "iron_man", "choreography": "infinity_war",
-    "stunts": "spider_man",
+#: One line of cinema per craft — a short, famous fragment, who said it,
+#: and which house it comes from — shown as a subtitle card when a mark is
+#: hovered or focused. Home only: the Login constellation keeps the crafts'
+#: own names and blurbs (``Craft.tip``). Telugu lines are transliterated.
+#: Deterministic: the same mark always says the same thing.
+#:
+#: The six Telugu lines open the page: they belong to the first six marks
+#: of :data:`HOME_LAYOUT`'s ``band``, which is the first zone drawn and
+#: reads left to right, and to the first six of the phone's :data:`STRIP`,
+#: so the order is the same at every width. Each names its hero *and* the
+#: film, and none of those six heroes says anything anywhere else — the
+#: other eighteen are Marvel, Hollywood and two Batman lines.
+LINES: dict[str, tuple[str, str, str]] = {
+    # ── the band: the six heroes, in order ──────────────────────────────
+    "direction": ("Thokkukuntu povaale!", "Jr NTR · RRR", "Tollywood"),
+    "cinematography": ("vandha mandhini okesari Ramannu!", "Ram Charan · Magadheera", "Tollywood"),
+    "screenwriting": ("Please... I kindly request!", "Prabhas · Salaar", "Tollywood"),
+    "producing": ("Pushpa... Pushpa Raj... Thaggede Le!", "Allu Arjun · Pushpa: The Rise", "Tollywood"),
+    "acting": ("Okka sari commit aithe... naa maata nene vinanu!", "Mahesh Babu · Pokiri", "Tollywood"),
+    "editing": ("Naakkonchem thikka undi... kaani daaniko lekkundi!", "Pawan Kalyan · Gabbar Singh", "Tollywood"),
+    "projection": ("To infinity and beyond!", "Toy Story", "Hollywood"),
+    "distribution": ("There's no place like home.", "The Wizard of Oz", "Hollywood"),
+    # ── the rail ────────────────────────────────────────────────────────
+    "production_design": ("Wakanda forever.", "Black Panther", "Marvel"),
+    "art_direction": ("Why so serious?", "The Joker · The Dark Knight", "DC"),
+    "costume_design": ("Bond. James Bond.", "Dr. No", "Hollywood"),
+    "makeup": ("I am Iron Man.", "Tony Stark", "Marvel"),
+    "hair": ("That's my secret, Cap. I'm always angry.", "Bruce Banner · The Avengers", "Marvel"),
+    "set_design": ("On your left.", "Captain America · The Winter Soldier", "Marvel"),
+    "casting": ("You're gonna need a bigger boat.", "Jaws", "Hollywood"),
+    "color_grading": ("I love you 3000.", "Iron Man", "Marvel"),
+    # ── the foot ────────────────────────────────────────────────────────
+    "sound": ("I am Groot.", "Groot", "Marvel"),
+    "music": ("May the Force be with you.", "Star Wars", "Hollywood"),
+    "sound_mixing": ("Hulk smash!", "Hulk", "Marvel"),
+    "lighting": ("I'm Batman.", "Batman", "DC"),
+    "visual_effects": ("I'll be back.", "The Terminator", "Hollywood"),
+    "special_effects": ("Houston, we have a problem.", "Apollo 13", "Hollywood"),
+    "choreography": ("Dread it. Run from it. Destiny arrives.", "Thanos · Infinity War", "Marvel"),
+    "stunts": ("With great power comes great responsibility.", "Spider-Man", "Marvel"),
 }
-assert set(LINES) == set(crafts.BY_KEY), "every craft has a line"
-assert set(LINES.values()) <= set(dialogues.BY_KEY), "every line is in the audited collection"
+
+#: The six marks that carry the Telugu lines, in the order they are drawn.
+TELUGU_SIX: tuple[str, ...] = ("direction", "cinematography", "screenwriting",
+                               "producing", "acting", "editing")
+
+#: The hero's rotating line: one dialogue at a time, in its original language
+#: (romanised, in the same spelling the marks and the Explorer already use),
+#: with its English translation underneath and the film, year and language.
+#: Only approved lines whose wording and meaning are certain are here; the
+#: marks keep all twenty-four of theirs, untouched. (quote, English, film,
+#: year, language)
+HERO_LINES: tuple[tuple[str, str, str, int, str], ...] = (
+    ("Pushpa... Pushpa Raj... Thaggede Le!", "Pushpa... Pushpa Raj... I won't back down!",
+     "Pushpa: The Rise", 2021, "Telugu"),
+    ("Kitne aadmi the?", "How many men were there?", "Sholay", 1975, "Hindi"),
+    ("Okka sari commit aithe... naa maata nene vinanu!", "Once I commit, I don't listen even to myself.",
+     "Pokiri", 2006, "Telugu"),
+    ("En vazhi thani vazhi.", "My way is a way of its own.", "Padayappa", 1999, "Tamil"),
+    ("Naakkonchem thikka undi... kaani daaniko lekkundi!", "I'm a little crazy... but there's a method to it.",
+     "Gabbar Singh", 2012, "Telugu"),
+    ("Nee po mone Dinesha.", "Off you go, Dinesha, my boy.", "Narasimham", 2000, "Malayalam"),
+    ("Mere paas maa hai.", "I have Mother.", "Deewaar", 1975, "Hindi"),
+    ("Mogambo khush hua.", "Mogambo is pleased.", "Mr. India", 1987, "Hindi"),
+)
+#: How long each line holds the hero, in seconds.
+HERO_LINE_SECONDS = 6
+
+
+def hero_lines() -> str:
+    """Every line stacked in one fixed slot, each shown in turn by its own CSS
+    delay — no script, no rerun, the slot never changes size. Hidden from
+    assistive technology: a sentence that changes every six seconds is noise
+    to a screen reader, and the marks carry their lines in their own labels."""
+    spans = "".join(
+        f'<span class="ln" style="animation-delay:{i * HERO_LINE_SECONDS}s">'
+        f'<span class="q">“{escape(q)}”</span>'
+        f'<span class="en"><b>English</b>{escape(en)}</span>'
+        f'<span class="by">{escape(film)} ({year}) · {escape(lang)}</span></span>'
+        for i, (q, en, film, year, lang) in enumerate(HERO_LINES))
+    return f'<div class="tr-hero-lines" aria-hidden="true">{spans}</div>'
+
+
+def _hero_lines_css() -> str:
+    n = len(HERO_LINES)
+    shown = 100 / n
+    fade = 1.2 / (n * HERO_LINE_SECONDS) * 100
+    return (f"@keyframes tr-hero-line {{ 0% {{ opacity:0; transform:translateY(3px); }} "
+            f"{fade:.2f}% {{ opacity:1; transform:none; }} {shown - fade:.2f}% {{ opacity:1; transform:none; }} "
+            f"{shown:.2f}%, 100% {{ opacity:0; transform:translateY(-3px); }} }}\n"
+            f".tr-hero-lines .ln {{ animation: tr-hero-line {n * HERO_LINE_SECONDS}s linear infinite; }}")
+
 
 #: The cinema technologies named in the dark behind the reel. A motif, not
 #: a claim: which formats a theatre actually lists comes from the catalogue
@@ -103,7 +173,8 @@ HOME_LAYOUT: dict[str, tuple[str, float, float]] = {
 }
 assert set(HOME_LAYOUT) == set(crafts.BY_KEY), "every craft has a home"
 
-STRIP = tuple(k for zone in ("band", "rail", "foot") for k, (z, _x, _y) in HOME_LAYOUT.items() if z == zone)
+STRIP = tuple(c.key for c in crafts.CRAFTS)
+assert STRIP[:6] == TELUGU_SIX, "the phone strip opens with the six too"
 assert len(STRIP) == 24, "all 24 crafts are in the strip"
 
 
@@ -154,16 +225,14 @@ def _mark(craft: crafts.Craft, x: float, y: float, *, zone: str = "", positioned
     constellation's ``data-tip`` pseudo-element off, so a second copy of
     the same sentence would be markup nobody ever reads.
     """
-    d = dialogues.BY_KEY[LINES[craft.key]]
-    tip = f"{craft.label} — {d.spoken}"
+    quote, by, _house = LINES.get(craft.key, (craft.blurb, craft.label, ""))
+    tip = f"{craft.label} — “{quote}” — {by}"
     cls = f"tr-craft {_side(x, y, zone, positioned=positioned)}".strip()
     style = f' style="left:{x}%;top:{y}%"' if positioned else ""
-    en = f'<span class="en">{escape(d.english)}</span>' if d.english else ""
-    note = f'<span class="note">{escape(d.note)}</span>' if d.note else ""
     return (f'<span class="{cls}"{style} tabindex="0" role="img" '
             f'aria-label="{escape(tip)}">{_icon(craft)}'
-            f'<span class="tr-sub" aria-hidden="true"><span class="q">“{escape(d.line)}”</span>{en}'
-            f'<span class="by">— {escape(d.speaker)} · {escape(d.credit)}</span>{note}</span></span>')
+            f'<span class="tr-sub" aria-hidden="true"><span class="q">“{escape(quote)}”</span>'
+            f'<span class="by">— {escape(by)}</span></span></span>')
 
 
 def crafts_zone(zone: str) -> str:
@@ -181,13 +250,7 @@ def crafts_strip(keys: tuple[str, ...] = STRIP) -> str:
     n = len(keys)
     marks = "".join(_mark(crafts.BY_KEY[k], (i / (n - 1) * 100) if n > 1 else 0, 0,
                           zone="strip", positioned=False) for i, k in enumerate(keys))
-    # The box holds the card: the strip scrolls, so a card anchored to its
-    # mark would scroll off the screen with it and be clipped by the strip.
-    # Anchored to the box instead (the strip and the marks are unpositioned),
-    # the card is the width of the screen, under the strip, whichever mark
-    # opened it — and nothing clips it.
-    return (f'<div class="tr-home-stripbox"><div class="tr-home-strip" aria-label="The crafts of filmmaking">'
-            f'{marks}</div></div>')
+    return f'<div class="tr-home-strip" aria-label="The crafts of filmmaking">{marks}</div>'
 
 
 def radar_state(monitors: list[Monitor], states: dict[str, MonitorState]) -> str:
@@ -242,17 +305,24 @@ def reel_svg(cls: str, *, formats: bool = False) -> str:
             f'{format_badges() if formats else ""}</svg>')
 
 
+def rail_film_svg(d: str, width: int = 20, pitch: int = 15) -> str:
+    """The rail's strip of film along the curve ``d``, drawn as Home's own
+    strip is (``strip_svg``): one path stroked in layers — a faint edge, the
+    dark band, the perforations (a dashed stroke that a narrower band then
+    covers in the middle, so they show only at the two edges), and the frames
+    down the middle. Its size is the rail's; the CSS sets every stroke."""
+    layers = "".join(f'<path class="{c}" d="{d}"/>' for c in ("edge", "band", "perf", "film", "frames"))
+    return f'<svg class="tr-film" width="244" height="720" viewBox="0 0 244 720" aria-hidden="true">{layers}</svg>'
+
+
 def rail_rig() -> str:
-    """The rail's two reels, as ``ui.theme.RAIL_RIG`` places them: a large
-    one at the upper left, a smaller one at the lower right, each on its
-    dark disc. Nothing runs between them."""
-    return ('<div class="tr-side-rig"><div class="tr-disc top"></div>' + reel_svg("top")
+    """The rail's two turning reels, as ``ui.theme.RAIL_RIG`` places them:
+    each reel's disc, then the reel on top. The strip of film between them
+    (``rail_film_svg``) is left out of the rail at the owner's request; its
+    drawing and styles are kept so it can be put back in one line."""
+    return ('<div class="tr-side-rig">'
+            + '<div class="tr-disc top"></div>' + reel_svg("top")
             + '<div class="tr-disc bottom"></div>' + reel_svg("bottom") + '</div>')
-
-
-def dialogue() -> str:
-    """The rotating line under the hero's copy: India and the world in turn."""
-    return dialogues.rotation_markup(dialogues.HOME_ROTATION, "tr-dlg-home")
 
 
 def strip_svg() -> str:
@@ -325,9 +395,6 @@ _IC = {name: _svg_uri(C.ICON_PATHS[name], "#FF8CA0", "1.9") for name in
        ("location", "movie", "theatre", "format", "radar", "calendar", "clock", "check")}
 _ICM = {name: _svg_uri(C.ICON_PATHS[name], "#8E8E98", "1.8") for name in
         ("location", "movie", "theatre", "format", "radar", "calendar", "clock", "check")}
-
-#: The rotating line's look and its fade, as ``ui.dialogues`` draws them.
-_DLG_CSS = dialogues.CSS + dialogues.rotation_css("tr-dlg-home", len(dialogues.HOME_ROTATION))
 
 CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 @keyframes tr-home-breathe {{ 0%,100% {{ opacity:.7; transform:scale(1); }} 50% {{ opacity:1; transform:scale(1.05); }} }}
@@ -417,21 +484,6 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 .tr-craft.tip-l .tr-sub {{ left:auto; right:-4px; transform:translate(0, 4px); }}
 .tr-craft.tip-l:hover .tr-sub, .tr-craft.tip-l:focus .tr-sub, .tr-craft.tip-l:focus-visible .tr-sub {{ transform:translate(0, 0); }}
 .tr-craft.tip-b .tr-sub {{ bottom:auto; top:calc(100% + 12px); }}
-.tr-craft .tr-sub .en {{ font-size:12px; line-height:1.35; color:#B4B4BE; text-transform:none; letter-spacing:0; }}
-.tr-craft .tr-sub .note {{ align-self:flex-start; font-size:9.5px; letter-spacing:.06em; color:#8E8E98; text-transform:none;
-  border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:1px 7px; }}
-/* a tap focuses the mark as a click does, so a phone opens the same card; the
-   mark answers once with a small nod — one beat, never a loop */
-@keyframes tr-home-nod {{ 0% {{ transform:scale(1); }} 45% {{ transform:scale(1.16) rotate(-6deg); }} 100% {{ transform:scale(1); }} }}
-/* the zone's resting .42 outranks the constellation's :hover rule, and a card
-   inherits its mark's opacity — so the open mark (and its card) is set whole here */
-.tr-home-zone .tr-craft:hover, .tr-home-zone .tr-craft:focus, .tr-home-zone .tr-craft:focus-visible {{ opacity:1; color:#FF8CA0; }}
-.tr-home-zone .tr-craft:focus, .tr-home-strip .tr-craft:focus {{ opacity:1; color:#FF8CA0; outline:none; }}
-.tr-home-zone .tr-craft:focus-visible, .tr-home-strip .tr-craft:focus-visible {{ box-shadow:0 0 0 2px rgba(255,51,85,.55); }}
-.tr-home-zone .tr-craft:hover .tr-ic, .tr-home-zone .tr-craft:focus .tr-ic,
-.tr-home-strip .tr-craft:hover .tr-ic, .tr-home-strip .tr-craft:focus .tr-ic {{ animation: tr-home-nod .5s var(--tr-ease) 1; }}
-/* ── the rotating line under the hero's copy ─────────────────────────── */
-{_DLG_CSS}
 /* ── the active monitor: a green scan moving down the card while it watches ─ */
 [class*="st-key-trrail"] .tr-monitor {{ position:relative; overflow:hidden; }}
 [class*="st-key-trrail"] .tr-monitor:has(.tr-pill.ok)::before {{ content:""; position:absolute; left:0; right:0; top:0; height:11%; z-index:0; pointer-events:none;
@@ -533,52 +585,47 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
     animation-duration:140s; will-change:transform; -webkit-animation-play-state:running; animation-play-state:running; }}
   .tr-home-ambience .tr-reel.small, .tr-home-ambience .tr-strip, .tr-home-ambience .tr-reel .fmts {{ display:none; }}   /* a cropped reel carries no legible badges */
   .tr-craft .tr-sub {{ max-width:min(300px, calc(100vw - 28px)); }}
-  .tr-home-stripbox {{ position:relative; margin:4px 0 0; }}
-  .tr-home-strip {{ display:flex; position:static; justify-content:flex-start; align-items:center; gap:8px;
-    padding:6px 12px 10px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
-    border-bottom:1px solid rgba(255,255,255,.06); }}
+  .tr-home-strip {{ display:flex; position:relative; justify-content:flex-start; align-items:center; gap:8px;
+    padding:6px 12px 64px; margin:4px 0 -48px;
+    overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; border-bottom:1px solid rgba(255,255,255,.06); }}
   .tr-home-strip::-webkit-scrollbar {{ display:none; }}
-  .tr-home-strip .tr-craft {{ position:static; flex-shrink:0; margin:0; width:34px; height:34px; opacity:.55; }}
+  .tr-home-strip .tr-craft {{ position:relative; flex-shrink:0; margin:0; width:34px; height:34px; opacity:.55; }}
   .tr-home-strip .tr-craft:hover, .tr-home-strip .tr-craft:focus, .tr-home-strip .tr-craft:focus-visible {{ opacity:1; color:#FF8CA0; }}
-  .tr-home-strip .tr-craft .tr-sub {{ position:absolute; left:0; right:0; bottom:auto; top:calc(100% + 6px);
-    width:auto; max-width:none; white-space:normal; transform:none !important; z-index:10; }}
+  .tr-home-strip .tr-craft .tr-sub {{ position:absolute; left:0; right:auto; bottom:auto; top:calc(100% + 8px);
+    width:max-content; max-width:min(280px, calc(100vw - 28px)); white-space:normal; transform:none !important; z-index:10; }}
+  .tr-home-strip .tr-craft.tip-l .tr-sub {{ left:auto; right:0; }}
+  .tr-home-strip .tr-craft:not(.tip-r):not(.tip-l) .tr-sub {{ left:50%; right:auto; transform:translateX(-50%) !important; }}
   .tr-home-strip .tr-craft:hover .tr-sub, .tr-home-strip .tr-craft:focus .tr-sub, .tr-home-strip .tr-craft:focus-visible .tr-sub {{ opacity:1; visibility:visible; }}
   [class*="st-key-trstatus"] > [data-testid="stElementContainer"]:has(> .stMarkdown .tr-home-zone.band) {{ position:relative; inset:auto; z-index:7; height:auto; width:auto; }}
+}}
+/* ── the hero's rotating line: one fixed slot under the copy ──────────── */
+.tr-hero-lines {{ position:relative; height:54px; margin-top:9px; overflow:hidden; pointer-events:none; }}
+.tr-hero-lines .ln {{ position:absolute; left:0; right:0; top:0; display:flex; flex-direction:column; gap:2px; opacity:0; }}
+.tr-hero-lines .ln > span {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+.tr-hero-lines .q {{ font-size:13.5px; line-height:18px; font-style:italic; font-weight:600; color:var(--tr-text-2); }}
+.tr-hero-lines .en {{ font-size:12px; line-height:16px; color:var(--tr-text-3); }}
+.tr-hero-lines .en b {{ margin-right:7px; font-family:var(--tr-mono); font-size:9px; font-weight:500; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--tr-text-4); }}
+.tr-hero-lines .by {{ font-family:var(--tr-mono); font-size:9.5px; line-height:13px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--tr-accent-soft); opacity:.85; }}
+{_hero_lines_css()}
+@media (max-width: 768px) {{
+  .tr-hero-lines {{ height:96px; }}
+  .tr-hero-lines .ln > span {{ white-space:normal; }}
+}}
+@media (prefers-reduced-motion: reduce) {{
+  .tr-hero-lines .ln {{ animation:none; }}
+  .tr-hero-lines .ln:first-child {{ opacity:1; }}
 }}
 @media (prefers-reduced-motion: reduce) {{
   .tr-home-ambience::after, .tr-hero-radar .scan {{ animation:none; }}
   .tr-home-ambience .tr-reel, .tr-home-ambience .tr-reel .fmt, [class*="st-key-trrail"] .tr-monitor:has(.tr-pill.ok)::before {{ animation:none; }}
   .tr-home-veil {{ animation:none; opacity:1; }}
   .tr-craft .tr-sub {{ transition:none; }}
-  .tr-home-zone .tr-craft .tr-ic, .tr-home-strip .tr-craft .tr-ic {{ animation:none !important; }}
   .tr-hero, .tr-platforms, .tr-hero-radar .tr-radar.home {{ animation:none; }}
 }}
 </style>"""
 
-__all__ = [
-    "CSS",
-    "DESKTOP_MIN",
-    "FORMAT_MARKS",
-    "HOME_LAYOUT",
-    "LINES",
-    "PREMIUM_FORMATS",
-    "RAIL_MIN",
-    "STEP_ICONS",
-    "STRIP",
-    "ambience",
-    "band",
-    "busy",
-    "crafts_strip",
-    "crafts_zone",
-    "dialogue",
-    "foot",
-    "format_badges",
-    "hero_radar",
-    "hero_radar_markup",
-    "radar_state",
-    "rail_foot",
-    "rail_rig",
-    "reel_svg",
-    "step_icon_css",
-    "strip_svg",
-]
+__all__ = ["CSS", "DESKTOP_MIN", "FORMAT_MARKS", "HOME_LAYOUT", "LINES", "PREMIUM_FORMATS", "RAIL_MIN", "STEP_ICONS", "STRIP",
+           "HERO_LINES", "ambience", "band", "busy", "hero_lines", "crafts_strip", "crafts_zone", "foot", "format_badges", "hero_radar", "hero_radar_markup",
+           "radar_state", "rail_foot", "reel_svg", "step_icon_css", "strip_svg"]
