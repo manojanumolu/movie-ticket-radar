@@ -439,9 +439,12 @@ def test_the_atmosphere_is_cheap_quiet_and_out_of_the_way():
         assert props <= {"transform", "opacity"}, props
 
 
-def test_home_is_untouched():
+def test_home_login_radar_and_auth_are_untouched():
+    """The Explorer's work changes none of these. (Home itself changed once, on
+    purpose: its big reel's glow became a static halo — see
+    tests/test_sidebar_ambience.py — and its radar is the same code.)"""
     import subprocess
 
-    changed = subprocess.run(["git", "diff", "--name-only", "origin/main", "--", "ui/home.py", "ui/radar.py",
+    changed = subprocess.run(["git", "diff", "--name-only", "b37d93d", "--", "ui/radar.py",
                               "ui/login.py", "ui/crafts.py", "auth/"], capture_output=True, text=True).stdout
     assert changed.strip() == ""

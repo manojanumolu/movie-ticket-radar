@@ -258,6 +258,45 @@ def reel_svg(cls: str, *, formats: bool = False) -> str:
             f'{format_badges() if formats else ""}</svg>')
 
 
+def rail_film_svg(width: int, height: int, pitch: int = 14) -> str:
+    """A strip of 35mm-style film for the rail: a dark celluloid band, four
+    sprocket perforations per frame down each edge, one picture frame per
+    ``pitch`` (wider than tall, faintly lit, as an exposed frame is), and the
+    band's two edges. One tile (``<pattern>``) repeats down the strip, so it is
+    a handful of nodes however long it runs; the strip is one ``pitch`` longer
+    than it shows, so moving it up by one pitch (CSS) loops without a seam."""
+    run = height + pitch
+    perf_w, perf_h, margin = 2.6, 2.0, 1.4
+    perfs = "".join(
+        f'<rect class="perf" x="{x}" y="{y:.2f}" width="{perf_w}" height="{perf_h}" rx=".6"/>'
+        for y in (0.75 + k * pitch / 4 for k in range(4)) for x in (margin, width - margin - perf_w))
+    inset = margin + perf_w + 1.4
+    frame = (f'<rect class="frame" x="{inset}" y="1.6" width="{width - 2 * inset:.1f}" '
+             f'height="{pitch - 3.2:.1f}" rx="1"/>')
+    return (f'<div class="tr-film"><svg class="run" width="{width}" height="{run}" viewBox="0 0 {width} {run}" '
+            f'aria-hidden="true"><defs>'
+            '<linearGradient id="tr-rail-frame" x1="0" y1="0" x2="1" y2="1">'
+            '<stop offset="0" stop-color="#FF6B85" stop-opacity=".22"/>'
+            '<stop offset="1" stop-color="#FF3355" stop-opacity=".05"/></linearGradient>'
+            f'<pattern id="tr-rail-film" width="{width}" height="{pitch}" '
+            f'patternUnits="userSpaceOnUse">{perfs}{frame}</pattern></defs>'
+            f'<rect class="base" width="{width}" height="{run}"/>'
+            f'<rect width="{width}" height="{run}" fill="url(#tr-rail-film)"/>'
+            f'<path class="edge" d="M.5 0V{run}M{width - .5} 0V{run}"/></svg></div>')
+
+
+def rail_rig() -> str:
+    """The rail's whole film mechanism, as ``ui.theme.RAIL_RIG`` places it:
+    the halo, the film (under the reels, so its ends tuck beneath the rims),
+    then the two reels."""
+    from ui.theme import RAIL_RIG
+
+    film = RAIL_RIG["film"]
+    return ('<div class="tr-side-rig"><div class="tr-halo"></div>'
+            + rail_film_svg(film["width"], film["height"], film["pitch"])
+            + reel_svg("top") + reel_svg("bottom") + '</div>')
+
+
 def strip_svg() -> str:
     """The film strip leaving the big reel: one curve, drawn three times —
     the band, its sprocket holes, its frames — as the Login's is."""
@@ -271,7 +310,7 @@ def strip_svg() -> str:
 def ambience() -> None:
     """Home's stylesheet and its background layers — the reels, the strip,
     the formats in the dark, the light — drawn once, first, behind it all."""
-    C.html(CSS + '<div class="tr-home-ambience" aria-hidden="true">'
+    C.html(CSS + '<div class="tr-home-ambience" aria-hidden="true"><div class="tr-halo-big"></div>'
            + reel_svg("big", formats=True) + reel_svg("small") + strip_svg() + '</div>')
 
 
@@ -379,7 +418,11 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 .tr-home-ambience .tr-reel .holes {{ opacity:.11; }}
 .tr-home-ambience .tr-reel .hub {{ opacity:.12; }}
 .tr-home-ambience .tr-reel .pin {{ opacity:.35; }}
-.tr-home-ambience .tr-reel.big {{ right:-6%; bottom:-140px; width:min(64vw, 820px); filter: drop-shadow(0 0 40px rgba(255,51,85,.16)); animation: tr-home-reel 84s linear infinite; }}
+.tr-home-ambience .tr-reel.big {{ right:-6%; bottom:-140px; width:min(64vw, 820px); animation: tr-home-reel 84s linear infinite; }}
+/* the big reel's glow: a static halo where a drop-shadow filter used to be — a
+   filter on a turning element is repainted every frame (measured ~17 → ~28 fps) */
+.tr-home-ambience .tr-halo-big {{ position:absolute; right:-6%; bottom:-140px; width:min(64vw, 820px); aspect-ratio:1; border-radius:50%; pointer-events:none;
+  background: radial-gradient(closest-side, transparent 72%, rgba(255,51,85,.07) 90%, rgba(255,51,85,.03) 97%, transparent 100%); }}
 .tr-home-ambience .tr-reel.small {{ left:-120px; top:38%; width:min(30vw, 380px); opacity:.7; animation: tr-home-reel-back 120s linear infinite; }}
 .tr-home-ambience .tr-strip {{ position:absolute; right:-4%; bottom:-40px; width:88%; height:70%; pointer-events:none; opacity:.9; }}
 .tr-home-ambience .tr-strip .halo {{ stroke:rgba(255,51,85,.05); stroke-width:96; }}

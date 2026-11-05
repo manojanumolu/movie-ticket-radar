@@ -78,6 +78,10 @@ ICON_PATHS = {
     "history": "<path d='M3.5 12a8.5 8.5 0 1 0 2.6-6.1'/><path d='M3.2 4.6v3.9h3.9'/><path d='M12 8v4.4l3.2 1.9'/>",
     "chevron": "<path d='M8 10l4 4 4-4'/>",
     "user": "<circle cx='12' cy='8.5' r='3.5'/><path d='M5 20a7 7 0 0 1 14 0'/>",
+    # A cinema, not a building: the curved screen, then two rows of seats.
+    "cinema": "<path d='M3.5 6.2c5.7-2.3 11.3-2.3 17 0v5.2c-5.7-1.9-11.3-1.9-17 0z'/><path d='M5.6 15.6h3M10.5 15.6h3M15.4 15.6h3M8 19.6h3M13 19.6h3'/>",
+    "filter": "<path d='M4 7h9.5M18.5 7H20M4 17h3.5M12.5 17H20'/><circle cx='16' cy='7' r='2.3'/><circle cx='10' cy='17' r='2.3'/>",
+    "language": "<path d='M4 5.5h9M8.5 3.5v2c0 3.6-1.9 6.6-4.5 8M6.3 9.2c1.3 2.2 3.3 3.8 5.5 4.4'/><path d='M12.6 20.5l3.7-9 3.7 9M13.9 17.4h4.8'/>",
 }
 
 
