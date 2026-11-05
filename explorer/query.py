@@ -60,6 +60,9 @@ class ExplorerShow:
     booking_url: str = ""    # "" when no verified BookMyShow URL exists
     sold_out: bool = False   # only when every seat category said so
     poster_url: str = ""
+    #: The show's dimension as BookMyShow names its event ("2D", "3D", "4DX 3D");
+    #: "" when unknown. Always ``formats[0]`` when set.
+    dimension: str = ""
 
     @property
     def starts_at(self) -> datetime | None:

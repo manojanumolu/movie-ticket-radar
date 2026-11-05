@@ -225,6 +225,7 @@ def shows_from_day(day, movie: MovieRef, movie_id: str, *, title: str = "", post
             date_code=s.date_code, time_label=s.time_label,
             minutes=parse_minutes(s.time_code, s.time_label),
             formats=_formats(s.format_label, s.event_format, base_format),
+            dimension=s.event_format or base_format,
             session_id=s.session_id, booking_url=_booking_url(provider, movie, s.venue_code, s.date_code),
             sold_out=s.availability is Availability.SOLD_OUT, poster_url=safe_poster(poster),
         ))
@@ -250,6 +251,7 @@ def shows_from_snapshot(rec: dict[str, Any], movie: MovieRef, movie_id: str, *, 
             locality=facts.locality, operator=facts.operator, theatre_type=facts.theatre_type,
             date_code=str(date_code), time_label=str(label), minutes=parse_minutes(str(time_code), str(label)),
             formats=_formats(str(fmt), str(event_fmt), base_format),
+            dimension=str(event_fmt) or base_format,
             session_id=str(session), booking_url=_booking_url(provider, movie, str(code), str(date_code)),
             sold_out=bool(sold), poster_url=safe_poster(poster),
         ))

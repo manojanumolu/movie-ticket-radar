@@ -38,7 +38,7 @@ from ui import radar
 
 MODES = {
     "movie": ("By movie", "Find where and when a movie is playing.", "movie"),
-    "theatre": ("By theatre", "See every movie and showtime at a theatre.", "theatre"),
+    "theatre": ("By theatre", "See every movie and showtime at a theatre.", "cinema"),
 }
 DAYS = 7
 PAGE_SIZE = 120
@@ -139,6 +139,19 @@ def _clean(key: str, allowed: list[str]) -> None:
 
 
 # ── drawing ─────────────────────────────────────────────────────────────
+def _label(icon: str, text: str) -> None:
+    """A field label in the panel: the product's icon, then the mono caption."""
+    C.html(f'<div class="tr-field-label tr-sx-label">{C.icon(icon, 13)}<span>{C.e(text)}</span></div>')
+
+
+def day_tile(code: str, selected: bool) -> None:
+    """A date as a ticket stub: the day's name, its number, the month."""
+    day = datetime.strptime(code, "%Y%m%d").date()
+    name, _ = date_label(code)
+    C.html(f'<div class="tr-sx-day{" selected" if selected else ""}"><span class="k">{C.e(name)}</span>'
+           f'<b>{day.day}</b><span class="m tr-mono">{C.e(day.strftime("%b"))}</span></div>')
+
+
 def mode_tile(mode: str, selected: bool) -> None:
     title, line, glyph = MODES[mode]
     C.html(
@@ -158,18 +171,18 @@ def _modes(mode: str) -> None:
 
 
 def _dates(selected: str) -> None:
-    C.html('<div class="tr-field-label">Date</div>')
+    _label("calendar", "Date")
     for column, code in flow.grid(date_codes(), DAYS, "sxdate"):
         with column:
             name, sub = date_label(code)
             sel = code == selected
             flow.pick(f"sxdate_{code}", "Selected" if sel else f"Show {name} {sub}",
-                      lambda n=name, s=sub, x=sel: C.choice_tile(n, s, x),
+                      lambda c=code, x=sel: day_tile(c, x),
                       on_click=_set_date, args=(code,))
 
 
 def _window() -> tuple[int, int] | None:
-    C.html('<div class="tr-field-label">Time window · IST</div>')
+    _label("clock", "Time window · IST")
     with st.container(key="trpair_sxwin"):
         a, b = st.columns(2, gap="small")
         a.time_input("From", key="sx_from", step=timedelta(minutes=15), on_change=_ui_only)
@@ -180,6 +193,7 @@ def _window() -> tuple[int, int] | None:
         for col, (label, lo, hi) in zip(cols, Q.PRESETS):
             col.button(label, key=f"sxpre_{label.lower().replace(' ', '_')}", use_container_width=True,
                        type="primary" if current == (lo, hi) else "secondary",
+                       help=f"{Q.fmt_clock(lo)} – {Q.fmt_clock(hi)}",
                        on_click=_set_window, args=(lo, hi))
     try:
         return Q.validate_window(st.session_state.get("sx_from"), st.session_state.get("sx_to"))
@@ -188,10 +202,14 @@ def _window() -> tuple[int, int] | None:
         return None
 
 
+FILTER_ICONS = {"Area": "location", "Operator": "theatre", "Theatre type": "cinema",
+                "Language": "language", "Format": "format"}
+
+
 def _multiselect(column, label: str, key: str, opts: list[str], placeholder: str) -> None:
     _clean(key, opts)
     with column:
-        C.html(f'<div class="tr-field-label">{C.e(label)}</div>')
+        _label(FILTER_ICONS.get(label, "filter"), label)
         st.multiselect(label, opts, key=key, placeholder=placeholder, label_visibility="collapsed",
                        on_change=_ui_only, disabled=not opts)
 
@@ -199,12 +217,13 @@ def _multiselect(column, label: str, key: str, opts: list[str], placeholder: str
 def _filters(mode: str, shows: list[Q.ExplorerShow], languages: list[str]) -> None:
     opts = Q.options(shows)
     with st.container(key="sxfilters"):
+        C.html(f'<div class="tr-sx-refine">{C.icon("filter", 13)}<span>Refine</span></div>')
         if mode == "movie":
             cols = st.columns([1.15, 1.15, 1, 1, 1.15], gap="small")
             _multiselect(cols[0], "Area", "sx_area", opts["localities"], "All Hyderabad")
             _multiselect(cols[1], "Operator", "sx_ops", opts["operators"], "All operators")
             with cols[2]:
-                C.html('<div class="tr-field-label">Theatre type</div>')
+                _label("cinema", "Theatre type")
                 st.selectbox("Theatre type", TYPE_CHOICES, key="sx_type", label_visibility="collapsed",
                              on_change=_ui_only)
             lang_col, fmt_col = cols[3], cols[4]
@@ -232,14 +251,14 @@ def _kept_index(key: str, labels: list[str]) -> int | None:
 
 def _searchbox(mode: str, titles: list[catalog.Title], theatres: list[catalog.Theatre]):
     if mode == "movie":
-        C.html('<div class="tr-field-label">Movie</div>')
+        _label("movie", "Movie")
         labels = [t.label for t in titles]
         _clean_single("sx_movie", labels)
         choice = st.selectbox("Movie", labels, index=_kept_index("sx_movie", labels), key="sx_movie",
                               label_visibility="collapsed", placeholder="Search movies playing in Hyderabad…",
                               on_change=_keep, args=("sx_movie",))
         return next((t for t in titles if t.label == choice), None)
-    C.html('<div class="tr-field-label">Theatre</div>')
+    _label("cinema", "Theatre")
     labels = [t.label for t in theatres]
     _clean_single("sx_theatre", labels)
     choice = st.selectbox("Theatre", labels, index=_kept_index("sx_theatre", labels), key="sx_theatre",
@@ -342,11 +361,21 @@ def _book(url: str, text: str = "Book") -> str:
     if not url:
         return '<span class="tr-sx-book off" title="No verified BookMyShow link for this show">No link</span>'
     return (f'<a class="tr-sx-book" href="{C.e(url)}" target="_blank" rel="noopener noreferrer" '
-            f'title="Open on BookMyShow">{C.e(text)}{C.icon("external", 12)}</a>')
+            f'title="Book on BookMyShow" aria-label="{C.e(text)} on BookMyShow">{C.icon("ticket", 13)}'
+            f'<span>{C.e(text)}</span></a>')
 
 
-def _fmt_badges(show: Q.ExplorerShow) -> str:
-    out = "".join(f'<span class="tr-badge muted">{C.e(f)}</span>' for f in show.formats[:2])
+def _fmt_badges(show: Q.ExplorerShow, *, language: bool = True) -> str:
+    """Dimension first (accent), then the language, then the screen BookMyShow
+    named — only what the listing says; nothing is filled in."""
+    out = ""
+    screens = list(show.formats)
+    if show.dimension and screens and screens[0] == show.dimension:
+        out += f'<span class="tr-badge dim" title="Dimension">{C.e(show.dimension)}</span>'
+        screens = screens[1:]
+    if language and show.language:
+        out += f'<span class="tr-badge muted lang" title="Language">{C.e(show.language)}</span>'
+    out += "".join(f'<span class="tr-badge muted" title="Screen">{C.e(f)}</span>' for f in screens[:1])
     if show.sold_out:
         out += '<span class="tr-badge soon" title="Every seat category BookMyShow returned was sold out">Sold out</span>'
     return out
@@ -363,12 +392,13 @@ def time_rows_markup(shows: list[Q.ExplorerShow], mode: str) -> str:
         for s in items:
             clock, half = s.display_time
             if mode == "movie":
-                primary, secondary = s.venue_name, " · ".join(x for x in (_where(s), s.language) if x)
+                primary, secondary = s.venue_name, _where(s)
             else:
-                primary, secondary = s.movie_title, s.language
+                primary, secondary = s.movie_title, ""
             parts.append(
                 f'<div class="tr-sx-row"><div class="t"><b>{C.e(clock)}</b><span>{C.e(half)}</span></div>'
-                f'<div class="m"><div class="n">{C.e(primary)}</div><div class="s">{C.e(secondary)}</div></div>'
+                f'<div class="m"><div class="n">{C.e(primary)}</div>'
+                + (f'<div class="s">{C.e(secondary)}</div>' if secondary else "") + '</div>'
                 f'<div class="f">{_fmt_badges(s)}</div>{_book(s.booking_url)}</div>'
             )
     parts.append("</div>")
@@ -389,7 +419,7 @@ def group_markup(groups: list[Q.Group], mode: str) -> str:
             (f'<a class="tr-sx-time{" sold" if s.sold_out else ""}" href="{C.e(s.booking_url)}" target="_blank" '
              f'rel="noopener noreferrer">' if s.booking_url else f'<span class="tr-sx-time{" sold" if s.sold_out else ""}">')
             + f'<b>{C.e(" ".join(s.display_time).strip())}</b>'
-            + (f'<span>{C.e(s.formats[0])}</span>' if s.formats else "")
+            + (f'<span>{C.e(s.dimension or s.formats[0])}</span>' if (s.dimension or s.formats) else "")
             + ("</a>" if s.booking_url else "</span>")
             for s in g.shows
         )
@@ -433,6 +463,12 @@ def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -
     out = Q.apply(shows, filt)
     venues = {s.venue_code for s in out.shows}
 
+    film = result.get("film")
+    if film is not None:
+        poster = next((S.safe_poster(w.poster) for w in film.rows if S.safe_poster(w.poster)), "")
+        C.html(f'<div class="tr-sx-film">{C.thumb(poster)}<div class="b"><span class="tr-eyebrow">Now showing</span>'
+               f'<div class="n">{C.e(film.title)}</div>'
+               f'<div class="s">{C.e(" · ".join(film.languages))}</div></div></div>')
     with st.container(key="trpair_sxhead"):
         head, toggle = st.columns([3, 2], gap="small", vertical_alignment="center")
         with head:
@@ -589,11 +625,19 @@ def page() -> None:
         _page_body()
 
 
+@st.cache_resource(show_spinner=False, max_entries=4)
+def _lookups(signature: tuple[str, str], slug: str) -> tuple[list, list]:
+    """The movie and theatre pickers' contents, built once per catalogue file
+    (``signature`` is its content digest) instead of on every rerun. Public
+    catalogue data only — nothing about whoever is looking."""
+    entries = cv.view(slug, "bookmyshow").entries
+    return catalog.titles(entries), catalog.theatres(entries)
+
+
 def _page_body() -> None:
     slug = "hyderabad"
     view = cv.view(slug, "bookmyshow")
-    titles = catalog.titles(view.entries)
-    theatres = catalog.theatres(view.entries)
+    titles, theatres = _lookups(cv._signature("bookmyshow"), slug)
     mode = st.session_state.get("sx_mode", "movie")
 
     _modes(mode)
@@ -620,6 +664,8 @@ def _page_body() -> None:
             result = _load(mode, wanted, date_code) if wanted else None
             if result is not None and mode == "theatre":
                 result = {**result, "venue": target.code, "venue_name": target.name}
+            elif result is not None:
+                result = {**result, "film": target}
             shows = [s for d in (result or {}).get("days", []) for s in d.shows]
             _filters(mode, shows, languages)
 

@@ -91,26 +91,49 @@ def _nav_css() -> str:
     return "\n".join(rules)
 
 
-#: The rail's two reels (``ui.home.reel_svg``), in pixels from the rail's
-#: top-left corner: one behind the navigation, a small one in the empty
-#: rail below the footer. The rig never scales — a phone's wider rail shows
-#: the same picture — and nothing joins the reels: the navigation, the
-#: quote and the footer fill the column between them, and a strip of film
-#: would have to pass them.
+#: The rail's film mechanism, in pixels from the rail's top-left corner: an
+#: upper reel behind the navigation rows, a lower reel in the empty rail under
+#: the version line, and the film strip between them. The strip runs down the
+#: rail's right-hand gutter (x 200–244 is clear of every word at every width,
+#: measured) and leaves each reel at its right-hand rim, tangent, as film does
+#: — so the strip's centre line is each reel's ``left + size/2 + rim``, where
+#: the rim is 95% of the half-width (``ui.home.reel_svg`` draws r=190 of 200).
+#: On a phone the rail is 300px wide, not 244, and the whole rig moves right by
+#: ``phone_shift`` so the strip keeps to the gutter there too.
 RAIL_RIG = {
-    "top": {"left": 22, "top": 160, "size": 180},      # behind the navigation
-    "bottom": {"left": 96, "top": 548, "size": 128},   # below everything, to the right
+    "top": {"left": 83, "top": 158, "size": 150},      # behind the navigation rows, below the logo
+    "bottom": {"left": 120, "top": 584, "size": 112},  # below the version line
+    "film": {"left": 218, "top": 226, "width": 22, "height": 418, "pitch": 14},
+    "phone_shift": 56,
 }
+#: One turn of the upper reel, in seconds. The lower reel and the film move at
+#: the same rim speed, so the three read as one mechanism.
+RAIL_TURN = 42
 
 
 def _rail_rig_css() -> str:
-    top, bottom = RAIL_RIG["top"], RAIL_RIG["bottom"]
+    top, bottom, film = RAIL_RIG["top"], RAIL_RIG["bottom"], RAIL_RIG["film"]
+    rim_speed = 2 * 3.14159 * (top["size"] / 2 * 0.95) / RAIL_TURN          # px per second at the rim
+    bottom_turn = round(RAIL_TURN * bottom["size"] / top["size"], 1)
+    film_loop = round(film["pitch"] / rim_speed, 2)
+    halo = top["size"] + 80
     return (
         f".tr-side-ambience .tr-reel.top {{ left: {top['left']}px; top: {top['top']}px; "
-        f"width: {top['size']}px; height: {top['size']}px; animation: tr-side-reel 42s linear infinite; }}\n"
+        f"width: {top['size']}px; height: {top['size']}px; animation: tr-side-reel {RAIL_TURN}s linear infinite; }}\n"
         f".tr-side-ambience .tr-reel.bottom {{ left: {bottom['left']}px; top: {bottom['top']}px; "
-        f"width: {bottom['size']}px; height: {bottom['size']}px; animation: tr-side-reel 30s linear infinite; }}"
+        f"width: {bottom['size']}px; height: {bottom['size']}px; animation: tr-side-reel {bottom_turn}s linear infinite; }}\n"
+        f".tr-side-ambience .tr-film {{ left: {film['left']}px; top: {film['top']}px; width: {film['width']}px; "
+        f"height: {film['height']}px; }}\n"
+        f".tr-side-ambience .tr-film .run {{ animation: tr-side-film {film_loop}s linear infinite; }}\n"
+        f"@keyframes tr-side-film {{ to {{ transform: translateY(-{film['pitch']}px); }} }}\n"
+        f".tr-side-ambience .tr-halo {{ left: {top['left'] - 40}px; top: {top['top'] - 40}px; "
+        f"width: {halo}px; height: {halo}px; }}"
     )
+
+
+def _rail_phone_css() -> str:
+    """The rig's phone rule, set inside the theme's one phone block."""
+    return f".tr-side-ambience .tr-side-rig {{ transform: translateX({RAIL_RIG['phone_shift']}px); }}"
 
 
 #: Web fonts, injected as their own block. A ``<link>`` starts a Markdown
@@ -219,36 +242,50 @@ p, span, div, label, li, input, button { font-family: var(--tr-sans); }
   min-width: 244px !important; width: 244px !important;
   position: relative; isolation: isolate;
 }
-/* Sidebar ambience — two of Home's reels behind the rail.
+/* Sidebar ambience — the rail's film mechanism, behind everything in it.
 
-   Home's reel drawing (``ui.home.reel_svg``: rim, sheen arc, ring, six
-   perforations, hub, pin, in Home's colours) twice: one behind the
-   navigation, a small one in the empty rail below the footer, both turning
-   the same way, the smaller one faster (``RAIL_RIG`` places them). No film
-   joins them — the navigation, the quote and the footer fill the column
-   between, and every word in the rail keeps a clear background. The
-   markup rides in the footer's html block (``app.sidebar``) and is fixed
-   here: ``position: fixed`` inside the rail — whose backdrop-filter makes
-   it the containing block — is the rail's box, so it never adds scrollable
-   width to the rail's scroll container, and ``overflow: hidden`` clips
-   whatever runs past the edge. Transform-only, no script, no asset;
-   pointer-transparent at z-index 0 under the content (lifted to 1 below). */
+   Two of Home's reels (``ui.home.reel_svg``: rim, sheen arc, ring, six
+   cut-outs, hub, pin) — one behind the navigation rows, one in the empty rail
+   under the version line — and a strip of film between them
+   (``ui.home.rail_film_svg``): a dark celluloid band with a row of sprocket
+   perforations down each edge and picture frames between, leaving each reel
+   at its right-hand rim. ``RAIL_RIG`` places all three; the strip runs down
+   the rail's right-hand gutter, clear of every word. The reels turn and the
+   film runs at one rim speed, the way one film would drive them — slowly,
+   transform only. The glow is a static halo, not a filter: a filter on a
+   turning element is repainted every frame (measured: Home's big reel cost
+   ~40% of the frame rate that way). The markup rides in the footer's html
+   block (``app.sidebar``) and is fixed here: ``position: fixed`` inside the
+   rail — whose backdrop-filter makes it the containing block — is the rail's
+   box, so it never adds scrollable width, and ``overflow: hidden`` clips
+   whatever runs past the edge. No script, no asset; pointer-transparent at
+   z-index 0 under the content (lifted to 1 below). */
 @keyframes tr-side-reel { to { transform: rotate(-360deg); } }
 .tr-side-ambience {
   position: fixed; left: 0; top: 0; width: 100%; height: 100%; z-index: 0;
   pointer-events: none; overflow: hidden; color: #FF8CA0;
 }
+.tr-side-ambience .tr-side-rig { position: absolute; inset: 0; }
 .tr-side-ambience .tr-reel { position: absolute; transform-origin: 50% 50%; will-change: transform; }
-.tr-side-ambience .tr-reel .rim { opacity: .13; }
+.tr-side-ambience .tr-reel .rim { opacity: .14; }
 .tr-side-ambience .tr-reel .sheen { stroke: #FFC9D4; opacity: .24; }
 .tr-side-ambience .tr-reel .ring { opacity: .11; }
 .tr-side-ambience .tr-reel .holes { opacity: .13; }
 .tr-side-ambience .tr-reel .hub { opacity: .14; }
 .tr-side-ambience .tr-reel .pin { opacity: .35; }
-.tr-side-ambience .tr-reel.top { filter: drop-shadow(0 0 24px rgba(255,51,85,.14)); }
+.tr-side-ambience .tr-halo { position: absolute; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,51,85,.10), rgba(255,51,85,.035) 62%, transparent 100%); }
+.tr-side-ambience .tr-film { position: absolute; overflow: hidden; opacity: .62; border-radius: 2px;
+  box-shadow: 0 0 22px -4px rgba(255,51,85,.22); }
+.tr-side-ambience .tr-film .run { display: block; will-change: transform; }
+.tr-side-ambience .tr-film .base { fill: #170D13; }
+.tr-side-ambience .tr-film .perf { fill: #FF8CA0; opacity: .5; }
+.tr-side-ambience .tr-film .frame { fill: url(#tr-rail-frame); stroke: #FF8CA0; stroke-width: .6; stroke-opacity: .42; }
+.tr-side-ambience .tr-film .edge { stroke: #FFC9D4; stroke-width: .8; opacity: .3; }
 __RAIL_RIG__
 /* off-canvas (a phone's collapsed rail) there is nothing to see */
-[data-testid="stSidebar"][aria-expanded="false"] .tr-side-ambience { display: none; }
+[data-testid="stSidebar"][aria-expanded="false"] .tr-side-ambience,
+[data-testid="stSidebar"][data-collapsed="true"] .tr-side-ambience { display: none; }
 /* the rail's own content stays above the room, and readable */
 [data-testid="stSidebar"] > div,
 [data-testid="stSidebarUserContent"],
@@ -603,7 +640,7 @@ __NAV_ICONS__
 
 /* Asked for stillness, the reels stay — they just stop moving. */
 @media (prefers-reduced-motion: reduce) {
-  .tr-side-ambience .tr-reel.top, .tr-side-ambience .tr-reel.bottom {
+  .tr-side-ambience .tr-reel.top, .tr-side-ambience .tr-reel.bottom, .tr-side-ambience .tr-film .run {
     animation: none;
     transform: none;
   }
@@ -1365,19 +1402,50 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 [class*="st-key-trgrid_sxmode"] { margin-bottom:4px; }
 [class*="st-key-trcard_sx_query"] > [data-testid="stVerticalBlock"] { gap:.55rem; }
 [class*="st-key-trcard_sx_query"] .tr-field-label { margin-top:8px; }
-[class*="st-key-pick_sxdate_"]:hover .tr-interval:not(.selected),
 [class*="st-key-pick_sxview_"]:hover .tr-sx-seg:not(.selected) { border-color:var(--tr-border-hover); background:var(--tr-raised); }
+[class*="st-key-pick_sxmode_"]:active .tr-sx-mode, [class*="st-key-pick_sxdate_"]:active .tr-sx-day,
+[class*="st-key-pick_sxview_"]:active .tr-sx-seg { transform:translateY(0) scale(.985); }
+/* section labels: the product's icon beside the mono caption */
+.tr-sx-label { display:flex; align-items:center; gap:7px; }
+.tr-sx-label .tr-ic { color:var(--tr-accent-soft); opacity:.85; }
+.tr-sx-refine { display:flex; align-items:center; gap:8px; margin:0 0 2px; font-size:12.5px; font-weight:700;
+  color:var(--tr-text-2); letter-spacing:-.005em; }
+.tr-sx-refine .tr-ic { color:var(--tr-accent-soft); }
+/* dates as ticket stubs: the day's name, its number, the month */
+.tr-sx-day { position:relative; display:flex; flex-direction:column; align-items:center; gap:1px; padding:9px 4px 8px;
+  border-radius:13px; text-align:center; box-sizing:border-box; min-width:0;
+  background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.012)), var(--tr-sunken);
+  border:1px solid rgba(255,255,255,.10); box-shadow: var(--tr-hi), 0 10px 22px -18px rgba(0,0,0,.9);
+  transition:border-color var(--tr-fast) var(--tr-ease), background var(--tr-fast) var(--tr-ease), transform var(--tr-fast) var(--tr-ease), box-shadow var(--tr-fast) var(--tr-ease); }
+/* the stub's perforation: a hairline across, as a ticket's tear-off has */
+.tr-sx-day::after { content:""; position:absolute; left:10px; right:10px; bottom:7px; border-top:1px dashed rgba(255,255,255,.07); }
+.tr-sx-day .k { font-size:11.5px; font-weight:700; color:var(--tr-text-3); white-space:nowrap; }
+.tr-sx-day b { font-size:22px; font-weight:800; line-height:1.1; letter-spacing:-.03em; color:var(--tr-text-2); }
+.tr-sx-day .m { font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--tr-text-4); padding-bottom:5px; }
+[class*="st-key-pick_sxdate_"]:hover .tr-sx-day:not(.selected) { border-color:var(--tr-border-hover); background:var(--tr-raised); transform:translateY(-1px); }
+.tr-sx-day.selected { border:1.5px solid var(--tr-accent);
+  background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,0) 50%), linear-gradient(160deg,rgba(255,51,85,.20),rgba(255,51,85,.05)), var(--tr-raised);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 14px 30px -18px rgba(255,51,85,.85); }
+.tr-sx-day.selected .k { color:var(--tr-accent-soft); }
+.tr-sx-day.selected b { color:#fff; }
+.tr-sx-day.selected .m { color:var(--tr-text-2); }
+.tr-sx-day.selected::after { border-top-color:rgba(255,140,160,.28); }
 /* Time inputs: the theme's glass, a touch shorter than the search field. */
 [class*="st-key-trpair_sxwin"] [data-testid="stWidgetLabel"] p { font-size:12px !important; }
 [class*="st-key-trpair_sxwin"] .stTimeInput [data-baseweb="select"] > div { min-height:46px; border-radius:12px !important; }
 /* Quick windows: small chips under the inputs; the active one is tinted, not a CTA. */
-[class*="st-key-sxpresets"] [data-testid="stHorizontalBlock"] { gap:6px !important; }
+[class*="st-key-sxpresets"] { padding:3px; border-radius:12px; background:rgba(0,0,0,.22); border:1px solid rgba(255,255,255,.07);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.45); }
+[class*="st-key-sxpresets"] [data-testid="stHorizontalBlock"] { gap:3px !important; }
 [class*="st-key-sxpresets"] .stButton button, [class*="st-key-sxpresets"] .stButton button[kind="primary"] {
   min-height:34px; padding:5px 10px; border-radius:9px; font-size:12px; font-weight:700; letter-spacing:0; text-transform:none;
-  color:var(--tr-text-3); background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.10); box-shadow:none; text-shadow:none; }
+  color:var(--tr-text-3); background:transparent; border:1px solid transparent; box-shadow:none; text-shadow:none; }
 [class*="st-key-sxpresets"] .stButton button p, [class*="st-key-sxpresets"] .stButton button[kind="primary"] p { font-size:12px; font-weight:700; }
-[class*="st-key-sxpresets"] .stButton button:hover { color:#fff; border-color:var(--tr-border-hover); background:rgba(255,255,255,.06); transform:none; box-shadow:none; }
-[class*="st-key-sxpresets"] .stButton button[kind="primary"] { color:var(--tr-accent-soft); background:rgba(255,51,85,.12); border-color:rgba(255,51,85,.45); }
+[class*="st-key-sxpresets"] .stButton button:hover { color:#fff; background:rgba(255,255,255,.06); transform:none; box-shadow:none; }
+[class*="st-key-sxpresets"] .stButton button[kind="primary"] { color:#fff; border-color:rgba(255,51,85,.55);
+  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,0) 60%), linear-gradient(90deg,rgba(255,51,85,.30),rgba(255,51,85,.14));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 6px 16px -10px rgba(255,51,85,.9); }
+[class*="st-key-sxpresets"] .stButton button:focus-visible { outline:2px solid var(--tr-accent); outline-offset:1px; }
 /* Filters: compact fields, no magnifier — they choose, they don't search. */
 [class*="st-key-sxfilters"] { margin-top:4px; padding-top:12px; border-top:1px solid var(--tr-border); }
 [class*="st-key-sxfilters"] .stSelectbox .react-aria-ComboBox::before, [class*="st-key-sxfilters"] .stSelectbox [data-baseweb="select"]::before { display:none; }
@@ -1442,7 +1510,11 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 .tr-sx-fresh.bad .h { color:#FF8A8A; }
 .tr-sx-fresh .w { font-size:12px; color:var(--tr-text-3); margin-top:2px; }
 .tr-sx-fresh .d { font-size:12px; color:var(--tr-text-3); margin-top:4px; line-height:1.5; overflow-wrap:anywhere; }
-[class*="st-key-sx_refresh"] .stButton button { min-height:40px; font-size:12.5px; }
+[class*="st-key-sx_refresh"] .stButton button { min-height:40px; font-size:12.5px; border-radius:11px; }
+[class*="st-key-sx_refresh"] .stButton button [data-testid="stIconMaterial"] { color:var(--tr-accent-soft); }
+[class*="st-key-sx_refresh"] .stButton button:hover [data-testid="stIconMaterial"] { color:#fff; }
+.stButton button:focus-visible { outline:2px solid var(--tr-accent); outline-offset:2px; }
+.stButton button:disabled { opacity:.5; cursor:not-allowed; transform:none !important; box-shadow:none; }
 /* time-first list */
 .tr-sx-list { margin-top:2px; }
 .tr-sx-hour { display:flex; align-items:center; gap:10px; margin:16px 0 2px; }
@@ -1456,14 +1528,30 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 .tr-sx-row .t b { font-size:22px; font-weight:800; letter-spacing:-.035em; color:var(--tr-text); }
 .tr-sx-row .t span { font-size:11px; font-weight:700; color:var(--tr-text-3); margin-left:4px; letter-spacing:.04em; }
 .tr-sx-row .m { min-width:0; }
-.tr-sx-row .n { font-size:14.5px; font-weight:700; letter-spacing:-.01em; line-height:1.3; overflow-wrap:anywhere; }
+.tr-sx-row .n { font-size:15px; font-weight:800; letter-spacing:-.015em; line-height:1.3; overflow-wrap:anywhere; color:var(--tr-text); }
 .tr-sx-row .s { font-size:12px; color:var(--tr-text-3); margin-top:2px; overflow-wrap:anywhere; }
 .tr-sx-row .f { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; min-width:0; max-width:280px; }
-.tr-sx-book { display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border-radius:9px; white-space:nowrap;
-  font-size:12.5px; font-weight:700; text-decoration:none !important; color:var(--tr-accent-soft) !important;
-  background:rgba(255,51,85,.08); border:1px solid rgba(255,51,85,.40);
-  transition:background var(--tr-fast) var(--tr-ease), color var(--tr-fast) var(--tr-ease), border-color var(--tr-fast) var(--tr-ease); }
-.tr-sx-book:hover { background:rgba(255,51,85,.18); color:#fff !important; border-color:rgba(255,51,85,.7); }
+.tr-sx-book { display:inline-flex; align-items:center; gap:7px; padding:7px 13px 7px 11px; border-radius:10px; white-space:nowrap;
+  font-size:12.5px; font-weight:800; text-decoration:none !important; color:#FFD6DE !important;
+  background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,0) 55%), linear-gradient(135deg,rgba(255,51,85,.26),rgba(212,18,63,.16));
+  border:1px solid rgba(255,107,133,.48); box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 8px 18px -12px rgba(255,51,85,.8);
+  transition:background var(--tr-fast) var(--tr-ease), color var(--tr-fast) var(--tr-ease), border-color var(--tr-fast) var(--tr-ease), transform var(--tr-fast) var(--tr-ease), box-shadow var(--tr-fast) var(--tr-ease); }
+.tr-sx-book .tr-ic { color:var(--tr-accent-soft); }
+.tr-sx-book:hover { color:#fff !important; border-color:rgba(255,140,160,.8); transform:translateY(-1px);
+  background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,0) 55%), linear-gradient(135deg,rgba(255,51,85,.42),rgba(212,18,63,.26));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 12px 24px -12px rgba(255,51,85,.95); }
+.tr-sx-book:hover .tr-ic { color:#fff; }
+.tr-sx-book:active { transform:translateY(0) scale(.98); }
+.tr-sx-book:focus-visible, a.tr-sx-time:focus-visible { outline:2px solid var(--tr-accent); outline-offset:2px; }
+/* the show's facts, each in its own voice: dimension (accent), language, screen, sold out */
+.tr-badge.dim { background:linear-gradient(180deg,rgba(255,51,85,.20),rgba(255,51,85,.09)); border-color:rgba(255,107,133,.45); color:#FFC2CE; }
+.tr-badge.lang { color:var(--tr-text-2); border-color:var(--tr-border-strong); }
+/* By movie: the film, above its shows */
+.tr-sx-film { display:flex; align-items:center; gap:14px; margin:6px 0 2px; min-width:0; }
+.tr-sx-film .tr-thumb { width:46px; height:66px; }
+.tr-sx-film .b { min-width:0; }
+.tr-sx-film .n { font-size:22px; font-weight:800; letter-spacing:-.03em; line-height:1.15; margin-top:3px; overflow-wrap:anywhere; }
+.tr-sx-film .s { font-size:12.5px; color:var(--tr-text-3); margin-top:3px; }
 .tr-sx-book.off { color:var(--tr-text-4) !important; background:transparent; border:1px dashed rgba(255,255,255,.14); }
 /* grouped: a heading per theatre (or film), its times as a row of links */
 .tr-sx-group { padding:16px 4px 18px; border-bottom:1px solid var(--tr-border); }
@@ -1528,6 +1616,7 @@ a.tr-sx-time:hover { border-color:rgba(255,51,85,.6); background:rgba(255,51,85,
   /* the sidebar is an overlay here; the toolbar's "open" control is the nav */
   [data-testid="stSidebar"] { width: min(300px, 86vw) !important; min-width: 0 !important; }
   .tr-side-ambience { opacity: .8; }   /* the rail covers the page here; the reels keep their place, a shade quieter */
+  __RAIL_PHONE__   /* the phone's rail is 300px wide: the rig keeps to its gutter */
   .block-container { padding-top: 3.2rem !important; }
   /* the account chip sits at the top-right, below Streamlit's header so the
      transparent toolbar can never intercept a tap; a z-index keeps it on top. */
@@ -1646,6 +1735,8 @@ a.tr-sx-time:hover { border-color:rgba(255,51,85,.6); background:rgba(255,51,85,
   .tr-sx-row .f { grid-column: 2; justify-content: flex-start; max-width: none; }
   .tr-sx-row .tr-sx-book { grid-column: 3; }
   .tr-sx-count b { font-size: 21px; }
+  .tr-sx-day b { font-size: 19px; }
+  .tr-sx-film .n { font-size: 19px; }
 }
 @media (max-width: 480px) {
   [class*="st-key-trpair_sxhead"] [data-testid="stHorizontalBlock"],
@@ -1695,7 +1786,7 @@ a.tr-sx-time:hover { border-color:rgba(255,51,85,.6); background:rgba(255,51,85,
   font-family: 'Material Symbols Rounded' !important;
 }
 </style>
-""".replace("__NAV_ICONS__", _nav_css()).replace("__RAIL_RIG__", _rail_rig_css())
+""".replace("__NAV_ICONS__", _nav_css()).replace("__RAIL_RIG__", _rail_rig_css()).replace("__RAIL_PHONE__", _rail_phone_css())
 
 
 def inject() -> None:
@@ -1704,4 +1795,4 @@ def inject() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
 
 
-__all__ = ["CSS", "FONTS", "NAV_ICONS", "RAIL_RIG", "TOKENS", "inject"]
+__all__ = ["CSS", "FONTS", "NAV_ICONS", "RAIL_RIG", "RAIL_TURN", "TOKENS", "inject"]
