@@ -258,43 +258,26 @@ def reel_svg(cls: str, *, formats: bool = False) -> str:
             f'{format_badges() if formats else ""}</svg>')
 
 
-def rail_film_svg(width: int, height: int, pitch: int = 14) -> str:
-    """A strip of 35mm-style film for the rail: a dark celluloid band, four
-    sprocket perforations per frame down each edge, one picture frame per
-    ``pitch`` (wider than tall, faintly lit, as an exposed frame is), and the
-    band's two edges. One tile (``<pattern>``) repeats down the strip, so it is
-    a handful of nodes however long it runs; the strip is one ``pitch`` longer
-    than it shows, so moving it up by one pitch (CSS) loops without a seam."""
-    run = height + pitch
-    perf_w, perf_h, margin = 2.6, 2.0, 1.4
-    perfs = "".join(
-        f'<rect class="perf" x="{x}" y="{y:.2f}" width="{perf_w}" height="{perf_h}" rx=".6"/>'
-        for y in (0.75 + k * pitch / 4 for k in range(4)) for x in (margin, width - margin - perf_w))
-    inset = margin + perf_w + 1.4
-    frame = (f'<rect class="frame" x="{inset}" y="1.6" width="{width - 2 * inset:.1f}" '
-             f'height="{pitch - 3.2:.1f}" rx="1"/>')
-    return (f'<div class="tr-film"><svg class="run" width="{width}" height="{run}" viewBox="0 0 {width} {run}" '
-            f'aria-hidden="true"><defs>'
-            '<linearGradient id="tr-rail-frame" x1="0" y1="0" x2="1" y2="1">'
-            '<stop offset="0" stop-color="#FF6B85" stop-opacity=".22"/>'
-            '<stop offset="1" stop-color="#FF3355" stop-opacity=".05"/></linearGradient>'
-            f'<pattern id="tr-rail-film" width="{width}" height="{pitch}" '
-            f'patternUnits="userSpaceOnUse">{perfs}{frame}</pattern></defs>'
-            f'<rect class="base" width="{width}" height="{run}"/>'
-            f'<rect width="{width}" height="{run}" fill="url(#tr-rail-film)"/>'
-            f'<path class="edge" d="M.5 0V{run}M{width - .5} 0V{run}"/></svg></div>')
+def rail_film_svg(d: str, width: int = 20, pitch: int = 15) -> str:
+    """The rail's strip of film along the curve ``d``, drawn as Home's own
+    strip is (``strip_svg``): one path stroked in layers — a faint edge, the
+    dark band, the perforations (a dashed stroke that a narrower band then
+    covers in the middle, so they show only at the two edges), and the frames
+    down the middle. Its size is the rail's; the CSS sets every stroke."""
+    layers = "".join(f'<path class="{c}" d="{d}"/>' for c in ("edge", "band", "perf", "film", "frames"))
+    return f'<svg class="tr-film" width="244" height="720" viewBox="0 0 244 720" aria-hidden="true">{layers}</svg>'
 
 
 def rail_rig() -> str:
     """The rail's whole film mechanism, as ``ui.theme.RAIL_RIG`` places it:
-    the halo, the film (under the reels, so its ends tuck beneath the rims),
-    then the two reels."""
+    the film first, then each reel's disc (the film's ends run under it) and
+    the reel on top."""
     from ui.theme import RAIL_RIG
 
     film = RAIL_RIG["film"]
-    return ('<div class="tr-side-rig"><div class="tr-halo"></div>'
-            + rail_film_svg(film["width"], film["height"], film["pitch"])
-            + reel_svg("top") + reel_svg("bottom") + '</div>')
+    return ('<div class="tr-side-rig">' + rail_film_svg(film["d"], film["width"], film["pitch"])
+            + '<div class="tr-disc top"></div>' + reel_svg("top")
+            + '<div class="tr-disc bottom"></div>' + reel_svg("bottom") + '</div>')
 
 
 def strip_svg() -> str:
