@@ -269,8 +269,9 @@ def sidebar(active_count: int) -> str:
             f'<div class="tr-version"><span>V{APP_VERSION}</span>'
             f"<span>{C.e(get_location(st.session_state.get('location') or 'hyderabad').name.upper())}</span></div>"
             "</div>"
-            # The rail's two still reels: Home's own reel drawing, twice —
-            # behind the navigation and below the footer (``home.rail_rig``).
+            # The rail's film mechanism: Home's own reel drawing, twice —
+            # behind the navigation and below the footer — joined by a strip
+            # of film down the rail's empty right-hand gutter (``home.rail_rig``).
             # Carried in this block so it adds no element (and no gap) to
             # the rail; the theme fixes it behind everything and clips it to
             # the rail (``.tr-side-ambience``).
@@ -748,7 +749,7 @@ def page_home(monitors, states, history, settings) -> None:
         home.ambience()                       # the room's light and reel, behind everything below
         with st.container(key="trstatus"):
             C.hero("Movie Ticket Monitor", "Know the moment your tickets go live.",
-                   "We watch the booking page for you, so you don't have to.", after=home.dialogue())
+                   "We watch the booking page for you, so you don't have to.", after=home.hero_lines())
             home.hero_radar(monitors, states)
             home.band()
             drain_flash()

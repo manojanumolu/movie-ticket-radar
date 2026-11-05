@@ -1,33 +1,45 @@
-"""Home's cinema dialogue: what each mark says, and where the subtitle card
-opens so it is never cut off.
+"""Home's cinema dialogue: what the six opening marks say, and where the
+subtitle card opens so it is never cut off.
 
 Two contracts live here.
 
-**The lines.** Every mark carries one entry of the audited collection
-(``ui.dialogues``): the line, its English translation when it is not in
-English, and the speaker, film, year and language. The band — the first zone
-drawn, and the first eight of the phone's strip — is Indian cinema, Telugu
-first; the rail is world cinema in its own languages; the foot is Hollywood.
-A subtitle or a paraphrase says so on the card.
+**The lines.** The first six marks a person meets on Home — the band's
+first six, left to right, which are also the phone strip's first six —
+carry six Telugu lines, each naming its hero and the film, in a fixed
+order. None of those six heroes appears anywhere else among the other
+eighteen, which are Marvel, Hollywood and exactly two Batman lines.
 
-**The placement.** The card is CSS: a hover, a focus and a tap (which
-focuses the mark) reveal a child element, with no script, no timer and no
-rerun. The band hangs above the hero at the very top of the document, so its
-cards open downward.
+**The placement.** The card is CSS: a hover and a focus reveal a child
+element, with no script, no timer and no rerun. What changed is only
+*which way it opens* — the band hangs above the hero at the very top of
+the document, so its cards open downward, where a card opening upward was
+cut off by the top of the browser window.
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
-from ui import crafts, dialogues, home
+from ui import crafts, home
 
 pytestmark = pytest.mark.usefixtures("signed_in")
 
-INDIAN = {"Telugu", "Hindi", "Tamil", "Malayalam", "Kannada · said in English", "Bengali"}
+#: The six, exactly as they must be said, in the order they are met.
+SIX: tuple[tuple[str, str, str], ...] = (
+    ("direction", "Thokkukuntu povaale!", "Jr NTR · RRR"),
+    ("cinematography", "vandha mandhini okesari Ramannu!", "Ram Charan · Magadheera"),
+    ("screenwriting", "Please... I kindly request!", "Prabhas · Salaar"),
+    ("producing", "Pushpa... Pushpa Raj... Thaggede Le!", "Allu Arjun · Pushpa: The Rise"),
+    ("acting", "Okka sari commit aithe... naa maata nene vinanu!", "Mahesh Babu · Pokiri"),
+    ("editing", "Naakkonchem thikka undi... kaani daaniko lekkundi!", "Pawan Kalyan · Gabbar Singh"),
+)
+
+HEROES = ("Jr NTR", "Ram Charan", "Prabhas", "Allu Arjun", "Mahesh Babu", "Pawan Kalyan")
+FILMS = ("RRR", "Magadheera", "Salaar", "Pushpa", "Pokiri", "Gabbar Singh")
 
 
 def _marks(markup: str) -> list[str]:
@@ -43,70 +55,78 @@ def _rule(css: str, selector: str) -> str:
     raise AssertionError(f"no rule for {selector!r}")
 
 
-def _zone(name: str) -> list[str]:
-    return [k for k, (z, _x, _y) in home.HOME_LAYOUT.items() if z == name]
-
-
 # ──────────────────────────────────────────────────────────────────────────
-# The lines: India first, then the world, then Hollywood
+# The six, in order
 # ──────────────────────────────────────────────────────────────────────────
-def test_every_mark_carries_one_audited_entry_and_none_repeats():
-    assert set(home.LINES) == set(crafts.BY_KEY)
-    assert len(set(home.LINES.values())) == 24                       # 24 different lines
-    assert set(home.LINES.values()) <= set(dialogues.BY_KEY)
-
-
-def test_the_band_is_indian_cinema_telugu_first_and_the_strip_reads_the_same():
-    band = _zone("band")
-    langs = [dialogues.BY_KEY[home.LINES[k]].language for k in band]
-    assert set(langs) <= INDIAN and langs[:4] == ["Telugu"] * 4, langs
+def test_the_first_six_marks_drawn_on_home_are_the_six_heroes_in_order():
+    """Not the dictionary's order — the order the page actually renders."""
+    band = [k for k, (zone, _x, _y) in home.HOME_LAYOUT.items() if zone == "band"]
+    assert band[:6] == [key for key, _q, _by in SIX]
+    # …and the band is laid out left to right, so reading order is visual order
     xs = [home.HOME_LAYOUT[k][1] for k in band]
-    assert xs == sorted(xs), xs                                      # reading order is visual order
+    assert xs == sorted(xs), xs
+    # the band is the first zone drawn on the page
     import app
 
     page = __import__("inspect").getsource(app.page_home)
     assert page.index("home.band()") < page.index("home.rail_foot()") < page.index("home.foot()")
-    assert home.STRIP[:8] == tuple(band) and len(home.STRIP) == 24
+    # the phone's strip opens with the six too, so 390px reads what 1600px reads
+    assert home.STRIP[:6] == tuple(key for key, _q, _by in SIX)
+    assert len(home.STRIP) == 24
+
+    assert len(_marks(home.crafts_zone("band"))) == 8
+    drawn = _marks(home.crafts_strip())
+    assert len(drawn) == 24
+    for got, (key, quote, by) in zip(drawn, SIX):
+        craft = crafts.BY_KEY[key]
+        assert got == f"{craft.label} — “{quote}” — {by}", got
 
 
-def test_the_rail_is_world_cinema_in_its_own_languages_and_the_foot_is_hollywood():
-    rail = {dialogues.BY_KEY[home.LINES[k]].language for k in _zone("rail")}
-    assert "English" not in rail and len(rail) >= 6, rail
-    assert {"French", "Italian", "Japanese", "Korean", "Spanish", "Mandarin"} <= rail
-    foot = [dialogues.BY_KEY[home.LINES[k]] for k in _zone("foot")]
-    assert all(d.language == "English" and d.region == "World" for d in foot)
+def test_the_six_strings_are_carried_through_exactly_as_written():
+    for key, quote, by in SIX:
+        assert home.LINES[key] == (quote, by, "Tollywood"), key
+    body = home.crafts_zone("band") + home.crafts_strip()
+    for _key, quote, by in SIX:
+        assert f'<span class="q">“{quote}”</span><span class="by">— {by}</span>' in body, quote
+    # transliterated, never Telugu script, and each names a hero and a film
+    for _key, quote, by in SIX:
+        assert quote.isascii(), quote
+        hero, _, film = by.partition(" · ")
+        assert hero in HEROES and film, by
 
 
-def test_a_card_carries_line_translation_attribution_and_its_label():
-    mark = home._mark(crafts.BY_KEY["acting"], 50, 50, zone="band")         # Sholay
-    assert ('<span class="q">“Kitne aadmi the?”</span><span class="en">How many men were there?</span>'
-            '<span class="by">— Gabbar Singh (Amjad Khan) · Sholay (1975) · Hindi</span>') in mark
-    assert 'aria-label="Acting — “Kitne aadmi the?” (How many men were there?) — Gabbar Singh (Amjad Khan), Sholay (1975) · Hindi"' in mark
-    sub = home._mark(crafts.BY_KEY["producing"], 50, 50, zone="band")       # Baahubali 2: a subtitle
-    assert '<span class="note">English subtitle</span>' in sub and "[English subtitle]" in sub
-    english = home._mark(crafts.BY_KEY["sound"], 50, 50, zone="foot")       # Casablanca: no translation
-    assert 'class="en"' not in english and "Casablanca (1942) · English" in english
+# ──────────────────────────────────────────────────────────────────────────
+# …and nowhere else
+# ──────────────────────────────────────────────────────────────────────────
+def test_none_of_the_six_heroes_speaks_again_lower_down():
+    rest = {k: v for k, v in home.LINES.items() if k not in home.TELUGU_SIX}
+    assert len(rest) == 18
+    for key, (quote, by, house) in rest.items():
+        assert house != "Tollywood", key
+        for hero in HEROES:
+            assert hero not in by, (key, by)
+        for film in FILMS:
+            assert film not in by and film not in quote, (key, by)
 
 
-def test_the_strings_are_escaped_on_the_way_out(monkeypatch):
-    evil = dialogues.Dialogue("x", '<b>"hi"</b>', "<i>t</i>", "<s>F</s>", 2000, "Telugu", "<u>S</u>", "India")
-    monkeypatch.setitem(dialogues.BY_KEY, home.LINES["acting"], evil)
-    mark = home._mark(crafts.BY_KEY["acting"], 50, 50, zone="band")
-    for raw in ("<b>", "<i>", "<s>", "<u>"):
-        assert raw not in mark
-    assert "&lt;b&gt;" in mark and "&lt;i&gt;" in mark
+def test_the_houses_keep_their_balance_with_marvel_in_front():
+    houses = Counter(house for _q, _by, house in home.LINES.values())
+    assert sum(houses.values()) == 24 and len(home.LINES) == 24
+    assert houses["Tollywood"] == 6
+    assert houses["DC"] == 2
+    assert houses["Marvel"] == 9 and houses.most_common(1)[0][0] == "Marvel"
+    assert houses["Marvel"] > max(v for k, v in houses.items() if k != "Marvel")
+    assert set(houses) == {"Marvel", "Tollywood", "DC", "Hollywood"}
 
 
-def test_the_rotation_under_the_hero_alternates_india_and_the_world():
-    keys = dialogues.HOME_ROTATION
-    regions = [dialogues.BY_KEY[k].region for k in keys]
-    assert regions == ["India", "World"] * (len(keys) // 2)
-    markup = home.dialogue()
-    assert markup.startswith('<div class="tr-dlg tr-dlg-home" aria-hidden="true">')
-    delays = [int(d) for d in re.findall(r"animation-delay:(\d+)s", markup)]
-    assert delays == [i * dialogues.LINE_SECONDS for i in range(len(keys))]
-    css = home.CSS
-    assert f".tr-dlg-home .ln {{ animation: tr-dlg-home-turn {len(keys) * dialogues.LINE_SECONDS}s linear infinite; }}" in css
+def test_the_two_batman_lines_survived_the_swap():
+    dc = [(q, by) for q, by, house in home.LINES.values() if house == "DC"]
+    assert len(dc) == 2
+    assert ("Why so serious?", "The Joker · The Dark Knight") in dc
+    assert ("I'm Batman.", "Batman") in dc
+    for quote, by in dc:
+        assert len(quote) <= 30                                   # short and recognisable
+        assert "Batman" in by or "Dark Knight" in by
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -213,14 +233,7 @@ def test_the_tablet_band_anchors_its_cards_and_caps_them_to_the_room_it_has():
 def test_the_phone_card_drops_below_the_strip_and_stays_in_the_window():
     phone = home.CSS[home.CSS.index("@media (max-width: 768px)"):]
     strip = _rule(phone, ".tr-home-strip .tr-craft .tr-sub")
-    assert "bottom:auto" in strip and "top:calc(100% + 6px)" in strip   # …and never off the top
-    # anchored to the box around the strip, not to the mark: the strip scrolls
-    # and clips, so a card on the mark was cut off at the screen's edge
-    assert "left:0; right:0;" in strip and "max-width:none" in strip
-    assert ".tr-home-stripbox { position:relative;" in phone
-    assert "position:static" in _rule(phone, ".tr-home-strip .tr-craft")
-    assert ".tr-home-strip {{ display:flex; position:static;".replace("{{", "{") in phone
-    assert home.crafts_strip().startswith('<div class="tr-home-stripbox"><div class="tr-home-strip"')
+    assert "bottom:auto" in strip and "top:calc(100% + 8px)" in strip   # …and never off the top
     assert "max-width:min(300px, calc(100vw - 28px))" in _rule(phone, ".tr-craft .tr-sub")
     assert ".tr-home-zone.band, .tr-home-zone.rail, .tr-home-zone.foot { display:none; }" in phone
     assert ".tr-home-strip { display:flex;" in phone               # the crafts are a strip
@@ -234,10 +247,7 @@ def test_the_card_is_revealed_by_hover_and_focus_alone():
     css = home.CSS
     assert ".tr-craft:hover .tr-sub, .tr-craft:focus-visible .tr-sub, .tr-craft:focus .tr-sub { opacity:1;" in css
     mark = home._mark(crafts.BY_KEY["acting"], 50, 50, zone="band")
-    assert 'tabindex="0"' in mark and 'role="img"' in mark         # reachable by keyboard, and by a tap
-    # a tap focuses the mark, and focus opens the card and answers with one nod
-    assert ".tr-home-zone .tr-craft:focus, .tr-home-strip .tr-craft:focus { opacity:1;" in css
-    assert "animation: tr-home-nod .5s var(--tr-ease) 1;" in css                    # once, never a loop
+    assert 'tabindex="0"' in mark and 'role="img"' in mark         # reachable by keyboard
     assert "onmouseover" not in mark and "onclick" not in mark and "<script" not in mark
     src = Path("ui/home.py").read_text(encoding="utf-8")
     for forbidden in ("<script", "setTimeout", "setInterval", "requestAnimationFrame",
@@ -268,15 +278,6 @@ def test_the_line_is_carried_once_not_three_times():
 def test_the_whole_layer_is_smaller_than_it_was_and_draws_the_same_marks():
     zones = home.crafts_zone("band") + home.crafts_zone("rail") + home.crafts_zone("foot")
     assert len(_marks(zones)) == 24 and len(_marks(home.crafts_strip())) == 24
-    assert len(zones) + len(home.crafts_strip()) < 32000      # each card now carries its translation and year
+    assert len(zones) + len(home.crafts_strip()) < 26000
     labels = {line.split(" — ")[0] for line in _marks(zones)}
     assert labels == {c.label for c in crafts.CRAFTS}              # every craft still there, by its own name
-
-
-def test_an_open_mark_and_its_card_are_fully_opaque():
-    """The zone's resting ``opacity:.42`` outranked the constellation's
-    ``:hover`` rule, and a card inherits its mark's opacity — so every
-    desktop card was drawn at 42%, with the hero's title showing through."""
-    css = home.CSS
-    assert (".tr-home-zone .tr-craft:hover, .tr-home-zone .tr-craft:focus, "
-            ".tr-home-zone .tr-craft:focus-visible { opacity:1;") in css

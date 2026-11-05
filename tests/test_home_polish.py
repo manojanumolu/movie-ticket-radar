@@ -68,22 +68,34 @@ def test_premium_formats_ride_the_reel_each_with_its_own_mark_and_never_as_a_she
 # The crafts' subtitle cards — Home only
 # ──────────────────────────────────────────────────────────────────────────
 def test_every_craft_has_a_short_line_with_an_attribution_and_login_keeps_its_names():
-    from ui import dialogues
+    from collections import Counter
 
     assert set(home.LINES) == set(crafts.BY_KEY)
-    for key, ref in home.LINES.items():
-        d = dialogues.BY_KEY[ref]
-        assert dialogues.words(d.line) <= dialogues.MAX_WORDS and d.film and d.year and d.language, key
-    assert dialogues.BY_KEY[home.LINES["makeup"]].film == "Memories of Murder"
-    assert dialogues.BY_KEY[home.LINES["special_effects"]].line == "I am Iron Man."
-    mark = home._mark(crafts.BY_KEY["cinematography"], 50, 50, zone="band")       # Pokiri
-    assert '<span class="tr-sub" aria-hidden="true"><span class="q">“Okkasari commit ayithe, naa maata nene vinanu.”</span>' in mark
-    assert '<span class="by">— Pandu (Mahesh Babu) · Pokiri (2006) · Telugu</span>' in mark
+    for key, (quote, by, house) in home.LINES.items():
+        assert 3 <= len(quote) <= 60 and by and house, key                          # a fragment, never a passage
+    houses = Counter(house for _, _, house in home.LINES.values())
+    assert set(houses) == {"Marvel", "Tollywood", "DC", "Hollywood"}                 # four houses
+    assert houses.most_common(1)[0][0] == "Marvel" and houses["Marvel"] >= 8          # Marvel leads
+    assert houses["Tollywood"] == 6 and houses["DC"] == 2
+    assert home.LINES["acting"][:2] == ("Okka sari commit aithe... naa maata nene vinanu!", "Mahesh Babu · Pokiri")
+    assert home.LINES["makeup"][0] == "I am Iron Man." and home.LINES["stunts"][0] == "With great power comes great responsibility."
+    assert home.LINES["direction"] == ("Thokkukuntu povaale!", "Jr NTR · RRR", "Tollywood")
+    telugu = [q for q, _, h in home.LINES.values() if h == "Tollywood"]
+    assert all(q.isascii() for q in telugu)                                          # transliterated, not Telugu script
+    batman = [(q, by) for q, by, h in home.LINES.values() if h == "DC"]
+    assert all("Batman" in by or "Dark Knight" in by for _, by in batman)            # both clearly Batman
+    # the Telugu lines open the page: the band's first six, and the phone's
+    zones = {home.HOME_LAYOUT[k][0] for k, (_, _, h) in home.LINES.items() if h == "Tollywood"}
+    assert zones == {"band"} and home.STRIP[:6] == home.TELUGU_SIX
+    mark = home._mark(crafts.BY_KEY["acting"], 50, 50, zone="band")
+    assert ('<span class="tr-sub" aria-hidden="true"><span class="q">“Okka sari commit aithe... naa maata nene vinanu!”</span>'
+            '<span class="by">— Mahesh Babu · Pokiri</span></span>') in mark
     assert 'tabindex="0"' in mark
+    assert 'aria-label="Acting — “Okka sari commit aithe... naa maata nene vinanu!” — Mahesh Babu · Pokiri"' in mark
     # the Login constellation is untouched: the crafts' own tips, no subtitle cards
     login = crafts.constellation()
     assert "tr-sub" not in login and 'data-tip="Acting — The people you believe in for two hours."' in login
-    assert "commit ayithe" not in login and "Thaggedhe" not in login
+    assert "Okka sari commit" not in login and "Thokkukuntu" not in login
     assert crafts.BY_KEY["acting"].tip == "Acting — The people you believe in for two hours."
     css = home.CSS
     assert ".tr-craft:hover .tr-sub, .tr-craft:focus-visible .tr-sub, .tr-craft:focus .tr-sub { opacity:1; visibility:visible;" in css

@@ -226,8 +226,7 @@ def logo(*, css: str = "") -> None:
 
 
 def hero(title: str, lede: str, sub: str, after: str = "") -> None:
-    """The page's hero. ``after`` is markup the caller built (and escaped)
-    to sit under the copy — Home's rotating line."""
+    """``after`` is markup the caller built and escaped, set under the copy."""
     html(
         f"""<div class="tr-hero"><div class="tr-hero-inner">
           <div>
