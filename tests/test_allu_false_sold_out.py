@@ -28,7 +28,7 @@ import copy
 
 import pytest
 
-from config.seat_sections import section_name
+from config.seat_sections import screen_for, sections
 from monitor.checker import evaluate_target
 from monitor.models import (
     ANY_FORMAT,
@@ -46,8 +46,8 @@ from tests.conftest import FakeResponse, build_payload
 from tests.test_category_watch import TWO_GOLDS, _run
 
 DAY = "20260925"
-GOLD_1 = "0000000003|3D GOLD"        # area 3 — Gold Area 1
-GOLD_2 = "0000000005|3D GOLD."       # area 5 — Gold Area 2
+GOLD_1 = "0000000003|3D GOLD"        # area 3 — Gold Area 1 in the Dolby Cinema auditorium
+GOLD_2 = "0000000005|3D GOLD."       # area 5 — Gold Area 2 in the Dolby Cinema auditorium
 
 
 def allu(time, code, status_by_area, fmt="DOLBY CINEMA", date=DAY):
@@ -265,16 +265,15 @@ def test_allu_3d_sections_are_bookmyshows_own_with_their_prices():
     assert len({c.key for c in cats.values()}) == 4                          # area 3 and area 5 never collide
 
 
-def test_allu_sections_have_the_same_physical_names_in_2d_and_3d():
-    assert section_name("ALUC", "0000000002") == "Platinum · recliners"
-    assert section_name("ALUC", "0000000003") == "Gold Area 1 · upper"
-    assert section_name("ALUC", "0000000004") == "Director Choice · between the Gold areas"
-    assert section_name("ALUC", "0000000005") == "Gold Area 2 · lower"
-    # 2D GOLD (₹295) and 3D GOLD (₹395) are the same area, so the same seats
-    two_d = SeatCategory("0002", "GOLD", Availability.AVAILABLE, "295.00", "0000000003")
-    three_d = SeatCategory("0006", "3D GOLD", Availability.AVAILABLE, "395.00", "0000000003")
-    assert section_name("ALUC", two_d.area_code) == section_name("ALUC", three_d.area_code)
-    assert section_name("AMBH", "0000000003") == "" and section_name("ALUC", "0000000009") == ""   # nothing invented
+def test_allu_sections_are_verified_for_the_dolby_auditorium_only():
+    # corrected 6 Nov: an area number is per auditorium. Laser 4K Atmos lists
+    # only area 2 PLATINUM and area 3 GOLD, so its area 3 is not Gold Area 1.
+    names = [(s.name, s.where, s.area_code) for s in sections("ALUC", "Dolby Cinema")]
+    assert names == [("Platinum", "Recliners", "0000000002"), ("Gold Area 1", "Upper seating", "0000000003"),
+                     ("Director Choice", "Between the two Gold areas", "0000000004"),
+                     ("Gold Area 2", "Lower seating", "0000000005")]
+    assert sections("ALUC", "Laser 4K Atmos") == () and sections("AMBH", "Dolby Cinema") == ()   # nothing invented
+    assert screen_for("ALUC", "Dolby Cinema 3D") == "Dolby Cinema" and screen_for("ALUC", "Laser 4K Atmos") == ""
 
 
 def test_a_sections_identity_never_depends_on_its_price():

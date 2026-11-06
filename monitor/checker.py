@@ -247,7 +247,9 @@ def _evaluate_categories(monitor: Monitor, target: TheatreTarget, snapshot: Snap
         )
 
     def watched(show: Showtime) -> list[SeatCategory]:
-        return [c for c in show.categories if monitor.watches_category(c)]
+        # every BookMyShow block the watch names at this show — a logical
+        # section can be more than one, and is matched with the show itself
+        return [c for c in show.categories if monitor.watches_category(c, show)]
 
     live = [s for s in shows if any(c.availability is Availability.AVAILABLE for c in watched(s))]
     if live:
@@ -260,11 +262,13 @@ def _evaluate_categories(monitor: Monitor, target: TheatreTarget, snapshot: Snap
             detail=f"{', '.join(names)} bookable at {len(live)} showtime(s).",
         )
 
-    # SOLD_OUT only on a status that says so: a watched category whose
-    # status could not be read is "we don't know", never "no seats left".
-    listed = [s for s in shows if any(c.availability is Availability.SOLD_OUT for c in watched(s))]
+    # SOLD_OUT only when every watched block BookMyShow lists says so: one
+    # whose status could not be read is "we don't know", never "no seats
+    # left" — and it keeps the whole verdict at "we don't know".
+    listed = [s for s in shows if watched(s)]
+    blocks = [c for s in listed for c in watched(s)]
     date_code = _earliest_date(shows)
-    if listed:
+    if blocks and all(c.availability is Availability.SOLD_OUT for c in blocks):
         return TargetResult(
             target_key=target.key, venue_name=target.venue_name, fmt=target.fmt,
             availability=Availability.SOLD_OUT, showtimes=listed, date_code=date_code,

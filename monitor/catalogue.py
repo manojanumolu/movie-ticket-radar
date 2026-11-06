@@ -102,7 +102,8 @@ def entry_from_snapshot(snapshot: Snapshot) -> dict[str, Any]:
         "movie": asdict(snapshot.movie),
         "venues": [
             {"code": v.code, "name": v.name, "area": v.area, "formats": list(v.formats),
-             "categories": [c.to_dict() for c in v.categories]}
+             "categories": [c.to_dict() for c in v.categories],
+             "screen_categories": {k: [c.to_dict() for c in cats] for k, cats in v.screen_categories}}
             for v in snapshot.venues
         ],
         "listings": listings_from_showtimes(snapshot.showtimes),
@@ -140,10 +141,27 @@ def venues_from_entry(entry: dict[str, Any]) -> list[Venue]:
             area=v.get("area", ""),
             formats=tuple(dedupe(v.get("formats", []))),
             categories=categories_from_entry(v.get("categories", []) or []),
+            screen_categories=screen_categories_from_entry(v.get("screen_categories")),
         )
         for v in entry.get("venues", [])
         if isinstance(v, dict) and (v.get("code") or v.get("name"))
     ]
+
+
+def screen_categories_from_entry(raw: Any) -> tuple[tuple[str, tuple[SeatCategory, ...]], ...]:
+    """A venue's categories per ``screen|dimension``; an entry synced before
+    they were kept has none (and the picker says the price is pending)."""
+    if not isinstance(raw, dict):
+        return ()
+    return tuple((k, categories_from_entry(v)) for k, v in sorted(raw.items()) if isinstance(k, str) and "|" in k)
+
+
+def merge_screen_categories(*groups) -> tuple[tuple[str, tuple[SeatCategory, ...]], ...]:
+    out: dict[str, list[tuple[SeatCategory, ...]]] = {}
+    for group in groups:
+        for key, cats in group:
+            out.setdefault(key, []).append(cats)
+    return tuple((k, merge_categories(*v)) for k, v in sorted(out.items()))
 
 
 def categories_from_entry(raw: Any) -> tuple[SeatCategory, ...]:
@@ -211,6 +229,7 @@ def merge_snapshots(first: Snapshot, second: Snapshot) -> Snapshot:
             code=known.code, name=known.name or v.name, area=known.area or v.area,
             formats=tuple(dedupe([*known.formats, *v.formats])),
             categories=merge_categories(known.categories, v.categories),
+            screen_categories=merge_screen_categories(known.screen_categories, v.screen_categories),
         )
     return Snapshot(
         movie=first.movie,

@@ -344,8 +344,11 @@ def selected_venues(movie_id: str, slug: str, codes: list[str],
             continue
         categories = tuple({c.key: c for c in (*(own.categories if own else ()),
                                                *(known.categories if known else ()))}.values())
+        # per-screen prices are this film's own only: the city directory's
+        # are other films' shows, priced their own way
         out.append(Venue(code=venue.code, name=venue.name, area=venue.area,
-                         formats=listed.get(code, ()), categories=categories))
+                         formats=listed.get(code, ()), categories=categories,
+                         screen_categories=own.screen_categories if own else ()))
     return out
 
 
