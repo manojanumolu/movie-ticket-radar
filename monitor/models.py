@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Iterable
 
+from config.seat_sections import parse_entry as parse_section_entry
+from config.seat_sections import section_for_entry
 from config.timezone import IST, now_ist, parse_iso, to_iso
 
 ANY_FORMAT = "Any format"
@@ -166,8 +168,8 @@ class SeatCategory:
         if self.price:
             low = _rupees(self.price)
             high = _rupees(self.price_high) if self.price_high else ""
-            # a category is priced per show (an early show can be cheaper),
-            # so a theatre-wide summary says the range, never one show's price
+            # a category is priced per show, so a theatre-wide summary says
+            # the range, never one show's price
             parts.append(f"₹{low}–{high}" if high and high != low else f"₹{low}")
         if self.area_code:
             parts.append(f"area {self.area_code.lstrip('0') or '0'}")
@@ -217,9 +219,9 @@ def merge_categories(*groups) -> tuple[SeatCategory, ...]:
     """One theatre's categories across many shows: one entry per platform
     identity (``SeatCategory.key`` — area and exact name, never the price),
     first seen first, carrying the lowest and highest price any show listed
-    it at. Before this, the first show seen set the price for all of them,
-    so an early show's ₹335 was shown as *the* price of a category every
-    later show sold at ₹395."""
+    it at. Before this, the first show seen set the price for all of them.
+    (ALLU's "3D GOLD" at ₹335 and ₹395 is not one category at two prices:
+    it is two auditoriums reusing one key — see ``Venue.screen_categories``.)"""
     out: dict[str, SeatCategory] = {}
     lows: dict[str, float] = {}
     highs: dict[str, float] = {}
@@ -287,21 +289,76 @@ class Showtime:
     def category(self, wanted: str) -> SeatCategory | None:
         """This show's category by key ("0000000005|3D GOLD.") or, for a
         plain name, by name (``normalise_category``)."""
-        return next((c for c in self.categories if category_matches(wanted, c)), None)
+        return next((c for c in self.categories if category_matches(wanted, c, self)), None)
+
+    @property
+    def screen_keys(self) -> tuple[str, ...]:
+        """``screen|dimension`` keys this show's categories belong under
+        (:attr:`Venue.screen_categories`)."""
+        return tuple(dedupe(f"{k}|{self.dimension}" for k in map(screen_key, self.format_labels) if k))
+
+    @property
+    def dimension(self) -> str:
+        """"3D" or "2D", from what BookMyShow says about this show: its
+        event's format or screen naming 3D, or — for a base event that says
+        neither — every seat category named "3D …" (how ALLU prices 3D)."""
+        labels = " ".join(self.format_labels).casefold()
+        if "3d" in labels.split() or " 3d" in f" {labels}":
+            return "3D"
+        names = [c.name for c in self.categories if c.name]
+        if names and all(n.upper().startswith("3D ") for n in names):
+            return "3D"
+        return "2D"
 
 
-def category_matches(wanted: str, category: SeatCategory) -> bool:
-    """Does a stored watch entry name this category? An entry with a ``|``
-    is a :attr:`SeatCategory.key` and must match exactly; a plain name — how
-    watches were stored before keys — matches by name alone."""
+def _screen_matches(screen: str, show: Showtime) -> bool:
+    """Is the show on this screen? Its screen label, or its event's format
+    that is the screen plus a dimension ("Dolby Cinema 3D")."""
+    want = screen_key(screen)
+    return bool(want) and any(screen_key(label) == want for label in show.format_labels)
+
+
+def screen_key(label: str) -> str:
+    """A screen's comparison key without its dimension: "Dolby Cinema",
+    "DOLBY CINEMA 3D" and "3D Dolby-Cinema" are all "dolbycinema"; a label
+    that is only a dimension ("3D") is ""."""
+    key = normalise_format(label)
+    for dim in ("2d", "3d"):
+        key = key.removesuffix(dim).removeprefix(dim)
+    return key
+
+
+def category_matches(wanted: str, category: SeatCategory, show: Showtime | None = None) -> bool:
+    """Does a stored watch entry name this category?
+
+    * ``@VENUE|screen|area`` — a logical section (``config.seat_sections``):
+      that theatre, that screen, that BookMyShow area, whatever the 2D or 3D
+      name of the section. Needs the show, because an area number only means
+      something inside one auditorium; with no show it matches nothing.
+    * ``area|name`` — a :attr:`SeatCategory.key`, matched exactly.
+    * a plain name — how watches were stored before keys — by name alone.
+    """
+    if wanted.startswith("@"):
+        parsed = parse_section_entry(wanted)
+        if parsed is None or show is None:
+            return False
+        venue, screen, area = parsed
+        return show.venue_code == venue and category.area_code == area and _screen_matches(screen, show)
     if "|" in wanted:
         return wanted == category.key
     return normalise_category(wanted) == normalise_category(category.name)
 
 
 def category_display(entry: str) -> str:
-    """A stored entry for people: the name, plus the area for a key —
-    "3D GOLD. · area 5"; a plain name stays a plain name."""
+    """A stored entry for people: a logical section's name and screen —
+    "Gold Area 1 · Dolby Cinema"; a key's name and area — "3D GOLD. · area
+    5"; a plain name stays a plain name."""
+    if entry.startswith("@"):
+        section = section_for_entry(entry)
+        parsed = parse_section_entry(entry)
+        if section is not None and parsed is not None:
+            return f"{section.name} · {parsed[1]}"
+        return entry[1:]
     if "|" not in entry:
         return entry
     area, _, name = entry.partition("|")
@@ -318,6 +375,15 @@ class Venue:
     #: showtimes, each with the platform's identity — what the category
     #: watch may pick from. Status is not meaningful here.
     categories: tuple[SeatCategory, ...] = ()
+    #: The same, kept apart per screen and dimension — ``(("dolbycinema|3D",
+    #: (…)), …)`` — because one theatre's auditoriums can reuse area numbers
+    #: for different seats and price 2D and 3D differently. Prices here are
+    #: that screen's, in that dimension, across its shows.
+    screen_categories: tuple[tuple[str, tuple[SeatCategory, ...]], ...] = ()
+
+    def categories_on(self, screen: str, dimension: str) -> tuple[SeatCategory, ...]:
+        key = f"{screen_key(screen)}|{dimension}"
+        return next((cats for k, cats in self.screen_categories if k == key), ())
 
     @property
     def abbr(self) -> str:
@@ -568,10 +634,11 @@ class Monitor:
     def category_label(self) -> str:
         return ", ".join(category_display(c) for c in self.categories)
 
-    def watches_category(self, category: SeatCategory) -> bool:
-        """Entries are keys (``area|name``) or, for watches saved before
-        keys, plain names — see ``category_matches``."""
-        return any(category_matches(entry, category) for entry in self.categories)
+    def watches_category(self, category: SeatCategory, show: Showtime | None = None) -> bool:
+        """Entries are logical sections (``@venue|screen|area``, matched with
+        the show), keys (``area|name``) or, for watches saved before keys,
+        plain names — see ``category_matches``."""
+        return any(category_matches(entry, category, show) for entry in self.categories)
 
     def matches_show_time(self, show: Showtime) -> bool:
         """``show_time`` compared loosely to the show's label and its code:

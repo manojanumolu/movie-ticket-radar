@@ -29,6 +29,7 @@ from html import escape
 
 import streamlit as st
 
+from config.seat_sections import VERIFIED_VENUES
 from config.timezone import fmt_datetime, fmt_time, now_ist
 from monitor.models import Availability, Monitor
 from monitor.state import MonitorState
@@ -141,7 +142,15 @@ def _target_block(monitor: Monitor, state: MonitorState, target, finished: bool)
             f'{C.e(monitor.movie.title)} is also listed here in {C.e(", ".join(others))} — a separate '
             f'{C.e(platform_name(monitor.movie.platform))} listing this monitor does not read.</div>'
             if others and monitor.movie.language else "")
-    return f'<div class="tr-det-tgt">{body}<div class="tr-det-nobook">{C.e(hint)}</div>{note}</div>'
+    legacy = ""
+    if (monitor.is_category_watch and target.venue_code in VERIFIED_VENUES
+            and any(not entry.startswith("@") for entry in monitor.categories)):
+        # kept exactly as saved: never reinterpreted as one of the sections
+        legacy = ('<div class="tr-det-nobook">This category watch predates ALLU Cinemas\' verified '
+                  'sections: it watches the exact BookMyShow block it was saved with, in whichever '
+                  'auditorium lists it. Create a new watch to pick Platinum, Gold Area 1, Director '
+                  'Choice or Gold Area 2.</div>')
+    return f'<div class="tr-det-tgt">{body}<div class="tr-det-nobook">{C.e(hint)}</div>{note}{legacy}</div>'
 
 
 def _other_languages(monitor: Monitor, venue_code: str) -> tuple[str, ...]:

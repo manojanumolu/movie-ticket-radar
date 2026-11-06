@@ -34,8 +34,8 @@ from datetime import datetime, time as dtime, timedelta
 
 import streamlit as st
 
+from config import seat_sections
 from config.locations import LOCATIONS, enabled_locations, get_location
-from config.seat_sections import section_name
 from config.theatre_capabilities import format_aliases, premium_formats
 from platforms import DEFAULT_PLATFORM, enabled_platforms, platform_name
 from config.timezone import IST, now_ist
@@ -92,7 +92,7 @@ WIDGET_KEYS = ("notify_email", "notify_email_draft", "until_date", "until_time",
                "catwatch_categories", "catwatch_show_time")
 #: Prefixes of the per-venue / per-nonce widget keys (format checkboxes,
 #: theatre search boxes) — the exact keys depend on what was picked.
-WIDGET_PREFIXES = ("fmt_", "theatre_query_")
+WIDGET_PREFIXES = ("fmt_", "theatre_query_", "catwatch_dim_")
 RESET_FLAG = "wizard_reset_pending"
 #: Set by a wizard callback whose entire effect is a change to *this
 #: session's own* picks — the city, the film, a theatre, a format, an
@@ -1025,11 +1025,53 @@ SHOW_TIME_KEY = "catwatch_show_time"
 CATEGORY_WATCH_TITLE = "Category watch"
 
 
-def _section_label(venue_code: str, category) -> str:
-    """BookMyShow's label, then — at a theatre whose sections are verified
-    (``config.seat_sections``) — where the section physically is."""
-    where = section_name(venue_code, category.area_code)
-    return f"{category.label} — {where}" if where else category.label
+def _price_text(categories) -> str:
+    """"₹395" — or "₹335–395" when this screen's shows differ — across every
+    block of a section; "" when BookMyShow gave no price."""
+    values = sorted(float(p) for c in categories for p in (c.price, c.price_high) if _is_number(p))
+    if not values:
+        return ""
+    low, high = f"{values[0]:g}", f"{values[-1]:g}"
+    return f"₹{low}–{high}" if high != low else f"₹{low}"
+
+
+def _is_number(text: str) -> bool:
+    try:
+        float(text)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def section_choices(venue: Venue, formats: list[str], dimension: str = "") -> tuple[dict[str, str], tuple[str, ...], str]:
+    """A verified theatre's logical sections (``config.seat_sections``) for
+    the chosen formats: (label -> stored entry, dimensions listed, warning).
+
+    Offered only when the formats name exactly one verified auditorium —
+    an area number means different seats in another one. Prices are that
+    auditorium's in the screening's dimension (2D or 3D, never both in one
+    list); none yet means the catalogue has not synced them, said plainly.
+    """
+    screens = {seat_sections.screen_for(venue.code, f) for f in formats} if formats else {""}
+    if len(screens) != 1 or "" in screens:
+        return {}, (), (f"{venue.name}: seat sections differ between its auditoriums, and only "
+                        + ", ".join(screen for code, screen in seat_sections.SECTIONS if code == venue.code)
+                        + " is verified. Choose that format alone in step 4 to watch its sections; "
+                        "the other auditorium's sections are not verified, so they are not offered.")
+    screen = screens.pop()
+    dims = tuple(d for d in DIMENSIONS if venue.categories_on(screen, d))
+    dim = dimension if dimension in dims else (dims[0] if len(dims) == 1 else "")
+    listed = venue.categories_on(screen, dim) if dim else ()
+    options: dict[str, str] = {}
+    for section in seat_sections.sections(venue.code, screen):
+        blocks = [c for c in listed if c.area_code == section.area_code]
+        price = _price_text(blocks) if blocks else ""
+        parts = [section.name, price or ("price after the next catalogue sync" if not dims else
+                                         "not listed in this dimension" if dim else "choose 2D or 3D")]
+        if section.where:
+            parts.append(section.where)
+        options[" · ".join(parts)] = seat_sections.entry_for(venue.code, screen, section)
+    return options, dims, ""
 
 
 def _stem(name: str) -> str:
@@ -1070,10 +1112,35 @@ def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple
     C.step_header("ticket", "Watch specific seat categories?",
                   "Leave empty for a normal monitor. With categories chosen, you're emailed only when one "
                   "of them opens up — not on the first check, and not again while it stays open.")
-    seen = {_section_label(v.code, c): c.key for v in venues for c in v.categories}
+    chosen_formats = st.session_state.get("formats", {}) or {}
+    seen: dict[str, str] = {}
+    raw: list = []
+    notes: list[str] = []
+    dims_shown: list[str] = []
+    for v in venues:
+        if v.code not in seat_sections.VERIFIED_VENUES:
+            seen.update({c.label: c.key for c in v.categories})
+            raw.extend(v.categories)
+            continue
+        options, dims, warning = section_choices(v, list(chosen_formats.get(v.code, [])))
+        if warning:
+            notes.append(warning)
+            continue
+        if len(dims) > 1:
+            dim = st.radio(f"Screening at {v.name}", list(dims), horizontal=True, key=f"catwatch_dim_{v.code}",
+                           help="Prices differ between 2D and 3D shows; the sections are the same seats.")
+            options, dims, _w = section_choices(v, list(chosen_formats.get(v.code, [])), dim)
+            dims_shown.append(f"{v.name}: {dim} prices")
+        elif dims:
+            dims_shown.append(f"{v.name}: {dims[0]} prices")
+        prefix = f"{v.name}: " if len(venues) > 1 else ""
+        seen.update({prefix + label: entry for label, entry in options.items()})
+    for note in notes:
+        st.warning(note)
     if not seen:
-        st.caption("The catalogue hasn't seen seat categories at these theatres yet — the next sync "
-                   "will list them. A normal monitor is still available.")
+        if not notes:
+            st.caption("The catalogue hasn't seen seat categories at these theatres yet — the next sync "
+                       "will list them. A normal monitor is still available.")
         st.session_state[CATEGORY_WATCH_KEY] = []
         return [], st.session_state.get(SHOW_TIME_KEY, "").strip()
     with st.container(key="trpair_catwatch"):
@@ -1084,18 +1151,24 @@ def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple
     show_time = right.text_input("Show time", key=SHOW_TIME_KEY, placeholder="Show time, e.g. 07:15 PM",
                                  label_visibility="collapsed",
                                  help="Optional. One show only; leave empty to watch every show at the theatre.")
-    st.caption("Each option is one BookMyShow section: its name, its price (a range when shows differ — "
-               "an early show can be cheaper) and its area number. The section is what is watched; the "
-               "price is not part of it.")
-    for warning in sibling_sections([seen[label] for label in chosen if label in seen],
-                                    [c for v in venues for c in v.categories]):
+    if any(entry.startswith("@") for entry in seen.values()):
+        st.caption("ALLU Cinemas, Dolby Cinema: each option is one physical section, checked across every "
+                   "BookMyShow block in it, 2D or 3D. Prices are BookMyShow's for this auditorium"
+                   + (f" ({'; '.join(dims_shown)})" if dims_shown else "") + " — a range when its shows differ.")
+    if raw:
+        st.caption("Each other option is one BookMyShow section: its name, its price (a range when shows "
+                   "differ) and its area number. The section is what is watched; the price is not part of it.")
+    for warning in sibling_sections([seen[label] for label in chosen if label in seen], raw):
         st.caption(warning)
     if chosen:
         st.caption(f"Category watch: {', '.join(chosen)}"
                    + (f" at {show_time.strip()}" if show_time.strip() else " at every show")
-                   + " — for the theatres, format and dates above. A category is everything BookMyShow "
-                   "sells under it: where a theatre sells two blocks as one category, a seat in either "
-                   "block counts.")
+                   + " — for the theatres, format and dates above."
+                   + (" A section is every BookMyShow block in it; Gold Area 1 and Gold Area 2 are "
+                      "separate sections, so choose both to watch either."
+                      if any(seen[label].startswith("@") for label in chosen if label in seen) else
+                      " A category is everything BookMyShow sells under it: where a theatre sells two "
+                      "blocks as one category, a seat in either block counts."))
     return [seen[label] for label in chosen if label in seen], show_time.strip()
 
 
@@ -1139,6 +1212,7 @@ def ago(when) -> str:
 __all__ = [
     "INTERVALS",
     "CATEGORY_WATCH_KEY",
+    "section_choices",
     "CATEGORY_WATCH_TITLE",
     "SHOW_TIME_KEY",
     "STEPS",

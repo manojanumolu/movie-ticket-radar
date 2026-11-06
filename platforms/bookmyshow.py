@@ -1318,14 +1318,21 @@ class BookMyShowProvider:
         """
         by_code: dict[str, list[str]] = {}
         cats: dict[str, list[SeatCategory]] = {}
+        per_screen: dict[str, dict[str, list[SeatCategory]]] = {}
         for s in showtimes:
             by_code.setdefault(s.venue_code, []).extend(s.format_labels)
             # one entry per platform identity — two "GOLD"s stay two — with
             # the price range across shows (``merge_categories``)
             cats.setdefault(s.venue_code, []).extend(s.categories)
+            # and per screen and dimension: one theatre's auditoriums can
+            # reuse an area number for different seats, at different prices
+            for key in s.screen_keys:
+                per_screen.setdefault(s.venue_code, {}).setdefault(key, []).extend(s.categories)
         return [
             Venue(code=v.code, name=v.name, area=v.area, formats=tuple(sorted(dedupe(by_code.get(v.code, [])))),
-                  categories=merge_categories(cats.get(v.code, [])))
+                  categories=merge_categories(cats.get(v.code, [])),
+                  screen_categories=tuple((k, merge_categories(c))
+                                          for k, c in sorted(per_screen.get(v.code, {}).items())))
             for v in sorted(venues, key=lambda v: v.name.lower())
         ]
 

@@ -122,7 +122,7 @@ def _live_categories(monitor: Monitor, result: TargetResult) -> list[str]:
     out: dict[str, None] = {}
     for show in result.showtimes:
         for c in show.categories:
-            if monitor.watches_category(c) and c.availability is Availability.AVAILABLE:
+            if monitor.watches_category(c, show) and c.availability is Availability.AVAILABLE:
                 out.setdefault(c.label, None)
     return list(out)
 
