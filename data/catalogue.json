@@ -20082,6 +20082,335 @@
     {
       "movie": {
         "platform": "bookmyshow",
+        "event_code": "ET00495822",
+        "title": "Udta Teer",
+        "region_code": "HYD",
+        "region_slug": "hyderabad",
+        "city": "Hyderabad",
+        "language": "Hindi",
+        "poster_url": "https://in.bmscdn.com/events/moviecard/udta-teer-et00495822-1793796439.jpg",
+        "source_url": "https://in.bookmyshow.com/movies/hyderabad/udta-teer/buytickets/ET00495822",
+        "variants": []
+      },
+      "venues": [
+        {
+          "code": "AACN",
+          "name": "Aparna Cinemas",
+          "area": "Nallagandla",
+          "formats": [
+            "4K Dolby 7.1"
+          ],
+          "categories": [
+            {
+              "code": "GO",
+              "name": "GOLD",
+              "availability": "AVAILABLE",
+              "price": "300.00",
+              "area_code": "GO",
+              "has_seat_layout": true
+            },
+            {
+              "code": "EX",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "EX",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {
+            "4kdolby71|2D": [
+              {
+                "code": "GO",
+                "name": "GOLD",
+                "availability": "AVAILABLE",
+                "price": "300.00",
+                "area_code": "GO",
+                "has_seat_layout": true
+              },
+              {
+                "code": "EX",
+                "name": "EXECUTIVE",
+                "availability": "AVAILABLE",
+                "price": "200.00",
+                "area_code": "EX",
+                "has_seat_layout": true
+              }
+            ]
+          }
+        },
+        {
+          "code": "CTNR",
+          "name": "Cinepolis",
+          "area": "TNR North City, Suchitra, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0001",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "VIP",
+              "availability": "AVAILABLE",
+              "price": "300.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {}
+        },
+        {
+          "code": "CMMA",
+          "name": "Cinepolis",
+          "area": "Mantra Mall, Attapur",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0001",
+              "name": "NORMAL",
+              "availability": "AVAILABLE",
+              "price": "200.00",
+              "area_code": "0000000000",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "VIP",
+              "availability": "AVAILABLE",
+              "price": "300.00",
+              "area_code": "0000000003",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {}
+        },
+        {
+          "code": "STHD",
+          "name": "Cinepolis",
+          "area": "Sudha Cinemas, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "0001",
+              "name": "NORMAL",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "0000000000",
+              "has_seat_layout": true
+            },
+            {
+              "code": "0002",
+              "name": "EXECUTIVE",
+              "availability": "AVAILABLE",
+              "price": "150.00",
+              "area_code": "0000000002",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {}
+        },
+        {
+          "code": "ISTN",
+          "name": "INOX",
+          "area": "Sattva Necklace Mall, Kavadiguda",
+          "formats": [],
+          "categories": [
+            {
+              "code": "RY",
+              "name": "Royal",
+              "availability": "AVAILABLE",
+              "price": "299.00",
+              "area_code": "RY",
+              "has_seat_layout": true
+            },
+            {
+              "code": "EX",
+              "name": "Executive",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "EX",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {}
+        },
+        {
+          "code": "INMH",
+          "name": "INOX",
+          "area": "Maheshwari Parmeshwari Mall, Kachiguda",
+          "formats": [],
+          "categories": [
+            {
+              "code": "EX",
+              "name": "Executive",
+              "availability": "AVAILABLE",
+              "price": "149.00",
+              "area_code": "EX",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {}
+        },
+        {
+          "code": "INHY",
+          "name": "INOX GVK One, Banjara Hills",
+          "area": "Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "RY",
+              "name": "Royal",
+              "availability": "AVAILABLE",
+              "price": "299.00",
+              "area_code": "RY",
+              "has_seat_layout": true
+            },
+            {
+              "code": "EX",
+              "name": "Executive",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "EX",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {}
+        },
+        {
+          "code": "PIMH",
+          "name": "PVR",
+          "area": "Irrum Manzil, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "RE",
+              "name": "RECLINER",
+              "availability": "AVAILABLE",
+              "price": "299.00",
+              "area_code": "RE",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CC",
+              "name": "CLASSIC",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CC",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {}
+        },
+        {
+          "code": "PVUM",
+          "name": "PVR",
+          "area": "Musarambagh, Hyderabad",
+          "formats": [],
+          "categories": [
+            {
+              "code": "CC",
+              "name": "CLASSIC",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CC",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {}
+        },
+        {
+          "code": "ILKS",
+          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
+          "area": "",
+          "formats": [],
+          "categories": [
+            {
+              "code": "BR",
+              "name": "RECLINER ROWS",
+              "availability": "SOLD_OUT",
+              "price": "354.00",
+              "area_code": "BR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "CR",
+              "name": "CLASSIC ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "CR",
+              "has_seat_layout": true
+            },
+            {
+              "code": "QR",
+              "name": "PRIME ROWS",
+              "availability": "AVAILABLE",
+              "price": "199.00",
+              "area_code": "QR",
+              "has_seat_layout": true
+            }
+          ],
+          "screen_categories": {}
+        }
+      ],
+      "listings": {
+        "20261106": {
+          "AACN": [
+            "4K Dolby 7.1"
+          ],
+          "CTNR": [],
+          "CMMA": [],
+          "ILKS": [],
+          "ISTN": [],
+          "STHD": [],
+          "PIMH": [],
+          "PVUM": [],
+          "INMH": [],
+          "INHY": []
+        },
+        "20261107": {
+          "CTNR": [],
+          "ILKS": [],
+          "CMMA": [],
+          "ISTN": [],
+          "PIMH": [],
+          "STHD": [],
+          "PVUM": [],
+          "INMH": []
+        },
+        "20261108": {
+          "CTNR": [],
+          "ILKS": [],
+          "CMMA": [],
+          "ISTN": [],
+          "PIMH": [],
+          "STHD": [],
+          "PVUM": [],
+          "INMH": []
+        }
+      },
+      "bookable_dates": [
+        "20261106",
+        "20261107",
+        "20261108",
+        "20261109",
+        "20261110",
+        "20261111"
+      ],
+      "closed_dates": [
+        "20261112"
+      ],
+      "showtime_count": 27,
+      "resolved_at": "2026-11-06T12:35:27.183769+05:30",
+      "dimension": "2D"
+    },
+    {
+      "movie": {
+        "platform": "bookmyshow",
         "event_code": "ET00525155",
         "title": "Mahasakthi",
         "region_code": "HYD",
@@ -21596,335 +21925,6 @@
       "closed_dates": [],
       "showtime_count": 154,
       "resolved_at": "2026-11-06T12:34:31.657367+05:30",
-      "dimension": "2D"
-    },
-    {
-      "movie": {
-        "platform": "bookmyshow",
-        "event_code": "ET00495822",
-        "title": "Udta Teer",
-        "region_code": "HYD",
-        "region_slug": "hyderabad",
-        "city": "Hyderabad",
-        "language": "Hindi",
-        "poster_url": "https://in.bmscdn.com/events/moviecard/udta-teer-et00495822-1793796439.jpg",
-        "source_url": "https://in.bookmyshow.com/movies/hyderabad/udta-teer/buytickets/ET00495822",
-        "variants": []
-      },
-      "venues": [
-        {
-          "code": "AACN",
-          "name": "Aparna Cinemas",
-          "area": "Nallagandla",
-          "formats": [
-            "4K Dolby 7.1"
-          ],
-          "categories": [
-            {
-              "code": "GO",
-              "name": "GOLD",
-              "availability": "AVAILABLE",
-              "price": "300.00",
-              "area_code": "GO",
-              "has_seat_layout": true
-            },
-            {
-              "code": "EX",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "EX",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {
-            "4kdolby71|2D": [
-              {
-                "code": "GO",
-                "name": "GOLD",
-                "availability": "AVAILABLE",
-                "price": "300.00",
-                "area_code": "GO",
-                "has_seat_layout": true
-              },
-              {
-                "code": "EX",
-                "name": "EXECUTIVE",
-                "availability": "AVAILABLE",
-                "price": "200.00",
-                "area_code": "EX",
-                "has_seat_layout": true
-              }
-            ]
-          }
-        },
-        {
-          "code": "CTNR",
-          "name": "Cinepolis",
-          "area": "TNR North City, Suchitra, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000002",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "VIP",
-              "availability": "AVAILABLE",
-              "price": "300.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {}
-        },
-        {
-          "code": "CMMA",
-          "name": "Cinepolis",
-          "area": "Mantra Mall, Attapur",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "NORMAL",
-              "availability": "AVAILABLE",
-              "price": "200.00",
-              "area_code": "0000000000",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "VIP",
-              "availability": "AVAILABLE",
-              "price": "300.00",
-              "area_code": "0000000003",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {}
-        },
-        {
-          "code": "STHD",
-          "name": "Cinepolis",
-          "area": "Sudha Cinemas, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "0001",
-              "name": "NORMAL",
-              "availability": "AVAILABLE",
-              "price": "150.00",
-              "area_code": "0000000000",
-              "has_seat_layout": true
-            },
-            {
-              "code": "0002",
-              "name": "EXECUTIVE",
-              "availability": "AVAILABLE",
-              "price": "150.00",
-              "area_code": "0000000002",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {}
-        },
-        {
-          "code": "ISTN",
-          "name": "INOX",
-          "area": "Sattva Necklace Mall, Kavadiguda",
-          "formats": [],
-          "categories": [
-            {
-              "code": "RY",
-              "name": "Royal",
-              "availability": "AVAILABLE",
-              "price": "299.00",
-              "area_code": "RY",
-              "has_seat_layout": true
-            },
-            {
-              "code": "EX",
-              "name": "Executive",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "EX",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {}
-        },
-        {
-          "code": "INMH",
-          "name": "INOX",
-          "area": "Maheshwari Parmeshwari Mall, Kachiguda",
-          "formats": [],
-          "categories": [
-            {
-              "code": "EX",
-              "name": "Executive",
-              "availability": "AVAILABLE",
-              "price": "149.00",
-              "area_code": "EX",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {}
-        },
-        {
-          "code": "INHY",
-          "name": "INOX GVK One, Banjara Hills",
-          "area": "Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "RY",
-              "name": "Royal",
-              "availability": "AVAILABLE",
-              "price": "299.00",
-              "area_code": "RY",
-              "has_seat_layout": true
-            },
-            {
-              "code": "EX",
-              "name": "Executive",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "EX",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {}
-        },
-        {
-          "code": "PIMH",
-          "name": "PVR",
-          "area": "Irrum Manzil, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "RE",
-              "name": "RECLINER",
-              "availability": "AVAILABLE",
-              "price": "299.00",
-              "area_code": "RE",
-              "has_seat_layout": true
-            },
-            {
-              "code": "CC",
-              "name": "CLASSIC",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CC",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {}
-        },
-        {
-          "code": "PVUM",
-          "name": "PVR",
-          "area": "Musarambagh, Hyderabad",
-          "formats": [],
-          "categories": [
-            {
-              "code": "CC",
-              "name": "CLASSIC",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CC",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {}
-        },
-        {
-          "code": "ILKS",
-          "name": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction",
-          "area": "",
-          "formats": [],
-          "categories": [
-            {
-              "code": "BR",
-              "name": "RECLINER ROWS",
-              "availability": "SOLD_OUT",
-              "price": "354.00",
-              "area_code": "BR",
-              "has_seat_layout": true
-            },
-            {
-              "code": "CR",
-              "name": "CLASSIC ROWS",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "CR",
-              "has_seat_layout": true
-            },
-            {
-              "code": "QR",
-              "name": "PRIME ROWS",
-              "availability": "AVAILABLE",
-              "price": "199.00",
-              "area_code": "QR",
-              "has_seat_layout": true
-            }
-          ],
-          "screen_categories": {}
-        }
-      ],
-      "listings": {
-        "20261106": {
-          "AACN": [
-            "4K Dolby 7.1"
-          ],
-          "CTNR": [],
-          "CMMA": [],
-          "ILKS": [],
-          "ISTN": [],
-          "STHD": [],
-          "PIMH": [],
-          "PVUM": [],
-          "INMH": [],
-          "INHY": []
-        },
-        "20261107": {
-          "CTNR": [],
-          "ILKS": [],
-          "CMMA": [],
-          "ISTN": [],
-          "PIMH": [],
-          "STHD": [],
-          "PVUM": [],
-          "INMH": []
-        },
-        "20261108": {
-          "CTNR": [],
-          "ILKS": [],
-          "CMMA": [],
-          "ISTN": [],
-          "PIMH": [],
-          "STHD": [],
-          "PVUM": [],
-          "INMH": []
-        }
-      },
-      "bookable_dates": [
-        "20261106",
-        "20261107",
-        "20261108",
-        "20261109",
-        "20261110",
-        "20261111"
-      ],
-      "closed_dates": [
-        "20261112"
-      ],
-      "showtime_count": 27,
-      "resolved_at": "2026-11-06T12:35:27.183769+05:30",
       "dimension": "2D"
     },
     {
@@ -24643,12 +24643,12 @@
       "dimension": "2D"
     }
   ],
-  "updated_at": "2026-11-06T12:35:39.311326+05:30",
+  "updated_at": "2026-11-06T13:21:02.095328+05:30",
   "sync": {
     "hyderabad": {
       "status": "OK",
       "message": "",
-      "at": "2026-11-06T12:35:39.311310+05:30",
+      "at": "2026-11-06T13:21:02.095310+05:30",
       "movie_count": 26
     }
   }
