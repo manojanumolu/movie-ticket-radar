@@ -35,6 +35,7 @@ from datetime import datetime, time as dtime, timedelta
 import streamlit as st
 
 from config.locations import LOCATIONS, enabled_locations, get_location
+from config.seat_sections import section_name
 from config.theatre_capabilities import format_aliases, premium_formats
 from platforms import DEFAULT_PLATFORM, enabled_platforms, platform_name
 from config.timezone import IST, now_ist
@@ -654,6 +655,45 @@ def step_theatres() -> list[Venue]:
 # ──────────────────────────────────────────────────────────────────────────
 # 4 · Formats
 # ──────────────────────────────────────────────────────────────────────────
+#: Theatres where BookMyShow's "3D" and "<screen> 3D" labels name a
+#: screening's dimension, not an auditorium. Verified for ALLU Cinemas from
+#: BookMyShow's own listings (data/showtimes.json, 6 Nov 2026): every 3D show
+#: there runs on its Dolby Cinema or its Laser 4K Atmos screen, and a target
+#: on the screen already matches its 3D shows (``TheatreTarget.matches_show``
+#: reads the screen label). So the screen is the choice, 2D/3D is not.
+DIMENSION_IS_ATTRIBUTE = frozenset({"ALUC"})
+DIMENSIONS = ("2D", "3D")
+#: A screen certified for Marvel Studios' Infinity Vision presentations, as
+#: the theatre's owner confirmed (6 Nov 2026). Said on Marvel films only.
+INFINITY_VISION_CERTIFIED = {"ALUC": "Dolby Cinema"}
+
+
+def screen_options(venue_code: str, options: list[str]) -> list[str]:
+    """``options`` without the ones that only add a dimension to a screen
+    ("3D", "Dolby Cinema 3D") — at the theatres where that is verified;
+    everywhere else, unchanged."""
+    if venue_code not in DIMENSION_IS_ATTRIBUTE:
+        return options
+    screens = [o for o in options if normalise_format(o) not in {normalise_format(d) for d in DIMENSIONS}]
+    if not screens:
+        return options
+
+    def is_screen_plus_dimension(option: str) -> bool:
+        return any(normalise_format(option) == normalise_format(f"{screen} {dim}")
+                   for screen in screens for dim in DIMENSIONS if screen != option)
+
+    kept = [o for o in screens if not is_screen_plus_dimension(o)]
+    return kept or options
+
+
+def format_display_name(venue_code: str, fmt: str, title: str) -> str:
+    """The option's label: the format, plus Infinity Vision certification for
+    a Marvel film at a certified screen. The value stays the format."""
+    if INFINITY_VISION_CERTIFIED.get(venue_code) == fmt and is_marvel_title(title):
+        return f"{fmt} (Infinity Vision Certified)"
+    return fmt
+
+
 def infinity_vision_note(venues: list[Venue]) -> None:
     """For a Marvel film only: which of the chosen theatres BookMyShow lists
     an Infinity Vision screen at, 2D and 3D, from the catalogue's own format
@@ -723,6 +763,7 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
         return {}
 
     infinity_vision_note(venues)
+    movie = cv.movie(st.session_state.get("movie_id", ""), st.session_state.get("location", ""))
     formats: dict[str, list[str]] = dict(st.session_state.get("formats", {}))
     for venue in venues:
         premium = list(capable.get(venue.code, ()))
@@ -752,6 +793,7 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                                     if not any(normalise_format(q) == normalise_format(f) for q in premium)]])
         options = dedupe([*watch, *[f for f in listed if not is_alias_label(f)
                                     and not any(normalise_format(q) == normalise_format(f) for q in watch)]])
+        options = screen_options(venue.code, options)
         current = {f for f in options if (f in watch and covered(f)) or (f not in watch)}
         waiting = [f for f in watch if not covered(f)]
         listed_on = dates_by_venue.get(venue.code, {})
@@ -766,6 +808,15 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                 C.format_panel_head(venue.name, venue.area, listed[0] if listed else "",
                                     coming=is_coming, expected=waiting if not is_coming else [], when=when,
                                     premium=premium if is_coming else [])
+                if venue.code in DIMENSION_IS_ATTRIBUTE:
+                    st.caption("2D and 3D are the screening, not the screen: each screen below is watched "
+                               "for its 2D and 3D shows.")
+                if movie is not None and movie.language:
+                    others = cv.other_language_listings(movie, venue.code, st.session_state.get("location", ""))
+                    if others:
+                        st.caption(f"Watching the {movie.language} listing. {movie.title} is also listed here in "
+                                   f"{', '.join(others)} — a separate {_platform_label()} listing; choose it in "
+                                   "step 2 to watch those shows.")
             with right:
                 if not options:
                     st.caption("Not listed for this movie here yet, and no premium screen to wait for — "
@@ -804,7 +855,8 @@ def step_formats(venues: list[Venue], coming: set[str] | None = None,
                         # in it in this city, this theatre has not listed it.
                         hint = (f"{_platform_label()} sells this movie in {fmt} in this city but hasn't listed it at "
                                 f"{venue.name} — watching until it appears here in this format.")
-                    if st.checkbox(fmt, key=f"fmt_{venue.code}_{fmt}",
+                    if st.checkbox(format_display_name(venue.code, fmt, movie.title if movie else ""),
+                                   key=f"fmt_{venue.code}_{fmt}",
                                    value=fmt in formats.get(venue.code, []), help=hint):
                         chosen.append(fmt)
                 if any_on:
@@ -973,6 +1025,36 @@ SHOW_TIME_KEY = "catwatch_show_time"
 CATEGORY_WATCH_TITLE = "Category watch"
 
 
+def _section_label(venue_code: str, category) -> str:
+    """BookMyShow's label, then — at a theatre whose sections are verified
+    (``config.seat_sections``) — where the section physically is."""
+    where = section_name(venue_code, category.area_code)
+    return f"{category.label} — {where}" if where else category.label
+
+
+def _stem(name: str) -> str:
+    return "".join(ch for ch in name.casefold() if ch.isalnum())
+
+
+def sibling_sections(chosen_keys: list[str], categories) -> list[str]:
+    """Warnings for a chosen section whose near-twin is not chosen: ALLU
+    Cinemas sells two Gold blocks as "3D GOLD" (area 3) and "3D GOLD."
+    (area 5) — two sections, and watching one never covers the other. Said,
+    never decided for the user."""
+    by_key = {c.key: c for c in categories}
+    out = []
+    for key in chosen_keys:
+        mine = by_key.get(key)
+        if mine is None:
+            continue
+        twins = sorted({c.label for c in categories
+                        if c.key != key and c.key not in chosen_keys and _stem(c.name) == _stem(mine.name)})
+        if twins:
+            out.append(f"Heads up: {mine.label} is one section. BookMyShow also sells {', '.join(twins)} — a "
+                       "different block with almost the same name, not covered unless you choose it too.")
+    return out
+
+
 def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple[list[str], str]:
     """Admin only: turn this monitor into a *category watch* — an alert when
     one of the chosen seat categories (GOLD, PLATINUM…) becomes bookable at
@@ -988,7 +1070,7 @@ def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple
     C.step_header("ticket", "Watch specific seat categories?",
                   "Leave empty for a normal monitor. With categories chosen, you're emailed only when one "
                   "of them opens up — not on the first check, and not again while it stays open.")
-    seen = {c.label: c.key for v in venues for c in v.categories}
+    seen = {_section_label(v.code, c): c.key for v in venues for c in v.categories}
     if not seen:
         st.caption("The catalogue hasn't seen seat categories at these theatres yet — the next sync "
                    "will list them. A normal monitor is still available.")
@@ -1002,6 +1084,12 @@ def step_category_watch(venues: list[Venue], *, is_admin: bool = False) -> tuple
     show_time = right.text_input("Show time", key=SHOW_TIME_KEY, placeholder="Show time, e.g. 07:15 PM",
                                  label_visibility="collapsed",
                                  help="Optional. One show only; leave empty to watch every show at the theatre.")
+    st.caption("Each option is one BookMyShow section: its name, its price (a range when shows differ — "
+               "an early show can be cheaper) and its area number. The section is what is watched; the "
+               "price is not part of it.")
+    for warning in sibling_sections([seen[label] for label in chosen if label in seen],
+                                    [c for v in venues for c in v.categories]):
+        st.caption(warning)
     if chosen:
         st.caption(f"Category watch: {', '.join(chosen)}"
                    + (f" at {show_time.strip()}" if show_time.strip() else " at every show")

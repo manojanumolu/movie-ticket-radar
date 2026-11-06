@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Iterable
@@ -146,6 +146,10 @@ class SeatCategory:
     #: The platform says a seat map exists for this category. It is a flag,
     #: not the map: the layout itself is not in the payload.
     has_seat_layout: bool = False
+    #: A theatre-level summary only (``merge_categories``): the highest price
+    #: this category was listed at across the theatre's shows, when it differs
+    #: from ``price`` (then the lowest). One show's category never sets it.
+    price_high: str = ""
 
     @property
     def key(self) -> str:
@@ -160,19 +164,23 @@ class SeatCategory:
         area when the platform gave one — "3D GOLD. · ₹395 · area 5"."""
         parts = [self.name]
         if self.price:
-            try:
-                parts.append(f"₹{float(self.price):g}")
-            except ValueError:
-                parts.append(f"₹{self.price}")
+            low = _rupees(self.price)
+            high = _rupees(self.price_high) if self.price_high else ""
+            # a category is priced per show (an early show can be cheaper),
+            # so a theatre-wide summary says the range, never one show's price
+            parts.append(f"₹{low}–{high}" if high and high != low else f"₹{low}")
         if self.area_code:
             parts.append(f"area {self.area_code.lstrip('0') or '0'}")
         return " · ".join(parts)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "code": self.code, "name": self.name, "availability": self.availability.value,
             "price": self.price, "area_code": self.area_code, "has_seat_layout": self.has_seat_layout,
         }
+        if self.price_high:
+            out["price_high"] = self.price_high
+        return out
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> SeatCategory:
@@ -187,7 +195,50 @@ class SeatCategory:
             price=str(raw.get("price", "") or ""),
             area_code=str(raw.get("area_code", "") or ""),
             has_seat_layout=bool(raw.get("has_seat_layout", False)),
+            price_high=str(raw.get("price_high", "") or ""),
         )
+
+
+def _rupees(price: str) -> str:
+    try:
+        return f"{float(price):g}"
+    except ValueError:
+        return price
+
+
+def _price_value(price: str) -> float | None:
+    try:
+        return float(price)
+    except (TypeError, ValueError):
+        return None
+
+
+def merge_categories(*groups) -> tuple[SeatCategory, ...]:
+    """One theatre's categories across many shows: one entry per platform
+    identity (``SeatCategory.key`` — area and exact name, never the price),
+    first seen first, carrying the lowest and highest price any show listed
+    it at. Before this, the first show seen set the price for all of them,
+    so an early show's ₹335 was shown as *the* price of a category every
+    later show sold at ₹395."""
+    out: dict[str, SeatCategory] = {}
+    lows: dict[str, float] = {}
+    highs: dict[str, float] = {}
+    for group in groups:
+        for c in group:
+            out.setdefault(c.key, c)
+            for price in (c.price, c.price_high):
+                v = _price_value(price)
+                if v is None:
+                    continue
+                lows[c.key] = min(lows.get(c.key, v), v)
+                highs[c.key] = max(highs.get(c.key, v), v)
+    merged = []
+    for key, c in out.items():
+        if key in lows:
+            low, high = lows[key], highs[key]
+            c = replace(c, price=f"{low:.2f}", price_high=f"{high:.2f}" if high != low else "")
+        merged.append(c)
+    return tuple(merged)
 
 
 @dataclass(frozen=True)
@@ -736,6 +787,7 @@ __all__ = [
     "Showtime",
     "category_display",
     "category_matches",
+    "merge_categories",
     "Snapshot",
     "TargetResult",
     "TheatreTarget",

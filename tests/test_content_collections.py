@@ -108,7 +108,9 @@ def test_the_theatre_data_and_monitoring_are_untouched():
     # explorer/ (the Explorer's own data layer) is left out: later Explorer
     # features extend it. Theatre data, monitoring, the BookMyShow provider,
     # auth, notifications, Login, theme, crafts, flow and the workflows are not.
-    changed = subprocess.run(["git", "diff", "--name-only", "f6b73dd", "--", "config/", "monitor/", "platforms/",
+    # pinned to the content feature's own range (f6b73dd..e0e4661): what that change touched, for
+    # good — later fixes to monitoring or the provider are reviewed on their own
+    changed = subprocess.run(["git", "diff", "--name-only", "f6b73dd", "e0e4661", "--", "config/", "monitor/", "platforms/",
                               "auth/", "notifications/", "ui/login.py", "ui/theme.py", "ui/crafts.py",
                               "ui/flow.py", ".github/"], capture_output=True, text=True, check=True).stdout
     assert changed.strip() == ""

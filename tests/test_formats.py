@@ -298,8 +298,10 @@ def test_E_non_marvel_current_formats_are_exactly_bms_plus_premium_watch_targets
     app = run(step=4, furthest=4, location="hyderabad", movie_id=OTHER.id, theatres=["PRHN", "ALUC"])
     boxes = {c.key: c for c in app.checkbox}
     # the movie's own BMS formats, plus each theatre's verified premium screens as watch targets
+    # ALLU (6 Nov 2026): "Dolby Cinema 3D" is the Dolby Cinema screen showing a 3D film — the screen
+    # is the option, the dimension is not (``flow.screen_options``); other theatres are unchanged
     assert set(boxes) == {"fmt_PRHN_any", "fmt_PRHN_PCX", "fmt_PRHN_HDR By Barco", "fmt_PRHN_3D",
-                          "fmt_ALUC_any", "fmt_ALUC_Dolby Cinema", "fmt_ALUC_Dolby Cinema 3D", "fmt_ALUC_HDR By Barco"}
+                          "fmt_ALUC_any", "fmt_ALUC_Dolby Cinema", "fmt_ALUC_HDR By Barco"}
     assert boxes["fmt_ALUC_Dolby Cinema"].proto.help.startswith("Currently listed")          # listed as "Dolby Cinema 3D": covered
     assert boxes["fmt_PRHN_3D"].proto.help.startswith("Currently listed") and boxes["fmt_PRHN_PCX"].proto.help.startswith("Prasads")
     assert "Infinity Vision" not in markup(app)
