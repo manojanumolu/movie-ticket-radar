@@ -196,6 +196,34 @@ def venues(movie_id: str, slug: str = "") -> list[Venue]:
     return _build(_signature(), "").venues_by_id.get(movie_id, [])
 
 
+def other_language_listings(movie: MovieRef, venue_code: str, slug: str = "",
+                            rows: list[dict[str, Any]] | None = None) -> tuple[str, ...]:
+    """The other languages this film is listed in at one theatre.
+
+    BookMyShow sells each language of a film as its own event, and a
+    monitor watches one of them. The 6 Nov 2026 incident was exactly this:
+    a monitor on Ramayana (Telugu) at ALLU Cinemas, Dolby Cinema, reported
+    the Telugu shows (7 AM, 7 PM) correctly — while the 11 AM Dolby show
+    the user meant was the *Hindi* event, which that monitor never read.
+    Saying so is the fix; nothing here changes what a monitor reads."""
+    if movie is None or not venue_code:
+        return ()
+    key = " ".join((movie.title or "").casefold().split())
+    if rows is None:
+        rows = view(slug).entries if slug else _build(_signature(), "").entries
+    out: list[str] = []
+    for row in rows:
+        other = catalogue.movie_from_entry(row)
+        if (other.id == movie.id or other.platform != movie.platform
+                or " ".join((other.title or "").casefold().split()) != key):
+            continue
+        here = (any(v.code == venue_code for v in catalogue.venues_from_entry(row))
+                or any(venue_code in venues for venues in catalogue.listings_from_entry(row).values()))
+        if here and other.language and other.language != movie.language:
+            out.append(other.language)
+    return tuple(dedupe(out))
+
+
 def merge_formats(listed: tuple[str, ...] | list[str], known: tuple[str, ...] | list[str]) -> tuple[str, ...]:
     """Formats listed for this movie first, then every other format the
     theatre is known to run — one entry per format, first spelling kept.

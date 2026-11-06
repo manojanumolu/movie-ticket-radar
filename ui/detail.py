@@ -124,12 +124,35 @@ def _target_block(monitor: Monitor, state: MonitorState, target, finished: bool)
     if finished:
         hint = "This monitor is no longer running."
     elif availability is Availability.SOLD_OUT:
-        hint = "Shows are listed but every seat is taken — you'll be emailed if seats come back."
+        # Which shows, of which language listing: a sold-out verdict is only
+        # about the shows this monitor reads (6 Nov incident, see
+        # ``catalogue_view.other_language_listings``).
+        times = ", ".join(ts.time_labels) if ts and ts.time_labels else ""
+        lang = f"{monitor.movie.language} " if monitor.movie.language else ""
+        shows = f"the {lang}shows watched here" + (f" ({times})" if times else "")
+        hint = (f"{monitor.category_label}: no seats left at {shows}" if monitor.is_category_watch
+                else f"Every seat is taken at {shows}") + " — you'll be emailed if seats come back."
     elif availability in (Availability.ERROR, Availability.NOT_FOUND):
         hint = "The last check didn't get an answer for this theatre — it is retried automatically."
     else:
         hint = "No booking link yet — you'll be emailed the moment tickets open here."
-    return f'<div class="tr-det-tgt">{body}<div class="tr-det-nobook">{C.e(hint)}</div></div>'
+    others = () if finished else _other_languages(monitor, target.venue_code)
+    note = (f'<div class="tr-det-nobook">Watching the {C.e(monitor.movie.language)} listing only. '
+            f'{C.e(monitor.movie.title)} is also listed here in {C.e(", ".join(others))} — a separate '
+            f'{C.e(platform_name(monitor.movie.platform))} listing this monitor does not read.</div>'
+            if others and monitor.movie.language else "")
+    return f'<div class="tr-det-tgt">{body}<div class="tr-det-nobook">{C.e(hint)}</div>{note}</div>'
+
+
+def _other_languages(monitor: Monitor, venue_code: str) -> tuple[str, ...]:
+    """Other languages of this film listed at the theatre — read from the
+    catalogue, never fatal to drawing the dialog."""
+    try:
+        from ui import catalogue_view as cv
+
+        return cv.other_language_listings(monitor.movie, venue_code)
+    except Exception:  # noqa: BLE001 - a note, not a verdict
+        return ()
 
 
 def markup(monitor: Monitor, state: MonitorState, *, at=None) -> str:

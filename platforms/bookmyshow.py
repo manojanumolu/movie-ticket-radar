@@ -59,6 +59,7 @@ from monitor.models import (
     Snapshot,
     Venue,
     dedupe,
+    merge_categories,
 )
 from platforms.base import PlatformBlocked, PlatformError
 
@@ -1316,15 +1317,15 @@ class BookMyShowProvider:
         whatever this movie is screening at that theatre today.
         """
         by_code: dict[str, list[str]] = {}
-        cats: dict[str, dict[str, SeatCategory]] = {}
+        cats: dict[str, list[SeatCategory]] = {}
         for s in showtimes:
             by_code.setdefault(s.venue_code, []).extend(s.format_labels)
-            for c in s.categories:
-                # one entry per platform identity — two "GOLD"s stay two
-                cats.setdefault(s.venue_code, {}).setdefault(c.key, c)
+            # one entry per platform identity — two "GOLD"s stay two — with
+            # the price range across shows (``merge_categories``)
+            cats.setdefault(s.venue_code, []).extend(s.categories)
         return [
             Venue(code=v.code, name=v.name, area=v.area, formats=tuple(sorted(dedupe(by_code.get(v.code, [])))),
-                  categories=tuple(cats.get(v.code, {}).values()))
+                  categories=merge_categories(cats.get(v.code, [])))
             for v in sorted(venues, key=lambda v: v.name.lower())
         ]
 

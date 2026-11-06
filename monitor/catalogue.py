@@ -27,7 +27,15 @@ from typing import Any, Callable
 
 from config.store import load_catalogue, save_catalogue
 from config.timezone import now_ist, parse_iso, to_iso
-from monitor.models import Availability, MovieRef, SeatCategory, Snapshot, Venue, dedupe
+from monitor.models import (
+    Availability,
+    MovieRef,
+    SeatCategory,
+    Snapshot,
+    Venue,
+    dedupe,
+    merge_categories,
+)
 from platforms import get_provider, is_enabled
 from platforms.base import PlatformBlocked, PlatformError
 
@@ -202,7 +210,7 @@ def merge_snapshots(first: Snapshot, second: Snapshot) -> Snapshot:
         venues[v.code] = Venue(
             code=known.code, name=known.name or v.name, area=known.area or v.area,
             formats=tuple(dedupe([*known.formats, *v.formats])),
-            categories=tuple({c.key: c for c in (*known.categories, *v.categories)}.values()),
+            categories=merge_categories(known.categories, v.categories),
         )
     return Snapshot(
         movie=first.movie,
