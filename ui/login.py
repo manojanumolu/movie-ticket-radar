@@ -900,6 +900,9 @@ def handle_google_return() -> session.AuthUser | None:
     try:
         redirect = google.redirect_uri(_page_url())
         id_token = google.exchange_code(code, redirect)
+        if not google.nonce_matches(id_token, state):
+            print("[auth] google return: nonce mismatch - not signed in", flush=True)
+            raise google.GoogleError(google.MESSAGES["state"], "nonce")
         creds = firebase.FirebaseAuth().sign_in_with_google(id_token, redirect)
         if not creds.email_verified:
             # Google always vouches for its addresses; if Firebase still
@@ -989,7 +992,10 @@ def _signin() -> None:
     if verified:
         C.html('<h2 class="tr-auth-h">Email verified.</h2>'
                '<p class="tr-auth-p">Your TicketRadar account is active. Sign in with your password to continue.</p>')
-        _alert("success", f"{verified} is verified — welcome to TicketRadar.")
+        # The address came from the URL, which anyone can write; it goes in the
+        # email box (the person's own field), never into a sentence the page
+        # vouches for (audit SEC-08a).
+        _alert("success", "Your email address is verified — welcome to TicketRadar.")
     else:
         C.html('<h2 class="tr-auth-h">Welcome back.</h2>'
                '<p class="tr-auth-p">Track movie ticket releases and get notified the moment they go live.</p>')

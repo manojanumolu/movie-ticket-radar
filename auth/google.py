@@ -138,6 +138,26 @@ def nonce_for(state: str) -> str:
     return hashlib.sha256(state.encode("utf-8")).hexdigest()
 
 
+def nonce_matches(id_token: str, state: str) -> bool:
+    """Does Google's ID token carry the nonce this sign-in's link was minted
+    with (:func:`nonce_for`)? It binds the token to *this* attempt, so a
+    token obtained for another one cannot be replayed into it.
+
+    A real Google ID token is always a JWT and always echoes the nonce it was
+    asked for; one that does not is refused. Something that is not a JWT at
+    all is not a Google ID token, and Firebase's own check of the token
+    (``accounts:signInWithIdp``) refuses it — that is the case left to it.
+    The token came from Google's token endpoint to this server over TLS, so
+    its contents are read, not re-verified.
+    """
+    from auth.firebase import token_claims
+
+    claims = token_claims(id_token)
+    if not claims:
+        return True
+    return claims.get("nonce") == nonce_for(state)
+
+
 def authorization_url(state: str, redirect: str, *, login_hint: str = "") -> str:
     params = {
         "client_id": config().client_id,
@@ -215,5 +235,6 @@ __all__ = [
     "is_configured",
     "new_state",
     "nonce_for",
+    "nonce_matches",
     "redirect_uri",
 ]

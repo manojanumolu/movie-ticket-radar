@@ -442,9 +442,16 @@ def test_the_atmosphere_is_cheap_quiet_and_out_of_the_way():
 def test_home_login_radar_and_auth_are_untouched():
     """The Explorer's work changes none of these. (Home itself changed once, on
     purpose: its big reel's glow became a static halo — see
-    tests/test_sidebar_ambience.py — and its radar is the same code.)"""
+    tests/test_sidebar_ambience.py — and its radar is the same code.)
+
+    Checked over a fixed range — from before the Explorer work to the
+    production commit after it (242458e) — rather than against the working
+    tree: the Phase 5 security fixes change ``auth/`` and ``ui/login.py`` on
+    purpose, and this test is about what the Explorer did, not a ban on ever
+    changing sign-in again."""
     import subprocess
 
-    changed = subprocess.run(["git", "diff", "--name-only", "b37d93d", "--", "ui/radar.py",
-                              "ui/login.py", "ui/crafts.py", "auth/"], capture_output=True, text=True).stdout
-    assert changed.strip() == ""
+    changed = subprocess.run(["git", "diff", "--name-only", "b37d93d", "242458e", "--", "ui/radar.py",
+                              "ui/login.py", "ui/crafts.py", "auth/"], capture_output=True, text=True)
+    assert changed.returncode == 0, changed.stderr
+    assert changed.stdout.strip() == ""
