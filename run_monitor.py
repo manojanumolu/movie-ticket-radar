@@ -45,10 +45,20 @@ def main(argv: list[str] | None = None) -> int:
     started = now_ist()
     print(f"Movie Ticket Radar — worker run at {fmt_datetime(started)} IST")
 
-    notifier = None
+    # A dry run is not a different notifier: it is a different tick, one that
+    # evaluates everything and writes and sends nothing (``run_once`` /
+    # ``run_loop`` with ``dry_run``). Swapping only the notifier used to leave
+    # the rest of the tick running for real — an alert "delivered" to a print
+    # statement was then marked as sent, and the real alert never went out.
     if args.dry_run:
-        def notifier(monitor, change):  # noqa: ARG001 - signature must match
-            print(f"    [dry-run] would email: {change.headline} ({change.venue_name})")
+        print("DRY RUN — every monitor is evaluated; nothing is emailed and nothing is written.")
+
+    def report_dry_run(changes) -> None:
+        if not args.dry_run:
+            return
+        print(f"  would email: {len(changes)}")
+        for change in changes:
+            print(f"    [dry-run] would email: {change.headline} ({change.venue_name} · {change.fmt})")
 
     try:
         if args.loop:
@@ -57,9 +67,9 @@ def main(argv: list[str] | None = None) -> int:
                 poll_seconds=max(5, args.poll_seconds),
                 force=args.force,
                 monitor_id=args.monitor,
-                notifier=notifier,
                 use_git=False if args.no_git else None,
                 chain=False if args.no_chain else None,
+                dry_run=args.dry_run,
             )
             for line in (
                 f"ticks:    {loop.ticks}",
@@ -69,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"handover: {'yes' if loop.handed_over else 'no'}",
             ):
                 print(f"  {line}")
+            report_dry_run(loop.would_send)
             for rep in loop.reports:
                 for err in rep.email_errors:
                     print(f"::warning::email not sent ({err}) — retried on the next check")
@@ -87,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
             force=args.force,
             monitor_id=args.monitor,
             mirror=False,  # the workflow commits data/ once, at the end
-            notifier=notifier,
+            dry_run=args.dry_run,
         )
     except Exception as exc:  # noqa: BLE001
         print(f"::error::worker crashed: {type(exc).__name__}: {exc}")
@@ -112,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     ):
         print(f"  {line}")
 
+    report_dry_run(report.would_send)
     for err in report.email_errors:
         print(f"::warning::email not sent ({err}) — it will be retried on the next check")
     if report.failed:

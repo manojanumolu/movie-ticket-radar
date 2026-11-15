@@ -36,6 +36,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from config import readonly
 from config.timezone import now_ist
 from monitor.changes import Change, apply_outcome, detect_changes, mark_notified
 from monitor.discovery import DiscoveryReport, discover_siblings
@@ -102,6 +103,13 @@ class RunReport:
     #: Running monitors whose owners could not be looked up this tick: not
     #: checked, retried on the next tick.
     deferred: list[str] = field(default_factory=list)
+    #: A dry run (``run_once(dry_run=True)``): everything was evaluated and
+    #: nothing was sent or written. ``would_send`` is every alert a real run
+    #: would have emailed this tick; ``would_expire`` every monitor it would
+    #: have marked EXPIRED.
+    dry_run: bool = False
+    would_send: list[Change] = field(default_factory=list)
+    would_expire: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         text = (
@@ -115,6 +123,9 @@ class RunReport:
             text += f" saved={self.sharing.saved}"
         if self.discovery.ran:
             text += f" discovery[{self.discovery.summary()}]"
+        if self.dry_run:
+            text += (f" DRY-RUN would_email={len(self.would_send)}"
+                     f" would_expire={len(self.would_expire)} (nothing sent or written)")
         return text
 
 
@@ -603,10 +614,39 @@ def _park(state: dict[str, MonitorState], carry: dict[str, MonitorState] | None)
         carry.update({mid: ms for mid, ms in state.items() if ms.is_dirty()})
 
 
+def _no_mail_in_a_dry_run(monitor, change):
+    raise AssertionError("a dry run must never reach the notifier")
+
+
 def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str = "",
              mirror: bool = False, notifier=None,
              known_state: dict[str, MonitorState] | None = None,
-             carry: dict[str, MonitorState] | None = None) -> RunReport:
+             carry: dict[str, MonitorState] | None = None,
+             dry_run: bool = False) -> RunReport:
+    """Check every monitor that is due (see :func:`_run_once`).
+
+    ``dry_run`` evaluates exactly what a real tick would — the same reads,
+    the same verdicts, the same change detection — and then sends nothing
+    and writes nothing: no email, no "sent" mark, no observed state, no
+    history, no monitor marked EXPIRED, no end date clamped, no sibling
+    discovery (a city re-listing whose result would have to be stored). The
+    alerts a real tick would send are in ``report.would_send``. The whole
+    tick runs under :func:`config.readonly.read_only`, so any write that is
+    reached anyway is refused rather than performed. A later real run sees
+    the store exactly as it was, and alerts exactly as it would have.
+    """
+    if not dry_run:
+        return _run_once(at=at, force=force, monitor_id=monitor_id, mirror=mirror, notifier=notifier,
+                         known_state=known_state, carry=carry, dry_run=False)
+    with readonly.read_only():
+        return _run_once(at=at, force=force, monitor_id=monitor_id, mirror=False,
+                         notifier=_no_mail_in_a_dry_run, known_state=known_state, carry=None,
+                         dry_run=True)
+
+
+def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool, notifier,
+              known_state: dict[str, MonitorState] | None,
+              carry: dict[str, MonitorState] | None, dry_run: bool) -> RunReport:
     """Check every monitor that is due. This is what the workflow calls.
 
     ``mirror`` is False by default because inside Actions the workflow makes
@@ -640,7 +680,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     only at the end of the tick.
     """
     at = at or now_ist()
-    report = RunReport(started_at=at)
+    report = RunReport(started_at=at, dry_run=dry_run)
 
     if notifier is None:
         from notifications.email import send_change_email
@@ -650,7 +690,13 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     # Only what can still be checked. On Firestore that is the ACTIVE
     # documents alone — a stopped or expired monitor is never read again by
     # the worker, and never written back by it either.
-    stored, newly_expired = expire_due_monitors(load_monitors_for_checking(), at=at, mirror=mirror)
+    if dry_run:
+        # Read only. What *would* expire is reported; nothing is flipped —
+        # a monitor past its end time is not running either way.
+        stored, newly_expired = load_monitors_for_checking(), []
+        report.would_expire = [m.id for m in stored if m.status.is_running and m.is_expired(at)]
+    else:
+        stored, newly_expired = expire_due_monitors(load_monitors_for_checking(), at=at, mirror=mirror)
     report.expired = [m.id for m in newly_expired]
 
     # The worker is a security boundary of its own: a stored monitor is
@@ -665,7 +711,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
         report.skipped.append(f"{short_id(monitor_ref.id)} (owner not verified yet)")
     for rejected_id in screened.rejected:
         report.skipped.append(f"{short_id(rejected_id)} (refused)")
-    if screened.clamped:
+    if screened.clamped and not dry_run:
         # The whole list: the JSON store rewrites its file from what it is
         # given, so a subset would drop every other monitor.
         save_monitors(stored, mirror=mirror, changed=screened.clamped)
@@ -706,7 +752,10 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     # A theatre that is "not listed yet" may be listed under a sibling event
     # BookMyShow created after the monitor was saved. Learn of such events
     # *before* fetching, so this tick's sweep is the film as it is now.
-    report.discovery = discover_siblings(monitors, due, state, at=at, mirror=mirror)
+    # (Not in a dry run: what it learns has to be stored to be of any use,
+    # and a dry run stores nothing. It evaluates on the siblings known now.)
+    if not dry_run:
+        report.discovery = discover_siblings(monitors, due, state, at=at, mirror=mirror)
     if report.discovery.updated:
         save_monitors(stored, mirror=mirror,
                       changed=[m for m in stored if m.id in report.discovery.updated])
@@ -750,7 +799,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
             # next monitor is still checked.
             try:
                 if _check_one(monitor, listing, state, report, at=at, mirror=mirror,
-                              notifier=notifier, carry=carry):
+                              notifier=notifier, carry=carry, dry_run=dry_run):
                     dirty = True
             except Exception as exc:  # noqa: BLE001 - isolate, report, move on
                 dirty = True
@@ -759,7 +808,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
                 print(f"::warning::monitor {short_id(monitor.id)} could not be processed this tick "
                       f"({type(exc).__name__}); the others continue", flush=True)
 
-    if dirty:
+    if dirty and not dry_run:
         try:
             save_state(state, mirror=mirror)
         except Exception:
@@ -779,7 +828,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
 
 def _check_one(monitor: Monitor, listing: Listing, state: dict[str, MonitorState],
                report: RunReport, *, at: datetime, mirror: bool, notifier,
-               carry: dict[str, MonitorState] | None) -> bool:
+               carry: dict[str, MonitorState] | None, dry_run: bool = False) -> bool:
     """Evaluate one monitor against a listing already read, alert on what
     changed and record it. Returns True when its state record changed.
 
@@ -805,14 +854,21 @@ def _check_one(monitor: Monitor, listing: Listing, state: dict[str, MonitorState
     else:
         report.failed.append(monitor.id)
         print(f"    check failed: {outcome.error}")
-        _record_history_safely(
-            monitor, "ERROR",
-            "Couldn't check BookMyShow — connection problem, not a 'no tickets' answer.",
-            mirror=mirror, at=at,
-        )
+        if not dry_run:
+            _record_history_safely(
+                monitor, "ERROR",
+                "Couldn't check BookMyShow — connection problem, not a 'no tickets' answer.",
+                mirror=mirror, at=at,
+            )
 
     for change in changes:
         report.changes.append(change)
+        if dry_run:
+            # Reported, never sent and never marked: the next real run finds
+            # this alert still owed and sends it.
+            report.would_send.append(change)
+            print(f"    [dry-run] would email: {change.headline} ({change.venue_name} · {change.fmt})")
+            continue
         try:
             notifier(monitor, change)
         except Exception as exc:  # noqa: BLE001 - retried on the next tick
