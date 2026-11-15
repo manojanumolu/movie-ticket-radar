@@ -1117,6 +1117,10 @@ def extend_monitor(monitor_id: str, hours: int = 24, *, mirror: bool = True) -> 
     if _signed_in_scope() is not None:
         # Checked before the flip: the list may be the page's cached read.
         policy.assert_until_allowed(max(target.monitor_until, now_ist()) + timedelta(hours=hours))
+        # A monitor saved before Phase 5's request limit may exceed it; the
+        # rules refuse to make such a monitor running again, so say why here
+        # (as a message) rather than let Firestore's refusal reach the page.
+        policy.assert_affordable(target)
     target.extend(hours)
     save_monitors(monitors, mirror=mirror, changed=[target])
     return target
