@@ -20,9 +20,9 @@ store's throwaway data directory:
 5. a real run behaves exactly as before;
 6. the guard under it (``config.readonly``) refuses any write that is
    reached anyway;
-7. a dry-run segment is one pass, with no git, and hands over to a real
-   segment when monitors are running — so it can neither delay real alerts
-   nor break the chain.
+7. a dry-run segment is one pass, with no git, and never hands over — the
+   successor would be a real segment on whatever ref the dry run was
+   dispatched on (``tests/test_dry_run_handover.py``).
 """
 
 from __future__ import annotations
@@ -323,8 +323,7 @@ def dispatched(monkeypatch):
     return calls
 
 
-def test_a_dry_run_segment_is_one_pass_with_no_git_and_hands_over_to_a_real_one(cloud, dispatched,
-                                                                              monkeypatch):
+def test_a_dry_run_segment_is_one_pass_with_no_git_and_no_successor(cloud, dispatched, monkeypatch):
     m = cloud.seed(_monitor("ET1", cloud.now), checked=False)
     git = []
     monkeypatch.setattr(worker, "git_pull", lambda: git.append("pull") or True)
@@ -340,9 +339,10 @@ def test_a_dry_run_segment_is_one_pass_with_no_git_and_hands_over_to_a_real_one(
     assert clock.now == cloud.now, "it did not hold the slot"
     assert git == [] and cloud.writes() == 0 and cloud.inbox == []
     assert [(c.monitor_id, c.kind.value) for c in loop.would_send] == [(m.id, "TICKETS_LIVE")]
-    # The successor is a real segment: monitoring carries on as normal.
-    assert loop.handed_over is True and dispatched == [{"force": "false", "dry_run": "false",
-                                                        "monitor_id": ""}]
+    # No successor, even with chain=True and a monitor running: the
+    # successor would be a *real* segment on whatever ref this dry run was
+    # dispatched on (tests/test_dry_run_handover.py has the branch case).
+    assert loop.handed_over is False and dispatched == []
 
 
 def test_a_dry_run_with_nothing_running_ends_quietly(cloud, dispatched):
