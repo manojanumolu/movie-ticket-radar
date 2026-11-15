@@ -342,15 +342,19 @@ def test_failed_email_is_retried_on_the_next_check(make_monitor, provider_factor
 # Errors are never an answer  (Test 13)
 # ──────────────────────────────────────────────────────────────────────────
 def test_a_blocked_check_does_not_report_unavailability(make_monitor, provider_factory,
-                                                        monkeypatch, at):
-    monitor = make_monitor()
-    outcome = check_monitor(monitor, at=at)
-    assert isinstance(outcome, CheckOutcome)
-
+                                                        monkeypatch, at, live_ticketing_calls):
+    # The fake goes in before anything that could reach a provider. (This
+    # used to call ``check_monitor`` once first, with the real BookMyShow
+    # client — a live request on every suite run.)
     provider = provider_factory([FakeResponse(403)])
     monkeypatch.setattr("monitor.checker.get_provider", lambda slug: provider)
+    monitor = make_monitor()
+
     outcome = check_monitor(monitor, at=at)
 
+    assert isinstance(outcome, CheckOutcome)
+    assert len(provider.session.calls) == 1, "the fake answered, once (a 403 is not retried)"
+    assert live_ticketing_calls == []
     assert outcome.ok is False
     assert outcome.results == []
     assert "bot check" in outcome.error
