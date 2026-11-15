@@ -232,6 +232,25 @@ def owner_identities():
 
 
 @pytest.fixture(autouse=True)
+def no_retry_waits(monkeypatch):
+    """A retried Firestore call or handover waits between attempts. In the
+    suite those waits are recorded, never slept: ``retry_waits`` is every
+    delay that would have been taken, in order."""
+    from config import firestore as fs
+    from monitor import worker
+
+    waits: list[float] = []
+    monkeypatch.setattr(fs, "_sleep", waits.append)
+    monkeypatch.setattr(worker, "_sleep", waits.append)
+    return waits
+
+
+@pytest.fixture
+def retry_waits(no_retry_waits):
+    return no_retry_waits
+
+
+@pytest.fixture(autouse=True)
 def no_smtp(monkeypatch):
     """Fail loudly if a test ever tries to open a real SMTP connection."""
     import smtplib

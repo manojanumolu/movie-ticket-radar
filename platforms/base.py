@@ -25,6 +25,16 @@ class PlatformBlocked(PlatformError):
     """
 
 
+class PlatformNotFound(PlatformError):
+    """The platform said the thing asked for does not exist (HTTP 404).
+
+    Still an error for the event a monitor is *on* — a listing that has gone
+    is not a "no tickets" answer. For a premium-format sibling event it is
+    the one failure that is itself an answer: an event that does not exist
+    holds no shows, so its absence leaves the rest of the read complete.
+    """
+
+
 @dataclass(frozen=True)
 class Platform:
     slug: str
@@ -65,4 +75,4 @@ class Provider(Protocol):
         ...
 
 
-__all__ = ["Platform", "PlatformBlocked", "PlatformError", "Provider"]
+__all__ = ["Platform", "PlatformBlocked", "PlatformError", "PlatformNotFound", "Provider"]

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import threading
 import time
 from dataclasses import dataclass
@@ -50,10 +51,56 @@ PAIR_FIELDS: dict[str, tuple[str, str]] = {
 }
 
 
+#: How a call that fails for a reason that passes is retried. Firestore
+#: answers 429 when it is throttling and 5xx when it is having a moment; a
+#: dropped connection or a timeout never reached it at all. All three clear
+#: up by themselves, usually within a second or two — and before this, one
+#: of them anywhere in a worker tick ended the whole fifty-minute segment
+#: (audit REL-03). Everything else — 400, 401, 403, 404, 409 — is the
+#: request's own fault and is the same answer however often it is asked, so
+#: it is raised at once.
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+MAX_ATTEMPTS = 4
+BACKOFF_BASE = 0.5      # seconds: 0.5, 1, 2 between the four attempts…
+BACKOFF_JITTER = 0.25   # …each plus up to this much, so callers don't retry in step
+
+#: Replaced by the tests so a retry costs no wall-clock time.
+_sleep: Callable[[float], None] = time.sleep
+
+
+def backoff_delay(attempt: int) -> float:
+    """Seconds to wait after the ``attempt``-th failed try (1-based)."""
+    return BACKOFF_BASE * (2 ** (attempt - 1)) + random.uniform(0, BACKOFF_JITTER)
+
+
+def _credential_status(exc: BaseException) -> int:
+    """How a failure to mint the worker's access token should be treated.
+
+    ``google-auth`` raises ``RefreshError`` when Google *answered* and
+    refused the credential (a revoked or deleted key: ``invalid_grant``), and
+    marks it ``retryable`` only for the few answers that pass. That refusal
+    is reported as 401 — permanent, never retried — so a dead key stops the
+    worker instead of being retried for ever. Everything else (a
+    ``TransportError``: the exchange never reached Google) is 0, a failure
+    that passes. Matched by name so the app never has to import google-auth.
+    """
+    names = {cls.__name__ for cls in type(exc).__mro__}
+    if "RefreshError" in names and not getattr(exc, "retryable", False):
+        return 401
+    return 0
+
+
 class FirestoreError(Exception):
     def __init__(self, message: str, status: int = 0):
         super().__init__(message)
         self.status = status
+
+    @property
+    def transient(self) -> bool:
+        """Could the same call succeed if made again? True for a call that
+        never got an answer (``status`` 0) and for the statuses in
+        :data:`RETRY_STATUSES`; False for a refusal of the request itself."""
+        return self.status == 0 or self.status in RETRY_STATUSES
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -289,8 +336,42 @@ class FirestoreClient:
 
     def _call(self, method: str, suffix: str, body: dict[str, Any] | None = None,
               *, absent: tuple[int, ...] = (404,)) -> Any:
+        """One Firestore call, retried while the failure is one that passes.
+
+        Every call this client makes is safe to repeat: a query reads, and a
+        commit here is whole-document sets and deletes with no precondition,
+        so a write that did land before its answer was lost lands the same
+        way again. A permanent refusal is raised on the first answer.
+        """
+        where = suffix.split("?")[0]
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                return self._call_once(method, suffix, body, absent=absent)
+            except FirestoreError as exc:
+                if not exc.transient or attempt == MAX_ATTEMPTS:
+                    if exc.transient:
+                        print(f"[firestore] {method} {where}: giving up after {attempt} attempts "
+                              f"({'HTTP ' + str(exc.status) if exc.status else 'unreachable'})", flush=True)
+                    raise
+                delay = backoff_delay(attempt)
+                print(f"[firestore] {method} {where}: "
+                      f"{'HTTP ' + str(exc.status) if exc.status else 'unreachable'} — "
+                      f"retry {attempt}/{MAX_ATTEMPTS - 1} in {delay:.1f}s", flush=True)
+                _sleep(delay)
+        raise AssertionError("unreachable")  # pragma: no cover - the loop returns or raises
+
+    def _call_once(self, method: str, suffix: str, body: dict[str, Any] | None = None,
+                   *, absent: tuple[int, ...] = (404,)) -> Any:
         try:
-            status, payload = self.transport(method, self._url(suffix), self.token(), body)
+            token = self.token()
+        except FirestoreError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - the credential exchange is a network call too
+            # Type only: a credential error's text is not for a log.
+            raise FirestoreError(f"Firestore credential unavailable ({type(exc).__name__})",
+                                 _credential_status(exc)) from None
+        try:
+            status, payload = self.transport(method, self._url(suffix), token, body)
         except (requests.RequestException, OSError) as exc:
             raise FirestoreError(f"Firestore unreachable ({type(exc).__name__})") from None
         if method == "GET" and status in absent:
@@ -370,10 +451,13 @@ class FirestoreClient:
 
 
 __all__ = [
+    "MAX_ATTEMPTS",
     "OWNER",
     "PAIR_FIELDS",
+    "RETRY_STATUSES",
     "FirestoreClient",
     "FirestoreError",
+    "backoff_delay",
     "decode",
     "encode",
     "project_from_env",

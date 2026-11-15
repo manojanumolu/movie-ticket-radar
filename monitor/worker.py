@@ -60,6 +60,27 @@ DEFAULT_MAX_MINUTES = 50
 DEFAULT_POLL_SECONDS = 30
 GIT_TIMEOUT = 90
 
+#: A tick that fails for a reason no retry will fix — the store refusing the
+#: worker's credential, a request it calls invalid — fails the same way next
+#: time. After this many in a row the segment stops and does *not* dispatch
+#: a successor: a chain of segments that can only fail would otherwise
+#: re-dispatch itself for ever. The schedule remains as the way back in once
+#: the cause is fixed. Failures that pass (a timeout, a 429, a 5xx) never
+#: count towards it: those are waited out, and the segment hands over as usual.
+MAX_PERMANENT_FAILURES = 3
+#: After a failed tick the next one waits the poll interval times this, per
+#: consecutive failure, up to the cap — a store that is down is not asked
+#: every thirty seconds.
+FAILURE_BACKOFF_CAP = 4
+#: The handover is one API call, and the only thing that starts the next
+#: segment promptly. It is tried this many times before the schedule is left
+#: to do it.
+HANDOVER_ATTEMPTS = 3
+HANDOVER_BACKOFF = 5.0   # seconds, doubled per attempt
+
+#: Replaced by the tests so a retried handover costs no wall-clock time.
+_sleep: Callable[[float], None] = time.sleep
+
 #: Set to "1" to let a run inside GitHub Actions use the legacy JSON store on
 #: purpose. Without it, Actions refuses to monitor production against JSON —
 #: see :func:`preflight`. This exists so the legacy worker is still reachable
@@ -111,7 +132,16 @@ def preflight(*, in_actions: bool, monitor_id: str = "",
     # One read, so the segment's first decision is visible rather than
     # inferred from the fact that it exited. Deliberately not cached: the
     # worker has no Streamlit session and must see every tick's writes.
-    monitors = load_monitors()
+    try:
+        monitors = load_monitors()
+    except Exception as exc:  # noqa: BLE001 - a report, not a gate
+        # This read only feeds the lines below. The store being unreachable
+        # for a moment is the first tick's to deal with (it retries, and the
+        # segment carries on) — not a reason to end the segment before it
+        # has started, with nobody dispatched to take over.
+        print(f"::warning::the store could not be read at start-up ({describe_failure(exc)}); "
+              "the first tick will try again", flush=True)
+        return report.name, []
     at = at or now_ist()
     running = [m for m in monitors if m.is_running(at)]
     print(f"[worker] monitor_count={len(monitors)}")
@@ -141,6 +171,8 @@ class LoopReport:
     push_failures: int = 0
     handed_over: bool = False
     stopped_reason: str = ""
+    #: Ticks that raised instead of finishing. The segment carried on.
+    failed_ticks: int = 0
     #: Which store this segment actually used. In the summary so that a run
     #: which checked nothing can be told apart from one that was looking in
     #: the wrong place.
@@ -159,6 +191,7 @@ class LoopReport:
             f"backend={self.backend or 'unknown'} "
             f"ticks={self.ticks} checks={self.checks} emails={self.emails_sent} "
             f"commits={self.commits} push_failures={self.push_failures} "
+            f"failed_ticks={self.failed_ticks} "
             f"handed_over={self.handed_over} stopped={self.stopped_reason or 'time'}"
         )
 
@@ -259,11 +292,55 @@ def git_commit_and_push(message: str, attempts: int = 3) -> tuple[bool, bool]:
         return False, False
 
 
-def hand_over() -> bool:
-    """Dispatch the next segment. Only meaningful inside Actions."""
-    ok, message = dispatch_workflow(MONITOR_WORKFLOW, {"force": "false", "dry_run": "false", "monitor_id": ""})
-    print(f"[worker] next segment: {'dispatched' if ok else 'NOT dispatched — ' + message}")
-    return ok
+def hand_over(attempts: int = HANDOVER_ATTEMPTS) -> bool:
+    """Dispatch the next segment. Only meaningful inside Actions. Never raises.
+
+    Tried a few times, because a segment that ends without a successor
+    leaves every monitor waiting on GitHub's schedule — hours, as measured.
+    A dispatch that did reach GitHub but whose answer was lost may be sent
+    twice; the workflow's concurrency group keeps one run and at most one
+    waiting, so two segments still never run at once.
+    """
+    message = ""
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            ok, message = dispatch_workflow(
+                MONITOR_WORKFLOW, {"force": "false", "dry_run": "false", "monitor_id": ""})
+        except Exception as exc:  # noqa: BLE001 - dispatch_workflow never raises; nor may this
+            ok, message = False, f"unexpected {type(exc).__name__}"
+        if ok:
+            print("[worker] next segment: dispatched"
+                  + (f" (attempt {attempt})" if attempt > 1 else ""))
+            return True
+        if attempt < attempts:
+            print(f"[worker] next segment: dispatch attempt {attempt} failed — {message}; retrying")
+            _sleep(HANDOVER_BACKOFF * (2 ** (attempt - 1)))
+    print(f"::warning::next segment NOT dispatched after {max(1, attempts)} attempt(s) — {message}. "
+          "Monitoring resumes on the schedule, or when a monitor is next saved.")
+    return False
+
+
+def describe_failure(exc: BaseException) -> str:
+    """A failure for a public log: what kind it was, and an HTTP status when
+    it has one. Never the exception's own text — a store's error message can
+    name a document, and a credential error can quote one."""
+    status = getattr(exc, "status", 0)
+    return f"{type(exc).__name__}{f' HTTP {status}' if status else ''}"
+
+
+def is_permanent(exc: BaseException) -> bool:
+    """Will the same tick fail the same way if simply run again?
+
+    Only a store error that says so about itself (``FirestoreError`` with a
+    non-retryable status: a refused credential, an invalid request) and a
+    configuration error count. Anything else — including an exception this
+    module has never seen — is treated as passing, because stopping a
+    segment is the more expensive mistake.
+    """
+    if isinstance(exc, WorkerConfigError):
+        return True
+    transient = getattr(exc, "transient", None)
+    return transient is False
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -308,50 +385,105 @@ def run_loop(
 
     first = True
     known_state: dict[str, MonitorState] | None = None
-    while True:
-        at = clock()
-        if not first and use_git:
-            git_pull()
+    #: State records a tick changed but could not save (``run_once``): held
+    #: here, in this process, and handed to the next tick so that nobody is
+    #: emailed or checked twice while the store is failing.
+    carry: dict[str, MonitorState] = {}
+    failures_in_a_row = 0
+    permanent_in_a_row = 0
+    # Whatever goes wrong inside the loop, the segment's last act is to decide
+    # about its successor. Before this, an exception in any tick left the
+    # function by the nearest exit and the handover below was never reached.
+    try:
+        while True:
+            at = clock()
+            try:
+                if not first and use_git:
+                    git_pull()
 
-        report = run_once(
-            at=at,
-            force=force if first else False,
-            monitor_id=monitor_id if first else "",
-            mirror=False,
-            notifier=notifier,
-            # This segment's own last-written state: lets a tick where nothing
-            # is due skip the state read. Never carried across segments.
-            known_state=known_state,
-        )
-        known_state = report.state
-        loop.ticks += 1
-        loop.reports.append(report)
-        first = False
+                report = run_once(
+                    at=at,
+                    force=force if first else False,
+                    monitor_id=monitor_id if first else "",
+                    mirror=False,
+                    notifier=notifier,
+                    # This segment's own last-written state: lets a tick where
+                    # nothing is due skip the state read. Never carried across
+                    # segments.
+                    known_state=known_state,
+                    carry=carry,
+                )
+            except Exception as exc:  # noqa: BLE001 - a tick is a unit of failure
+                # The tick did not finish: the store was unreachable, or
+                # something nobody foresaw. This tick is lost; the segment is
+                # not. What it had learned and could not save is in ``carry``.
+                loop.ticks += 1
+                loop.failed_ticks += 1
+                failures_in_a_row += 1
+                permanent_in_a_row = permanent_in_a_row + 1 if is_permanent(exc) else 0
+                first = False
+                # The in-memory copy can no longer be assumed to be what the
+                # store holds: the next tick reads state afresh.
+                known_state = None
+                print(f"::warning::worker tick {loop.ticks} failed ({describe_failure(exc)}); "
+                      f"{len(carry)} unsaved state record(s) kept in memory — the segment continues",
+                      flush=True)
+                if permanent_in_a_row >= MAX_PERMANENT_FAILURES:
+                    loop.stopped_reason = "store refused the worker"
+                    print(f"::error::{permanent_in_a_row} ticks in a row failed for a reason a retry "
+                          f"cannot fix ({describe_failure(exc)}). Stopping this segment without a "
+                          "successor; fix the cause and the schedule starts monitoring again.",
+                          flush=True)
+                    break
+                wait = float(poll_seconds) * min(2 ** (failures_in_a_row - 1), FAILURE_BACKOFF_CAP)
+                if clock() + timedelta(seconds=wait) >= deadline:
+                    break
+                sleeper(wait)
+                continue
 
-        if use_git and report_did_work(report):
-            committed, pushed = git_commit_and_push(
-                f"chore: monitoring state {at.strftime('%Y-%m-%dT%H:%M')} IST [skip ci]"
-            )
-            loop.commits += int(committed)
-            loop.push_failures += int(committed and not pushed)
+            failures_in_a_row = permanent_in_a_row = 0
+            known_state = report.state
+            loop.ticks += 1
+            loop.reports.append(report)
+            first = False
 
-        wait = seconds_until_next_due(clock(), poll_seconds,
-                                      monitors=report.monitors, state=report.state)
-        if wait is None and report.deferred:
-            # Monitors whose owners could not be looked up this tick are not
-            # refused, only postponed: keep polling at the ordinary pace (never
-            # faster — a failing lookup is not retried in a tight loop).
-            wait = float(poll_seconds)
-        if wait is None:
-            loop.stopped_reason = "nothing running"
-            break
-        if clock() + timedelta(seconds=wait) >= deadline:
-            break
-        sleeper(wait)
+            if use_git and report_did_work(report):
+                committed, pushed = git_commit_and_push(
+                    f"chore: monitoring state {at.strftime('%Y-%m-%dT%H:%M')} IST [skip ci]"
+                )
+                loop.commits += int(committed)
+                loop.push_failures += int(committed and not pushed)
 
-    if chain and loop.stopped_reason != "nothing running":
+            wait = seconds_until_next_due(clock(), poll_seconds,
+                                          monitors=report.monitors, state=report.state)
+            if wait is None and report.deferred:
+                # Monitors whose owners could not be looked up this tick are not
+                # refused, only postponed: keep polling at the ordinary pace (never
+                # faster — a failing lookup is not retried in a tight loop).
+                wait = float(poll_seconds)
+            if wait is None:
+                loop.stopped_reason = "nothing running"
+                break
+            if clock() + timedelta(seconds=wait) >= deadline:
+                break
+            sleeper(wait)
+    except Exception as exc:  # noqa: BLE001 - outside a tick: the clock, the sleeper, git
+        loop.stopped_reason = "segment error"
+        print(f"::error::worker segment stopped early ({describe_failure(exc)}); "
+              "handing over to a new segment", flush=True)
+
+    # Reached on every way out of the loop that is a *failure or a finish*:
+    # the deadline, nothing left to watch, a tick that raised, an error
+    # outside a tick. Only the two endings that mean "there is nothing for a
+    # successor to do" skip the dispatch: nothing is running, or the store is
+    # refusing the worker outright. A cancelled job (KeyboardInterrupt /
+    # SystemExit — not ``Exception``) deliberately passes all of this by: a
+    # run somebody stopped must not start its own replacement.
+    if chain and loop.stopped_reason not in ("nothing running", "store refused the worker"):
         loop.handed_over = hand_over()
-
+    if carry:
+        print(f"::warning::{len(carry)} state record(s) were never saved this segment; "
+              "an alert already sent for them may be sent again", flush=True)
     print(f"[worker] segment end · {loop.summary()}")
     return loop
 
@@ -359,10 +491,13 @@ def run_loop(
 __all__ = [
     "DEFAULT_MAX_MINUTES",
     "DEFAULT_POLL_SECONDS",
+    "MAX_PERMANENT_FAILURES",
     "LoopReport",
+    "describe_failure",
     "git_commit_and_push",
     "git_pull",
     "hand_over",
+    "is_permanent",
     "report_did_work",
     "run_loop",
     "seconds_until_next_due",

@@ -35,7 +35,7 @@ import secrets
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from config import firestore as fs
 from config.store import (
@@ -287,7 +287,10 @@ class _JsonStore:
         return {k: MonitorState.from_dict(v) for k, v in raw.items()
                 if (owned_ids is None or k in owned_ids) and isinstance(v, dict)}
 
-    def save_state(self, state: dict[str, MonitorState], *, mirror: bool = True) -> None:
+    def save_state(self, state: dict[str, MonitorState], *, mirror: bool = True,
+                   only: Iterable[str] | None = None) -> None:
+        # ``only`` narrows a Firestore write to named records; this store's
+        # file is written whole from ``state`` whatever it names.
         if self.uid is None:
             payload = {k: v.to_dict() for k, v in state.items()}
         else:
@@ -544,7 +547,8 @@ class _FirestoreStore:
                     _owner_of.setdefault(doc_id, str(doc[fs.OWNER]))
         return out
 
-    def save_state(self, state: dict[str, MonitorState], *, mirror: bool = True) -> None:
+    def save_state(self, state: dict[str, MonitorState], *, mirror: bool = True,
+                   only: Iterable[str] | None = None) -> None:
         """Write the records that changed since they were read — and only
         those. A tick that checked one monitor used to rewrite every state
         document it had loaded, finished monitors' included: a document
@@ -552,9 +556,15 @@ class _FirestoreStore:
         already held. A record never loaded (a first check) is always
         written; a record loaded and untouched is not. Nothing about *what*
         is written changes, and the JSON store still writes its file whole.
+
+        ``only`` names the records to consider at all: the worker saves one
+        monitor's record the moment its alert has gone out, without also
+        writing the still-blank records of monitors it has yet to reach.
         """
         writes = []
-        dirty = [(monitor_id, ms) for monitor_id, ms in state.items() if ms.is_dirty()]
+        wanted = None if only is None else set(only)
+        dirty = [(monitor_id, ms) for monitor_id, ms in state.items()
+                 if ms.is_dirty() and (wanted is None or monitor_id in wanted)]
         for monitor_id, ms in dirty:
             owner = self.uid or _owner_of.get(monitor_id, "")
             if not owner:
@@ -1308,9 +1318,12 @@ def load_state() -> dict[str, MonitorState]:
     return _cached("state", lambda: _backend().load_state())
 
 
-def save_state(state: dict[str, MonitorState], *, mirror: bool = True) -> None:
+def save_state(state: dict[str, MonitorState], *, mirror: bool = True,
+               only: Iterable[str] | None = None) -> None:
+    """``only`` (Firestore): write just these monitors' records, if changed.
+    The JSON store writes its whole file from ``state`` either way."""
     invalidate_cache("state")
-    _backend().save_state(state, mirror=mirror)
+    _backend().save_state(state, mirror=mirror, only=only)
 
 
 def get_monitor_state(monitor_id: str) -> MonitorState:

@@ -54,6 +54,7 @@ from platforms.http import REQUEST_ERRORS, build_session, transport_name
 from monitor.models import (
     Availability,
     MovieRef,
+    ReadFailure,
     SeatCategory,
     Showtime,
     Snapshot,
@@ -61,7 +62,7 @@ from monitor.models import (
     dedupe,
     merge_categories,
 )
-from platforms.base import PlatformBlocked, PlatformError
+from platforms.base import PlatformBlocked, PlatformError, PlatformNotFound
 
 API_URL = "https://in.bookmyshow.com/api/movies-data/v4/showtimes-by-event/primary-dynamic"
 SITE = "https://in.bookmyshow.com"
@@ -259,6 +260,98 @@ def published_show_url(show: dict[str, Any]) -> str:
             if is_bookmyshow_url(value):
                 return value
     return ""
+
+
+def _shape(node: Any) -> str:
+    """What a value *is*, for a log line: its type, and a dict's key names.
+    Names only — never a value — so a diagnostic cannot carry anything the
+    response held."""
+    if isinstance(node, dict):
+        keys = sorted(str(k) for k in node)[:12]
+        return "object{" + ",".join(keys) + ("…" if len(node) > 12 else "") + "}"
+    if isinstance(node, list):
+        return f"list[{len(node)}]"
+    return type(node).__name__
+
+
+def validate_showtimes_payload(payload: Any, event_code: str = "") -> dict[str, Any]:
+    """The response's ``data``, once it is recognisably a showtimes answer.
+
+    An HTTP 200 is not an answer by itself. BookMyShow can change this
+    undocumented endpoint, and a bot check can be served as JSON with a 200:
+    read leniently, either one parses to "no theatres, no shows" and every
+    monitor on the film quietly reports *not listed yet* for as long as it
+    lasts. So the envelope is checked before anything is read out of it, and
+    anything else raises :class:`PlatformError` — "we don't know", which the
+    checker never mistakes for "nothing is listed".
+
+    What is required is only what every showtimes answer has carried
+    (``tests/conftest.py`` ``build_payload`` mirrors a live read): an object
+    with a ``data`` object holding a ``showtimeWidgets`` *list*, and — when
+    it is there at all — a ``topStickyWidgets`` list (the date strip). An
+    empty ``showtimeWidgets`` list, or one with no theatre cards in it, is a
+    legitimate empty listing and passes; a theatre list whose structure is
+    not the one the parser walks does not (``_theatre_list_problem``).
+    """
+    problem = ""
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        problem = "the response is not an object"
+    elif not isinstance(data, dict):
+        problem = "it has no 'data' object"
+    elif not isinstance(data.get("showtimeWidgets"), list):
+        problem = ("'showtimeWidgets' is missing" if "showtimeWidgets" not in data
+                   else "'showtimeWidgets' is not a list")
+    elif "topStickyWidgets" in data and not isinstance(data["topStickyWidgets"], list):
+        problem = "the date strip ('topStickyWidgets') is not a list"
+    elif data["showtimeWidgets"] and not any(
+            isinstance(w, dict) and isinstance(w.get("type"), str) for w in data["showtimeWidgets"]):
+        problem = "'showtimeWidgets' holds no widget TicketRadar recognises"
+    else:
+        problem = _theatre_list_problem(data["showtimeWidgets"])
+    if problem:
+        _unrecognised(problem, event_code, payload, data)
+    return data
+
+
+def _theatre_list_problem(widgets: list[Any]) -> str:
+    """Why the theatre list inside ``showtimeWidgets`` is not one, or "".
+
+    The path the parser walks is ``groupList → venueGroup → venue-card →
+    showtimes[]``. Each level may be *empty* — that is a film with nothing
+    listed — but a level that has content and none of the kind the next
+    level needs is a structure this module does not know, and reading it
+    would produce "no theatres" out of a response full of them.
+    """
+    for widget in _dicts(widgets):
+        if widget.get("type") != "groupList":
+            continue
+        groups = widget.get("data")
+        if not isinstance(groups, list):
+            return "the theatre list ('groupList') has no list of groups"
+        venue_groups = [g for g in _dicts(groups) if g.get("type") == "venueGroup"]
+        if groups and not venue_groups:
+            return "the theatre list holds no 'venueGroup'"
+        for group in venue_groups:
+            cards = group.get("data")
+            if not isinstance(cards, list):
+                return "a theatre group has no list of theatres"
+            venue_cards = [c for c in _dicts(cards) if c.get("type") == "venue-card"]
+            if cards and not venue_cards:
+                return "a theatre group holds no 'venue-card'"
+            if any("showtimes" in c and not isinstance(c["showtimes"], list) for c in venue_cards):
+                return "a theatre's 'showtimes' is not a list"
+    return ""
+
+
+def _unrecognised(problem: str, event_code: str, payload: Any, data: Any = None) -> None:
+    """Log what came back (shapes and key names only) and raise."""
+    print(f"[bookmyshow] unrecognised showtimes response for {event_code or '?'}: {problem} "
+          f"— response={_shape(payload)} data={_shape(data)}", flush=True)
+    raise PlatformError(
+        f"BookMyShow answered, but not with a showtimes listing TicketRadar recognises ({problem}). "
+        "This is not a 'no shows' answer — the response format may have changed."
+    )
 
 
 def _price(value: Any) -> str:
@@ -589,6 +682,8 @@ class BookMyShowProvider:
                         ) from None
                     if not isinstance(payload, dict):
                         raise PlatformError("Unexpected response shape from BookMyShow.")
+                    # A 200 is only an answer once it looks like one.
+                    validate_showtimes_payload(payload, event_code)
                     return payload
 
                 if resp.status_code in (401, 403):
@@ -597,7 +692,7 @@ class BookMyShowProvider:
                         "This is a bot check, not a 'no tickets' answer."
                     )
                 if resp.status_code == 404:
-                    raise PlatformError(f"BookMyShow has no listing for {event_code} (HTTP 404).")
+                    raise PlatformNotFound(f"BookMyShow has no listing for {event_code} (HTTP 404).")
                 if resp.status_code == 429:
                     last_error = "HTTP 429 (rate limited)"
                 elif 500 <= resp.status_code < 600:
@@ -935,7 +1030,12 @@ class BookMyShowProvider:
         bookable: list[str] = []
         closed: list[str] = []
         resolved = movie
-        errors: list[str] = []
+        errors: list[PlatformError] = []
+        #: Every request that did not answer. Kept, not dropped: the shows it
+        #: would have carried are missing from this snapshot, and the checker
+        #: must know that before it reads "not listed" out of what is left.
+        failures: list[ReadFailure] = []
+        named = False
 
         for idx, date_code in enumerate(wanted):
             if idx:  # be a polite client when sweeping several dates
@@ -943,10 +1043,12 @@ class BookMyShowProvider:
             try:
                 payload = self._get(movie.event_code, date_code, region)
             except PlatformError as exc:
-                errors.append(str(exc))
+                errors.append(exc)
+                failures.append(self._failure(movie.event_code, date_code, exc))
                 continue
 
-            if idx == 0:
+            if not named:
+                named = True
                 resolved = replace(
                     self._movie_ref(
                         payload,
@@ -965,8 +1067,9 @@ class BookMyShowProvider:
             closed.extend(snap.closed_dates)
 
         if errors and not showtimes and len(errors) == len(wanted):
-            # Every date failed — we learned nothing. Say so.
-            raise PlatformError(errors[0])
+            # Every date failed — we learned nothing. Say so, as what it was:
+            # a refusal stays a refusal (``PlatformBlocked``).
+            raise errors[0]
 
         # The premium-format siblings (3D, 4DX, IMAX, EPIQ…) are separate
         # events whose venues are *not* in the base event's answer — see
@@ -982,15 +1085,26 @@ class BookMyShowProvider:
                 self._sleep(1.0)
                 try:
                     payload = self._get(code, date_code, region)
-                except PlatformError as exc:
-                    errors.append(f"{code}: {exc}")
+                    snap = self._snapshot(payload, sibling, default_format=fallback)
+                except PlatformNotFound:
+                    # The one failure that is an answer: an event BookMyShow
+                    # no longer has holds no shows. The read stays complete.
+                    print(f"[bookmyshow] sibling event {code} no longer exists (HTTP 404); "
+                          "it holds no shows", flush=True)
                     continue
-                snap = self._snapshot(payload, sibling, default_format=fallback)
+                except PlatformError as exc:
+                    failures.append(self._failure(code, date_code, exc, label=fallback))
+                    continue
                 for v in snap.venues:
                     venues.setdefault(v.code, v)
                 showtimes.extend(snap.showtimes)
                 bookable.extend(snap.bookable_dates)
                 closed.extend(snap.closed_dates)
+
+        for failure in failures:
+            print(f"[bookmyshow] partial read: {failure.where}"
+                  f"{f' ({failure.label})' if failure.label else ''} did not answer — "
+                  f"{'refused (bot check)' if failure.blocked else failure.message[:120]}", flush=True)
 
         return Snapshot(
             movie=resolved,
@@ -999,7 +1113,13 @@ class BookMyShowProvider:
             bookable_dates=dedupe(bookable),
             closed_dates=[d for d in dedupe(closed) if d not in set(bookable)],
             fetched_at=now_ist(),
+            failures=failures,
         )
+
+    @staticmethod
+    def _failure(event_code: str, date_code: str, exc: PlatformError, *, label: str = "") -> ReadFailure:
+        return ReadFailure(event_code=event_code, date_code=date_code or "", message=str(exc),
+                           blocked=isinstance(exc, PlatformBlocked), label=label)
 
     def read_day(self, movie: MovieRef, date_code: str) -> "DayRead":
         """One film's listing on one date — its base event and every premium
@@ -1303,12 +1423,15 @@ class BookMyShowProvider:
             return overall or Availability.NOT_BOOKABLE
 
         states = [AVAIL_STATUS.get(str(c.get("availStatus", "")).strip()) for c in categories]
-        known = [s for s in states if s is not None]
-        if not known:
-            return Availability.NOT_BOOKABLE
-        if any(s is Availability.AVAILABLE for s in known):
+        if any(s is Availability.AVAILABLE for s in states):
             return Availability.AVAILABLE
-        return Availability.SOLD_OUT
+        # SOLD_OUT is a claim about *every* category, so every one of them
+        # has to say so. A category whose status is missing or is a code we
+        # do not know is "we can't tell" — and one of those is enough to keep
+        # the show from being called sold out.
+        if all(s is Availability.SOLD_OUT for s in states):
+            return Availability.SOLD_OUT
+        return Availability.NOT_BOOKABLE
 
     def _merge_venue_formats(self, venues: list[Venue], showtimes: list[Showtime]) -> list[Venue]:
         """Attach the formats each venue actually runs, discovered from shows.

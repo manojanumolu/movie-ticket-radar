@@ -139,14 +139,19 @@ def test_malformed_json_raises(provider_factory, listing_url):
         provider.resolve(listing_url)
 
 
-def test_unexpected_shape_yields_no_shows_not_a_crash(provider_factory, listing_url):
-    """A restructured payload must degrade to 'nothing listed', not explode."""
+def test_unexpected_shape_is_an_error_not_an_empty_listing(provider_factory, listing_url):
+    """A restructured payload is "we don't know", never "nothing is listed".
+
+    This used to assert the opposite — that it degraded to an empty snapshot.
+    That is exactly how a changed response format (or a bot check served as
+    JSON with a 200) would have told every monitor its theatre "isn't listed
+    yet" (audit REL-02). ``tests/test_response_validation.py`` has the rest.
+    """
     provider = provider_factory([{"data": {"showtimeWidgets": "not-a-list"}}])
-    snap = provider.resolve(listing_url)
-    assert snap.showtimes == []
-    assert snap.venues == []
-    # Title is unknown, so it falls back to the event code — never invented.
-    assert snap.movie.title == "ET00478890"
+    with pytest.raises(PlatformError) as exc:
+        provider.resolve(listing_url)
+    assert not isinstance(exc.value, PlatformBlocked)
+    assert "not a 'no shows' answer" in str(exc.value)
 
 
 def test_404_is_an_error_not_a_no(provider_factory, listing_url):
