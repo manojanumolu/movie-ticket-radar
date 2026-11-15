@@ -1,0 +1,39 @@
+name: Tests
+
+# The test suite, on every change that is not the worker's or the catalogue
+# sync's own data commit (those carry "[skip ci]"). Before this there was no
+# CI at all: a regression was caught only if someone ran pytest by hand.
+#
+# Least privilege throughout: a read-only token, no secrets of any kind, and
+# dependencies installed only from the hash-pinned lock. The suite itself
+# never reaches the network for BookMyShow, Firebase or Gmail
+# (tests/conftest.py refuses each one), so it needs nothing else.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0     # a test checks a fixed commit range of history
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r ci/requirements-dev.lock
+      - name: Test suite
+        run: python -m pytest -q --timeout=300
+      - name: Known vulnerabilities in the pinned dependencies
+        run: pip-audit --require-hashes -r ci/requirements-worker.lock --progress-spinner off

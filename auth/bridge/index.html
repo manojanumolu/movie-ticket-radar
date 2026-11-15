@@ -33,6 +33,15 @@
       the jar and hand it to Python, which then restores the session the
       way it restores any reload: Google's answer to the refresh token is
       the authority, never this message.
+
+  Who it listens to (audit SEC-02). The session cookie holds a Firebase
+  refresh token and has to be readable here, so this frame must answer only
+  the app that embeds it — never a page elsewhere that frames this file and
+  posts it a render message. Every message is checked for coming from this
+  frame's own parent *and* this frame's own origin; every reply is addressed
+  to this origin only; and only the bridge's own cookie names can be read or
+  written. The app frame is always this origin — the bridge already reads
+  window.parent.document, which a browser allows only then.
 -->
 <html>
   <head><meta charset="utf-8" /><title>auth bridge</title></head>
@@ -40,11 +49,28 @@
     <script>
       (function () {
         var lastSent = null;
+        // The only origin this frame talks to: its own, which is the app's.
+        var SELF = window.location.origin;
+        // The only cookies this frame may read back or write.
+        var OWN_COOKIES = ["tr_session", "tr_session_started", "tr_oauth_state"];
+
+        function own(name) {
+          return OWN_COOKIES.indexOf(String(name)) >= 0;
+        }
 
         function post(type, extra) {
           var msg = { isStreamlitMessage: true, type: type };
           for (var k in extra) { if (extra.hasOwnProperty(k)) msg[k] = extra[k]; }
-          window.parent.postMessage(msg, "*");
+          // Addressed to this origin only: if the parent is anything else,
+          // the browser drops the message instead of delivering it.
+          try { window.parent.postMessage(msg, SELF); } catch (e) {}
+        }
+
+        function trusted(event) {
+          // From the frame that embeds this one, on this origin. A page
+          // elsewhere that frames this file is a different origin; one that
+          // merely holds a reference to it is not the parent.
+          return event.source === window.parent && event.origin === SELF;
         }
 
         function flat() {
@@ -157,10 +183,14 @@
           // The opener side. Only a message from this exact origin, with this
           // exact type, counts — and it only ever means "look at the jar
           // again": Python does the actual restoring, against Google.
+          // Reading a property of a parent on another origin throws: that is
+          // one more reason to stop, never an error to step over.
           var target = null;
-          try { target = window.parent; } catch (e) { target = null; }
-          if (!target || target.__trGoogleListen) return;
-          target.__trGoogleListen = true;
+          try {
+            target = window.parent;
+            if (!target || target.__trGoogleListen) return;
+            target.__trGoogleListen = true;
+          } catch (e) { return; }
           target.addEventListener("message", function (e) {
             if (e.origin !== origin()) return;
             var d = e.data;
@@ -188,7 +218,7 @@
           for (var k in jar) { if (jar.hasOwnProperty(k)) total++; }
           value.seen = total;
           for (var n = 0; n < names.length; n++) {
-            value[names[n]] = jar[names[n]] || "";
+            if (own(names[n])) value[names[n]] = jar[names[n]] || "";
           }
 
           // Only speak when something actually changed: an unchanged value
@@ -201,12 +231,14 @@
         }
 
         function onMessage(event) {
+          if (!trusted(event)) return;
           var data = event.data;
           if (!data || data.type !== "streamlit:render") return;
           var args = (data.args || {});
 
           var ops = args.ops || [];
           for (var i = 0; i < ops.length; i++) {
+            if (!ops[i] || !own(ops[i].name)) continue;
             try { writeCookie(ops[i].name, String(ops[i].value), Number(ops[i].max_age) || 0); } catch (e) {}
           }
 

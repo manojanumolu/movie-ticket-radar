@@ -51,9 +51,18 @@ def _scope() -> state.Scope:
     return scope
 
 
+#: Above this many remembered requests, the ones whose cooldown has passed are
+#: forgotten — they no longer matter — so the table cannot grow without end
+#: in a long-lived app process (audit SEC-08f).
+_PRUNE_ABOVE = 1000
+
+
 def _cooldown(uid: str, monitor_id: str) -> None:
     with _lock:
         now = _clock()
+        if len(_last) > _PRUNE_ABOVE:
+            for key in [k for k, at in _last.items() if now - at >= MEMBER_COOLDOWN]:
+                del _last[key]
         last = _last.get((uid, monitor_id))
         if last is not None and now - last < MEMBER_COOLDOWN:
             wait = int(MEMBER_COOLDOWN - (now - last)) + 1

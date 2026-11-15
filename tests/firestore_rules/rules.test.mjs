@@ -199,6 +199,73 @@ test("history is append-only and the owner's", async () => {
   await assertSucceeds(deleteDoc(doc(me, "history/h1")));
 });
 
+// ── Phase 5: resource bounds and forged claims (audit SEC-01, SEC-03) ─────
+const sibling = (i) => ({ code: `ET9${String(i).padStart(7, "0")}`, label: "4DX 3D" });
+const film = (variants) => ({ ...monitor(ALICE).movie, variants });
+
+test("a monitor carries at most 12 sibling events", async () => {
+  const me = db(ALICE);
+  await assertSucceeds(setDoc(doc(me, "monitors/v1"),
+    monitor(ALICE, { id: "v1", movie: film(Array.from({ length: 12 }, (_, i) => sibling(i))) })));
+  await assertFails(setDoc(doc(me, "monitors/v2"),
+    monitor(ALICE, { id: "v2", movie: film(Array.from({ length: 13 }, (_, i) => sibling(i))) })));
+  await assertFails(setDoc(doc(me, "monitors/v3"),
+    monitor(ALICE, { id: "v3", movie: film(Array.from({ length: 5000 }, (_, i) => sibling(i))) })));
+  // Not even a stopped one: the bound is on the document's shape.
+  await assertFails(setDoc(doc(me, "monitors/v4"),
+    monitor(ALICE, { id: "v4", status: "STOPPED", movie: film(Array.from({ length: 13 }, (_, i) => sibling(i))) })));
+});
+
+test("a running monitor costs at most 120 BookMyShow requests per check", async () => {
+  const me = db(ALICE);
+  const dates = (n) => Array.from({ length: n }, (_, i) => `202612${String(i % 28 + 1).padStart(2, "0")}`);
+  // 40 dates x (1 + 2 siblings) = 120: allowed. 41 x 3 = 123: refused.
+  await assertSucceeds(setDoc(doc(me, "monitors/r1"),
+    monitor(ALICE, { id: "r1", date_codes: dates(40), movie: film([sibling(1), sibling(2)]) })));
+  await assertFails(setDoc(doc(me, "monitors/r2"),
+    monitor(ALICE, { id: "r2", date_codes: dates(41), movie: film([sibling(1), sibling(2)]) })));
+  // 62 dates (the date cap) with 1 sibling = 124: refused while running…
+  await assertFails(setDoc(doc(me, "monitors/r3"),
+    monitor(ALICE, { id: "r3", date_codes: dates(62), movie: film([sibling(1)]) })));
+  // …and a stopped one costs nothing, so it may still be saved.
+  await assertSucceeds(setDoc(doc(me, "monitors/r4"),
+    monitor(ALICE, { id: "r4", status: "STOPPED", date_codes: dates(62), movie: film([sibling(1)]) })));
+});
+
+test("the movie map holds only MovieRef's fields, at sane sizes", async () => {
+  const me = db(ALICE);
+  await assertFails(setDoc(doc(me, "monitors/g1"),
+    monitor(ALICE, { id: "g1", movie: { ...monitor(ALICE).movie, payload: "x".repeat(10) } })));
+  await assertFails(setDoc(doc(me, "monitors/g2"),
+    monitor(ALICE, { id: "g2", movie: { ...monitor(ALICE).movie, title: "x".repeat(501) } })));
+  await assertFails(setDoc(doc(me, "monitors/g3"),
+    monitor(ALICE, { id: "g3", movie: { ...monitor(ALICE).movie, event_code: "ET1\r\nX-Injected: 1".padEnd(40, "x") } })));
+  const { title, ...noTitle } = monitor(ALICE).movie;
+  await assertFails(setDoc(doc(me, "monitors/g4"), monitor(ALICE, { id: "g4", movie: noTitle })));
+});
+
+test("a history line has only the fields the application writes", async () => {
+  const me = db(ALICE);
+  const line = { owner_uid: ALICE.uid, monitor_id: "m1", kind: "STOPPED", message: "Monitoring stopped.",
+                 movie: "Film", language: "Telugu", poster_url: "", targets: ["ALLU · Any format"],
+                 at: new Date().toISOString() };
+  await assertSucceeds(setDoc(doc(me, "history/k1"), line));
+  await assertFails(setDoc(doc(me, "history/k2"), { ...line, blob: "x" }));
+  await assertFails(setDoc(doc(me, "history/k3"), { ...line, message: "x".repeat(501) }));
+  await assertFails(setDoc(doc(me, "history/k4"), { ...line, targets: Array.from({ length: 201 }, () => "t") }));
+  await assertFails(setDoc(doc(me, "history/k5"), { owner_uid: ALICE.uid }));         // no kind
+});
+
+test("an admin claim that is not exactly the boolean true is no admin claim", async () => {
+  const forged = env.authenticatedContext(ALICE.uid,
+    { email: ALICE.email, email_verified: true, admin: "true" }).firestore();
+  await assertFails(setDoc(doc(forged, "monitors/a1"), monitor(ALICE, { id: "a1", interval_minutes: 5 })));
+  await assertFails(setDoc(doc(forged, "monitors/a2"), monitor(ALICE, { id: "a2", categories: ["GOLD"] })));
+  // …and no claim at all lets anyone read another account's records.
+  await seed("monitors/b1", monitor(BOB, { id: "b1" }));
+  await assertFails(getDoc(doc(db(ALICE, { admin: true }), "monitors/b1")));
+});
+
 let failed = 0;
 for (const [name, fn] of cases) {
   await env.clearFirestore();

@@ -374,12 +374,15 @@ def run_loop(
 
     ``dry_run`` makes the segment a single read-only pass
     (``run_once(dry_run=True)``: nothing sent, nothing written, no git), and
-    then ends the way any segment does — handing over to a real one when
-    monitors are running. It is one pass because a segment holds the
+    it never hands over. It is one pass because a segment holds the
     workflow's only slot: a dry run that ticked for fifty minutes would be
-    fifty minutes in which no real alert could go out, and a dry run that
-    ended without handing over could leave the real chain broken (a dispatch
-    can replace the one waiting behind it in the concurrency group).
+    fifty minutes in which no real alert could go out. It never hands over
+    because the handover starts a *real* segment on the ref this run is on
+    (``GITHUB_REF_NAME``): from a dry run dispatched on a feature branch that
+    was a real worker run of the branch's own code, with the production
+    secrets, chaining itself on that branch. A dry run starts nothing, on any
+    branch; the real chain on ``main`` continues on its own handovers and the
+    schedule.
     """
     in_actions = running_in_actions()
     # A dry run writes nothing, so there is never anything to commit — and it
@@ -503,7 +506,11 @@ def run_loop(
     # refusing the worker outright. A cancelled job (KeyboardInterrupt /
     # SystemExit — not ``Exception``) deliberately passes all of this by: a
     # run somebody stopped must not start its own replacement.
-    if chain and loop.stopped_reason not in ("nothing running", "store refused the worker"):
+    if dry_run:
+        # Never a successor from a dry run: the successor would be a real
+        # segment, on whatever ref this dry run was dispatched on.
+        print("[worker] dry run: no next segment is dispatched", flush=True)
+    elif chain and loop.stopped_reason not in ("nothing running", "store refused the worker"):
         loop.handed_over = hand_over()
     if carry:
         print(f"::warning::{len(carry)} state record(s) were never saved this segment; "

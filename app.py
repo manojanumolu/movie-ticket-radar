@@ -593,15 +593,21 @@ def retry_check(monitor: Monitor) -> None:
         # monitor is no longer running): nothing went wrong with the monitor.
         flash("warning", str(exc))
         st.rerun()
-    if ok:
-        monitor.first_check_requested_at = now_ist()
-        monitor.clear_problem()
-        upsert_monitor(monitor, mirror=mirrored())
-        flash("success", "Retry requested — the worker is checking again.")
-    else:
-        monitor.set_problem("RETRY_FAILED", f"Starting the worker on demand failed — {msg}")
-        upsert_monitor(monitor, mirror=mirrored())
-        flash("error", f"PROBLEM: {msg}")
+    try:
+        if ok:
+            monitor.first_check_requested_at = now_ist()
+            monitor.clear_problem()
+            upsert_monitor(monitor, mirror=mirrored())
+            flash("success", "Retry requested — the worker is checking again.")
+        else:
+            monitor.set_problem("RETRY_FAILED", f"Starting the worker on demand failed — {msg}")
+            upsert_monitor(monitor, mirror=mirrored())
+            flash("error", f"PROBLEM: {msg}")
+    except (MonitorLimitError, policy.MonitorNotAllowed) as exc:
+        # A monitor saved before today's limits (Phase 5) can no longer be
+        # saved as it is: say why, as Create and Extend do, rather than end
+        # on Streamlit's error page. Stop and Delete still work on it.
+        flash("error", str(exc))
     st.rerun()
 
 

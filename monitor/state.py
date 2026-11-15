@@ -185,6 +185,13 @@ def _backend() -> "_Store":
             return _JsonStore(uid=scope.uid)
     info = fs.service_account_from_env()
     project = fs.project_from_env()
+    if info and project and _scope_provider is not None:
+        # The app registered a scope provider, so this is the Streamlit app —
+        # and nobody is signed in for this call. The service account reads
+        # and writes every account's data; it is the worker's credential and
+        # must never answer for a page, whatever the host's environment
+        # holds (audit SEC-06). Refused, never "fall back" to it.
+        raise StorageUnavailable("no signed-in account for this request")
     if info and project:
         if _admin is None or _admin.client.project_id != project:
             client = fs.FirestoreClient(project, fs.service_account_token_getter(info),
@@ -1036,6 +1043,12 @@ def upsert_monitor(monitor: Monitor, *, mirror: bool = True) -> list[Monitor]:
         # Refused with a reason, not silently shortened: this is the
         # person's own choice being saved.
         policy.assert_until_allowed(monitor.monitor_until)
+        # The same shape and cost bounds the worker enforces, said here,
+        # before saving, rather than discovered as a silent refusal later.
+        policy.assert_affordable(monitor)
+        problem = policy.shape_problem(monitor)
+        if problem:
+            raise policy.MonitorNotAllowed(f"That monitor can't be saved: {problem}.")
     _assert_may_run(monitor, monitors)
     for i, existing in enumerate(monitors):
         if existing.id == monitor.id:
@@ -1043,7 +1056,11 @@ def upsert_monitor(monitor: Monitor, *, mirror: bool = True) -> list[Monitor]:
             break
     else:
         monitors.insert(0, monitor)
-    save_monitors(monitors, mirror=mirror)
+    # Only this monitor's document is written (Firestore; the JSON store
+    # still rewrites its file whole). Rewriting every monitor the person owns
+    # made one older document that the rules now refuse fail every save they
+    # made — creating, stopping or extending anything else included.
+    save_monitors(monitors, mirror=mirror, changed=[monitor])
     return monitors
 
 
@@ -1080,7 +1097,7 @@ def stop_monitor(monitor_id: str, *, at: datetime | None = None, mirror: bool = 
     if target is None:
         return None
     target.stop(at)
-    save_monitors(monitors, mirror=mirror)
+    save_monitors(monitors, mirror=mirror, changed=[target])
     record_history(target, "STOPPED", "Monitoring stopped — you stopped this alert.")
     return target
 
@@ -1100,8 +1117,12 @@ def extend_monitor(monitor_id: str, hours: int = 24, *, mirror: bool = True) -> 
     if _signed_in_scope() is not None:
         # Checked before the flip: the list may be the page's cached read.
         policy.assert_until_allowed(max(target.monitor_until, now_ist()) + timedelta(hours=hours))
+        # A monitor saved before Phase 5's request limit may exceed it; the
+        # rules refuse to make such a monitor running again, so say why here
+        # (as a message) rather than let Firestore's refusal reach the page.
+        policy.assert_affordable(target)
     target.extend(hours)
-    save_monitors(monitors, mirror=mirror)
+    save_monitors(monitors, mirror=mirror, changed=[target])
     return target
 
 

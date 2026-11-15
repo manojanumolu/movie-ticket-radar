@@ -103,6 +103,11 @@ class RunReport:
     #: Running monitors whose owners could not be looked up this tick: not
     #: checked, retried on the next tick.
     deferred: list[str] = field(default_factory=list)
+    #: Listing reads that were due but did not fit this tick's request budget
+    #: (``policy.TICK_REQUEST_BUDGET``). Untouched: still due, read first next tick.
+    budget_deferred: list = field(default_factory=list)
+    #: BookMyShow requests this tick's reads were expected to cost.
+    budgeted_requests: int = 0
     #: A dry run (``run_once(dry_run=True)``): everything was evaluated and
     #: nothing was sent or written. ``would_send`` is every alert a real run
     #: would have emailed this tick; ``would_expire`` every monitor it would
@@ -614,6 +619,43 @@ def _park(state: dict[str, MonitorState], carry: dict[str, MonitorState] | None)
         carry.update({mid: ms for mid, ms in state.items() if ms.is_dirty()})
 
 
+def _within_budget(groups: list, state: dict[str, MonitorState]) -> tuple[list, list]:
+    """The reads this tick can afford, most overdue first, and the rest.
+
+    Each read costs ``FetchKey.request_count`` BookMyShow requests. Reads
+    are taken in order of how long their longest-waiting monitor has gone
+    unchecked — never checked first — until :data:`policy.TICK_REQUEST_BUDGET`
+    would be exceeded; the first is always taken, so a read can never be
+    starved. What is left is not checked and not touched: it is still due,
+    and the next tick (thirty seconds on) reaches it first, because it has
+    now waited longest. One account's expensive monitors therefore delay
+    their own checks, not everybody else's.
+    """
+    def waited(group) -> float:
+        seen = [state.get(m.id).last_check_at for m in group.monitors
+                if state.get(m.id) is not None and state.get(m.id).last_check_at is not None]
+        if not seen or len(seen) < len(group.monitors):
+            return float("inf")              # a member never checked waits longest
+        return -min(seen).timestamp()
+
+    ordered = sorted(groups, key=waited, reverse=True)
+    taken, left, spent = [], [], 0
+    for group in ordered:
+        cost = group.key.request_count
+        if taken and spent + cost > policy.TICK_REQUEST_BUDGET:
+            left.append(group)
+            continue
+        taken.append(group)
+        spent += cost
+    if left:
+        print(f"[checker] request budget: {len(taken)} read(s) this tick ({spent} requests); "
+              f"{len(left)} wait for the next tick", flush=True)
+    # Keep the original order among the reads taken, so a tick with room
+    # for everything behaves exactly as it always has.
+    order = {id(g): i for i, g in enumerate(groups)}
+    return sorted(taken, key=lambda g: order[id(g)]), left
+
+
 def _no_mail_in_a_dry_run(monitor, change):
     raise AssertionError("a dry run must never reach the notifier")
 
@@ -770,9 +812,13 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
     # notification, history — stays per monitor and per owner, exactly as
     # it was.
     groups = select_for_fetch(running, (m.id for m in due), resolve=with_current_variants)
+    groups, report.budget_deferred = _within_budget(groups, state)
     checked_ids = {m.id for g in groups for m in g.monitors}
+    deferred_ids = {m.id for g in report.budget_deferred for m in g.monitors}
     for monitor in running:
-        if monitor.id not in checked_ids and (not monitor_id or monitor.id == monitor_id):
+        if monitor.id in deferred_ids:
+            report.skipped.append(f"{short_id(monitor.id)} (waiting for the next tick: request budget)")
+        elif monitor.id not in checked_ids and (not monitor_id or monitor.id == monitor_id):
             report.skipped.append(f"{short_id(monitor.id)} (not due)")
     report.sharing = describe(groups)
     if report.sharing.saved or report.sharing.aligned:
@@ -790,6 +836,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
         else:
             listing = fetch_listing(group.movie, group.date_codes)
         report.fetches += 1
+        report.budgeted_requests += group.key.request_count
         _warn_if_listing_vanished(group, listing, state)
 
         for monitor in group.monitors:

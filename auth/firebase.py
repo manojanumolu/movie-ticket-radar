@@ -25,6 +25,7 @@ import os
 import re
 from dataclasses import dataclass, replace
 from typing import Any
+from urllib.parse import urlencode
 
 import requests
 
@@ -313,7 +314,7 @@ class FirebaseAuth:
         """
         try:
             body = self._call("signInWithIdp", {
-                "postBody": f"id_token={google_id_token}&providerId=google.com",
+                "postBody": urlencode({"id_token": google_id_token, "providerId": "google.com"}),
                 "requestUri": request_uri,
                 "returnSecureToken": True,
                 "returnIdpCredential": True,
@@ -485,6 +486,31 @@ class FirebaseAuth:
         self._call("delete", {"idToken": id_token})
 
 
+def token_claims(id_token: str) -> dict[str, Any]:
+    """The claims inside a Firebase ID token — ``auth_time``, ``admin``,
+    ``email_verified``, ``user_id``… — or ``{}`` for anything that is not a
+    well-formed JWT.
+
+    The signature is not checked, and need not be: this is only ever called
+    on a token this process has just received from Google itself (the
+    password exchange, the refresh exchange), over TLS, never on one the
+    browser supplied. It is how the session learns facts Firebase decides —
+    when the person actually signed in, whether the account still carries the
+    admin claim — without one more request.
+    """
+    import base64
+
+    parts = (id_token or "").split(".")
+    if len(parts) != 3 or not parts[1]:
+        return {}
+    try:
+        padded = parts[1] + "=" * (-len(parts[1]) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+    except (ValueError, UnicodeError):
+        return {}
+    return claims if isinstance(claims, dict) else {}
+
+
 def _credentials(body: dict[str, Any]) -> Credentials:
     uid = str(body.get("localId", ""))
     if not uid or not body.get("idToken"):
@@ -529,5 +555,6 @@ __all__ = [
     "is_configured",
     "log_config_once",
     "password_problem",
+    "token_claims",
     "valid_email",
 ]

@@ -20,7 +20,9 @@ rules_version = '2';
 //   * only the fields the application writes, with sane sizes;
 //   * a running monitor emails the account's own verified address, checks at
 //     10/15/30 minutes (5 for the admin claim), carries no admin-only
-//     category watch, and ends within the 30-day limit.
+//     category watch, ends within the 30-day limit, carries at most 12
+//     sibling events and costs at most 120 BookMyShow requests per check;
+//   * a history line has only the fields the application writes.
 // Stopped and expired monitors are only shape-checked, so an older document
 // can always be stopped or deleted. What rules cannot count — how many
 // monitors one account is running — the app and the worker enforce.
@@ -70,12 +72,35 @@ service cloud.firestore {
       return !(key in d) || d[key] == null || d[key] == '';
     }
 
+    // The film a monitor watches: exactly MovieRef's fields. Its sibling
+    // events are bounded (monitor/policy.py MAX_VARIANTS): each one is
+    // another BookMyShow request on every check, and an unbounded list in
+    // one document could stall the worker for every account (audit SEC-01).
+    function validMovie(m) {
+      return m.keys().hasOnly(['platform', 'event_code', 'title', 'region_code', 'region_slug',
+                               'city', 'language', 'poster_url', 'source_url', 'variants'])
+        && m.keys().hasAll(['platform', 'event_code', 'title', 'region_code', 'region_slug'])
+        && m.platform is string && m.platform.size() <= 40
+        && m.event_code is string && m.event_code.size() <= 20
+        && m.title is string && m.title.size() <= 500
+        && (!('variants' in m) || m.variants == null
+            || (m.variants is list && m.variants.size() <= 12));
+    }
+
+    // One check's BookMyShow requests: one per watched date (one for every
+    // date) for the film's event and each sibling — monitor/policy.py
+    // request_cost and MAX_REQUESTS_PER_CHECK.
+    function requestCost(d) {
+      return (('date_codes' in d) && d.date_codes is list && d.date_codes.size() > 0 ? d.date_codes.size() : 1)
+        * (1 + (('variants' in d.movie) && d.movie.variants is list ? d.movie.variants.size() : 0));
+    }
+
     function validShape(d, id) {
       return d.keys().hasOnly(monitorFields())
         && d.keys().hasAll(['movie', 'targets', 'interval_minutes', 'monitor_until',
                             'notify_email', 'status', 'owner_uid'])
         && (!('id' in d) || d.id == id)
-        && d.movie is map
+        && d.movie is map && validMovie(d.movie)
         && d.targets is list && d.targets.size() > 0 && d.targets.size() <= 200
         && d.interval_minutes is int
         && d.status in ['ACTIVE', 'STOPPED', 'EXPIRED']
@@ -109,6 +134,7 @@ service cloud.firestore {
         && (d.interval_minutes in [10, 15, 30] || (isAdmin() && d.interval_minutes == 5))
         && (isAdmin() || (hasNoneOrEmptyList(d, 'categories') && hasNoneOrEmptyString(d, 'show_time')))
         && endsWithinLimit(d.monitor_until)
+        && requestCost(d) <= 120
       );
     }
 
@@ -143,9 +169,25 @@ service cloud.firestore {
     // own history with it. It is gated on the *existing* document's owner, so
     // one person can never remove another's record, and `update` stays closed
     // so a record cannot be rewritten after the fact.
+    // Only the fields record_history writes, with bounded sizes: a history
+    // line is a few hundred bytes, never a megabyte of anything (SEC-03).
+    function validHistory(d) {
+      return d.keys().hasOnly(['owner_uid', 'monitor_id', 'kind', 'message', 'movie', 'language',
+                               'poster_url', 'targets', 'at', 'booking_url'])
+        && d.kind is string && d.kind.size() <= 40
+        && (!('monitor_id' in d) || (d.monitor_id is string && d.monitor_id.size() <= 64))
+        && (!('message' in d) || (d.message is string && d.message.size() <= 500))
+        && (!('movie' in d) || (d.movie is string && d.movie.size() <= 500))
+        && (!('language' in d) || (d.language is string && d.language.size() <= 100))
+        && (!('poster_url' in d) || (d.poster_url is string && d.poster_url.size() <= 1000))
+        && (!('booking_url' in d) || (d.booking_url is string && d.booking_url.size() <= 1000))
+        && (!('at' in d) || (d.at is string && d.at.size() <= 40))
+        && (!('targets' in d) || (d.targets is list && d.targets.size() <= 200));
+    }
+
     match /history/{id} {
       allow read: if ownsExisting();
-      allow create: if ownsIncoming();
+      allow create: if ownsIncoming() && validHistory(request.resource.data);
       allow delete: if ownsExisting();
       allow update: if false;
     }

@@ -32,7 +32,7 @@ from config.timezone import (
 )
 from monitor.models import Availability, Monitor, MonitorStatus, describe_date_codes
 from monitor.state import MonitorState
-from platforms import platform_name
+from platforms import is_platform_url, platform_name
 
 ASSETS = Path(__file__).parent / "assets"
 
@@ -999,6 +999,14 @@ def dedupe_names(values: list[str]) -> list[str]:
     return seen
 
 
+def safe_href(url: str, platform: str) -> str:
+    """``url`` when it is the platform's own https page, else "". Every link
+    the cards draw goes through here, as every link in an email already does
+    (``notifications.email._safe_url``): a stored value that is not one —
+    ``javascript:``, another site — is drawn as plain text (audit SEC-08c)."""
+    return url if url and is_platform_url(url, platform) else ""
+
+
 def _chip(label: str, url: str) -> str:
     if url:
         return (f'<a class="tr-chip" href="{escape(url, quote=True)}" target="_blank" '
@@ -1025,14 +1033,16 @@ def live_card(monitor: Monitor, state: MonitorState, target_key: str) -> None:
     if target is None or ts is None:
         return
 
-    links = {label: url for label, url in ts.time_links}
-    chips = "".join(_chip(t, links.get(t, ts.booking_url)) for t in ts.time_labels) or (
+    platform = monitor.movie.platform
+    links = {label: safe_href(url, platform) for label, url in ts.time_links}
+    booking_url = safe_href(ts.booking_url, platform)
+    chips = "".join(_chip(t, links.get(t, booking_url)) for t in ts.time_labels) or (
         f'<span class="tr-chip" style="font-weight:400;color:#8E8E98;">See {e(_pname(monitor))} for times</span>'
     )
     booked = (
-        f'<a class="tr-book" href="{escape(ts.booking_url, quote=True)}" target="_blank" '
+        f'<a class="tr-book" href="{escape(booking_url, quote=True)}" target="_blank" '
         f'rel="noopener">BOOK ON {e(_pname(monitor).upper())} ↗</a>'
-        if ts.booking_url
+        if booking_url
         else f'<span class="tr-chip" style="text-align:center;">Open {e(_pname(monitor))} to book</span>'
     )
     dates = list(ts.date_codes) or ([ts.date_code] if ts.date_code else [])

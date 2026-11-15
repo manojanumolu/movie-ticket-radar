@@ -52,6 +52,15 @@ POPUP_DONE_KEY = "auth_google_popup_done"
 SIGNALS_SEEN_KEY = "auth_google_signals_seen"
 SESSION_STARTED_KEY = "auth_session_started"
 SESSION_EXPIRES_KEY = "auth_session_expires"
+#: Refresh answers that mean the session is over, not that the network is
+#: down: the account was disabled or deleted, the refresh token was revoked
+#: (a password change, an administrator), or it is simply not valid. The
+#: session is signed out on any of these instead of carrying on with the last
+#: ID token it held (audit SEC-04).
+SESSION_ENDING_REFRESH = frozenset({
+    "TOKEN_EXPIRED", "USER_DISABLED", "USER_NOT_FOUND", "INVALID_REFRESH_TOKEN",
+    "INVALID_ID_TOKEN", "MISSING_REFRESH_TOKEN", "INVALID_GRANT_TYPE", "PROJECT_NUMBER_MISMATCH",
+})
 # This is an absolute deadline, not a sliding refresh-token lifetime.
 COOKIE_DAYS = 7
 SESSION_SECONDS = COOKIE_DAYS * 86400
@@ -778,6 +787,17 @@ def _cookie_started() -> float:
         return 0.0
 
 
+def _signed_in_at(id_token: str) -> float:
+    """When the person last actually signed in, as Firebase says: the
+    ``auth_time`` claim of an ID token Google just issued. It survives every
+    refresh and nothing in the browser can move it. 0 when the token carries
+    none (it is not a JWT)."""
+    try:
+        return float(firebase.token_claims(id_token).get("auth_time") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _session_window(started: float | None = None) -> tuple[float, float]:
     start = float(started or 0)
     if start <= 0 or start > time.time():
@@ -841,6 +861,18 @@ def restore() -> AuthUser | None:
         log_restore("FAILED reason=email_not_verified")
         st.session_state["auth_cookie_clear"] = True
         return None
+    # The seven-day deadline runs from the sign-in Firebase recorded, not from
+    # the companion cookie: that cookie is written by the browser, and one
+    # that is missing or in the future used to start a fresh week on every
+    # restore. The cookie is still honoured above as an early, cheaper "no"
+    # (it can only make the session shorter).
+    signed_in = _signed_in_at(creds.id_token)
+    if signed_in > 0:
+        started, expires = signed_in, signed_in + SESSION_SECONDS
+        if time.time() >= expires:
+            log_restore("FAILED reason=session_deadline_passed source=auth_time")
+            st.session_state["auth_cookie_clear"] = True
+            return None
     user = _from_credentials(creds, email=info["email"], display_name=info["display_name"])
     if info["uid"]:
         user.uid = info["uid"]
@@ -879,10 +911,25 @@ def id_token() -> str:
     try:
         creds = firebase.FirebaseAuth().refresh(user.refresh_token)
     except AuthError as exc:
+        if exc.code in SESSION_ENDING_REFRESH:
+            # Google refused the session itself: the account is disabled or
+            # gone, or the token was revoked. Carrying on with the last ID
+            # token would keep the page open for up to an hour after that.
+            print(f"[auth] token refresh refused ({exc.code}); signing out", flush=True)
+            sign_out(f"refresh_refused_{exc.code.lower()}")
+            return ""
         print(f"[auth] token refresh failed: {exc.code}", flush=True)
         return user.id_token
     fresh = replace(user, id_token=creds.id_token, refresh_token=creds.refresh_token,
                     expires_at=time.time() + max(60, creds.expires_in))
+    # Custom claims ride inside the ID token, so a refresh is when an admin
+    # claim granted or revoked since sign-in reaches this session (SEC-08b).
+    claims = firebase.token_claims(creds.id_token)
+    if "admin" in claims or claims.get("user_id"):
+        admin = claims.get("admin") is True
+        if admin != user.admin:
+            print(f"[auth] admin claim changed at refresh: admin={str(admin).lower()}", flush=True)
+        fresh = replace(fresh, admin=admin)
     st.session_state[USER_KEY] = fresh
     if creds.refresh_token != user.refresh_token:
         st.session_state["auth_cookie_set"] = creds.refresh_token
