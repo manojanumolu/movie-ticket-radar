@@ -231,6 +231,74 @@ def owner_identities():
     policy._built = None
 
 
+class _OfflineSession:
+    """Stands in for every real ticketing-site HTTP session during the suite.
+
+    Each request is recorded and refused with a connection error — what an
+    offline machine would answer, so the code under test takes exactly the
+    path it takes without a network. The ``no_live_ticketing`` fixture then
+    fails the test that made it: the suite must never reach BookMyShow (or
+    any other platform) for real, whatever the machine it runs on can reach.
+    """
+
+    def __init__(self, label: str, calls: list):
+        self.label, self.calls = label, calls
+
+    def _refuse(self, method: str, url: str):
+        import requests
+
+        self.calls.append(f"{self.label} {method} {url}")
+        raise requests.ConnectionError(f"offline in tests: {url}")
+
+    def get(self, url, *args, **kwargs):
+        self._refuse("GET", url)
+
+    def post(self, url, *args, **kwargs):
+        self._refuse("POST", url)
+
+    def request(self, method, url, *args, **kwargs):
+        self._refuse(method, url)
+
+
+@pytest.fixture(autouse=True)
+def no_live_ticketing(monkeypatch, request):
+    """No test reaches a ticketing site over the network (audit follow-up).
+
+    ``platforms`` builds its providers once, at import, each with a live
+    session (``curl_cffi`` for BookMyShow), and ``get_provider`` hands those
+    out. A test that called the checker before installing its fake — as
+    ``test_a_blocked_check_does_not_report_unavailability`` did — made real
+    requests to BookMyShow on every suite run. Here every such session, and
+    every one built afresh through ``build_session``, is replaced by
+    :class:`_OfflineSession`, and the test that used one fails at teardown,
+    named, even when the code under test swallowed the refusal. Tests that
+    need a listing install a fake (``provider_factory``) as they always have.
+    ``live_ticketing_calls`` exposes the record to a test that asserts on it.
+    """
+    import platforms
+    from platforms import bookmyshow, http
+
+    calls: list[str] = []
+    for slug, provider in platforms._PROVIDERS.items():
+        if hasattr(provider, "_session"):
+            monkeypatch.setattr(provider, "_session", _OfflineSession(f"{slug}-registry", calls))
+    def offline(*args, **kwargs):
+        return _OfflineSession("build_session", calls)
+
+    monkeypatch.setattr(http, "build_session", offline)
+    monkeypatch.setattr(bookmyshow, "build_session", offline)
+    request.node.live_ticketing_calls = calls
+    yield calls
+    if calls:
+        pytest.fail(f"this test tried to reach a ticketing site for real ({len(calls)} request(s)): "
+                    f"{calls[0]}", pytrace=False)
+
+
+@pytest.fixture
+def live_ticketing_calls(no_live_ticketing):
+    return no_live_ticketing
+
+
 @pytest.fixture(autouse=True)
 def no_retry_waits(monkeypatch):
     """A retried Firestore call or handover waits between attempts. In the

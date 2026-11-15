@@ -183,6 +183,11 @@ class LoopReport:
         return sum(r.emails_sent for r in self.reports)
 
     @property
+    def would_send(self) -> list:
+        """A dry run's alerts that a real run would have sent."""
+        return [c for r in self.reports for c in r.would_send]
+
+    @property
     def checks(self) -> int:
         return sum(len(r.checked) + len(r.failed) for r in self.reports)
 
@@ -357,6 +362,7 @@ def run_loop(
     chain: bool | None = None,
     clock: Callable[[], datetime] = now_ist,
     sleeper: Callable[[float], None] = time.sleep,
+    dry_run: bool = False,
 ) -> LoopReport:
     """Tick until the segment's time is up or nothing is left to watch.
 
@@ -365,9 +371,20 @@ def run_loop(
     later tick serves all monitors at their own intervals — a segment must
     never spend fifty minutes watching one alert because it was started for
     it.
+
+    ``dry_run`` makes the segment a single read-only pass
+    (``run_once(dry_run=True)``: nothing sent, nothing written, no git), and
+    then ends the way any segment does — handing over to a real one when
+    monitors are running. It is one pass because a segment holds the
+    workflow's only slot: a dry run that ticked for fifty minutes would be
+    fifty minutes in which no real alert could go out, and a dry run that
+    ended without handing over could leave the real chain broken (a dispatch
+    can replace the one waiting behind it in the concurrency group).
     """
     in_actions = running_in_actions()
-    use_git = in_actions if use_git is None else use_git
+    # A dry run writes nothing, so there is never anything to commit — and it
+    # does not pull or push either.
+    use_git = False if dry_run else (in_actions if use_git is None else use_git)
     chain = in_actions if chain is None else chain
 
     started = clock()
@@ -412,6 +429,7 @@ def run_loop(
                     # segments.
                     known_state=known_state,
                     carry=carry,
+                    dry_run=dry_run,
                 )
             except Exception as exc:  # noqa: BLE001 - a tick is a unit of failure
                 # The tick did not finish: the store was unreachable, or
@@ -428,6 +446,9 @@ def run_loop(
                 print(f"::warning::worker tick {loop.ticks} failed ({describe_failure(exc)}); "
                       f"{len(carry)} unsaved state record(s) kept in memory — the segment continues",
                       flush=True)
+                if dry_run:
+                    loop.stopped_reason = "dry run: one pass"
+                    break
                 if permanent_in_a_row >= MAX_PERMANENT_FAILURES:
                     loop.stopped_reason = "store refused the worker"
                     print(f"::error::{permanent_in_a_row} ticks in a row failed for a reason a retry "
@@ -463,6 +484,9 @@ def run_loop(
                 wait = float(poll_seconds)
             if wait is None:
                 loop.stopped_reason = "nothing running"
+                break
+            if dry_run:
+                loop.stopped_reason = "dry run: one pass"
                 break
             if clock() + timedelta(seconds=wait) >= deadline:
                 break

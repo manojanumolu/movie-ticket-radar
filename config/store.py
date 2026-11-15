@@ -72,6 +72,9 @@ def read_json(path: Path) -> Any:
 
 def write_json(path: Path, payload: Any, *, mirror: bool = True, message: str = "") -> None:
     """Write atomically, then optionally mirror to GitHub."""
+    from config import readonly
+
+    readonly.refuse(path.name)
     path.parent.mkdir(parents=True, exist_ok=True)
     body = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
 

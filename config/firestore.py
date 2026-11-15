@@ -434,6 +434,9 @@ class FirestoreClient:
         """Apply ``[(collection, doc, fields-or-None-to-delete), …]`` atomically."""
         if not writes:
             return
+        from config import readonly
+
+        readonly.refuse(f"{len(writes)} Firestore document(s)")
         body = {"writes": [
             {"delete": f"{self.root}/{collection}/{doc}"} if fields is None else
             {"update": {"name": f"{self.root}/{collection}/{doc}",
