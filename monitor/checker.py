@@ -44,6 +44,7 @@ from monitor.models import (
     CheckOutcome,
     Monitor,
     MovieRef,
+    ReadFailure,
     SeatCategory,
     Showtime,
     Snapshot,
@@ -134,7 +135,50 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
     theatre existing without this format, the format existing without an open
     sale, and the sale being sold out are four different situations, and the
     UI says four different things about them.
+
+    Every one of those "no" answers is a claim about the *whole* listing, so
+    none of them can be made from a partial read (``Snapshot.failures``). A
+    request that did not answer may be the one that carries this theatre —
+    a premium-format sibling event is precisely where a Dolby or IMAX screen
+    is listed — and which theatres an unread event holds is not knowable
+    from its name. So when a failed request could concern the dates this
+    monitor watches, the only verdict that survives is the one a partial
+    read can still prove: AVAILABLE, from a bookable show that *was* read.
+    Anything else becomes UNKNOWN, which is not an answer: the target keeps
+    its last real observation, nothing is re-armed and nothing is emailed.
     """
+    result = _evaluate(monitor, target, snapshot)
+    if result.availability is Availability.AVAILABLE:
+        return result
+    missing = snapshot.failures_for(monitor.date_codes)
+    if not missing:
+        return result
+    print(f"    [partial] {target.venue_name} · {target.fmt}: {len(missing)} request(s) of this listing "
+          f"did not answer ({', '.join(f.where for f in missing[:4])}{'…' if len(missing) > 4 else ''}) — "
+          f"not recording '{result.availability.value}'; keeping the last observation")
+    return TargetResult(
+        target_key=target.key,
+        venue_name=target.venue_name,
+        fmt=target.fmt,
+        availability=Availability.UNKNOWN,
+        date_code=result.date_code,
+        booking_url=result.booking_url,
+        detail=describe_failures(missing),
+    )
+
+
+def describe_failures(failures: list[ReadFailure]) -> str:
+    """One sentence for a read that came back in part."""
+    refused = sum(1 for f in failures if f.blocked)
+    how = ("refused" if refused == len(failures)
+           else "did not answer for" if not refused else "refused or did not answer for")
+    return (f"BookMyShow {how} {len(failures)} part(s) of this listing, so this check "
+            "can't say what is or isn't listed. Not a 'no tickets' answer.")
+
+
+def _evaluate(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot) -> TargetResult:
+    """The verdict the snapshot's contents give, taken at face value.
+    :func:`evaluate_target` decides whether a partial read may give it."""
     shows = [s for s in snapshot.showtimes if _same_venue(s, target)]
     wanted_dates = set(monitor.date_codes)
 
@@ -205,9 +249,15 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
             detail=f"{len(bookable)} showtime(s) bookable.",
         )
 
+    # SOLD_OUT is a claim about everything this target watches, so every
+    # matching show has to say so — and a show only says so when every one
+    # of its seat categories does (``BookMyShowProvider._availability``).
+    # One show that has not opened for sale, or whose status could not be
+    # read, means the data cannot prove "no seats left": that is
+    # NOT_BOOKABLE, the same rule the category watch below holds itself to.
     sold_out = [s for s in matching if s.availability is Availability.SOLD_OUT]
     date_code = _earliest_date(matching)
-    if sold_out:
+    if sold_out and len(sold_out) == len(matching):
         return TargetResult(
             target_key=target.key,
             venue_name=target.venue_name,
@@ -227,7 +277,9 @@ def evaluate_target(monitor: Monitor, target: TheatreTarget, snapshot: Snapshot)
         showtimes=matching,
         date_code=date_code,
         booking_url=_booking_url(monitor, snapshot, date_code, target),
-        detail="Showtimes are listed but booking hasn't opened.",
+        detail=(f"{len(sold_out)} of {len(matching)} showtime(s) are sold out; the rest "
+                "haven't opened for booking or sent no status we can read."
+                if sold_out else "Showtimes are listed but booking hasn't opened."),
     )
 
 
@@ -268,7 +320,12 @@ def _evaluate_categories(monitor: Monitor, target: TheatreTarget, snapshot: Snap
     listed = [s for s in shows if watched(s)]
     blocks = [c for s in listed for c in watched(s)]
     date_code = _earliest_date(shows)
-    if blocks and all(c.availability is Availability.SOLD_OUT for c in blocks):
+    # …and only when no show in scope is still to open: a show that has
+    # published no seat categories at all is not on sale yet, and its seats
+    # are not "gone". (A show that *has* published its categories and simply
+    # does not have this section is not waiting on anything.)
+    unopened = [s for s in shows if not s.categories]
+    if blocks and not unopened and all(c.availability is Availability.SOLD_OUT for c in blocks):
         return TargetResult(
             target_key=target.key, venue_name=target.venue_name, fmt=target.fmt,
             availability=Availability.SOLD_OUT, showtimes=listed, date_code=date_code,
@@ -276,7 +333,10 @@ def _evaluate_categories(monitor: Monitor, target: TheatreTarget, snapshot: Snap
             detail=f"{monitor.category_label}: no seats left at the shows listed.",
         )
     seen = sorted({c.label for s in shows for c in s.categories})
-    if any(watched(s) for s in shows):
+    if blocks and unopened and all(c.availability is Availability.SOLD_OUT for c in blocks):
+        detail = (f"{monitor.category_label}: no seats left at {len(listed)} showtime(s); "
+                  f"{len(unopened)} more haven't opened for booking.")
+    elif any(watched(s) for s in shows):
         detail = f"{monitor.category_label} is listed, but BookMyShow sent no status we can read for it."
     elif seen:
         detail = f"{monitor.category_label} not listed for these shows (listed: {', '.join(seen)})."
@@ -443,8 +503,17 @@ def outcome_for(monitor: Monitor, listing: Listing, *, at: datetime | None = Non
     at = at or now_ist()
     if not listing.ok:
         return CheckOutcome(monitor.id, at, ok=False, error=listing.error, blocked=listing.blocked)
-    results = [evaluate_target(monitor, t, listing.snapshot) for t in monitor.targets]
-    return CheckOutcome(monitor.id, at, ok=True, results=results)
+    snapshot = listing.snapshot
+    results = [evaluate_target(monitor, t, snapshot) for t in monitor.targets]
+    missing = snapshot.failures_for(monitor.date_codes)
+    if missing and results and not any(r.availability.is_answer for r in results):
+        # A partial read that could answer for none of this monitor's
+        # targets is, for this monitor, a check that did not happen. Recorded
+        # as one (state untouched, "couldn't check" on the page) rather than
+        # as a successful check that learned nothing.
+        return CheckOutcome(monitor.id, at, ok=False, error=describe_failures(missing),
+                            blocked=all(f.blocked for f in missing), partial=True)
+    return CheckOutcome(monitor.id, at, ok=True, results=results, partial=bool(missing))
 
 
 def check_monitor(monitor: Monitor, *, at: datetime | None = None) -> CheckOutcome:
@@ -467,9 +536,77 @@ def check_monitor(monitor: Monitor, *, at: datetime | None = None) -> CheckOutco
 # ──────────────────────────────────────────────────────────────────────────
 # The worker tick
 # ──────────────────────────────────────────────────────────────────────────
+#: Availabilities that mean "this theatre was in the listing when we looked".
+_SEEN_LISTED = frozenset({Availability.AVAILABLE, Availability.SOLD_OUT, Availability.NOT_BOOKABLE,
+                          Availability.SHOW_NOT_AVAILABLE})
+
+
+def _warn_if_listing_vanished(group, listing: Listing, state: dict[str, MonitorState]) -> None:
+    """A canary, not a verdict: one warning when a listing that monitors had
+    seen theatres in comes back *complete and with no theatres at all*.
+
+    A film leaving cinemas looks like this too, so nothing is held back or
+    changed — the read is recorded as it stands. But it is also exactly what
+    a response-format change that slipped past validation would look like,
+    and that must not be silent. It fires on the transition only: once the
+    empty read is recorded the monitors no longer count as having seen the
+    theatre, so a film that has genuinely gone warns once, not every tick.
+    """
+    snapshot = listing.snapshot
+    if snapshot is None or snapshot.venues or snapshot.failures:
+        return
+    had = [m for m in group.monitors
+           if any(ts.availability in _SEEN_LISTED
+                  for ts in (state.get(m.id) or MonitorState()).targets.values())]
+    if had:
+        print(f"::warning::{group.key.label} came back with no theatres at all, though "
+              f"{len(had)} monitor(s) had seen theatres listed there. If the film is still "
+              "showing, BookMyShow's response format may have changed.", flush=True)
+
+
+def _record_history_safely(monitor: Monitor, kind: str, message: str, **kwargs) -> None:
+    """The activity log is a convenience; a check and its alert are not.
+    A history write that fails is logged and dropped — it must never undo a
+    check, lose the record that an email went out, or end the tick."""
+    try:
+        record_history(monitor, kind, message, **kwargs)
+    except Exception as exc:  # noqa: BLE001 - never worth a tick
+        print(f"    history not written for {short_id(monitor.id)} ({type(exc).__name__})", flush=True)
+
+
+def _persist_now(state: dict[str, MonitorState], carry: dict[str, MonitorState] | None,
+                 monitor_id: str, *, mirror: bool) -> bool:
+    """Write one monitor's state record now. Never raises.
+
+    Called the moment an alert has gone out, so "this was announced" reaches
+    the store before anything else can fail. Only that monitor's record:
+    the ones the tick has not reached yet are still blank and are not worth
+    a write. If the store refuses, the record is parked in ``carry`` — the
+    segment's own memory, handed back to the next tick — so the same process
+    does not announce the same thing twice while the store is down.
+    """
+    try:
+        save_state(state, mirror=mirror, only=[monitor_id])
+    except Exception as exc:  # noqa: BLE001 - reported, parked, retried
+        print(f"::warning::monitoring state could not be saved ({type(exc).__name__}); "
+              "kept in memory and retried", flush=True)
+        if carry is not None:
+            carry[monitor_id] = state[monitor_id]
+        return False
+    if carry is not None:
+        carry.pop(monitor_id, None)
+    return True
+
+
+def _park(state: dict[str, MonitorState], carry: dict[str, MonitorState] | None) -> None:
+    if carry is not None:
+        carry.update({mid: ms for mid, ms in state.items() if ms.is_dirty()})
+
+
 def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str = "",
              mirror: bool = False, notifier=None,
-             known_state: dict[str, MonitorState] | None = None) -> RunReport:
+             known_state: dict[str, MonitorState] | None = None,
+             carry: dict[str, MonitorState] | None = None) -> RunReport:
     """Check every monitor that is due. This is what the workflow calls.
 
     ``mirror`` is False by default because inside Actions the workflow makes
@@ -487,6 +624,20 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     named monitor — reads the collection exactly as before. Monitors are
     read every tick regardless, so a monitor stopped or created in the app
     is seen at once and expiry runs as it always has.
+
+    ``carry`` is the segment's memory of state records a previous tick
+    changed but could not save (the store was failing). They are laid over
+    whatever this tick reads, still marked as changed, so a monitor already
+    emailed is not emailed again and a monitor already checked is not
+    checked again every tick for as long as the store is down. This tick
+    empties ``carry`` when its own save succeeds and refills it when it does
+    not. It lives in the worker process only: a segment that dies with
+    unsaved records can still repeat an email — delivery is at-least-once.
+
+    One monitor failing — an exception anywhere in its evaluation, its alert
+    or its bookkeeping — is recorded against that monitor and the tick moves
+    on to the next. State is saved as soon as an alert has been sent, not
+    only at the end of the tick.
     """
     at = at or now_ist()
     report = RunReport(started_at=at)
@@ -528,7 +679,15 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
         report.state_read_skipped = True
     else:
         state = load_state()
-    dirty = bool(newly_expired)
+    if carry:
+        # Records an earlier tick could not save: newer than the store's —
+        # for the monitors still being checked. One stopped or deleted in
+        # the app meanwhile is dropped, so no state is written for it.
+        live_ids = {m.id for m in monitors}
+        for stale in [mid for mid in carry if mid not in live_ids]:
+            carry.pop(stale)
+        state.update(carry)
+    dirty = bool(newly_expired) or bool(carry)
 
     running: list[Monitor] = []
     due: list[Monitor] = []
@@ -582,54 +741,35 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
         else:
             listing = fetch_listing(group.movie, group.date_codes)
         report.fetches += 1
+        _warn_if_listing_vanished(group, listing, state)
 
         for monitor in group.monitors:
-            ms = state[monitor.id]
-            print(f"[checker] {short_id(monitor.id)} — {monitor.movie.title} "
-                  f"({len(monitor.targets)} target(s))")
-            outcome = outcome_for(monitor, listing, at=at)
-            changes = detect_changes(monitor, outcome, ms)
-            apply_outcome(outcome, ms)
-            dirty = True
-
-            if outcome.ok:
-                report.checked.append(monitor.id)
-                for result in outcome.results:
-                    print(f"    {result.venue_name} · {result.fmt} -> {result.availability.value}"
-                          f"{' — ' + result.detail if result.detail else ''}")
-                    if result.availability is Availability.THEATRE_NOT_AVAILABLE:
-                        _hint_other_rows(monitor, monitor.target(result.target_key))
-            else:
-                report.failed.append(monitor.id)
-                print(f"    check failed: {outcome.error}")
-                record_history(
-                    monitor, "ERROR",
-                    "Couldn't check BookMyShow — connection problem, not a 'no tickets' answer.",
-                    mirror=mirror, at=at,
-                )
-
-            for change in changes:
-                report.changes.append(change)
-                try:
-                    notifier(monitor, change)
-                except Exception as exc:  # noqa: BLE001 - retried on the next tick
-                    report.email_errors.append(f"{short_id(monitor.id)}: {exc}")
-                    ms.last_email_error = f"{type(exc).__name__}: {exc}"[:300]
-                    print(f"    email failed ({exc}) — will retry next check")
-                    continue
-                report.emails_sent += 1
-                ms.last_email_error = ""
-                mark_notified(change, ms, at)
-                record_history(
-                    monitor,
-                    change.kind.value,
-                    f"{change.venue_name} · {change.fmt} — {change.kind.value.replace('_', ' ').title()}",
-                    mirror=mirror, at=at,
-                    extra={"booking_url": change.booking_url},
-                )
+            # One monitor is one unit of failure. Whatever goes wrong inside
+            # it — a parser surprise in its evaluation, its alert, its
+            # bookkeeping — is this monitor's problem this tick, and the
+            # next monitor is still checked.
+            try:
+                if _check_one(monitor, listing, state, report, at=at, mirror=mirror,
+                              notifier=notifier, carry=carry):
+                    dirty = True
+            except Exception as exc:  # noqa: BLE001 - isolate, report, move on
+                dirty = True
+                if monitor.id not in report.failed:
+                    report.failed.append(monitor.id)
+                print(f"::warning::monitor {short_id(monitor.id)} could not be processed this tick "
+                      f"({type(exc).__name__}); the others continue", flush=True)
 
     if dirty:
-        save_state(state, mirror=mirror)
+        try:
+            save_state(state, mirror=mirror)
+        except Exception:
+            # Nothing this tick learned reached the store. Park it for the
+            # next tick (so nobody is emailed or checked twice meanwhile)
+            # and let the failure be seen: the segment decides what next.
+            _park(state, carry)
+            raise
+        if carry is not None:
+            carry.clear()
 
     report.monitors = monitors
     report.state = state
@@ -637,5 +777,65 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     return report
 
 
-__all__ = ["Listing", "RunReport", "check_monitor", "evaluate_target", "fetch_listing",
-           "outcome_for", "reads_per_venue", "run_once", "short_id"]
+def _check_one(monitor: Monitor, listing: Listing, state: dict[str, MonitorState],
+               report: RunReport, *, at: datetime, mirror: bool, notifier,
+               carry: dict[str, MonitorState] | None) -> bool:
+    """Evaluate one monitor against a listing already read, alert on what
+    changed and record it. Returns True when its state record changed.
+
+    The order is the guarantee: the alert is sent, *then* marked as sent,
+    *then* that mark is written to the store before anything else happens.
+    A send that fails is never marked (it is retried next check); a mark
+    that cannot be saved stays in the segment's memory (``_persist_now``).
+    """
+    ms = state[monitor.id]
+    print(f"[checker] {short_id(monitor.id)} — {monitor.movie.title} "
+          f"({len(monitor.targets)} target(s))")
+    outcome = outcome_for(monitor, listing, at=at)
+    changes = detect_changes(monitor, outcome, ms)
+    apply_outcome(outcome, ms)
+
+    if outcome.ok:
+        report.checked.append(monitor.id)
+        for result in outcome.results:
+            print(f"    {result.venue_name} · {result.fmt} -> {result.availability.value}"
+                  f"{' — ' + result.detail if result.detail else ''}")
+            if result.availability is Availability.THEATRE_NOT_AVAILABLE:
+                _hint_other_rows(monitor, monitor.target(result.target_key))
+    else:
+        report.failed.append(monitor.id)
+        print(f"    check failed: {outcome.error}")
+        _record_history_safely(
+            monitor, "ERROR",
+            "Couldn't check BookMyShow — connection problem, not a 'no tickets' answer.",
+            mirror=mirror, at=at,
+        )
+
+    for change in changes:
+        report.changes.append(change)
+        try:
+            notifier(monitor, change)
+        except Exception as exc:  # noqa: BLE001 - retried on the next tick
+            report.email_errors.append(f"{short_id(monitor.id)}: {exc}")
+            ms.last_email_error = f"{type(exc).__name__}: {exc}"[:300]
+            print(f"    email failed ({exc}) — will retry next check")
+            continue
+        report.emails_sent += 1
+        ms.last_email_error = ""
+        mark_notified(change, ms, at)
+        # The alert is out. Say so in the store *now* — before the history
+        # line, before the next monitor, before the end-of-tick save — so
+        # that nothing failing later in this tick can make it go out again.
+        _persist_now(state, carry, monitor.id, mirror=mirror)
+        _record_history_safely(
+            monitor,
+            change.kind.value,
+            f"{change.venue_name} · {change.fmt} — {change.kind.value.replace('_', ' ').title()}",
+            mirror=mirror, at=at,
+            extra={"booking_url": change.booking_url},
+        )
+    return True
+
+
+__all__ = ["Listing", "RunReport", "check_monitor", "describe_failures", "evaluate_target",
+           "fetch_listing", "outcome_for", "reads_per_venue", "run_once", "short_id"]

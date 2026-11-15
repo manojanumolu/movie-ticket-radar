@@ -17,12 +17,12 @@ panel asks the store instead — and that asking stayed cheap.
 from __future__ import annotations
 
 import inspect
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 
 from config import firestore as fs
-from config.timezone import IST, now_ist
+from config.timezone import now_ist
 from monitor import state as state_mod
 from monitor.models import ANY_FORMAT, Availability, Monitor, MovieRef, TheatreTarget
 from monitor.state import MonitorState, Scope, TargetState
@@ -36,7 +36,7 @@ def _monitor(uid: str, title: str = "Hanuman Ansh") -> Monitor:
         movie=MovieRef(platform="bookmyshow", event_code="ET1", title=title,
                        region_code="HYD", region_slug="hyderabad", city="Hyderabad"),
         targets=[TheatreTarget("ALLU", "ALLU Cinemas", "Kokapet", ANY_FORMAT)],
-        interval_minutes=10, monitor_until=datetime.now(IST) + timedelta(days=2),
+        interval_minutes=10, monitor_until=now_ist() + timedelta(days=2),
         notify_email="w@example.com", owner_uid=uid)
 
 

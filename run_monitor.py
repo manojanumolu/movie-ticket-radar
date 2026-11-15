@@ -75,7 +75,12 @@ def main(argv: list[str] | None = None) -> int:
             if loop.push_failures:
                 print("::warning::some state commits could not be pushed during the "
                       "segment; the final commit step retries them")
-            return 0
+            if loop.failed_ticks:
+                print(f"::warning::{loop.failed_ticks} tick(s) failed during the segment; "
+                      "it carried on and the checks were retried")
+            # The run breaking is the one thing exit 1 is for: a store that
+            # refuses the worker outright is that, and must show as a red run.
+            return 1 if loop.stopped_reason == "store refused the worker" else 0
 
         report = run_once(
             at=started,

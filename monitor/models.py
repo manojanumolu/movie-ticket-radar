@@ -442,9 +442,48 @@ _MOVIE_TEXT_FIELDS = ("platform", "event_code", "title", "region_code", "region_
                       "city", "language", "poster_url", "source_url")
 
 
+@dataclass(frozen=True)
+class ReadFailure:
+    """One request of a listing read that did not produce an answer.
+
+    A listing is read as several requests — one per show date, for the
+    film's own event and for each premium-format sibling event. When one of
+    them is refused or errors, the shows it would have carried are simply
+    not in the snapshot. That is not the same as those shows not existing,
+    so the failure travels with the snapshot and the checker refuses to
+    read "not listed" or "sold out" out of data it knows is incomplete.
+    """
+
+    event_code: str
+    #: The show date asked for; "" is the platform's default date.
+    date_code: str = ""
+    #: Why, in the provider's words. Never a credential or a person's data.
+    message: str = ""
+    #: The platform *refused* (bot check), as opposed to failing.
+    blocked: bool = False
+    #: The sibling event's format label ("4DX 3D"); "" for the film's own event.
+    label: str = ""
+
+    def concerns(self, date_codes: Iterable[str]) -> bool:
+        """Could the shows this read would have carried fall on one of the
+        watched dates? ``date_codes`` empty means every date is watched; a
+        failure on the default date ("") could have carried any date."""
+        wanted = {c for c in date_codes if c}
+        return not wanted or not self.date_code or self.date_code in wanted
+
+    @property
+    def where(self) -> str:
+        return f"{self.event_code}@{self.date_code or 'default date'}"
+
+
 @dataclass
 class Snapshot:
-    """A successful read of a platform listing. Never constructed on failure."""
+    """A successful read of a platform listing. Never constructed on failure.
+
+    "Successful" means the film's own event answered for at least one date.
+    A read can still be *partial*: :attr:`failures` names every request that
+    did not answer, and :attr:`complete` is False while there is one.
+    """
 
     movie: MovieRef
     venues: list[Venue]
@@ -452,6 +491,18 @@ class Snapshot:
     bookable_dates: list[str] = field(default_factory=list)
     closed_dates: list[str] = field(default_factory=list)
     fetched_at: datetime = field(default_factory=now_ist)
+    #: Requests of this read that failed; the shows they would have carried
+    #: are missing from ``showtimes`` (and their theatres from ``venues``).
+    failures: list[ReadFailure] = field(default_factory=list)
+
+    @property
+    def complete(self) -> bool:
+        return not self.failures
+
+    def failures_for(self, date_codes: Iterable[str]) -> list[ReadFailure]:
+        """The failed requests that could have carried a show on these dates."""
+        codes = list(date_codes)
+        return [f for f in self.failures if f.concerns(codes)]
 
     def venue(self, code: str) -> Venue | None:
         return next((v for v in self.venues if v.code == code), None)
@@ -781,6 +832,10 @@ class CheckOutcome:
     #: True when the platform *refused* us (bot check / WAF), as opposed to a
     #: network or parsing failure. The UI words the two differently.
     blocked: bool = False
+    #: The listing was read only in part (``Snapshot.failures``): some of its
+    #: requests did not answer. Targets the missing part could concern carry
+    #: ``UNKNOWN`` and keep their last real observation.
+    partial: bool = False
 
     @property
     def available_results(self) -> list[TargetResult]:
@@ -850,6 +905,7 @@ __all__ = [
     "MonitorStatus",
     "MovieRef",
     "NOTIFIABLE_FROM",
+    "ReadFailure",
     "SeatCategory",
     "Showtime",
     "category_display",
