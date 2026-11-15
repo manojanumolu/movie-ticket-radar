@@ -55,6 +55,28 @@ MAX_DATE_CODES = 62
 MAX_CATEGORIES = 20
 MAX_TEXT = 500
 MAX_EMAIL_LENGTH = 254
+#: Premium-format sibling events one monitor may carry (``movie.variants``).
+#: BookMyShow has never listed more than 5 for one film in this city (every
+#: catalogue snapshot in the repository's history); 12 is far above that.
+#: Unbounded, one document could make a single check thousands of requests
+#: long and stall the worker for every account (audit SEC-01).
+MAX_VARIANTS = 12
+#: The most BookMyShow listing requests one check of one monitor may cost:
+#: one per watched date (or one for "every date") for the film's own event
+#: and for each sibling. A legitimate monitor reaches it only by watching
+#: more than 20 dates of a film with five premium formats; anything above it
+#: is refused with a reason, in the app before it is saved and by the
+#: worker if it was written some other way.
+MAX_REQUESTS_PER_CHECK = 120
+#: What the worker will spend on BookMyShow in one tick (every 30 seconds),
+#: across all accounts. Groups beyond it wait for the next tick, most
+#: overdue first, so one account's expensive monitors cannot hold back
+#: everybody else's; at least one group is always read, so nothing starves.
+TICK_REQUEST_BUDGET = 240
+
+#: BookMyShow's identifiers, as everything that reads them expects them.
+EVENT_CODE = re.compile(r"^ET\d{1,12}$")
+DATE_CODE = re.compile(r"^20\d{6}$")
 
 #: Every field ``Monitor.to_dict`` writes. A stored monitor with anything
 #: else in it was not written by this application.
@@ -149,6 +171,17 @@ def shape_problem(monitor: Monitor) -> str:
         return "it watches too many dates"
     if len(monitor.categories) > MAX_CATEGORIES:
         return "it watches too many categories"
+    if len(monitor.movie.variants) > MAX_VARIANTS:
+        return "it carries too many sibling events"
+    if monitor.movie.platform == "bookmyshow":
+        codes = [monitor.movie.event_code, *(code for code, _ in monitor.movie.variants)]
+        if not all(EVENT_CODE.match(code or "") for code in codes):
+            return "an event code is not one BookMyShow issues"
+    if not all(DATE_CODE.match(code or "") for code in monitor.date_codes):
+        return "a watched date is not a date"
+    cost = request_cost(monitor)
+    if cost > MAX_REQUESTS_PER_CHECK:
+        return f"one check of it would cost {cost} requests (the limit is {MAX_REQUESTS_PER_CHECK})"
     texts = [monitor.movie.title, monitor.movie.event_code, monitor.movie.source_url,
              monitor.movie.poster_url, monitor.show_time]
     texts += [t.venue_name for t in monitor.targets] + [t.fmt for t in monitor.targets]
@@ -157,6 +190,26 @@ def shape_problem(monitor: Monitor) -> str:
     if monitor.interval_minutes not in ADMIN_INTERVALS:
         return f"its interval ({monitor.interval_minutes} min) is not one the app offers"
     return ""
+
+
+def request_cost(monitor: Monitor, variant_codes: Iterable[str] | None = None) -> int:
+    """BookMyShow listing requests one check of this monitor makes: one per
+    watched date (one for "every date") per event — the film's own and each
+    sibling (``BookMyShowProvider.fetch``). ``variant_codes`` overrides the
+    stored siblings, for the family as the catalogue knows it today."""
+    codes = monitor.movie.variant_codes if variant_codes is None else tuple(dict.fromkeys(variant_codes))
+    dates = {c for c in monitor.date_codes if c}
+    return max(1, len(dates)) * (1 + len(codes))
+
+
+def assert_affordable(monitor: Monitor, variant_codes: Iterable[str] | None = None) -> None:
+    """Refuse, with the sentence to show, a monitor whose one check would
+    cost more than :data:`MAX_REQUESTS_PER_CHECK` listing requests."""
+    cost = request_cost(monitor, variant_codes)
+    if cost > MAX_REQUESTS_PER_CHECK:
+        raise MonitorNotAllowed(
+            f"That would take {cost} BookMyShow requests every check — too many. "
+            "Watch fewer dates, or choose Any date.")
 
 
 def unknown_fields(raw: dict[str, Any]) -> set[str]:
@@ -479,15 +532,20 @@ __all__ = [
     "InvalidRecipient",
     "LOCAL",
     "MAX_MONITOR_DAYS",
+    "MAX_REQUESTS_PER_CHECK",
+    "MAX_VARIANTS",
     "MEMBER_INTERVALS",
     "MonitorNotAllowed",
     "OwnerIdentity",
     "Screened",
+    "TICK_REQUEST_BUDGET",
+    "assert_affordable",
     "assert_until_allowed",
     "interval_allowed",
     "mask_email",
     "max_until",
     "normalise_recipient",
+    "request_cost",
     "same_address",
     "screen",
     "set_identity_resolver",
