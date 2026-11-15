@@ -146,16 +146,16 @@ def test_grid_yields_rows_in_reading_order():
 # Language on My Monitors, the rail, and History
 # ──────────────────────────────────────────────────────────────────────────
 def _monitor(language: str):
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
-    from config.timezone import IST
+    from config.timezone import now_ist
     from monitor.models import Monitor
 
     return Monitor(
         movie=MovieRef(platform="bookmyshow", event_code="ET00514163", title="Avengers Endgame: Encore",
                        region_code="HYD", region_slug="hyderabad", language=language),
         targets=[TheatreTarget("ALUC", "ALLU Cinemas", "Kokapet", "Dolby Cinema")],
-        monitor_until=datetime.now(IST) + timedelta(days=2), notify_email="w@example.com",
+        monitor_until=now_ist() + timedelta(days=2), notify_email="w@example.com",
         # Owned by the signed-in test session (``signed_in`` fixture), so the
         # rendered app — which shows only the signed-in person's own records —
         # actually sees it.
