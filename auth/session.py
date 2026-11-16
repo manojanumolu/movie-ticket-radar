@@ -459,6 +459,14 @@ BRIDGE_OPS_KEY = "auth_cookie_ops"
 #: otherwise a retry would lose the Google ``state`` cookie and that sign-in
 #: would end in a mismatch. Server-side, and not kept across a session reset.
 BRIDGE_UNACKED_KEY = "auth_bridge_unacked"
+#: The nonce of the newest batch of cookie writes (or signal) the bridge was
+#: handed. Minted when the batch is queued, not each time it is drawn: a run
+#: that re-sends the same unacknowledged batch, or one with nothing to send,
+#: draws the bridge exactly as the run before did. A nonce that moved on every
+#: draw — and fell back to 0 once the writes were acknowledged — made the frame
+#: write and report again each time, and every report is a full script run:
+#: three extra runs of the whole app after every sign-in (measured, Phase 6).
+BRIDGE_NONCE_KEY = "auth_bridge_nonce"
 #: The watchdog's bookkeeping: which frame is mounted (only ever goes up: it
 #: names the frame), where we are in the schedule, and since when.
 BRIDGE_MOUNT_KEY = "auth_bridge_mount"
@@ -529,15 +537,20 @@ def run_bridge(*, signal: str = "") -> dict | None:
     on screen.
     """
     answered_before = bridge_answered()
-    ops = list(st.session_state.get(BRIDGE_UNACKED_KEY, [])) + st.session_state.pop(BRIDGE_OPS_KEY, [])
+    fresh = st.session_state.pop(BRIDGE_OPS_KEY, [])
+    ops = list(st.session_state.get(BRIDGE_UNACKED_KEY, [])) + fresh
+    if fresh or signal:
+        # New work: a new render, so a repeat write is still carried out
+        # rather than taken for the last one. Re-sending a batch the frame
+        # has not acknowledged keeps its nonce — the frame either never had it
+        # (a replacement frame is handed it on mount) or already did it.
+        st.session_state[BRIDGE_NONCE_KEY] = time.time()
     try:
         value = _bridge_component()(
             ops=ops,
             names=[COOKIE, SESSION_STARTED_COOKIE, OAUTH_STATE_COOKIE],
             signal=signal,
-            # Changes whenever there is work to do, so a repeat write is still
-            # a new render rather than a no-op.
-            nonce=(len(ops) or bool(signal)) and time.time() or 0,
+            nonce=st.session_state.get(BRIDGE_NONCE_KEY, 0),
             key=bridge_key(),
             default=None,
         )
