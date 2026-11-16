@@ -12,7 +12,7 @@ import {
   assertFails,
   assertSucceeds,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const rules = readFileSync(join(here, "..", "..", "firestore.rules"), "utf8");
@@ -264,6 +264,29 @@ test("an admin claim that is not exactly the boolean true is no admin claim", as
   // …and no claim at all lets anyone read another account's records.
   await seed("monitors/b1", monitor(BOB, { id: "b1" }));
   await assertFails(getDoc(doc(db(ALICE, { admin: true }), "monitors/b1")));
+});
+
+// ── Phase 7: list queries (the app reads every collection this way) ─────
+// Every read the app makes of monitors, monitor_state and history is a query
+// filtered on owner_uid (monitor/state.py _mine). The cases above read one
+// document by id; these pin that a query is only allowed when it can return
+// nothing but the caller's own records — no filter, another account's UID, or
+// the admin claim, and it is refused outright.
+test("a query returns only the caller's records, or is refused", async () => {
+  await seed("monitors/a1", monitor(ALICE, { id: "a1" }));
+  await seed("monitors/b1", monitor(BOB, { id: "b1" }));
+  await seed("history/hb", { owner_uid: BOB.uid, kind: "CREATED", at: iso(0) });
+  await seed("monitor_state/b1", { owner_uid: BOB.uid });
+  const alice = db(ALICE);
+  const mine = await assertSucceeds(getDocs(query(collection(alice, "monitors"), where("owner_uid", "==", ALICE.uid))));
+  assert.deepEqual(mine.docs.map((d) => d.id), ["a1"]);
+  await assertSucceeds(getDocs(query(collection(alice, "monitor_state"), where("owner_uid", "==", ALICE.uid))));
+  await assertSucceeds(getDocs(query(collection(alice, "history"), where("owner_uid", "==", ALICE.uid))));
+  for (const name of ["monitors", "monitor_state", "history", "users"]) {
+    await assertFails(getDocs(collection(alice, name)));
+    await assertFails(getDocs(query(collection(alice, name), where("owner_uid", "==", BOB.uid))));
+    await assertFails(getDocs(query(collection(db(ALICE, { admin: true }), name), where("owner_uid", "==", BOB.uid))));
+  }
 });
 
 let failed = 0;
