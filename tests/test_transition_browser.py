@@ -10,7 +10,10 @@ Home are, and whether the big reel and the hero are.
 Before Phase 6 (same harness, main at 757d49b): the login page's text and
 form fields were painted beside the rail and account chip during sign-in, the
 big reel was at full strength before the hero on every reload and every return
-to Home, and a sign-in cost four runs of the app.
+to Home, and a sign-in cost four runs of the app. The first Phase 6 fix
+(877931b) removed those but left the rail and chip over an empty page for a
+moment on the way in; the app now waits in its own slot behind the login page
+and replaces it in one step.
 
 Off by default, like the rest of the browser suite:
 
@@ -56,10 +59,22 @@ SAMPLER = r"""
       if (/Never Miss|Welcome back|RADAR ONLINE|Forgot password|Continue with Google|Create account/i.test(n.textContent) && shown(n.parentElement)) return true; }
     for (const i of main.querySelectorAll('input')) if (/@example\.com/.test(i.value) && shown(i)) return true;
     return false; };
+  const pageText = () => {       // visible text in the main pane, the account chip aside
+    const main = document.querySelector('[data-testid="stMain"]'); if (!main) return 0;
+    const w = document.createTreeWalker(main, NodeFilter.SHOW_TEXT); let n = 0;
+    while (w.nextNode() && n < 400) { const t = w.currentNode.textContent.trim(); const el = w.currentNode.parentElement;
+      if (t && el && !el.closest('.tr-acct-chip, [class*="st-key-tracct"], style') && shown(el)) n += t.length; }
+    return n; };
+  const paneOpacity = () => { let o = 1; const m = document.querySelector('[data-testid="stMainBlockContainer"]');
+    for (let e = m; e && e !== document.documentElement; e = e.parentElement) o *= parseFloat(getComputedStyle(e).opacity);
+    return o; };
   const tick = () => {
     const q = (s) => document.querySelector(s);
     window.__frames.push({
       t: Math.round(performance.now()),
+      text: pageText(),
+      pane: paneOpacity(),
+      chrome: shown(q('[data-testid="stSidebar"]')) || shown(q('.tr-acct-chip')),
       login: loginText(),
       app: shown(q('[data-testid="stSidebar"]')) || shown(q('[class*="st-key-acct_menu"]')) || shown(q('.tr-hero')),
       reel: shown(q('.tr-home-ambience .tr-reel.big')),
@@ -129,6 +144,15 @@ def reel_ahead_of_hero(seen: list[dict]) -> list[int]:
     return [f["t"] for f in seen if f["reel"] and not f["hero"]]
 
 
+def blank(seen: list[dict]) -> list[int]:
+    """The rail or the account chip over an empty page."""
+    return [f["t"] for f in seen if f["chrome"] and f["text"] < 40]
+
+
+def login_dimmed(seen: list[dict]) -> list[int]:
+    return [f["t"] for f in seen if f["login"] and f["pane"] < 0.95]
+
+
 def test_signing_in_never_paints_the_login_page_beside_the_app(tab, slow_server):
     mark = slow_server.mark()
     sign_in(tab, slow_server)
@@ -136,6 +160,10 @@ def test_signing_in_never_paints_the_login_page_beside_the_app(tab, slow_server)
     assert any(f["login"] for f in seen) and any(f["app"] for f in seen), "the sampler saw both pages"
     assert overlaps(seen) == []
     assert reel_ahead_of_hero(seen) == []
+    # One swap: the styled login page, then the app — no empty page between,
+    # and the login page is not faded out and back in while it waits.
+    assert blank(seen) == []
+    assert login_dimmed(seen) == []
     # One run of the app to write the session cookie, one to hear it written.
     log = slow_server.since(mark)
     assert log.count("renders=app") == 2, log.count("renders=app")

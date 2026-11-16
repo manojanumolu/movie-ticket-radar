@@ -383,24 +383,34 @@ _IC = {name: _svg_uri(C.ICON_PATHS[name], "#FF8CA0", "1.9") for name in
 _ICM = {name: _svg_uri(C.ICON_PATHS[name], "#8E8E98", "1.8") for name in
         ("location", "movie", "theatre", "format", "radar", "calendar", "clock", "check")}
 
+#
+#: Two Phase 6 rules, explained here rather than in the stylesheet (which goes
+#: to the browser):
+#:
+#: * The ambience — the big reel — is Home's first element, so it reached the
+#:   screen first and at full strength while the hero and the cards were still
+#:   rising. It is now unseen until the hero is on the page and then eases in
+#:   just behind it; the animation starts when that rule starts to match, and a
+#:   rerun keeps both elements, so it never replays. Inside
+#:   ``@supports selector(:has(*))``: a browser without ``:has()`` shows the
+#:   reel as before rather than never.
+#: * ``tr-home-rise`` starts half-lit rather than from nothing. Home appears
+#:   whole, in one step, where the login page or the restoring beat was
+#:   (``auth.gate``); a rise from opacity 0 left the top of the page empty for
+#:   its first frames. Same rise, same timing.
 CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 @keyframes tr-home-breathe {{ 0%,100% {{ opacity:.7; transform:scale(1); }} 50% {{ opacity:1; transform:scale(1.05); }} }}
-@keyframes tr-home-rise {{ from {{ opacity:0; transform:translateY(10px); }} to {{ opacity:1; transform:none; }} }}
+@keyframes tr-home-rise {{ from {{ opacity:.5; transform:translateY(10px); }} to {{ opacity:1; transform:none; }} }}
 /* ── ambience: the room's light, behind every card ───────────────────── */
 [class*="st-key-trhome"] {{ position:relative; isolation:isolate; }}
 [class*="st-key-trhome"] > [data-testid="stLayoutWrapper"] {{ position:relative; z-index:1; }}
 [class*="st-key-trhome"] > [data-testid="stElementContainer"] {{ position:relative; z-index:1; }}
 .tr-home-ambience {{ position:absolute; left:-60px; right:-60px; top:-140px; bottom:-120px; z-index:0; pointer-events:none; overflow:hidden; }}
-/* The room's reels arrive with the room, never ahead of it. The ambience is
-   Home's first element, so it reached the screen first and at full strength —
-   on the deployed app a beat before the hero, and always while the hero and
-   the cards were still rising from nothing (tr-home-rise) — so the big reel was
-   the first thing a person saw of Home. It now waits for the hero and fades in
-   just behind it. The animation starts when the hero appears (when this rule
-   starts to match), not when the reel is mounted; a rerun keeps both, so it
-   does not replay. */
-.tr-home-ambience {{ opacity:0; }}
-[class*="st-key-trhome"]:has(.tr-hero) .tr-home-ambience {{ opacity:1; animation: tr-home-ambience-in 1.1s var(--tr-ease) .2s backwards; }}
+/* the reels arrive with the room: unseen until the hero is on the page, then easing in just behind it */
+@supports selector(:has(*)) {{
+  .tr-home-ambience {{ opacity:0; }}
+  [class*="st-key-trhome"]:has(.tr-hero) .tr-home-ambience {{ opacity:1; animation: tr-home-ambience-in 1.1s var(--tr-ease) .2s backwards; }}
+}}
 @keyframes tr-home-ambience-in {{ from {{ opacity:0; }} to {{ opacity:1; }} }}
 .tr-home-ambience::before {{ content:""; position:absolute; right:-12%; top:-8%; width:80%; height:70%; filter: blur(16px); opacity:.9;
   background: conic-gradient(from 200deg at 92% 4%, transparent 0deg, rgba(255,107,133,.12) 14deg, rgba(255,51,85,.045) 30deg, rgba(255,51,85,.012) 44deg, transparent 56deg); }}

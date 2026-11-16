@@ -152,6 +152,17 @@ FONTS = (
     'family=Manrope:wght@500;600;700;800&family=DM+Mono:wght@400;500&display=swap">'
 )
 
+#: The app's entrance is the swap itself. The app appears whole, in one step,
+#: where the styled login page (or the restoring beat) was — and Home's own
+#: motion (the hero and the platform shelf rising, the reel easing in behind
+#: the hero) is the only animation. A fade of the whole pane from nothing used
+#: to run here, at the top of the run: with a slow store it faded the login
+#: page out and back in, and at the swap it showed a dark, empty pane beside a
+#: rail that was already there. Kept as a rule so the reduced-motion setting
+#: and the "never the sidebar, never a transform" contract stay in one place.
+APP_ENTRANCE = """[class*="st-key-tr_app"] { animation:none; }
+"""
+
 CSS = """
 <style>
 
@@ -475,10 +486,20 @@ __NAV_ICONS__
    form fields beside the rail. Only stale elements outside the shell are
    touched — on the login page's own reruns everything is still inside it, so
    nothing there ever blinks — and only login markup and the login form's own
-   widgets (the app's Sign out is the one auth_ key outside it). */
-[data-stale="true"]:has([class*="tr-auth-"]):not([class*="st-key-trauth_shell"] *),
+   widgets (the app's Sign out is the one auth_ key outside it). Two rules, not
+   one list: a browser without :has() drops a whole list, and the second rule
+   needs no :has(). */
+[data-stale="true"]:has([class*="tr-auth-"]):not([class*="st-key-trauth_shell"] *) { display:none !important; }
 [data-stale="true"][class*="st-key-auth_"]:not([class*="st-key-auth_signout"]):not([class*="st-key-trauth_shell"] *) { display:none !important; }
-
+/* The app waits behind the page it replaces. ``tr_app`` (auth.gate) stays
+   hidden while ``tr_page`` still holds the previous page — the login page or
+   the restoring beat, stale but still styled — and Streamlit removes that page
+   when the run ends. So the person sees the styled login page right up to the
+   moment the finished app replaces it: no blank frame, no half-built Home, no
+   rail beside a login page. Only while something stale is in ``tr_page``: on
+   every ordinary run of the app ``tr_page`` is empty and this never matches. */
+.stApp:has([class*="st-key-tr_page"] [data-stale="true"]) [class*="st-key-tr_app"] { display:none !important; }
+__APP_ENTRANCE__
 /* ── hero ──────────────────────────────────────────────────────────── */
 .tr-hero {
   position:relative; overflow:hidden; padding:38px 40px 34px; border-radius:22px;
@@ -1812,7 +1833,7 @@ a.tr-sx-time:hover { border-color:rgba(255,51,85,.6); background:rgba(255,51,85,
   font-family: 'Material Symbols Rounded' !important;
 }
 </style>
-""".replace("__NAV_ICONS__", _nav_css()).replace("__RAIL_RIG__", _rail_rig_css()).replace("__RAIL_PHONE__", _rail_phone_css())
+""".replace("__APP_ENTRANCE__", APP_ENTRANCE).replace("__NAV_ICONS__", _nav_css()).replace("__RAIL_RIG__", _rail_rig_css()).replace("__RAIL_PHONE__", _rail_phone_css())
 
 
 def inject() -> None:

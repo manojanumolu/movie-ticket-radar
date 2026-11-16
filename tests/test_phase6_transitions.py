@@ -185,10 +185,14 @@ def test_the_login_stylesheet_takes_the_rail_away():
 
 
 def test_stale_login_pieces_outside_the_shell_are_not_drawn():
-    selector = ('[data-stale="true"]:has([class*="tr-auth-"]):not([class*="st-key-trauth_shell"] *),\n'
-                '[data-stale="true"][class*="st-key-auth_"]:not([class*="st-key-auth_signout"])'
-                ':not([class*="st-key-trauth_shell"] *)')
-    assert "display:none !important" in _rule(theme.CSS, selector)
+    markup = '[data-stale="true"]:has([class*="tr-auth-"]):not([class*="st-key-trauth_shell"] *)'
+    widgets = ('[data-stale="true"][class*="st-key-auth_"]:not([class*="st-key-auth_signout"])'
+               ':not([class*="st-key-trauth_shell"] *)')
+    # Two rules, not one list: a browser without :has() drops a whole list,
+    # and the widget rule needs no :has().
+    assert "display:none !important" in _rule(theme.CSS, markup)
+    assert "display:none !important" in _rule(theme.CSS, widgets)
+    assert ":has(" not in widgets
 
 
 def test_only_the_login_form_uses_auth_widget_keys_besides_sign_out():
@@ -224,6 +228,9 @@ def run_login(visitor):  # noqa: F811 - the imported fixture
 # ──────────────────────────────────────────────────────────────────────────
 def test_the_reel_is_invisible_until_the_hero_is_on_the_page():
     assert "opacity:0" in _rule(home.CSS, ".tr-home-ambience")
+    # …only where :has() exists; elsewhere the reel shows as it always did.
+    guarded = home.CSS.split("@supports selector(:has(*)) {", 1)[1].split("\n}", 1)[0]
+    assert ".tr-home-ambience { opacity:0; }" in guarded
     shown = _rule(home.CSS, '[class*="st-key-trhome"]:has(.tr-hero) .tr-home-ambience')
     assert "opacity:1" in shown and "tr-home-ambience-in" in shown
     assert "@keyframes tr-home-ambience-in" in home.CSS
@@ -247,6 +254,83 @@ def test_the_reel_and_its_animation_are_unchanged():
     assert 'class="tr-reel big"' in markup
     assert "tr-home-reel 84s linear infinite" in home.CSS
     assert "tr-home-reel-back 120s linear infinite" in home.CSS
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# One swap: the app waits in its own slot behind the page it replaces
+# ──────────────────────────────────────────────────────────────────────────
+def test_the_gate_reserves_three_slots_in_a_fixed_order():
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent.parent.joinpath("auth", "gate.py").read_text(encoding="utf-8")
+    order = [src.index(f'st.container(key="{key}")') for key in ("tr_chrome", "tr_page", "tr_app")]
+    assert order == sorted(order)
+    assert src.count('st.container(key="tr_app")') == 1
+
+
+def test_the_app_renders_in_its_own_slot_and_the_login_page_in_the_page_slot(monkeypatch):
+    """The login page, the restoring beat and its recovery screen draw into
+    ``tr_page``; ``app_container()`` is ``tr_app`` — never the same slot, so the
+    app never takes over the login page's elements."""
+    from auth import gate
+
+    made = []
+
+    class Slot:
+        def __init__(self, key):
+            self.key = key
+
+        def __enter__(self):
+            made.append(("enter", self.key))
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(gate.st, "container", lambda key=None, **k: Slot(key))
+    gate._page.page = gate.st.container(key="tr_page")
+    gate._page.container = gate.st.container(key="tr_app")
+    assert gate.app_container().key == "tr_app"
+    assert gate._page.page.key == "tr_page"
+
+
+def test_the_app_is_held_only_while_the_page_slot_holds_something_stale():
+    hold = _rule(theme.CSS, '.stApp:has([class*="st-key-tr_page"] [data-stale="true"]) [class*="st-key-tr_app"]')
+    assert "display:none !important" in hold
+    # Nothing else in the theme hides the app's slot.
+    rules = re.sub(r"/\*.*?\*/", "", theme.CSS, flags=re.S)
+    hides = re.findall(r'([^{}]*st-key-tr_app[^{}]*)\{([^}]*)\}', rules)
+    assert [sel.strip() for sel, body in hides if "display:none" in body.replace(" ", "")] == [
+        '.stApp:has([class*="st-key-tr_page"] [data-stale="true"]) [class*="st-key-tr_app"]']
+
+
+def test_signing_out_hides_only_the_stale_app():
+    assert "display: none !important" in _rule(login.CSS, '[class*="st-key-tr_app"]:has([data-stale="true"])')
+
+
+def test_the_entrance_draws_nothing_at_the_top_of_the_run(monkeypatch):
+    """The fade used to be drawn at the top of the first run after signing in:
+    with a slow store it faded the login page out and back in, and its element
+    moved the cookie bridge to a new position (a new frame on every sign-in)."""
+    import types
+
+    state = {"auth_just_signed_in": True}
+    drawn = []
+    monkeypatch.setattr(login, "st", types.SimpleNamespace(session_state=state, markdown=lambda *a, **k: drawn.append(a)))
+    login.entrance()
+    assert drawn == [] and "auth_just_signed_in" not in state
+
+
+def test_the_entrance_is_the_app_slot_only_and_never_a_transform():
+    assert "st-key-tr_app" in theme.APP_ENTRANCE and theme.APP_ENTRANCE in theme.CSS
+    assert "stSidebar" not in theme.APP_ENTRANCE and "transform" not in theme.APP_ENTRANCE
+    assert "stMainBlockContainer" not in login.ENTRANCE_CSS
+
+
+def test_homes_rise_starts_half_lit_not_from_nothing():
+    rise = re.search(r"@keyframes tr-home-rise \{ from \{([^}]*)\}", home.CSS).group(1)
+    assert "opacity:.5" in rise and "translateY(10px)" in rise
+    assert "tr-home-rise .8s var(--tr-ease) backwards" in home.CSS      # same rise, same timing
 
 
 from tests.test_auth import run, visitor  # noqa: E402,F401 - the fixture and the runner
