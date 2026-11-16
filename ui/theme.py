@@ -19,6 +19,7 @@ the design — while Streamlit still owns the click, the rerun and the tests.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from urllib.parse import quote
 
 import streamlit as st
@@ -151,6 +152,68 @@ FONTS = (
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
     'family=Manrope:wght@500;600;700;800&family=DM+Mono:wght@400;500&display=swap">'
 )
+
+def strip_css_comments(css: str) -> str:
+    """``css`` without its ``/* … */`` comments, and nothing else changed.
+
+    The stylesheets explain themselves in comments — about a tenth of their
+    size, and a quarter of it compressed — and every comment went to every
+    browser that opened the app. Streamlit sends a page's stylesheets in full
+    once per browser session (later runs send a reference to the copy the
+    browser already holds), so this is what a first load and a reload carry.
+
+    Only comments go: text inside quotes (``content:"…"``, ``url("…")``) is
+    copied as it is, so a ``/*`` inside a string survives (an *unquoted*
+    ``url(…)`` holding ``/*`` would not; none exists, and a test keeps it so),
+    and every rule,
+    selector and value is byte-for-byte what was written. The source keeps
+    its comments (see :func:`sheet`). Pinned by ``tests/test_stylesheet_payload.py``, which checks
+    that every stripped sheet tokenises to exactly the original.
+    """
+    out: list[str] = []
+    i, n, quote = 0, len(css), ""
+    while i < n:
+        ch = css[i]
+        if quote:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(css[i + 1])
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "\"'":
+            quote = ch
+        elif css.startswith("/*", i):
+            end = css.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+@lru_cache(maxsize=32)
+def sheet(css: str) -> str:
+    """A stylesheet as it goes to the browser: :func:`strip_css_comments`, done
+    once per distinct sheet and process. The module constants keep their
+    comments (they are the documentation, and the suite reads them); only what
+    is rendered loses them."""
+    return strip_css_comments(css)
+
+
+#: The app's entrance is the swap itself. The app appears whole, in one step,
+#: where the styled login page (or the restoring beat) was — and Home's own
+#: motion (the hero and the platform shelf rising, the reel easing in behind
+#: the hero) is the only animation. A fade of the whole pane from nothing used
+#: to run here, at the top of the run: with a slow store it faded the login
+#: page out and back in, and at the swap it showed a dark, empty pane beside a
+#: rail that was already there. Kept as a rule so the reduced-motion setting
+#: and the "never the sidebar, never a transform" contract stay in one place.
+APP_ENTRANCE = """[class*="st-key-tr_app"] { animation:none; }
+"""
 
 CSS = """
 <style>
@@ -461,7 +524,34 @@ __NAV_ICONS__
    screen says the same thing in plain language and offers a way out. */
 [class*="st-key-tr_chrome"] [data-testid="stAlert"] { display:none !important; }
 [class*="st-key-tr_chrome"] iframe { display:block; height:0 !important; min-height:0 !important; border:0; }
-
+/* The login page is drawn only while its own stylesheet is on the page
+   (ui.login.CSS turns it back on). The run that opens the app replaces that
+   stylesheet with its first element, but Streamlit keeps the rest of the
+   login page mounted until the run ends — on the deployed app, behind a
+   Firestore read — so the page's text sat unstyled next to the new rail and
+   account chip. Now it leaves with its stylesheet. */
+[class*="st-key-trauth_shell"] { display:none !important; }
+/* …and so does any piece of it Streamlit has not removed yet. The app's first
+   keyed container lands where the login shell was, and Streamlit reuses that
+   block: the login page's old elements stay inside it, stale and no longer
+   under the shell, until the run ends. They rendered as bare text and bare
+   form fields beside the rail. Only stale elements outside the shell are
+   touched — on the login page's own reruns everything is still inside it, so
+   nothing there ever blinks — and only login markup and the login form's own
+   widgets (the app's Sign out is the one auth_ key outside it). Two rules, not
+   one list: a browser without :has() drops a whole list, and the second rule
+   needs no :has(). */
+[data-stale="true"]:has([class*="tr-auth-"]):not([class*="st-key-trauth_shell"] *) { display:none !important; }
+[data-stale="true"][class*="st-key-auth_"]:not([class*="st-key-auth_signout"]):not([class*="st-key-trauth_shell"] *) { display:none !important; }
+/* The app waits behind the page it replaces. ``tr_app`` (auth.gate) stays
+   hidden while ``tr_page`` still holds the previous page — the login page or
+   the restoring beat, stale but still styled — and Streamlit removes that page
+   when the run ends. So the person sees the styled login page right up to the
+   moment the finished app replaces it: no blank frame, no half-built Home, no
+   rail beside a login page. Only while something stale is in ``tr_page``: on
+   every ordinary run of the app ``tr_page`` is empty and this never matches. */
+.stApp:has([class*="st-key-tr_page"] [data-stale="true"]) [class*="st-key-tr_app"] { display:none !important; }
+__APP_ENTRANCE__
 /* ── hero ──────────────────────────────────────────────────────────── */
 .tr-hero {
   position:relative; overflow:hidden; padding:38px 40px 34px; border-radius:22px;
@@ -1795,13 +1885,13 @@ a.tr-sx-time:hover { border-color:rgba(255,51,85,.6); background:rgba(255,51,85,
   font-family: 'Material Symbols Rounded' !important;
 }
 </style>
-""".replace("__NAV_ICONS__", _nav_css()).replace("__RAIL_RIG__", _rail_rig_css()).replace("__RAIL_PHONE__", _rail_phone_css())
+""".replace("__APP_ENTRANCE__", APP_ENTRANCE).replace("__NAV_ICONS__", _nav_css()).replace("__RAIL_RIG__", _rail_rig_css()).replace("__RAIL_PHONE__", _rail_phone_css())
 
 
 def inject() -> None:
     """Apply the theme once per rerun."""
     st.markdown(FONTS, unsafe_allow_html=True)
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(sheet(CSS), unsafe_allow_html=True)
 
 
 __all__ = ["CSS", "FONTS", "NAV_ICONS", "RAIL_RIG", "RAIL_TURN", "TOKENS", "inject", "rail_speed"]

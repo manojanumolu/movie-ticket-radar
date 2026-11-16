@@ -6,21 +6,33 @@ restored from the cookie Google just re-validated — and the app continues
 with their :class:`AuthUser`; or the login page is drawn and the script
 stops right there. Nothing below the call runs for a visitor.
 
-Two fixed, always-present slots
--------------------------------
-Both the login page and the signed-in app render inside keyed containers this
-gate creates *unconditionally, in the same order, every run*:
+Three fixed, always-present slots
+---------------------------------
+Every page renders inside keyed containers this gate creates
+*unconditionally, in the same order, every run*:
 
-* ``tr_chrome`` — the zero-height cookie writer and the sign-in animation.
-* ``tr_page``   — the login page, or the whole app.
+* ``tr_chrome`` — the zero-height cookie writer.
+* ``tr_page``   — the login page, the restoring beat or its recovery screen.
+* ``tr_app``    — the signed-in app.
 
 Streamlit reconciles the DOM by an element's position. A keyed
 ``st.container`` that moves position between runs — which is exactly what
 happened when the cookie writer's iframe appeared on one run and not the next
 — is not garbage-collected, so the previous page's account chip and the login
-shell piled up on top of each other after a sign-out/sign-in. Pinning the two
+shell piled up on top of each other after a sign-out/sign-in. Pinning the
 slots to a fixed position keeps every login⇄app transition a clean swap: the
 app renders inside :func:`app_container`.
+
+The app has a slot of its own (Phase 6). When it shared ``tr_page`` with the
+login page, the app's first element replaced the login page's stylesheet and
+its first keyed container took over the login shell's block, old children and
+all, while the run was still waiting on the store: for a moment the login page
+was bare text beside the rail. In its own slot the app never touches the login
+page's elements. The theme keeps ``tr_app`` hidden while ``tr_page`` still
+holds the previous page (stale, and still styled), and Streamlit removes that
+page at the end of the run — so the swap from the styled login page (or the
+restoring beat) to the finished app happens in one step, with no blank frame
+between them.
 """
 
 from __future__ import annotations
@@ -32,8 +44,9 @@ import streamlit as st
 from auth import firebase, session
 from auth.session import AuthUser
 
-#: The ``tr_page`` slot from the current run, so ``main()`` can render the app
-#: into the very container the gate reserved. Valid only within one run —
+#: The slots from the current run — ``page`` (``tr_page``) for the login page and
+#: the restoring beat, ``container`` (``tr_app``) for the app — so ``main()`` can
+#: render the app into the very container the gate reserved. Valid only within one run —
 #: and held per *thread*, because Streamlit runs every session's script on
 #: its own thread and all of them share this module. A plain module global
 #: here was one slot for the whole process: with two sessions running at
@@ -45,7 +58,7 @@ _page = threading.local()
 
 
 def app_container():
-    """The fixed ``tr_page`` slot the authenticated app renders into."""
+    """The fixed ``tr_app`` slot the authenticated app renders into."""
     return getattr(_page, "container", None)
 
 
@@ -62,9 +75,10 @@ def require_user() -> AuthUser:
     # signed in, and before either page is drawn.
     login.handle_verified_return()
 
-    # The two fixed slots, always here and always in this order.
+    # The three fixed slots, always here and always in this order.
     chrome = st.container(key="tr_chrome")
-    _page.container = st.container(key="tr_page")
+    _page.page = st.container(key="tr_page")
+    _page.container = st.container(key="tr_app")
 
     # The in-memory session is the fast path: while this Streamlit session is
     # authenticated nothing is read from the browser at all.
@@ -95,7 +109,7 @@ def require_user() -> AuthUser:
         session.run_bridge(signal=session.GOOGLE_SIGNAL if popup_done else "")
 
     if popup_done:
-        with _page.container:
+        with _page.page:
             login.popup_done()
         st.stop()
 
@@ -118,7 +132,7 @@ def require_user() -> AuthUser:
                 st.session_state[session.BRIDGE_RUNS_KEY] = runs
                 print(f"[auth] gate: waiting for the browser bridge (run {runs} "
                       f"mount={session.bridge_mount()})", flush=True)
-                with _page.container:
+                with _page.page:
                     if session.bridge_needs_recovery():
                         _recovery()
                     else:
@@ -142,7 +156,7 @@ def require_user() -> AuthUser:
           f"renders={'app' if user is not None else 'login'}", flush=True)
 
     if user is None:
-        with _page.container:
+        with _page.page:
             login.render()
             _diag_panel()
         st.stop()

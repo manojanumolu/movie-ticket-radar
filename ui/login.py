@@ -48,7 +48,7 @@ from auth import disposable, firebase, google, session
 from auth.firebase import AuthError
 from ui import assets_registry as art
 from ui import components as C
-from ui import crafts, radar
+from ui import crafts, radar, theme
 
 MODE_KEY = "auth_mode"
 ERROR_KEY = "auth_error"
@@ -137,7 +137,17 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
   padding-right:max(2.4rem, calc((100% - 1600px) / 2 + 2.4rem)) !important; overflow:clip; min-height:100vh; box-sizing:border-box; flex-shrink:0; }
 [data-testid="stMainBlockContainer"] { padding-top: .6rem !important; }
 [data-testid="stHeader"] { display: none !important; }
-[class*="st-key-trauth_shell"] { position: relative; }
+/* shown only while this stylesheet is on the page (ui.theme hides it otherwise) */
+[class*="st-key-trauth_shell"] { position: relative; display: flex !important; }
+/* The login page has no rail. The run that opens the app draws the rail
+   before it reaches the page slot, so for that moment the rail stood beside a
+   login page squeezed to make room for it; and signing out kept the old rail
+   up until the run ended. While this stylesheet is on the page, there is none. */
+[data-testid="stSidebar"], button[data-testid="stExpandSidebarButton"] { display: none !important; }
+/* Signing out: the app's last page is still mounted, stale, until the run
+   ends. While this stylesheet is on the page it is not drawn. Only stale
+   content: on the way in, the app arriving in its slot is new, never stale. */
+[class*="st-key-tr_app"]:has([data-stale="true"]) { display: none !important; }
 /* a fine film grain over the whole room; one tiny repeating gradient, no image */
 [class*="st-key-trauth_shell"]::before { content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.35;
   background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px); }
@@ -846,7 +856,7 @@ def popup_done() -> None:
     """The popup's last paint: signed in, the opener has been told, and the
     bridge is closing this window. One line in the page's own voice, in
     case the browser keeps the window open."""
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(theme.sheet(CSS), unsafe_allow_html=True)
     C.html(
         '<div class="tr-auth-shell" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">'
         f'<div class="tr-auth-done" style="justify-content:center;">{_icon("check", 16, "#3ED598", "2.4")}'
@@ -1345,7 +1355,7 @@ def render() -> None:
     (``auth.gate``) before this runs, inside the fixed ``tr_chrome`` slot, so
     they never shift this page's position between runs.
     """
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(theme.sheet(CSS), unsafe_allow_html=True)
     with st.container(key="trauth_shell"):
         C.html(_topbar())
         visual, panel = st.columns([1.16, 0.84], gap="large")
@@ -1369,21 +1379,23 @@ def render() -> None:
         C.html(_bottom())
 
 
-#: Opacity only, and only the main pane. A ``transform`` here (or anything
-#: on the sidebar) overrides the ``translateX`` Streamlit itself uses to
-#: slide the sidebar away — the collapsed sidebar then sits over the page
-#: and swallows every click. That was the broken sidebar after sign-in.
-ENTRANCE_CSS = """<style>
-[data-testid="stMainBlockContainer"] { animation: tr-app-enter .6s var(--tr-ease) both; }
-@keyframes tr-app-enter { from { opacity:0; } to { opacity:1; } }
-@media (prefers-reduced-motion: reduce) { [data-testid="stMainBlockContainer"] { animation:none; } }
-</style>"""
+#: The app's entrance: opacity only, and only the app's own slot. A
+#: ``transform`` here (or anything on the sidebar) overrides the
+#: ``translateX`` Streamlit itself uses to slide the sidebar away — the
+#: collapsed sidebar then sits over the page and swallows every click. That
+#: was the broken sidebar after sign-in. It now lives in the theme
+#: (``ui.theme.APP_ENTRANCE``) and plays when the app is revealed.
+ENTRANCE_CSS = "<style>" + theme.APP_ENTRANCE + "</style>"
 
 
 def entrance() -> None:
-    """The first paint after signing in eases the app in, once."""
-    if st.session_state.pop("auth_just_signed_in", False):
-        st.markdown(ENTRANCE_CSS, unsafe_allow_html=True)
+    """Consume the "just signed in" mark. Nothing is drawn: the fade it used to
+    draw here, at the top of the run, ran while the login page was still on
+    screen behind a slow store read — it faded the login page out and back in —
+    and its element pushed the cookie bridge to a new position, so the bridge's
+    frame was replaced on every sign-in. The theme now eases the app in at the
+    moment it is revealed (``ui.theme.APP_ENTRANCE``)."""
+    st.session_state.pop("auth_just_signed_in", False)
 
 
 __all__ = ["CSS", "ENTRANCE_CSS", "MODE_KEY", "ERROR_KEY", "NOTICE_KEY", "VERIFIED_KEY",
