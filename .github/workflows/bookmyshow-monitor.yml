@@ -64,6 +64,15 @@ permissions:
 
 jobs:
   check:
+    # The production credentials (worker Firebase key, project id, Gmail) live
+    # in the `production` environment, whose deployment branches are `main`
+    # only, so a run of this workflow on any other branch is refused them.
+    # No reviewer: monitoring runs unattended. The schedule, the push trigger,
+    # the next-segment handover and the app's "check now" all run on main.
+    # (Repository settings, not this file, hold the branch rule — see the
+    # Phase 7 report. Until the environment exists, GitHub creates it on the
+    # first run and the repository secrets keep working exactly as before.)
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 65   # a 50-minute segment plus setup and the final commit
 
