@@ -164,8 +164,43 @@ def _compress_bridge_schedule() -> None:
         auth_session.BRIDGE_MOUNT_SECONDS = tuple(float(x) for x in raw.split(","))
 
 
+def _simulate_store_latency() -> None:
+    """``TR_STORE_LATENCY_MS=600``: a cold store read takes this long.
+
+    The deployed app reads Firestore over the network, and its read cache
+    lapses after five seconds, so the first run of a session — the one that
+    opens the app after signing in — waits on a round trip. The local JSON
+    store answers at once, which hid every transition that only goes wrong
+    while a run is waiting (the login page's leftovers beside the rail,
+    Phase 6). Harness only; the value is a stand-in, not a measurement.
+    """
+    raw = os.environ.get("TR_STORE_LATENCY_MS")
+    if not raw:
+        return
+    from monitor import state as state_mod
+
+    if getattr(state_mod, "_latency_patched", False):
+        return
+    state_mod._latency_patched = True
+    import time
+
+    import streamlit as st
+
+    real, delay = state_mod.load_many, int(raw) / 1000
+
+    def slow_when_cold(*kinds):
+        last = st.session_state.get("_harness_last_read", 0.0)
+        if time.time() - last > 5:
+            time.sleep(delay)
+        st.session_state["_harness_last_read"] = time.time()
+        return real(*kinds)
+
+    state_mod.load_many = slow_when_cold
+
+
 _install_fake()
 _simulate_streamlit_cloud()
 _compress_bridge_schedule()
 _simulate_blind_first_run()
+_simulate_store_latency()
 runpy.run_path(str(ROOT / "app.py"), run_name="__main__")
