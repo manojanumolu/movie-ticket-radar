@@ -34,6 +34,15 @@ So while something is being watched, the worker re-lists the city itself.
 * **Never destructive.** Siblings are only ever *added* to a monitor. A listing
   strategy that answers with fewer siblings, a movie missing from the listing,
   or a blocked request leaves every monitor exactly as it was.
+* **Bounded.** A stored monitor carries at most :data:`monitor.policy.MAX_VARIANTS`
+  (12) sibling events — the limit the app, the worker's screen and the Firestore
+  rules all enforce. Discovery keeps every sibling the monitor already has, adds
+  new ones in the listing's order, and stops at the limit; a sibling past it is
+  logged, not stored. It is still swept: every fetch reads the monitor's siblings
+  *and* the catalogue's (:func:`monitor.checker.with_current_variants`), and the
+  next catalogue sync records it there. Before the cap, a thirteenth sibling made
+  the stored monitor one the worker's screen refuses outright — no checks at all
+  — and one its owner could no longer stop under the Phase 5 rules.
 
 New siblings are merged onto the monitor and persisted, so the very next fetch
 — in the same tick — sweeps them, and the ordinary state-transition rules in
@@ -50,6 +59,7 @@ from typing import Any, Callable, Iterable
 
 from config.store import load_discovery, save_discovery
 from config.timezone import now_ist, parse_iso, to_iso
+from monitor import policy
 from monitor.models import Availability, Monitor, MovieRef
 from monitor.state import MonitorState
 from platforms import get_provider, is_enabled
@@ -85,6 +95,9 @@ class DiscoveryReport:
     failed: list[str] = field(default_factory=list)     # "hyderabad: refused (HTTP 403)"
     #: monitor id -> the sibling events it did not know about until now.
     updated: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    #: monitor id -> new sibling events not stored because the monitor is at
+    #: the sibling limit (still swept through the catalogue once it has them).
+    capped: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
 
     @property
     def ran(self) -> bool:
@@ -92,7 +105,9 @@ class DiscoveryReport:
 
     def summary(self) -> str:
         new = sum(len(v) for v in self.updated.values())
-        return f"listed={len(self.listed)} failed={len(self.failed)} new_siblings={new}"
+        text = f"listed={len(self.listed)} failed={len(self.failed)} new_siblings={new}"
+        over = sum(len(v) for v in self.capped.values())
+        return f"{text} over_limit={over}" if over else text
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -166,17 +181,52 @@ def family_for(movie: MovieRef, listed: Iterable[MovieRef]) -> tuple[tuple[str, 
     return None
 
 
-def merge_variants(known: tuple[tuple[str, str], ...], extra: Iterable[tuple[str, str]],
-                   *, own_code: str) -> tuple[tuple[str, str], ...]:
-    """Union by event code, keeping known labels. Never drops a sibling."""
-    merged: dict[str, str] = {}
-    for code, label in (*known, *extra):
-        if not code or code == own_code:
+def _pairs(items: Iterable[Any]) -> Iterable[tuple[str, str]]:
+    """``(code, label)`` from each well-formed item; anything else is skipped.
+
+    A listing parser bug or a hand-edited document can hand this a ``None``, a
+    bare string, a one-item list or a non-string code. None of those is a
+    sibling, and none of them may stop the merge."""
+    for item in items or ():
+        if isinstance(item, (str, bytes)) or not isinstance(item, (list, tuple)) or not item:
             continue
-        merged.setdefault(code, label)
-        if not merged[code] and label:
-            merged[code] = label
+        code = item[0]
+        label = item[1] if len(item) > 1 else ""
+        if not isinstance(code, str):
+            continue
+        yield code.strip(), label if isinstance(label, str) else ""
+
+
+def merge_variants(known: tuple[tuple[str, str], ...], extra: Iterable[tuple[str, str]],
+                   *, own_code: str, limit: int = policy.MAX_VARIANTS,
+                   valid: Callable[[str], Any] | None = None) -> tuple[tuple[str, str], ...]:
+    """Union by event code, keeping known labels, at most ``limit`` siblings.
+
+    Deterministic: every ``known`` sibling first, in its stored order, then each
+    new one in ``extra``'s order, until ``limit``. A known sibling is never
+    displaced by a new one; only a list that is already over the limit (which
+    nothing in this application writes) is cut back, keeping its first
+    ``limit``. The movie's own event, duplicates, empty codes and — when
+    ``valid`` is given — codes it rejects are never stored.
+    """
+    merged: dict[str, str] = {}
+    for code, label in (*_pairs(known), *_pairs(extra)):
+        if not code or code == own_code or (valid is not None and not valid(code)):
+            continue
+        if code in merged:
+            if not merged[code] and label:
+                merged[code] = label
+            continue
+        if len(merged) >= limit:
+            continue
+        merged[code] = label
     return tuple(merged.items())
+
+
+def _code_check(platform: str) -> Callable[[str], Any] | None:
+    """The event-code shape the worker's screen accepts for this platform
+    (``policy.shape_problem``): a code it would refuse is never stored."""
+    return policy.EVENT_CODE.match if platform == "bookmyshow" else None
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -272,17 +322,33 @@ def _merge_into(monitor: Monitor, listed: list[MovieRef], report: DiscoveryRepor
 
     known = with_current_variants(movie)  # monitor ∪ catalogue, as the checker sees it
     known_codes = {*known.variant_codes, movie.event_code}
-    new = [(code, fmt) for code, fmt in family if code and code not in known_codes]
+    new = [(code, fmt) for code, fmt in _pairs(family) if code and code not in known_codes]
     if not new:
         print(f"[discover]   {label} ({movie.event_code}): no new sibling events "
               f"({len(known.variant_codes)} known)")
         return
 
-    monitor.movie = replace(movie, variants=merge_variants(movie.variants, family,
-                                                           own_code=movie.event_code))
-    report.updated[monitor.id] = new
-    print(f"[discover]   {label} ({movie.event_code}): +{len(new)} new sibling event(s) — "
-          + ", ".join(f"{code} '{fmt or '?'}'" for code, fmt in new)
+    valid = _code_check(movie.platform)
+    merged = merge_variants(movie.variants, family, own_code=movie.event_code, valid=valid)
+    stored = {code for code, _ in merged}
+    added = [(code, fmt) for code, fmt in new if code in stored]
+    over = [(code, fmt) for code, fmt in new
+            if code not in stored and (valid is None or valid(code))]
+    if over:
+        report.capped[monitor.id] = over
+        print(f"[discover]   {label} ({movie.event_code}): {len(over)} new sibling event(s) not "
+              f"stored — monitor {monitor.id[:8]} is at the {policy.MAX_VARIANTS}-event limit; "
+              "they are swept once the catalogue records them")
+    if merged == movie.variants or not added:
+        if not over:
+            print(f"[discover]   {label} ({movie.event_code}): no new sibling events "
+                  f"({len(known.variant_codes)} known)")
+        return
+
+    monitor.movie = replace(movie, variants=merged)
+    report.updated[monitor.id] = added
+    print(f"[discover]   {label} ({movie.event_code}): +{len(added)} new sibling event(s) — "
+          + ", ".join(f"{code} '{fmt or '?'}'" for code, fmt in added)
           + f" — monitor {monitor.id[:8]} will sweep them from this check on")
 
 
