@@ -49,7 +49,21 @@ def test_the_admin_job_runs_in_the_admin_environment_with_no_mail_credentials():
     assert secrets_used(jobs["claim"]) == {"FIREBASE_SERVICE_ACCOUNT", "FIREBASE_PROJECT_ID"}
 
 
-@pytest.mark.parametrize("name", sorted(set(WORKFLOWS) - {"bookmyshow-monitor.yml", "grant-admin.yml"}))
+def test_the_rules_audit_reads_with_the_worker_key_and_can_do_nothing_else():
+    """Read-only audit before the rules are published: the worker's Firebase
+    key from `production` (main only), no mail credentials, no write token."""
+    doc = load("rules-audit.yml")
+    assert set(doc.get("on", doc.get(True))) == {"workflow_dispatch"}
+    assert doc["permissions"] == {"contents": "read"}
+    (job,) = doc["jobs"].values()
+    assert job["environment"] == "production"
+    assert secrets_used(job) == {"FIREBASE_SERVICE_ACCOUNT", "FIREBASE_PROJECT_ID"}
+    checkout = next(step for step in job["steps"] if str(step.get("uses", "")).startswith("actions/checkout@"))
+    assert checkout["with"]["persist-credentials"] is False
+
+
+@pytest.mark.parametrize("name", sorted(set(WORKFLOWS) - {"bookmyshow-monitor.yml", "grant-admin.yml",
+                                                          "rules-audit.yml"}))
 def test_no_other_workflow_touches_a_production_secret_or_environment(name):
     for job_name, job in load(name)["jobs"].items():
         assert "environment" not in job, (name, job_name)
