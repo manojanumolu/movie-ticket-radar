@@ -37,6 +37,7 @@ from ui import flow
 from content import explorer_dialogues, format_directory as fmtdir
 from ui import crafts, radar
 from ui import home as home_ui
+from ui.theme import sheet
 
 MODES = {
     "movie": ("By movie", "Find where and when a movie is playing.", "movie"),
@@ -782,7 +783,7 @@ def lines_markup() -> str:
 
 def ambience() -> None:
     """The room behind the page, drawn first so everything sits on top of it."""
-    C.html(AMBIENCE_CSS + '<div class="tr-sx-ambience" aria-hidden="true">'
+    C.html(sheet(AMBIENCE_CSS) + '<div class="tr-sx-ambience" aria-hidden="true">'
            + radar.svg(size="min(78vw, 980px)", state="idle", cls="sxbg", label="") + "</div>")
 
 

@@ -19,6 +19,7 @@ the design — while Streamlit still owns the click, the rerun and the tests.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from urllib.parse import quote
 
 import streamlit as st
@@ -151,6 +152,57 @@ FONTS = (
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
     'family=Manrope:wght@500;600;700;800&family=DM+Mono:wght@400;500&display=swap">'
 )
+
+def strip_css_comments(css: str) -> str:
+    """``css`` without its ``/* … */`` comments, and nothing else changed.
+
+    The stylesheets explain themselves in comments — about a tenth of their
+    size, and a quarter of it compressed — and every comment went to every
+    browser that opened the app. Streamlit sends a page's stylesheets in full
+    once per browser session (later runs send a reference to the copy the
+    browser already holds), so this is what a first load and a reload carry.
+
+    Only comments go: text inside quotes (``content:"…"``, ``url("…")``) is
+    copied as it is, so a ``/*`` inside a string survives (an *unquoted*
+    ``url(…)`` holding ``/*`` would not; none exists, and a test keeps it so),
+    and every rule,
+    selector and value is byte-for-byte what was written. The source keeps
+    its comments (see :func:`sheet`). Pinned by ``tests/test_stylesheet_payload.py``, which checks
+    that every stripped sheet tokenises to exactly the original.
+    """
+    out: list[str] = []
+    i, n, quote = 0, len(css), ""
+    while i < n:
+        ch = css[i]
+        if quote:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(css[i + 1])
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "\"'":
+            quote = ch
+        elif css.startswith("/*", i):
+            end = css.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+@lru_cache(maxsize=32)
+def sheet(css: str) -> str:
+    """A stylesheet as it goes to the browser: :func:`strip_css_comments`, done
+    once per distinct sheet and process. The module constants keep their
+    comments (they are the documentation, and the suite reads them); only what
+    is rendered loses them."""
+    return strip_css_comments(css)
+
 
 #: The app's entrance is the swap itself. The app appears whole, in one step,
 #: where the styled login page (or the restoring beat) was — and Home's own
@@ -1839,7 +1891,7 @@ a.tr-sx-time:hover { border-color:rgba(255,51,85,.6); background:rgba(255,51,85,
 def inject() -> None:
     """Apply the theme once per rerun."""
     st.markdown(FONTS, unsafe_allow_html=True)
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(sheet(CSS), unsafe_allow_html=True)
 
 
 __all__ = ["CSS", "FONTS", "NAV_ICONS", "RAIL_RIG", "RAIL_TURN", "TOKENS", "inject", "rail_speed"]

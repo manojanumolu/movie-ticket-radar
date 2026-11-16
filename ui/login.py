@@ -856,7 +856,7 @@ def popup_done() -> None:
     """The popup's last paint: signed in, the opener has been told, and the
     bridge is closing this window. One line in the page's own voice, in
     case the browser keeps the window open."""
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(theme.sheet(CSS), unsafe_allow_html=True)
     C.html(
         '<div class="tr-auth-shell" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">'
         f'<div class="tr-auth-done" style="justify-content:center;">{_icon("check", 16, "#3ED598", "2.4")}'
@@ -1355,7 +1355,7 @@ def render() -> None:
     (``auth.gate``) before this runs, inside the fixed ``tr_chrome`` slot, so
     they never shift this page's position between runs.
     """
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(theme.sheet(CSS), unsafe_allow_html=True)
     with st.container(key="trauth_shell"):
         C.html(_topbar())
         visual, panel = st.columns([1.16, 0.84], gap="large")

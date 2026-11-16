@@ -37,6 +37,7 @@ from content import home_dialogues
 from ui import crafts
 from ui import radar
 from ui.theme import _svg_uri
+from ui.theme import sheet
 
 #: The rail's column never goes below this on a desktop.
 RAIL_MIN = 320
@@ -325,7 +326,7 @@ def strip_svg() -> str:
 def ambience() -> None:
     """Home's stylesheet and its background layers — the reels, the strip,
     the formats in the dark, the light — drawn once, first, behind it all."""
-    C.html(CSS + '<div class="tr-home-ambience" aria-hidden="true"><div class="tr-halo-big"></div>'
+    C.html(sheet(CSS) + '<div class="tr-home-ambience" aria-hidden="true"><div class="tr-halo-big"></div>'
            + reel_svg("big", formats=True) + reel_svg("small") + strip_svg() + '</div>')
 
 

@@ -31,6 +31,7 @@ from ui import account
 from ui import assets_registry as art
 from ui import components as C
 from ui import flow
+from ui.theme import sheet
 
 #: The field on ``users/{uid}``. Empty or absent means "the initial".
 SETTING = "avatar_key"
@@ -147,7 +148,7 @@ def _preview(user, draft: str, settings: dict | None = None) -> str:
 
 def _body(user, settings: dict, *, mirror: bool, notify: Callable[[str, str], None] | None) -> None:
     draft = st.session_state.get(DRAFT_KEY, current_key(settings))
-    C.html(CSS + _preview(user, draft, settings))
+    C.html(sheet(CSS) + _preview(user, draft, settings))
     C.html('<div class="tr-avp-title">Choose your avatar</div>')
 
     # The way back to the letter, first, in the same grid as the characters.

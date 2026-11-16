@@ -38,6 +38,7 @@ from platforms.bookmyshow import is_bookmyshow_url
 from ui import radar
 from ui import components as C
 from ui import home
+from ui.theme import sheet
 
 OPEN_KEY = "monitor_detail"
 
@@ -199,7 +200,7 @@ def markup(monitor: Monitor, state: MonitorState, *, at=None) -> str:
         marks = [phase.label.upper()]
     tech = "".join(f"<span>{C.e(m)}</span>" for m in marks)
 
-    return f"""{CSS}<div class="tr-det{' live' if phase.key == 'available' else ''}" data-phase="{C.e(phase.key)}" data-running="{'1' if running else '0'}">
+    return f"""{sheet(CSS)}<div class="tr-det{' live' if phase.key == 'available' else ''}" data-phase="{C.e(phase.key)}" data-running="{'1' if running else '0'}">
       <div class="tr-det-bg" aria-hidden="true"><div class="sweep"></div><div class="line"></div>{home.reel_svg("det")}</div>
       <div class="tr-det-eyebrow"><span>Monitor control room</span><em>Created {C.e(fmt_datetime(monitor.created_at))}</em></div>
       <div class="tr-det-tech">{tech}</div>

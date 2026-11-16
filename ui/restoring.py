@@ -31,6 +31,7 @@ import streamlit as st
 
 from ui import components as C
 from ui import radar
+from ui.theme import sheet
 
 #: TicketRadar's own line. Not a quotation from anything — the app's voice,
 #: saying what it is doing: the queue is the booking page it watches.
@@ -59,7 +60,7 @@ def markup() -> str:
     clean swap rather than a pile of blocks the page has to reconcile.
     """
     return (
-        CSS
+        sheet(CSS)
         + '<div class="tr-boot" role="status" aria-live="polite" aria-label="Restoring your session">'
         + '<div class="tr-boot-stage">'
         + radar.svg(size=132, state="detecting", cls="boot", label="")
@@ -84,7 +85,7 @@ def recovery_markup(*, retrying: bool) -> str:
     screen reader hears it, which the beat's polite status would not force."""
     still = f'<div class="tr-boot-still">{C.e(RECOVERY_RETRYING)}</div>' if retrying else ""
     return (
-        CSS
+        sheet(CSS)
         + '<div class="tr-boot tr-boot-recovery" role="alert">'
         + '<div class="tr-boot-stage">'
         + radar.svg(size=132, state="idle", cls="boot", label="")
