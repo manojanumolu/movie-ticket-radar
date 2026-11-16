@@ -137,7 +137,13 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
   padding-right:max(2.4rem, calc((100% - 1600px) / 2 + 2.4rem)) !important; overflow:clip; min-height:100vh; box-sizing:border-box; flex-shrink:0; }
 [data-testid="stMainBlockContainer"] { padding-top: .6rem !important; }
 [data-testid="stHeader"] { display: none !important; }
-[class*="st-key-trauth_shell"] { position: relative; }
+/* shown only while this stylesheet is on the page (ui.theme hides it otherwise) */
+[class*="st-key-trauth_shell"] { position: relative; display: flex !important; }
+/* The login page has no rail. The run that opens the app draws the rail
+   before it reaches the page slot, so for that moment the rail stood beside a
+   login page squeezed to make room for it; and signing out kept the old rail
+   up until the run ended. While this stylesheet is on the page, there is none. */
+[data-testid="stSidebar"], button[data-testid="stExpandSidebarButton"] { display: none !important; }
 /* a fine film grain over the whole room; one tiny repeating gradient, no image */
 [class*="st-key-trauth_shell"]::before { content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.35;
   background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px); }

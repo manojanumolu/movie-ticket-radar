@@ -391,6 +391,17 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
 [class*="st-key-trhome"] > [data-testid="stLayoutWrapper"] {{ position:relative; z-index:1; }}
 [class*="st-key-trhome"] > [data-testid="stElementContainer"] {{ position:relative; z-index:1; }}
 .tr-home-ambience {{ position:absolute; left:-60px; right:-60px; top:-140px; bottom:-120px; z-index:0; pointer-events:none; overflow:hidden; }}
+/* The room's reels arrive with the room, never ahead of it. The ambience is
+   Home's first element, so it reached the screen first and at full strength —
+   on the deployed app a beat before the hero, and always while the hero and
+   the cards were still rising from nothing (tr-home-rise) — so the big reel was
+   the first thing a person saw of Home. It now waits for the hero and fades in
+   just behind it. The animation starts when the hero appears (when this rule
+   starts to match), not when the reel is mounted; a rerun keeps both, so it
+   does not replay. */
+.tr-home-ambience {{ opacity:0; }}
+[class*="st-key-trhome"]:has(.tr-hero) .tr-home-ambience {{ opacity:1; animation: tr-home-ambience-in 1.1s var(--tr-ease) .2s backwards; }}
+@keyframes tr-home-ambience-in {{ from {{ opacity:0; }} to {{ opacity:1; }} }}
 .tr-home-ambience::before {{ content:""; position:absolute; right:-12%; top:-8%; width:80%; height:70%; filter: blur(16px); opacity:.9;
   background: conic-gradient(from 200deg at 92% 4%, transparent 0deg, rgba(255,107,133,.12) 14deg, rgba(255,51,85,.045) 30deg, rgba(255,51,85,.012) 44deg, transparent 56deg); }}
 .tr-home-ambience::after {{ content:""; position:absolute; left:-10%; bottom:6%; width:56%; height:46%; filter: blur(18px);
@@ -605,6 +616,7 @@ CSS = "<style>" + radar.CSS + crafts.CSS + f"""
   .tr-home-veil {{ animation:none; opacity:1; }}
   .tr-craft .tr-sub {{ transition:none; }}
   .tr-hero, .tr-platforms, .tr-hero-radar .tr-radar.home {{ animation:none; }}
+  [class*="st-key-trhome"]:has(.tr-hero) .tr-home-ambience {{ animation:none; }}
 }}
 </style>"""
 

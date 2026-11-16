@@ -461,6 +461,23 @@ __NAV_ICONS__
    screen says the same thing in plain language and offers a way out. */
 [class*="st-key-tr_chrome"] [data-testid="stAlert"] { display:none !important; }
 [class*="st-key-tr_chrome"] iframe { display:block; height:0 !important; min-height:0 !important; border:0; }
+/* The login page is drawn only while its own stylesheet is on the page
+   (ui.login.CSS turns it back on). The run that opens the app replaces that
+   stylesheet with its first element, but Streamlit keeps the rest of the
+   login page mounted until the run ends — on the deployed app, behind a
+   Firestore read — so the page's text sat unstyled next to the new rail and
+   account chip. Now it leaves with its stylesheet. */
+[class*="st-key-trauth_shell"] { display:none !important; }
+/* …and so does any piece of it Streamlit has not removed yet. The app's first
+   keyed container lands where the login shell was, and Streamlit reuses that
+   block: the login page's old elements stay inside it, stale and no longer
+   under the shell, until the run ends. They rendered as bare text and bare
+   form fields beside the rail. Only stale elements outside the shell are
+   touched — on the login page's own reruns everything is still inside it, so
+   nothing there ever blinks — and only login markup and the login form's own
+   widgets (the app's Sign out is the one auth_ key outside it). */
+[data-stale="true"]:has([class*="tr-auth-"]):not([class*="st-key-trauth_shell"] *),
+[data-stale="true"][class*="st-key-auth_"]:not([class*="st-key-auth_signout"]):not([class*="st-key-trauth_shell"] *) { display:none !important; }
 
 /* ── hero ──────────────────────────────────────────────────────────── */
 .tr-hero {
