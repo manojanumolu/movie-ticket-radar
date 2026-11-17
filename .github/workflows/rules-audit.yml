@@ -1,0 +1,39 @@
+name: Firestore rules audit
+
+# Read-only. Before the Phase 5 Firestore rules are published, answers one
+# question: is there a stored monitor its owner could no longer stop, or the
+# app could no longer expire, once they are live? (tools/rules_audit.py)
+#
+# It reads every monitor with the worker's credential and writes nothing — the
+# run is under config.readonly.read_only, which makes any Firestore commit
+# raise. The log is public, so it prints counts and the first eight characters
+# of document ids only: never a title, an address or a UID.
+#
+# Run it from the Actions tab: Firestore rules audit → Run workflow (main).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    # The worker's credential, from the `production` environment: main only.
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          # Read-only job: the token is not left in .git/config for later steps.
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r ci/requirements-worker.lock
+      - name: Audit stored monitors against the Phase 5 rules
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python tools/rules_audit.py

@@ -35,6 +35,11 @@ permissions:
 
 jobs:
   claim:
+    # The admin credential (a service account that can change custom claims and
+    # nothing else) lives in the `admin` environment: deployment branch `main`
+    # only, and the owner's approval before every run, so the key is released
+    # to no run nobody approved. Read-only `show` waits for approval too.
+    environment: admin
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
