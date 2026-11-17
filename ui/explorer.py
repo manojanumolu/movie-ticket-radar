@@ -24,6 +24,7 @@ Rules this page keeps:
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, time as dtime, timedelta
 
 import streamlit as st
@@ -37,6 +38,7 @@ from ui import flow
 from content import explorer_dialogues, format_directory as fmtdir
 from ui import crafts, radar
 from ui import home as home_ui
+from ui import widget_state
 from ui.theme import sheet
 
 MODES = {
@@ -72,9 +74,30 @@ def _ui_only() -> None:
     flow.mark_ui_only()
 
 
+#: The time window's widgets, re-sent to the browser on every run (``_boot``).
+WINDOW_KEYS = ("sx_from", "sx_to")
+
+
 def _boot() -> None:
     for key, value in DEFAULTS.items():
-        st.session_state.setdefault(key, list(value) if isinstance(value, list) else value)
+        if key not in WINDOW_KEYS:
+            st.session_state.setdefault(key, list(value) if isinstance(value, list) else value)
+    # The window is re-sent on every run. Otherwise a run that ended early
+    # (st.stop() in the gate or on a storage error) leaves the server holding
+    # the window while the browser has forgotten the inputs, and they come
+    # back showing the server's clock ("now", UTC) — From = To, refused.
+    # The person's own times are what is re-sent; only a missing or broken
+    # value becomes the whole day (ui/widget_state.py).
+    # A copy outside the widget keys (``…_keep``) also carries the window
+    # across a visit to another page: Streamlit deletes a widget's key after
+    # a run that did not draw it, which used to bring the person back to the
+    # whole day instead of the window they chose.
+    for key in WINDOW_KEYS:
+        fallback = st.session_state.get(f"{key}_keep", DEFAULTS[key])
+        if not isinstance(fallback, dtime):
+            fallback = DEFAULTS[key]
+        value = widget_state.hold(key, fallback, valid=lambda v: isinstance(v, dtime))
+        st.session_state[f"{key}_keep"] = value
     dates = date_codes()
     if st.session_state.get("sx_date") not in dates:
         st.session_state["sx_date"] = dates[0]
@@ -406,8 +429,25 @@ def _fmt_badges(show: Q.ExplorerShow, *, language: bool = True) -> str:
     return out
 
 
+#: A trailing city name in BookMyShow's area text ("…, Hyderabad",
+#: "… Hyderabad"). Whole word only, so "Secunderabad" is never touched.
+_CITY_TAIL = re.compile(r"[\s,]*\bhyderabad\b[\s.,]*$", re.IGNORECASE)
+
+
 def _where(show: Q.ExplorerShow) -> str:
-    return show.locality if show.locality != UNKNOWN else (show.area or "Hyderabad")
+    """The theatre's second line: BookMyShow's own area text — what it wrote
+    after the colon in the venue name — without a trailing ", Hyderabad".
+
+    That text is what tells two branches of one chain apart ("PVR: Atrium
+    Gachibowli" vs "PVR: Preston, Gachibowli"), so it is shown as written.
+    The locality keyword (``explorer.classify``) is for the Area filter
+    only. When BookMyShow gave no area beyond the city, the known locality
+    is shown, else "Hyderabad" — nothing is invented.
+    """
+    area = _CITY_TAIL.sub("", show.area or "").strip(" ,")
+    if area:
+        return area
+    return show.locality if show.locality != UNKNOWN else "Hyderabad"
 
 
 def time_rows_markup(shows: list[Q.ExplorerShow], mode: str) -> str:

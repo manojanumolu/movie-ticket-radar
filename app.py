@@ -81,6 +81,7 @@ from ui import home  # noqa: E402
 from ui import catalogue_view as cv  # noqa: E402
 from ui import components as C  # noqa: E402
 from ui import flow  # noqa: E402
+from ui import widget_state  # noqa: E402
 from ui.theme import inject  # noqa: E402
 
 APP_VERSION = "2.6.0"
@@ -1126,7 +1127,11 @@ def main() -> None:
     # a previous session's account chip or the login shell can never linger.
     with app_container():
         flow.boot()
-        st.session_state.setdefault("page", "Home")
+        # The nav radio's page is re-sent on every run, so a browser that
+        # forgot the radio after a run that ended early (the gate's st.stop(),
+        # storage unavailable) is told the page again instead of falling back
+        # to Home on the next click (ui/widget_state.py).
+        widget_state.hold("page", "Home", valid=lambda p: p in PAGES)
         st.session_state.setdefault("flash", None)
 
         try:
