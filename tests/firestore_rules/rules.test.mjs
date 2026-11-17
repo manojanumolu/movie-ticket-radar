@@ -289,6 +289,39 @@ test("a query returns only the caller's records, or is refused", async () => {
   }
 });
 
+// ── Phase 7: an over-limit monitor can always be stopped or expired ──────
+test("a monitor over a newer limit can be stopped or expired, nothing else", async () => {
+  const thirteen = film(Array.from({ length: 13 }, (_, i) => sibling(i)));
+  const legacy = monitor(ALICE, { id: "old", movie: thirteen });
+  await seed("monitors/old", legacy);
+  const me = db(ALICE);
+  const stopped = { ...legacy, status: "STOPPED", stopped_at: iso(0), stopped_reason: "Stopped by you." };
+  // The app writes the whole document: everything else unchanged.
+  await assertSucceeds(setDoc(doc(me, "monitors/old"), stopped));
+  const ended = { ...legacy, id: "old2", monitor_until: iso(-DAY) };      // one timestamp, stored and sent
+  await seed("monitors/old2", ended);
+  await assertSucceeds(setDoc(doc(me, "monitors/old2"),
+    { ...ended, status: "EXPIRED", stopped_at: iso(0), stopped_reason: "Reached the end time you set." }));
+  // Not a restart, an extension or a reshape.
+  await assertFails(setDoc(doc(me, "monitors/old"), { ...stopped, status: "ACTIVE" }));
+  await seed("monitors/old3", { ...legacy, id: "old3" });
+  await assertFails(setDoc(doc(me, "monitors/old3"), { ...legacy, id: "old3", monitor_until: iso(5 * DAY) }));
+  await assertFails(setDoc(doc(me, "monitors/old3"),
+    { ...legacy, id: "old3", status: "STOPPED", movie: film(Array.from({ length: 14 }, (_, i) => sibling(i))) }));
+  await assertFails(setDoc(doc(me, "monitors/old3"),
+    { ...legacy, id: "old3", status: "STOPPED", notify_email: "someone@else.com" }));
+  await assertFails(setDoc(doc(me, "monitors/old3"),
+    { ...legacy, id: "old3", status: "STOPPED", stopped_reason: "x".repeat(501) }));
+  // Not by anyone else, and not unverified.
+  await assertFails(setDoc(doc(db(BOB), "monitors/old3"), { ...legacy, id: "old3", status: "STOPPED" }));
+  await assertFails(setDoc(doc(db(ALICE, { verified: false }), "monitors/old3"), { ...legacy, id: "old3", status: "STOPPED" }));
+  // Creation of an over-limit monitor is still refused, stopped or not.
+  await assertFails(setDoc(doc(me, "monitors/new13"), monitor(ALICE, { id: "new13", movie: thirteen })));
+  await assertFails(setDoc(doc(me, "monitors/new13s"), monitor(ALICE, { id: "new13s", status: "STOPPED", movie: thirteen })));
+  // Deletion was never affected.
+  await assertSucceeds(deleteDoc(doc(me, "monitors/old3")));
+});
+
 let failed = 0;
 for (const [name, fn] of cases) {
   await env.clearFirestore();

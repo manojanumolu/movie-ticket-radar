@@ -142,6 +142,21 @@ service cloud.firestore {
       return validShape(d, id) && runningAllowed(d);
     }
 
+    // Stopping or expiring is always possible, even for a monitor saved before
+    // a newer limit (e.g. more than 12 sibling events): the update may change
+    // nothing but status (to STOPPED or EXPIRED), stopped_at and stopped_reason.
+    // Everything else in the document must be exactly as stored, so this can
+    // neither create, restart, extend nor reshape a monitor.
+    function isStopOrExpiry() {
+      return request.resource.data.status in ['STOPPED', 'EXPIRED']
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'stopped_at', 'stopped_reason'])
+        && (!('stopped_reason' in request.resource.data) || request.resource.data.stopped_reason == null
+            || (request.resource.data.stopped_reason is string && request.resource.data.stopped_reason.size() <= 500))
+        && (!('stopped_at' in request.resource.data) || request.resource.data.stopped_at == null
+            || (request.resource.data.stopped_at is string && request.resource.data.stopped_at.size() <= 40));
+    }
+
     // users/{uid}: the person's own settings document.
     match /users/{uid} {
       allow read, delete: if signedIn() && request.auth.uid == uid;
@@ -153,7 +168,8 @@ service cloud.firestore {
     match /monitors/{id} {
       allow read: if ownsExisting();
       allow create: if ownsIncoming() && validMonitor(request.resource.data, id);
-      allow update: if ownsExisting() && ownsIncoming() && validMonitor(request.resource.data, id);
+      allow update: if ownsExisting() && ownsIncoming()
+        && (validMonitor(request.resource.data, id) || isStopOrExpiry());
       allow delete: if ownsExisting();
     }
 
