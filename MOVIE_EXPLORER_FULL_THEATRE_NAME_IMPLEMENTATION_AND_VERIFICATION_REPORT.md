@@ -9,8 +9,8 @@ Date: 18 Nov 2026 (UTC) · Branch: `claude/relaxed-turing-mw4fer`
 | Implemented | **Yes** — commit `9beb6a4` |
 | Tested locally | **Yes** — 61 new tests pass; full suite 2,084 passed, 0 failed, 48 skipped (the skips are the opt-in browser tests); opt-in browser suite: see §8 |
 | Browser-verified locally | **Yes** — real app in Chromium, desktop 1280×800 and mobile 390×844 (§8) |
-| CI verified | **Pending** — run in progress at time of writing |
-| Merged into `main` | **Not yet** — waits for green CI |
+| CI verified | **Yes** — GitHub Actions "Tests" run [44381929560](https://github.com/manojanumolu/movie-ticket-radar/actions/runs/44381929560) on `eafc952` (contains `9beb6a4`): test suite ✅, pip-audit ✅ (Python 3.12). The merge commit's own CI run is listed in §9 |
+| Merged into `main` | **Yes** — `--no-ff` merge commit (SHA in §9 and in the merge commit's message history; this report is part of the merged branch) |
 | Verified on live production | **No — blocked.** See §10 |
 
 ---
@@ -121,7 +121,10 @@ Updated existing tests: `test_explorer_window_and_theatre_names.py` (27/27 pass,
 - Command (same as CI): `python -m pytest -q --timeout=300` with `ci/requirements-dev.lock` installed.
 - Result: **2,084 passed, 0 failed, 48 skipped** (all 48 are the opt-in `TR_BROWSER_TESTS=1` browser tests) in 123 s.
 - Explorer and catalogue groups (`test_showtime_explorer`, `test_explorer_*`, `test_catalogue`): all pass.
-- Opt-in browser suite (`TR_BROWSER_TESTS=1`: auth bridge, bridge origin, transitions): pending at time of writing.
+- Opt-in browser suite (`TR_BROWSER_TESTS=1`: auth bridge, bridge origin, transitions; Chromium):
+  - run 1: 44 passed, **2 failed**, 2 skipped. It ran at the same time as other heavy local jobs, and the failure names were cut from the truncated output.
+  - run 2 (same command, clean): **46 passed, 0 failed, 2 skipped** (skipped by design: phone viewport, "reel is below the first screen"). This matches the result recorded for the previous merge (46 passed / 2 skipped).
+  - These suites cover sign-in, session bridge and page transitions. This change touches none of that code, so the run-1 failures are treated as timing flakiness. They were not reproduced.
 - Lint: `pyflakes` reports nothing on the changed modules. `ruff` is not part of this project's CI or config. With its defaults, the only remaining findings in the touched files were there before this change; the one new finding (`re.I` in the new test) was fixed.
 - Local Python 3.13; CI uses 3.12 (see §9).
 
@@ -168,8 +171,10 @@ Posters show as broken images in the screenshots only because the sandbox has no
 - Starting state: branch `claude/relaxed-turing-mw4fer` = `origin/main` = `a421230`, clean working tree.
 - Commit: `9beb6a4` — fix(explorer): full official theatre name on line one, locality on line two.
 - Report commit: on the same branch, after `9beb6a4`.
-- CI (GitHub Actions "Tests", run [44381701942](https://github.com/manojanumolu/movie-ticket-radar/actions/runs/44381701942)): in progress at time of writing.
-- Merge: not yet merged; will be a `--no-ff` merge commit into `main` once CI is green, as in earlier merges.
+- CI (GitHub Actions "Tests"):
+  - run [44381701942](https://github.com/manojanumolu/movie-ticket-radar/actions/runs/44381701942) on `9beb6a4`: *cancelled* by the workflow's `cancel-in-progress` concurrency when `eafc952` was pushed.
+  - run [44381929560](https://github.com/manojanumolu/movie-ticket-radar/actions/runs/44381929560) on `eafc952` (code + report draft): **success**. Full pytest suite with no failures, and pip-audit found "No known vulnerabilities".
+- Merge: `--no-ff` merge commit into `main`, matching the repository's earlier merges (e.g. `c304562`). It was created only after the CI run above was green. No force-push, no branch-protection bypass. The final merge SHA and its own CI run are given in the session's closing summary, because a file cannot contain the SHA of the commit that includes it.
 
 ## 10. Live deployment verification
 
