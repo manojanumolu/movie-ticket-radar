@@ -270,7 +270,8 @@ def test_grouping_by_theatre_and_by_movie():
              explorer_show(session_id="4", venue_code="A", venue_name="AMB", movie_id="m2", movie_title="Jailer",
                            minutes=700)]
     theatres = Q.group_by_theatre(shows)
-    assert [g.title for g in theatres] == ["PVR", "AMB"]           # by each theatre's first show
+    # by each theatre's first show; the full name ("PVR: Gachibowli"), never the brand alone
+    assert [g.title for g in theatres] == ["PVR: Gachibowli", "AMB: Gachibowli"]
     assert [s.minutes for s in theatres[0].shows] == [500, 600]
     movies = Q.group_by_movie(shows)
     assert [g.title for g in movies] == ["Ramayana", "Jailer"]
@@ -561,7 +562,7 @@ def test_titles_group_languages_and_theatres():
 
 def test_the_theatre_directory_and_films_at_a_theatre():
     th = {t.code: t for t in catalog.theatres(ENTRIES)}
-    assert th["AMBH"].label == "AMB Cinemas · Gachibowli" and th["AMBH"].facts.locality == "Gachibowli"
+    assert th["AMBH"].label == "AMB Cinemas: Gachibowli" and th["AMBH"].facts.locality == "Gachibowli"
     films = catalog.films_at(ENTRIES, "AMBH", TOMORROW)
     # listed there that day first; then a film AMB has played but the last sync
     # did not list for that day (BookMyShow may have added it since)
@@ -677,15 +678,15 @@ def test_operator_type_area_and_format_filters_on_the_page(page_env):
     app = pick_movie(ok(run(sx_date=TOMORROW)))
     app = ok(app.multiselect(key="sx_ops").select("PVR").run())
     html = body(app)
-    assert "AMB Cinemas</div>" not in html and "PVR</div>" in html
+    assert "AMB Cinemas: Gachibowli</div>" not in html and "PVR: Nexus Mall</div>" in html
     app = ok(app.multiselect(key="sx_ops").unselect("PVR").run())
     app = ok(app.selectbox(key="sx_type").select(K.SINGLE_SCREEN).run())
     html = body(app)
-    assert "Sudarshan" in html and "PVR</div>" not in html
+    assert "Sudarshan" in html and "PVR: Nexus Mall</div>" not in html
     app = ok(app.selectbox(key="sx_type").select("All theatres").run())
     app = ok(app.multiselect(key="sx_area").select("Gachibowli").run())
     html = body(app)
-    assert "AMB Cinemas</div>" in html and "Sudarshan" not in html
+    assert "AMB Cinemas: Gachibowli</div>" in html and "Sudarshan" not in html
     app = ok(app.multiselect(key="sx_fmt").select("3D").run())
     assert "10:40" in body(app) and "9:05" not in body(app)
 
@@ -706,7 +707,7 @@ def test_switching_mode_keeps_common_filters_and_clears_city_ones(page_env):
     assert app.session_state["sx_area"] == [] and app.session_state["sx_date"] == TOMORROW
     assert "Choose a theatre to begin" in body(app)
     box = app.selectbox(key="sx_theatre")
-    app = ok(box.select("AMB Cinemas · Gachibowli").run())
+    app = ok(box.select("AMB Cinemas: Gachibowli").run())
     html = body(app)
     # every film the catalogue lists at AMB tomorrow, and only AMB's shows
     # Jailer 2 was not in the catalogue's listing for AMB that day, but BookMyShow

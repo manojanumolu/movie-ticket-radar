@@ -59,3 +59,11 @@ These come only from BookMyShow's own theatre name and area text:
   Anything else is *Unknown*, and those theatres appear only under "All theatres".
 - **Locality**: a vocabulary of Hyderabad place names, matched in the theatre's area or name. If
   no place is named, the locality is *Unknown* and is never guessed.
+- **Display name** (`venue_display`): every theatre is shown on two lines, as BookMyShow lists
+  venues. Line 1 is the full official name rebuilt from the catalogue's `name` + `area` (the two
+  halves of BookMyShow's venue name, split at its colon), less only trailing place names and the
+  city: "PVR: Atrium Gachibowli, Hyderabad" → **PVR: Atrium** / Gachibowli; "PVR ICON: Hitech,
+  Madhapur, Hyderabad" → **PVR ICON: Hitech** / Madhapur. When the words after the colon are only
+  a place ("PVR: Musarambagh"), they stay on line 1, so a branch is never reduced to its chain.
+  Line 2 is the locality only; with no place named it is "Hyderabad". The By-theatre picker uses
+  the same name ("PVR: Atrium · Gachibowli").
