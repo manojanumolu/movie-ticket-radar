@@ -20,7 +20,7 @@ from datetime import datetime, time as dtime
 from typing import Iterable
 
 from config.timezone import IST
-from explorer.classify import LOCALITY_ORDER, UNKNOWN
+from explorer.classify import LOCALITY_ORDER, UNKNOWN, venue_display
 
 #: The quick picks offered beside the custom From / To inputs.
 PRESETS: tuple[tuple[str, dtime, dtime], ...] = (
@@ -63,6 +63,17 @@ class ExplorerShow:
     #: The show's dimension as BookMyShow names its event ("2D", "3D", "4DX 3D");
     #: "" when unknown. Always ``formats[0]`` when set.
     dimension: str = ""
+
+    @property
+    def theatre_title(self) -> str:
+        """The theatre's full official name for the first line — "PVR:
+        Atrium", never just "PVR" (``explorer.classify.venue_display``)."""
+        return venue_display(self.venue_name, self.area)[0]
+
+    @property
+    def theatre_where(self) -> str:
+        """The theatre's locality for the second line ("Gachibowli")."""
+        return venue_display(self.venue_name, self.area)[1]
 
     @property
     def starts_at(self) -> datetime | None:
@@ -239,8 +250,7 @@ def group_by_theatre(shows: Iterable[ExplorerShow]) -> list[Group]:
     groups = []
     for code, items in buckets.items():
         first = items[0]
-        where = first.locality if first.locality != UNKNOWN else (first.area or "")
-        groups.append(Group(key=code, title=first.venue_name, subtitle=where, shows=tuple(items),
+        groups.append(Group(key=code, title=first.theatre_title, subtitle=first.theatre_where, shows=tuple(items),
                             booking_url=first.booking_url))
     return groups
 

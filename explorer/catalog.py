@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from explorer.classify import TheatreFacts, classify
+from explorer.classify import TheatreFacts, classify, venue_display
 from explorer.source import Wanted
 from monitor.catalogue import listings_from_entry, movie_from_entry, venues_from_entry
 
@@ -50,8 +50,23 @@ class Theatre:
     facts: TheatreFacts
 
     @property
+    def title(self) -> str:
+        """Full official name ("PVR: Atrium"), as the By-movie rows show it."""
+        return venue_display(self.name, self.area)[0]
+
+    @property
+    def where(self) -> str:
+        """Locality ("Gachibowli"), as the By-movie rows show it."""
+        return venue_display(self.name, self.area)[1]
+
+    @property
     def label(self) -> str:
-        return f"{self.name} · {self.area}" if self.area else self.name
+        """The picker's text: the full name, then the locality unless the
+        name already ends with it ("AMB Cinemas: Gachibowli")."""
+        title, where = self.title, self.where
+        if where.casefold() in title.casefold():
+            return title
+        return f"{title} · {where}"
 
 
 def titles(entries: list[dict[str, Any]]) -> list[Title]:

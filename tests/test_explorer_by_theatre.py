@@ -280,7 +280,7 @@ def body(app) -> str:
 
 def at_amb(app, language="Hindi"):
     app = ok(app.button(key="sxmode_theatre").click().run())
-    app = ok(app.selectbox(key="sx_theatre").select("AMB Cinemas · Gachibowli").run())
+    app = ok(app.selectbox(key="sx_theatre").select("AMB Cinemas: Gachibowli").run())
     if language:
         app = ok(app.multiselect(key="sx_lang").select(language).run())
     return app
@@ -310,7 +310,7 @@ def test_page_a_theatre_with_nothing_that_day_says_so_not_widen_the_window(amb_p
         bms.answers[code] = payload([show(*PVR, "11:00 AM", "1100", date=NOV5)], date=NOV5)
     app = at_amb(ok(run()), language=None)
     html = body(app)
-    assert "Nothing listed for this date" in html and "AMB Cinemas lists no shows" in html
+    assert "Nothing listed for this date" in html and "AMB Cinemas: Gachibowli lists no shows" in html
     assert "Widen the window" not in html
 
 
@@ -343,7 +343,7 @@ def test_page_11_changing_theatre_date_or_language_reads_again_but_the_window_do
     app = ok(app.button(key="sxdate_20261106").click().run())
     assert (TELUGU_2D, NOV6) in bms.calls                            # a new date: read for that date
     app = ok(app.button(key="sxdate_20261105").click().run())
-    app = ok(app.selectbox(key="sx_theatre").select("Cinepolis · Lulu Mall, Hyderabad").run())
+    app = ok(app.selectbox(key="sx_theatre").select("Cinepolis: Lulu Mall · Hyderabad").run())
     app = ok(app.multiselect(key="sx_lang").select("Hindi").run()) if not app.session_state["sx_lang"] else app
     html = body(app)
     assert "10:00" in html and "11:15" not in html                   # Lulu's Hindi show, none of AMB's

@@ -12,9 +12,10 @@ Two bugs, both reproduced in a real browser before they were fixed:
   so the page refused the window. The nav radio fell back to Home the same
   way. ``ui.widget_state.hold`` now re-sends the held value on every run.
 * **"PVR / Gachibowli" for two different theatres.** The By-movie list printed
-  the locality keyword instead of BookMyShow's own area text ("PVR: Atrium
-  Gachibowli" vs "PVR: Preston, Gachibowli"). The area text is now shown,
-  less a trailing ", Hyderabad"; the keyword stays the Area filter's.
+  the locality keyword instead of BookMyShow's own name ("PVR: Atrium
+  Gachibowli" vs "PVR: Preston, Gachibowli"). The first line is now the full
+  official name ("PVR: Atrium") and the second the locality ("Gachibowli");
+  see ``tests/test_explorer_full_theatre_names.py`` for that contract.
 """
 
 from __future__ import annotations
@@ -265,59 +266,59 @@ def live_shows(codes=tuple(BRANCHES), *, venues=None) -> list[Q.ExplorerShow]:
 
 def test_branches_of_one_chain_keep_their_own_names():
     shows = live_shows()
-    lines = {s.venue_code: f"{s.venue_name} / {X._where(s)}" for s in shows}
+    lines = {s.venue_code: f"{s.theatre_title} / {X._where(s)}" for s in shows}
     assert lines == {
-        "PVTS": "PVR / Atrium Gachibowli",
-        "PVTP": "PVR / Preston, Gachibowli",
-        "PNNG": "PVR / Next Galleria Mall, Panjagutta",
-        "PVYH": "PVR / Central Mall, Panjagutta",
-        "PVUM": "PVR / Musarambagh",
+        "PVTS": "PVR: Atrium / Gachibowli",
+        "PVTP": "PVR: Preston / Gachibowli",
+        "PNNG": "PVR: Next Galleria Mall / Panjagutta",
+        "PVYH": "PVR: Central Mall / Panjagutta",
+        "PVUM": "PVR: Musarambagh / Musarambagh",
         "ILKS": "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction / Hyderabad",
     }
 
 
-def test_the_by_movie_list_and_group_headings_show_the_full_area(page_env):
+def test_the_by_movie_list_and_group_headings_show_the_full_name(page_env):
     shows = live_shows()
     html = X.time_rows_markup(shows, "movie")
-    for text in ("Atrium Gachibowli", "Preston, Gachibowli", "Next Galleria Mall, Panjagutta",
-                 "Central Mall, Panjagutta", "Musarambagh",
-                 "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction"):
-        assert text in html
+    for text in ("PVR: Atrium", "PVR: Preston", "PVR: Next Galleria Mall", "PVR: Central Mall",
+                 "PVR: Musarambagh", "PVR Lakeshore PXL 4K Laser ATMOS DTS-X Y Junction"):
+        assert f'<div class="n">{text}</div>' in html
     assert ", Hyderabad<" not in html and " Hyderabad<" not in html.replace(">Hyderabad<", "")
     groups = X.group_markup(Q.group_by_theatre(shows), "movie")
-    assert "Atrium Gachibowli · " in groups and "Preston, Gachibowli · " in groups
+    assert '<div class="n">PVR: Atrium</div><div class="s">Gachibowli · ' in groups
+    assert '<div class="n">PVR: Preston</div><div class="s">Gachibowli · ' in groups
 
 
-def test_the_page_shows_bookmyshows_area_text(page_env):
+def test_the_page_shows_the_full_theatre_name(page_env):
     app = pick_movie(ok(run(sx_date=TOMORROW)))
     html = body(app)
-    assert "Nexus Mall Kukatpally" in html                # was "Kukatpally"
+    assert '<div class="n">PVR: Nexus Mall</div><div class="s">Kukatpally</div>' in html
     assert "Nexus Mall Kukatpally, Hyderabad" not in html  # the city tail is dropped
 
 
 def test_no_two_theatres_in_the_catalogue_look_the_same():
     """On the real synced catalogue: no two different venue codes render the
-    same name and second line (Atrium/Preston and Next Galleria/Central did)."""
+    same first line (Atrium/Preston and Next Galleria/Central once did)."""
     data = json.loads(Path("data/catalogue.json").read_text(encoding="utf-8"))
     venues = {v["code"]: Venue(v["code"], v["name"], v["area"]) for m in data["movies"] for v in m["venues"]}
     if not venues:
         pytest.skip("the catalogue has no venues")
     shows = live_shows(tuple(venues), venues=list(venues.values()))
-    seen: dict[tuple[str, str], str] = {}
-    clashes = [(key, seen[key], s.venue_code) for s in shows
-               if seen.setdefault(key := (s.venue_name, X._where(s)), s.venue_code) != s.venue_code]
+    seen: dict[str, str] = {}
+    clashes = [(s.theatre_title, seen[s.theatre_title], s.venue_code) for s in shows
+               if seen.setdefault(s.theatre_title, s.venue_code) != s.venue_code]
     assert clashes == []
 
 
-def test_the_area_text_is_shown_as_bookmyshow_wrote_it():
+def test_the_second_line_is_the_locality_only():
     def where(name, area):
         facts = classify(name, area)
         return X._where(Q.ExplorerShow(movie_id="m", movie_title="t", language="", event_code="E",
                                        venue_code="V", venue_name=name, area=area, locality=facts.locality,
                                        operator=facts.operator, theatre_type=facts.theatre_type,
                                        date_code="20261118", time_label="", minutes=600))
-    assert where("PVR Superplex Inorbit", "LUXE, PXL, 4DX: Cyberabad") == "LUXE, PXL, 4DX: Cyberabad"
-    assert where("Cinepolis", "Lulu Mall, Hyderabad") == "Lulu Mall"
+    assert where("PVR Superplex Inorbit", "LUXE, PXL, 4DX: Cyberabad") == "Cyberabad"
+    assert where("Cinepolis", "Lulu Mall, Hyderabad") == "Hyderabad"
     assert where("Asian", "Secunderabad") == "Secunderabad"            # a whole word only
     assert where("INOX GVK One, Banjara Hills", "Hyderabad") == "Banjara Hills"   # city only → locality
     assert where("Some Hall", "") == "Hyderabad"                        # nothing given → the city
@@ -333,6 +334,7 @@ def test_a_name_without_a_colon_is_kept_whole():
 def test_a_theatre_missing_from_the_venue_list_falls_back_safely():
     (only,) = live_shows(("PVTS",), venues=[])
     assert only.venue_name == "PVR"                       # the showtime's own name
+    assert only.theatre_title == "PVR"                    # all BookMyShow gave; nothing added
     assert X._where(only) == "Hyderabad"                  # no area given → nothing invented
     nameless = SimpleNamespace(venues=[], showtimes=[Showtime("ZZZZ", "", "S1", "20261118", "", "1000", "2D",
                                                               Availability.AVAILABLE)])

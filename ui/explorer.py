@@ -24,14 +24,13 @@ Rules this page keeps:
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, time as dtime, timedelta
 
 import streamlit as st
 
 from config.timezone import fmt_time, now_ist
 from explorer import catalog, query as Q, source as S
-from explorer.classify import MULTIPLEX, SINGLE_SCREEN, UNKNOWN
+from explorer.classify import MULTIPLEX, SINGLE_SCREEN
 from ui import catalogue_view as cv
 from ui import components as C
 from ui import flow
@@ -429,25 +428,11 @@ def _fmt_badges(show: Q.ExplorerShow, *, language: bool = True) -> str:
     return out
 
 
-#: A trailing city name in BookMyShow's area text ("…, Hyderabad",
-#: "… Hyderabad"). Whole word only, so "Secunderabad" is never touched.
-_CITY_TAIL = re.compile(r"[\s,]*\bhyderabad\b[\s.,]*$", re.IGNORECASE)
-
-
 def _where(show: Q.ExplorerShow) -> str:
-    """The theatre's second line: BookMyShow's own area text — what it wrote
-    after the colon in the venue name — without a trailing ", Hyderabad".
-
-    That text is what tells two branches of one chain apart ("PVR: Atrium
-    Gachibowli" vs "PVR: Preston, Gachibowli"), so it is shown as written.
-    The locality keyword (``explorer.classify``) is for the Area filter
-    only. When BookMyShow gave no area beyond the city, the known locality
-    is shown, else "Hyderabad" — nothing is invented.
-    """
-    area = _CITY_TAIL.sub("", show.area or "").strip(" ,")
-    if area:
-        return area
-    return show.locality if show.locality != UNKNOWN else "Hyderabad"
+    """The theatre's second line: its locality only ("Gachibowli"). The
+    first line carries the full official name ("PVR: Atrium") — see
+    ``explorer.classify.venue_display``, which says where each comes from."""
+    return show.theatre_where
 
 
 def time_rows_markup(shows: list[Q.ExplorerShow], mode: str) -> str:
@@ -457,7 +442,7 @@ def time_rows_markup(shows: list[Q.ExplorerShow], mode: str) -> str:
         for s in items:
             clock, half = s.display_time
             if mode == "movie":
-                primary, secondary = s.venue_name, _where(s)
+                primary, secondary = s.theatre_title, _where(s)
             else:
                 primary, secondary = s.movie_title, ""
             parts.append(
@@ -892,7 +877,7 @@ def _page_body() -> None:
                 wanted = [w for w in films if not chosen or w.movie.language in chosen]
             result = _load(mode, wanted, date_code) if wanted else None
             if result is not None and mode == "theatre":
-                result = {**result, "venue": target.code, "venue_name": target.name, "film_at": film}
+                result = {**result, "venue": target.code, "venue_name": target.title, "film_at": film}
             elif result is not None:
                 result = {**result, "film": target}
             shows = [s for d in (result or {}).get("days", []) for s in d.shows]
@@ -913,7 +898,7 @@ def _page_body() -> None:
     if not wanted:
         name, sub = date_label(date_code)
         what = film.title if film is not None else "film"
-        _empty("Nothing listed here", f"The catalogue has no {what} listed at {target.name} for {name} {sub}"
+        _empty("Nothing listed here", f"The catalogue has no {what} listed at {target.title} for {name} {sub}"
                + (" in the chosen languages." if st.session_state.get("sx_lang") else "."))
         return
     _results(mode, result, window, date_code)

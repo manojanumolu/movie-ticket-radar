@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 UNKNOWN = "Unknown"
 INDEPENDENT = "Independent & others"
@@ -175,6 +176,85 @@ def classify(name: str, area: str = "") -> TheatreFacts:
                         locality=locality_of(name, area))
 
 
+#: The city every catalogue venue is in. BookMyShow often closes a venue's
+#: name with it ("PVR: Irrum Manzil, Hyderabad"); it never tells two
+#: theatres apart, so it is dropped from the first line.
+CITY = "Hyderabad"
+_CITY_PATTERN = _pattern((CITY,))
+#: What may sit between a venue's distinguishing words and a trailing place
+#: name: "Central Mall, Panjagutta", "LUXE, PXL, 4DX: Cyberabad", "Atrium Gachibowli".
+_TRIM = " \t,;:-\u2013\u2014"
+
+
+def _trailing_place(text: str) -> tuple[str, str] | None:
+    """``(rest, place)`` when ``text`` ends with a known place name or the
+    city, else None. The longest trailing match wins ("Hitech City" over a
+    shorter name ending at the same point)."""
+    best: tuple[int, str] | None = None
+    for place, pattern in (*_LOCALITY_PATTERNS, (CITY, _CITY_PATTERN)):
+        for match in pattern.finditer(text):
+            if text[match.end():].strip(" .,") == "" and (best is None or match.start() < best[0]):
+                best = (match.start(), place)
+    if best is None:
+        return None
+    return text[:best[0]].rstrip(_TRIM), best[1]
+
+
+@lru_cache(maxsize=8192)
+def venue_display(name: str, area: str = "") -> tuple[str, str]:
+    """A theatre's two display lines from BookMyShow's own venue name.
+
+    BookMyShow names a venue "<brand>: <distinguishing name>, <place>"
+    ("PVR: Atrium Gachibowli, Hyderabad"); ``split_venue_name`` keeps the
+    part before the colon as ``name`` and the rest as ``area``. Returned:
+
+    * **title** — the full official name, brand and distinguishing words
+      kept ("PVR: Atrium", "PVR ICON: Hitech", "PVR Superplex Inorbit:
+      LUXE, PXL, 4DX"), less only the trailing place names, which move to
+      the second line. When the words after the colon are nothing *but* a
+      place ("PVR: Musarambagh"), they stay: they are what tells that
+      theatre from the chain's others. Never shortened to the brand alone.
+    * **where** — the place names BookMyShow wrote at the end of the
+      venue's name ("Gachibowli"; "ECIL, Secunderabad"), else the first
+      known place named anywhere in it, else the city. Nothing is invented.
+    """
+    head = " ".join((name or "").split())
+    tail = " ".join((area or "").split())
+    if not tail and ":" in head:
+        h, _, t = head.partition(":")
+        if h.strip() and t.strip():
+            head, tail = h.strip(), t.strip()
+
+    places: list[str] = []
+    rest = tail
+    while rest:
+        found = _trailing_place(rest)
+        if found is None:
+            break
+        shorter, place = found
+        if not shorter:
+            # The tail is only a place. The city alone says nothing and goes;
+            # any other place is the theatre's own name and stays.
+            if place == CITY:
+                rest = ""
+            elif not places:
+                places.insert(0, place)
+            break
+        rest = shorter
+        if place != CITY:
+            places.insert(0, place)
+
+    title = f"{head}: {rest}" if head and rest else (head or rest)
+    if not title:                      # a venue with nothing but a city name
+        title = tail or head
+    if places:
+        where = ", ".join(dict.fromkeys(places))
+    else:
+        locality = locality_of(head, tail)
+        where = locality if locality != UNKNOWN else CITY
+    return title, where
+
+
 __all__ = [
     "INDEPENDENT",
     "LOCALITIES",
@@ -190,4 +270,5 @@ __all__ = [
     "locality_of",
     "operator_of",
     "theatre_type_of",
+    "venue_display",
 ]

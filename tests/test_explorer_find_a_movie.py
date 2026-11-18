@@ -198,7 +198,7 @@ def test_a_failed_read_is_a_failure_not_an_empty_film():
 # ── the page ─────────────────────────────────────────────────────────────
 def at_amb_film(app, film="Ramayana · Hindi, Telugu, Kannada"):
     app = ok(app.button(key="sxmode_theatre").click().run())
-    app = ok(app.selectbox(key="sx_theatre").select("AMB Cinemas · Gachibowli").run())
+    app = ok(app.selectbox(key="sx_theatre").select("AMB Cinemas: Gachibowli").run())
     return ok(app.selectbox(key="sx_film").select(film).run())
 
 
@@ -208,7 +208,7 @@ def test_page_find_a_movie_sits_under_the_theatre_and_shows_its_languages(amb_pa
     assert not [b for b in app.selectbox if b.key == "sx_film"]               # not in By movie
     app = ok(app.button(key="sxmode_theatre").click().run())
     assert not [b for b in app.selectbox if b.key == "sx_film"]               # not before a theatre
-    app = ok(app.selectbox(key="sx_theatre").select("AMB Cinemas · Gachibowli").run())
+    app = ok(app.selectbox(key="sx_theatre").select("AMB Cinemas: Gachibowli").run())
     box = app.selectbox(key="sx_film")
     assert box.value is None and "Ramayana · Hindi, Telugu, Kannada" in box.options
     before = len(bms.calls)
