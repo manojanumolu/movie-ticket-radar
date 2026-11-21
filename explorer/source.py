@@ -35,6 +35,13 @@ Safeguards
   JSON surface as an honest failure. A failed sibling makes a result
   *partial*, and the page says which part is missing.
 
+Prices
+------
+Each show's seat categories, with BookMyShow's listed price for each, come in
+the same response (``platforms.bookmyshow.parse_seat_categories``), so they
+cost no extra request. They are kept only from a live (or cached live) read:
+a show from the snapshot never carries a price (``explorer.prices``).
+
 The Explorer runs in the Streamlit process. The monitoring worker runs on a
 GitHub runner with its own client, so nothing here can delay or starve a
 monitor's checks.
@@ -53,6 +60,7 @@ from typing import Any, Callable
 from config.timezone import now_ist, parse_iso
 from explorer import snapshot as snap_store
 from explorer.classify import classify
+from explorer.prices import SeatPrice, parse_amount
 from explorer.query import ExplorerShow, parse_minutes
 from monitor.models import Availability, MovieRef
 from platforms.base import PlatformBlocked, PlatformError
@@ -152,10 +160,17 @@ class _Entry:
     read_at: datetime
 
 
-def _booking_url(provider: BookMyShowProvider, movie: MovieRef, venue_code: str, date_code: str) -> str:
+def _booking_url(provider: BookMyShowProvider, movie: MovieRef, venue_code: str, date_code: str,
+                 memo: dict[tuple[str, str], str] | None = None) -> str:
     """The theatre's page for that date (the redirect form ``venue_booking_url``
     documents as verified), else the film's page for that date — and only ever
-    an https BookMyShow address."""
+    an https BookMyShow address. ``memo`` (one per read) builds each theatre
+    and date's link once: a film's shows at one theatre share it."""
+    if memo is not None:
+        key = (venue_code, date_code)
+        if key not in memo:
+            memo[key] = _booking_url(provider, movie, venue_code, date_code)
+        return memo[key]
     for url in (provider.venue_booking_url(movie, venue_code, date_code),
                 provider.booking_url(movie, date_code)):
         if is_bookmyshow_url(url):
@@ -212,6 +227,7 @@ def shows_from_day(day, movie: MovieRef, movie_id: str, *, title: str = "", post
     theatre's own BookMyShow name and area (``explorer.classify``)."""
     provider = provider or BookMyShowProvider(session=object())
     venues = {v.code: v for v in day.venues}
+    links: dict[tuple[str, str], str] = {}
     out = []
     for s in day.showtimes:
         venue = venues.get(s.venue_code)
@@ -226,16 +242,26 @@ def shows_from_day(day, movie: MovieRef, movie_id: str, *, title: str = "", post
             minutes=parse_minutes(s.time_code, s.time_label),
             formats=_formats(s.format_label, s.event_format, base_format),
             dimension=s.event_format or base_format,
-            session_id=s.session_id, booking_url=_booking_url(provider, movie, s.venue_code, s.date_code),
+            session_id=s.session_id, booking_url=_booking_url(provider, movie, s.venue_code, s.date_code, links),
             sold_out=s.availability is Availability.SOLD_OUT, poster_url=safe_poster(poster),
+            seats=seat_prices(s.categories),
         ))
     return out
+
+
+def seat_prices(categories) -> tuple[SeatPrice, ...]:
+    """A show's seat categories as the Explorer prices them: BookMyShow's name
+    and listed price (``curPrice``) for each, and whether that category said
+    it was sold out. A missing or unusable price stays unknown, never 0."""
+    return tuple(SeatPrice(name=c.name, amount=parse_amount(c.price),
+                           sold_out=c.availability is Availability.SOLD_OUT) for c in categories)
 
 
 def shows_from_snapshot(rec: dict[str, Any], movie: MovieRef, movie_id: str, *, title: str = "",
                         poster: str = "", base_format: str = "") -> list[ExplorerShow]:
     provider = BookMyShowProvider(session=object())
     venues = rec.get("venues") if isinstance(rec.get("venues"), dict) else {}
+    links: dict[tuple[str, str], str] = {}
     out = []
     for row in rec.get("shows", []):
         if not isinstance(row, list) or len(row) < 8:
@@ -252,8 +278,11 @@ def shows_from_snapshot(rec: dict[str, Any], movie: MovieRef, movie_id: str, *, 
             date_code=str(date_code), time_label=str(label), minutes=parse_minutes(str(time_code), str(label)),
             formats=_formats(str(fmt), str(event_fmt), base_format),
             dimension=str(event_fmt) or base_format,
-            session_id=str(session), booking_url=_booking_url(provider, movie, str(code), str(date_code)),
+            session_id=str(session), booking_url=_booking_url(provider, movie, str(code), str(date_code), links),
             sold_out=bool(sold), poster_url=safe_poster(poster),
+            # The snapshot is up to MAX_AGE old: whatever it holds, it is never
+            # a source of prices.
+            seats=(),
         ))
     return out
 
@@ -387,7 +416,25 @@ class Wanted:
         return 1 + len(self.movie.variant_codes)
 
 
-def _snapshot_day(w: Wanted, date_code: str, error: str, data: dict | None) -> MovieDay:
+class _LazySnapshot:
+    """The snapshot file, read the first time a fallback needs it and then
+    shared by every film of one query — never read when every live read
+    succeeds (it is the size of the whole city's showtimes)."""
+
+    def __init__(self):
+        self._data: dict | None = None
+        self._lock = threading.Lock()
+
+    def __call__(self) -> dict:
+        with self._lock:
+            if self._data is None:
+                self._data = snap_store.load()
+            return self._data
+
+
+def _snapshot_day(w: Wanted, date_code: str, error: str, data: dict | Callable[[], dict] | None) -> MovieDay:
+    if callable(data):
+        data = data()
     rec = snap_store.movie_record(w.movie_id, data=data)
     if rec is None:
         return MovieDay(w.movie_id, date_code, [], FAILED, None, error=error)
@@ -397,7 +444,7 @@ def _snapshot_day(w: Wanted, date_code: str, error: str, data: dict | None) -> M
 
 
 def read_one(w: Wanted, date_code: str, *, force: bool = False, live: bool = True,
-             snapshot_data: dict | None = None, rd: LiveReader | None = None) -> MovieDay:
+             snapshot_data: dict | Callable[[], dict] | None = None, rd: LiveReader | None = None) -> MovieDay:
     rd = rd or reader()
     if not live:
         return _snapshot_day(w, date_code, "", snapshot_data)
@@ -422,7 +469,7 @@ def read_many(wanted: list[Wanted], date_code: str, *, force: bool = False, live
     most ``max_events`` events in all. Films over the cap are not read live:
     their snapshot is offered when there is one, and they are marked skipped."""
     rd = rd or reader()
-    data = snap_store.load()
+    data = _LazySnapshot()
     budgeted: list[Wanted] = []
     over: list[Wanted] = []
     used = 0

@@ -20,6 +20,11 @@ Rules this page keeps:
   catalogue sync's snapshot — never "live" for data that is not.
 * A listed show is not a claim that seats are free. The only seat fact shown
   is "Sold out", and only when every seat category BookMyShow returned said so.
+* Prices are BookMyShow's listed ticket prices from the read on screen
+  (``explorer.prices``) — a range, "₹X onwards", or "Price unavailable";
+  never estimated, never from the snapshot, never carried between reads.
+* Formats are filtered by what each show's own text names (``explorer.formats``),
+  grouped in a compact picker; any chosen format matches (OR).
 """
 
 from __future__ import annotations
@@ -29,7 +34,7 @@ from datetime import datetime, time as dtime, timedelta
 import streamlit as st
 
 from config.timezone import fmt_time, now_ist
-from explorer import catalog, query as Q, source as S
+from explorer import catalog, formats as F, prices as P, query as Q, source as S
 from explorer.classify import MULTIPLEX, SINGLE_SCREEN
 from ui import catalogue_view as cv
 from ui import components as C
@@ -239,8 +244,90 @@ def _multiselect(column, label: str, key: str, opts: list[str], placeholder: str
                        on_change=_ui_only, disabled=not opts)
 
 
-def _filters(mode: str, shows: list[Q.ExplorerShow], languages: list[str]) -> None:
-    opts = Q.options(shows)
+#: The format picker's pill groups, one widget each (``explorer.formats``).
+FMT_KEYS = {group: f"sx_fmt_{key}" for group, key in F.GROUP_KEYS.items()}
+FMT_AVAILABLE = "sx_fmt_avail"
+
+
+def _fmt_set(values: list[str]) -> None:
+    """Select all / Clear: the chosen formats, as one list this page owns."""
+    _ui_only()
+    st.session_state["sx_fmt"] = list(values)
+
+
+def _fmt_changed() -> None:
+    """A pill group's ``on_change``: the choice is every group's pills
+    together. Only the groups offered on this run are read."""
+    _ui_only()
+    available = st.session_state.get(FMT_AVAILABLE) or []
+    picked: list[str] = []
+    for group, items in F.grouped(available):
+        chosen = set(st.session_state.get(FMT_KEYS[group]) or [])
+        picked.extend(v for v in items if v in chosen)          # the picker's order, not the click order
+    st.session_state["sx_fmt"] = list(dict.fromkeys(picked))
+
+
+def format_summary(selected: list[str], available: list[str]) -> str:
+    """The picker's closed label: "All formats", "Dolby Atmos, 4K Laser", or
+    "Dolby Atmos, 4K Laser +2" — compact, whatever is chosen."""
+    chosen = F.effective(selected, available)
+    if not chosen:
+        return "All formats"
+    head = ", ".join(chosen[:2])
+    return head if len(chosen) <= 2 else f"{head} +{len(chosen) - 2}"
+
+
+def _format_picker(column, available: list[str]) -> None:
+    """Formats in four groups — Standard, Premium screen & projection, Premium
+    audio, More formats — as pills in a popover, so the closed field stays one
+    line and the open one is short. Select all and Clear sit at its top; any
+    chosen format matches (OR); choosing all is the same as choosing none."""
+    st.session_state[FMT_AVAILABLE] = list(available)
+    current = [f for f in (st.session_state.get("sx_fmt") or []) if f in available]
+    if current != st.session_state.get("sx_fmt"):
+        st.session_state["sx_fmt"] = current
+    with column:
+        _label(FILTER_ICONS["Format"], "Format")
+        label = format_summary(current, available)
+        with st.popover(label, key="sx_fmt_pop", width="stretch", disabled=not available,
+                        type="primary" if F.effective(current, available) else "secondary",
+                        help="Choose formats — a show with any chosen format is listed"):
+            C.html('<div class="tr-sx-fmtpop"><b>Formats</b><span>A show is listed when it has '
+                   '<em>any</em> chosen format, as BookMyShow names it.</span></div>')
+            with st.container(key="trpair_sxfmtact"):
+                a, b = st.columns(2, gap="small")
+                a.button("Select all", key="sx_fmt_all", on_click=_fmt_set, args=(list(available),),
+                         use_container_width=True, disabled=bool(available) and set(available) <= set(current))
+                b.button("Clear", key="sx_fmt_none", on_click=_fmt_set, args=([],),
+                         use_container_width=True, disabled=not current)
+            for group, items in F.grouped(available):
+                key = FMT_KEYS[group]
+                # Drawn from the one stored choice on every run, so Select
+                # all, Clear and the chips outside always agree with the pills.
+                st.session_state[key] = [f for f in current if f in items]
+                st.pills(group, items, selection_mode="multi", key=key, on_change=_fmt_changed,
+                         width="stretch")
+
+
+def _active_formats(available: list[str]) -> None:
+    """The chosen formats, compactly, under the filters — with a Clear that
+    is always one tap away (the picker itself may be closed)."""
+    chosen = F.effective(st.session_state.get("sx_fmt") or [], available)
+    if not chosen:
+        return
+    with st.container(key="trpair_sxfmton"):
+        left, right = st.columns([5, 1.2], gap="small", vertical_alignment="center")
+        with left:
+            C.html('<div class="tr-sx-fmton"><span class="k tr-mono">Formats · any of</span>'
+                   + "".join(f'<span class="tr-badge">{C.e(f)}</span>' for f in chosen) + "</div>")
+        with right:
+            st.button("Clear formats", key="sx_fmt_clear", icon=":material/close:", use_container_width=True,
+                      on_click=_fmt_set, args=([],))
+
+
+def _filters(mode: str, shows: list[Q.ExplorerShow], languages: list[str], *, date_code: str = "",
+             venue_code: str = "") -> dict[str, list[str]]:
+    opts = Q.options(shows, date_code=date_code, venue_code=venue_code)
     with st.container(key="sxfilters"):
         C.html(f'<div class="tr-sx-refine">{C.icon("filter", 13)}<span>Refine</span></div>')
         if mode == "movie":
@@ -255,7 +342,9 @@ def _filters(mode: str, shows: list[Q.ExplorerShow], languages: list[str]) -> No
         else:
             lang_col, fmt_col = st.columns(2, gap="small")
         _multiselect(lang_col, "Language", "sx_lang", languages, "All languages")
-        _multiselect(fmt_col, "Format", "sx_fmt", opts["formats"], "All formats")
+        _format_picker(fmt_col, opts["formats"])
+    _active_formats(opts["formats"])
+    return opts
 
 
 def _keep(key: str) -> None:
@@ -428,6 +517,42 @@ def _fmt_badges(show: Q.ExplorerShow, *, language: bool = True) -> str:
     return out
 
 
+def price_markup(show: Q.ExplorerShow) -> str:
+    """The show's listed price, beside its Book button: "₹150 – ₹450",
+    "₹295", "₹150 onwards" or "Price unavailable" — each seat category in
+    BookMyShow's own words on hover (``explorer.prices``)."""
+    rng = show.price
+    if not rng.known:
+        why = ("BookMyShow listed no price for this show in this read" if show.seats else
+               "No price in this read — prices come only from a live BookMyShow read")
+        return (f'<div class="p none" title="{C.e(why)}"><span class="na">{C.e(P.UNAVAILABLE)}</span></div>')
+    tip = f"{P.detail(show.seats)}. Listed price per ticket; the final amount is shown at seat selection."
+    if rng.kind == "from":
+        main = f'<span class="a"><b>{C.e(P.rupees(rng.low))}</b> <span class="on">onwards</span></span>'
+        sub = f"{rng.priced} of {rng.categories} seat types priced"
+    else:
+        main = f"<b>{C.e(rng.label)}</b>"
+        sub = f"{rng.categories} seat type{'s' if rng.categories != 1 else ''}"
+    return (f'<div class="p {rng.kind}" title="{C.e(tip)}">{main}'
+            f'<span class="c">{C.e(sub)}</span></div>')
+
+
+def price_summary_markup(shows: list[Q.ExplorerShow], days: list[S.MovieDay]) -> str:
+    """The price line above the results: the range across every show listed,
+    and how much of it is known — never more than the read says."""
+    rng, priced, total = Q.price_summary(shows)
+    live = any(d.origin in (S.LIVE, S.CACHED) for d in days)
+    if not rng.known:
+        note = ("Prices appear only with a live BookMyShow read." if not live else
+                "BookMyShow listed no ticket prices for these shows.")
+        return (f'<div class="tr-sx-pricesum none"><span class="k tr-mono">Tickets</span>'
+                f'<b>{C.e(P.UNAVAILABLE)}</b><span class="d">{C.e(note)}</span></div>')
+    coverage = (f"Listed for {priced} of {total} shows." if priced < total else "")
+    note = " ".join(x for x in (coverage, "Listed price per ticket; final amount at seat selection.") if x)
+    return (f'<div class="tr-sx-pricesum {rng.kind}"><span class="k tr-mono">Tickets</span>'
+            f'<b>{C.e(rng.label)}</b><span class="d">{C.e(note)}</span></div>')
+
+
 def _where(show: Q.ExplorerShow) -> str:
     """The theatre's second line: its locality only ("Gachibowli"). The
     first line carries the full official name ("PVR: Atrium") — see
@@ -445,11 +570,15 @@ def time_rows_markup(shows: list[Q.ExplorerShow], mode: str) -> str:
                 primary, secondary = s.theatre_title, _where(s)
             else:
                 primary, secondary = s.movie_title, ""
+            # Name, then locality, then the show's facts on their own line;
+            # the price and the Book button keep their own columns, so a long
+            # name or many badges wrap without ever reaching them.
             parts.append(
                 f'<div class="tr-sx-row"><div class="t"><b>{C.e(clock)}</b><span>{C.e(half)}</span></div>'
                 f'<div class="m"><div class="n">{C.e(primary)}</div>'
-                + (f'<div class="s">{C.e(secondary)}</div>' if secondary else "") + '</div>'
-                f'<div class="f">{_fmt_badges(s)}</div>{_book(s.booking_url)}</div>'
+                + (f'<div class="s">{C.e(secondary)}</div>' if secondary else "")
+                + f'<div class="f">{_fmt_badges(s)}</div></div>'
+                f'{price_markup(s)}{_book(s.booking_url)}</div>'
             )
     parts.append("</div>")
     return "".join(parts)
@@ -465,9 +594,12 @@ def group_markup(groups: list[Q.Group], mode: str) -> str:
         else:
             meta = g.subtitle
         thumb = C.thumb(g.poster_url, small=True) if mode == "theatre" else ""
+        rng, _priced, _total = Q.price_summary(g.shows)
+        price = (f'<span class="pr">{C.e(rng.label)}</span>' if rng.known else "")
         times = "".join(
             (f'<a class="tr-sx-time{" sold" if s.sold_out else ""}" href="{C.e(s.booking_url)}" target="_blank" '
-             f'rel="noopener noreferrer">' if s.booking_url else f'<span class="tr-sx-time{" sold" if s.sold_out else ""}">')
+             f'rel="noopener noreferrer" title="{C.e(s.price.label)}">' if s.booking_url else
+             f'<span class="tr-sx-time{" sold" if s.sold_out else ""}" title="{C.e(s.price.label)}">')
             + f'<b>{C.e(" ".join(s.display_time).strip())}</b>'
             + (f'<span>{C.e(s.dimension or s.formats[0])}</span>' if (s.dimension or s.formats) else "")
             + ("</a>" if s.booking_url else "</span>")
@@ -475,7 +607,8 @@ def group_markup(groups: list[Q.Group], mode: str) -> str:
         )
         parts.append(
             f'<div class="tr-sx-group"><div class="h">{thumb}<div class="b"><div class="n">{C.e(g.title)}</div>'
-            f'<div class="s">{C.e(meta)}{" · " if meta else ""}{n} show{"s" if n != 1 else ""}</div></div></div>'
+            f'<div class="s">{C.e(meta)}{" · " if meta else ""}{n} show{"s" if n != 1 else ""}</div></div>'
+            f'{price}</div>'
             f'<div class="times">{times}</div></div>'
         )
     parts.append("</div>")
@@ -494,7 +627,8 @@ def shows_title(result: dict) -> str:
     return result.get("venue_name") or "This theatre"
 
 
-def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -> None:
+def _results(mode: str, result: dict, window: tuple[int, int], date_code: str,
+             fmt_available: list[str] | None = None) -> None:
     days: list[S.MovieDay] = result["days"]
     shows = [s for d in days for s in d.shows]
     lo, hi = window
@@ -506,7 +640,8 @@ def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -
         theatre_type=(st.session_state.get("sx_type") if mode == "movie"
                       and st.session_state.get("sx_type") in (MULTIPLEX, SINGLE_SCREEN) else ""),
         languages=tuple(st.session_state.get("sx_lang") or ()),
-        formats=tuple(st.session_state.get("sx_fmt") or ()),
+        # every offered format chosen is the same as none (Select all == All formats)
+        formats=F.effective(st.session_state.get("sx_fmt") or (), fmt_available or ()),
         venue_code=result.get("venue", ""),
         title_key=(result.get("film_at").key if result.get("film_at") is not None else ""),
         hide_started_before=now_ist() if today else None,
@@ -533,7 +668,8 @@ def _results(mode: str, result: dict, window: tuple[int, int], date_code: str) -
             langs = {s.language or Q.NO_LANGUAGE for s in out.shows}
             extra = (f" · {len(venues)} theatre{'s' if len(venues) != 1 else ''}" if mode == "movie" else
                      f" · {len(langs)} language{'s' if len(langs) != 1 else ''}" if film_at is not None else "")
-            C.html(f'<div class="tr-sx-count"><b>{count}</b> showtime{"s" if count != 1 else ""}{C.e(extra)}</div>')
+            C.html(f'<div class="tr-sx-count"><b>{count}</b> showtime{"s" if count != 1 else ""}{C.e(extra)}</div>'
+                   + (price_summary_markup(out.shows, days) if out.shows else ""))
         with toggle:
             view = st.session_state.get("sx_view", "time")
             group_name = "By theatre" if mode == "movie" else "By language" if film_at is not None else "By movie"
@@ -612,6 +748,8 @@ def _notes(out: Q.FilterResult, days: list[S.MovieDay]) -> None:
         notes.append(f"{len(skipped)} more film{'s' if len(skipped) != 1 else ''} weren't read live, to keep "
                      "requests to BookMyShow bounded — pick a language to narrow the list.")
     notes.append("A listed show isn't a promise of seats — BookMyShow confirms availability when you book.")
+    notes.append(P.NOTE + " A show from the catalogue sync, or one BookMyShow listed without prices, says "
+                 "\"Price unavailable\".")
     C.html('<div class="tr-sx-notes">' + "".join(f"<div>{C.e(n)}</div>" for n in notes) + "</div>")
 
 
@@ -642,6 +780,12 @@ def _line_keyframes() -> str:
 AMBIENCE_CSS = "<style>" + radar.CSS + crafts.CSS + """
 @keyframes tr-sx-breathe { 0%,100% { opacity:.65; transform:scale(1); } 50% { opacity:1; transform:scale(1.05); } }
 [class*="st-key-trsx_root"] { position:relative; isolation:isolate; }
+/* No scroll anchoring on this page. A filter tap reruns the page and the
+   results below it shrink or grow; Chrome then "kept" a row in view by
+   scrolling the page ~800px on a phone, carrying the open format picker off
+   screen mid-choice (measured in Chromium, iPhone 13 viewport). The page's
+   own scroll position is what a person expects to keep. */
+[data-testid="stMain"]:has(.tr-sx-ambience) { overflow-anchor:none; }
 [class*="st-key-trsx_root"] > [data-testid="stElementContainer"],
 [class*="st-key-trsx_root"] > [data-testid="stLayoutWrapper"] { position:relative; z-index:1; }
 [class*="st-key-trsx_root"] > [data-testid="stElementContainer"]:has(> .stMarkdown .tr-sx-ambience) {
@@ -863,7 +1007,7 @@ def _page_body() -> None:
 
         if target is None:
             languages = sorted({w.movie.language for t in titles for w in t.rows if w.movie.language})
-            _filters(mode, [], languages)
+            opts = _filters(mode, [], languages)
             wanted, result = [], None
         else:
             if mode == "movie":
@@ -881,7 +1025,8 @@ def _page_body() -> None:
             elif result is not None:
                 result = {**result, "film": target}
             shows = [s for d in (result or {}).get("days", []) for s in d.shows]
-            _filters(mode, shows, languages)
+            opts = _filters(mode, shows, languages, date_code=date_code,
+                            venue_code=target.code if mode == "theatre" else "")
 
     if target is None:
         if not view.movies:
@@ -901,7 +1046,7 @@ def _page_body() -> None:
         _empty("Nothing listed here", f"The catalogue has no {what} listed at {target.title} for {name} {sub}"
                + (" in the chosen languages." if st.session_state.get("sx_lang") else "."))
         return
-    _results(mode, result, window, date_code)
+    _results(mode, result, window, date_code, fmt_available=opts["formats"])
 
 
 __all__ = ["DEFAULTS", "MODES", "date_codes", "date_label", "freshness", "group_markup", "page",

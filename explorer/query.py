@@ -17,9 +17,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field, replace
 from datetime import datetime, time as dtime
+from functools import cached_property
 from typing import Iterable
 
 from config.timezone import IST
+from explorer import formats as F, prices as P
 from explorer.classify import LOCALITY_ORDER, UNKNOWN, venue_display
 
 #: The quick picks offered beside the custom From / To inputs.
@@ -63,6 +65,26 @@ class ExplorerShow:
     #: The show's dimension as BookMyShow names its event ("2D", "3D", "4DX 3D");
     #: "" when unknown. Always ``formats[0]`` when set.
     dimension: str = ""
+    #: Every seat category BookMyShow listed for this show in *this* read, with
+    #: its price (``explorer.prices``). Empty when none was listed, and always
+    #: empty for a show from the catalogue sync's snapshot.
+    seats: tuple[P.SeatPrice, ...] = ()
+
+    @cached_property
+    def price(self) -> P.PriceRange:
+        """The show's listed ticket prices: range, "from", or unavailable."""
+        return P.of_show(self.seats)
+
+    @cached_property
+    def features(self) -> frozenset[str]:
+        """The cinema features its format text names (``explorer.formats``)."""
+        return F.features_of(self.formats)
+
+    @cached_property
+    def format_keys(self) -> frozenset[str]:
+        """What a format filter value can match, casefolded: each feature, and
+        each of BookMyShow's own whole strings ("imax 3d")."""
+        return frozenset(x.casefold() for x in (*self.features, *self.formats))
 
     @property
     def theatre_title(self) -> str:
@@ -174,20 +196,31 @@ def dedupe_shows(shows: Iterable[ExplorerShow]) -> tuple[list[ExplorerShow], int
         if key in seen:
             dropped += 1
             known = seen[key]
-            # Keep one, with every format either read named.
+            # Keep one, with every format either read named — and the seat
+            # prices of whichever copy listed them (both come from one read).
             merged = tuple(dict.fromkeys((*known.formats, *show.formats)))
+            changes: dict = {}
             if merged != known.formats:
-                seen[key] = replace(known, formats=merged)
+                changes["formats"] = merged
+            if not known.seats and show.seats:
+                changes["seats"] = show.seats
+            if changes:
+                seen[key] = replace(known, **changes)
             continue
         seen[key] = show
     return list(seen.values()), dropped
 
 
 def _matches_format(show: ExplorerShow, wanted: tuple[str, ...]) -> bool:
+    """OR over features (``explorer.formats``): a show is kept when its own
+    format text names *any* wanted feature — a show with Dolby Atmos and 4K
+    Laser is found by either. A show with no format text matches only when
+    nothing is wanted. A value may also be one of BookMyShow's own whole
+    strings, matched case-insensitively, as the filter always allowed."""
     if not wanted:
         return True
-    names = {f.casefold() for f in show.formats}
-    return any(w.casefold() in names for w in wanted)
+    have = show.format_keys
+    return any(w.casefold() in have for w in wanted)
 
 
 def apply(shows: Iterable[ExplorerShow], f: Filters) -> FilterResult:
@@ -292,9 +325,15 @@ def by_hour(shows: Iterable[ExplorerShow]) -> list[tuple[str, list[ExplorerShow]
     return out
 
 
-def options(shows: Iterable[ExplorerShow]) -> dict[str, list[str]]:
-    """What the filters can offer, from what was actually read."""
-    shows = list(shows)
+def options(shows: Iterable[ExplorerShow], *, date_code: str = "",
+            venue_code: str = "") -> dict[str, list[str]]:
+    """What the filters can offer, from what was actually read — for the
+    chosen date (BookMyShow may answer another) and, for one theatre, that
+    theatre only (a theatre read is city-wide): an option is never offered
+    for a format no show on screen could have. ``formats`` are features
+    (``explorer.formats``), in the picker's order."""
+    shows = [s for s in shows if (not date_code or s.date_code == date_code)
+             and (not venue_code or s.venue_code == venue_code)]
     localities = sorted({s.locality for s in shows},
                         key=lambda x: (x == UNKNOWN, LOCALITY_ORDER.get(x, 999), x))
     operators = sorted({s.operator for s in shows}, key=lambda x: (x.startswith("Independent"), x.casefold()))
@@ -302,8 +341,13 @@ def options(shows: Iterable[ExplorerShow]) -> dict[str, list[str]]:
         "localities": localities,
         "operators": operators,
         "languages": sorted({s.language for s in shows if s.language}, key=str.casefold),
-        "formats": sorted({f for s in shows for f in s.formats}, key=str.casefold),
+        "formats": sorted({f for s in shows for f in s.features}, key=F.sort_key),
     }
+
+
+def price_summary(shows: Iterable[ExplorerShow]) -> tuple[P.PriceRange, int, int]:
+    """``(range, shows with a listed price, shows)`` across the given shows."""
+    return P.summarise(s.price for s in shows)
 
 
 __all__ = [
@@ -326,6 +370,7 @@ __all__ = [
     "minutes_of",
     "options",
     "parse_minutes",
+    "price_summary",
     "sort_by_time",
     "validate_window",
 ]

@@ -67,3 +67,58 @@ These come only from BookMyShow's own theatre name and area text:
   a place ("PVR: Musarambagh"), they stay on line 1, so a branch is never reduced to its chain.
   Line 2 is the locality only; with no place named it is "Hyderabad". The By-theatre picker uses
   the same name ("PVR: Atrium · Gachibowli").
+
+## Ticket prices (`explorer/prices.py`)
+
+Prices come from the same `showtimes-by-event` response, at no extra request: each show's
+`additionalData.categories[]` lists every seat category with BookMyShow's `curPrice`
+(`platforms.bookmyshow.parse_seat_categories`). Each row shows, beside its Book button:
+
+| What BookMyShow listed | Row says |
+| --- | --- |
+| every category priced, different prices | `₹150 – ₹450` · "3 seat types" |
+| every category priced, one price | `₹295` |
+| some categories priced, some without a price | `₹180 onwards` · "1 of 2 seat types priced" |
+| no categories, or no usable price (missing, zero, unreadable) | `Price unavailable` |
+
+Hovering the price lists each category in BookMyShow's own words ("EXECUTIVE ₹150 · GOLD ₹295 ·
+RECLINER ₹450 (sold out)"). Above the results, a **Tickets** line gives the range across every
+listed show, and says how many shows had a price when not all did.
+
+These are *listed* ticket prices from the read the freshness line describes. The payload does not
+say whether GST is included, and the booking fee is added at checkout, so the page says the final
+amount is shown at seat selection. Nothing is estimated. A show from the catalogue sync's snapshot
+never carries a price (the snapshot stores none, and the code refuses one), and prices are never
+carried from one read to another.
+
+## Format filter (`explorer/formats.py`)
+
+BookMyShow names a show's screen in free text, theatre by theatre ("Atmos", "4K Dolby Atmos",
+"Barco Flagship Laser Dolby Atmos"). Each string is read into the features it names, as whole
+words, and the Format field opens a short popover of pills in four groups:
+
+- **Standard**: 2D, 3D, 2K
+- **Premium screen & projection**: IMAX, Dolby Cinema, 4K, 4K Laser, Laser projection, RGB Laser,
+  HDR, PXL, 4DX, MX4D, Infinity Vision, EPIQ, PCX, Macro XE, ICE, LED screen, 70MM, Barco projection,
+  Christie projection
+- **Premium audio**: Dolby Atmos (also spelled "Atmos"), Dolby 7.1, 7.1 surround (no "Dolby"
+  named), Dolby sound ("Dolby" with no system named)
+- **More formats**: LUXE, Recliner, VIP screen, Large screen, Air cooled, Air conditioned,
+  Playhouse, and any string that names nothing known ("Screen 3"), kept whole
+
+Only the features present among the shows on screen are offered, for the chosen date, and in By
+theatre for that theatre only. Matching is **OR**: a show is listed when it has any chosen
+feature, so a show with Dolby Atmos and 4K Laser appears under either. Nothing is inferred:
+Dolby Cinema does not imply Atmos, 4K does not imply laser, and a theatre's *name* ("Sudarshan
+35MM 4k Laser & Dolby Atmos") never gives its shows a feature. A show with no format text appears
+only under "All formats". **Select all** is the same as **All formats**, so ticking everything
+never hides such a show. The chosen formats show as chips under the filters, with **Clear
+formats**; the popover has Select all and Clear at its top.
+
+## Performance notes
+
+- Building a read's shows caches theatre classification (`classify`, a pure function of
+  BookMyShow's two strings) and builds each theatre-and-date booking link once per read.
+- The snapshot file is read only when a fallback needs it, once per query.
+- The page turns off scroll anchoring, so a filter tap that shrinks the results does not move a
+  phone's page (and the open format picker) off screen.
