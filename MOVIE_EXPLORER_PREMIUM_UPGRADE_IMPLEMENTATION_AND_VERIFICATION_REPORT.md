@@ -6,10 +6,13 @@ Date: 21 Nov 2026 (UTC) · Branch: `claude/optimistic-thompson-07yce7`
 
 | Stage | Status |
 |---|---|
-| Implemented and tested locally | **Yes** — see §8–§10 |
-| CI verified | See §11 |
-| Merged into `main` | See §12–§13 |
-| Verified on the live Streamlit app | **No — not performed** (§14) |
+| Implemented and tested locally | **PASS** — full suite 2,139 passed / 0 failed (§9) |
+| Verified with **real BookMyShow data** (merged code, local server, Chromium) | **PASS** — §14.2 |
+| CI verified | **PASS** — branch run 44939107965 and `main` merge run 44939907285, both success (§11) |
+| Merged into `main` | **PASS** — merge commit `954554d` (§12–§13) |
+| Deployment of `954554d` to Streamlit Cloud | **PENDING** — not observable from here (§14.1) |
+| Verified on the live deployed Explorer | **PENDING** — blocked by sign-in (§14.1) |
+| Opt-in browser suite | 1 pre-existing intermittent failure in sign-in cookie clearing, unrelated (§10) |
 
 Scope delivered: live ticket prices in every row and above the results, a grouped format
 picker with correct Dolby Atmos / multi-format filtering, a phone scroll-jump fix, and a faster
@@ -83,7 +86,7 @@ prices (test `test_6_prices_need_no_extra_request`: 3 reads before and after). N
 - **Stale prices:** the snapshot fallback (up to 30 h old) stores no prices and the code forces `seats=()` for it; prices are never carried between reads. A cached live read (≤10 min) shows the prices of that read, and the freshness line already states its age.
 - **Taxes/fees:** the payload does not say whether `curPrice` includes GST, and BookMyShow adds booking fees at checkout. So the UI says "Listed price per ticket; final amount at seat selection" and does not claim tax inclusion either way.
 - **Limitation:** prices appear only when the live read succeeds. On a host where BookMyShow's bot check refuses the Streamlit server, the page falls back to the snapshot and every row honestly says "Price unavailable".
-- **Not verified here:** this sandbox cannot reach BookMyShow, so the presence of `curPrice` in today's live responses was not re-checked in this session; it relies on the provider's documented live verification and existing monitoring use.
+- **Verified against real BookMyShow (22 Nov 2026, 00:46 IST read):** live responses do carry `curPrice` per category; see §14.2 for the independent comparison (0 mismatches).
 
 ## 6. Format categorisation and filtering behaviour
 
@@ -169,7 +172,13 @@ Baseline before any change (same environment): no failures (after `git fetch --u
 `test_auth_bridge_browser.py::test_an_invalid_cookie_is_the_login_page_and_goes_on_the_next_run`, which times out
 waiting for the login page. It is **flaky and pre-existing**: run alone 4 times each, it failed 3/4 on the
 baseline code and 2/4 with this change, alternating between its desktop and mobile variants. It tests the
-sign-in cookie bridge, which this work does not touch. It was not modified. (Run with Python Playwright 1.63 in
+sign-in cookie bridge, which this work does not touch. It was not modified.
+
+Investigation (after the merge):
+- With a temporary, uncommitted 60 s wait, the passing runs drop the cookie in 0.0–0.2 s. The failing run **never** drops it within 60 s. So it is not slowness; the clear is lost.
+- Server log of a failing run: the forged cookie is rejected (`restore: FAILED reason=INVALID_REFRESH_TOKEN`). `restore()` then sets `auth_cookie_clear`, and `flush_cookie()` queues the clear for the browser bridge component (`auth/session.py`). Every later run still reports `session_cookie=True`, so the bridge did not deliver the queued clear.
+- It reproduces on the pre-merge baseline `a449c5c` (3 of 4 runs). `auth/`, the bridge component and Firebase code are not in this change.
+- **Conclusion:** a pre-existing intermittent defect in delivering a cookie *clear* through the sign-in bridge. Its effect: an invalid session cookie can survive a failed sign-in, so a later visit spends one more refresh call before showing the login page. It does not sign anyone in. It is left for a separate auth task, as instructed not to change auth/Firebase code here. (Run with Python Playwright 1.63 in
 a scratch venv, matching the pre-installed Chromium build; not a repository dependency.)
 
 **Explorer, real app in Chromium** (project harness `tools/fake_firebase_app.py`, in-memory Firebase; a scratch launcher, not committed, replaced BookMyShow with a fake answering from the real synced venues/format strings and **fixture prices** — the screenshots' prices are test values, not BookMyShow's):
@@ -194,25 +203,70 @@ Screenshots: `docs/screenshots/explorer-premium-upgrade/`.
 
 ## 11. CI runs
 
-CI_RESULT
+| Run | Commit | Result |
+|---|---|---|
+| [44939107965](https://github.com/manojanumolu/movie-ticket-radar/actions/runs/44939107965) | `db78476` (branch) | **success** — test suite ✅ (Python 3.12), pip-audit ✅ "No known vulnerabilities found" |
+| [44939907285](https://github.com/manojanumolu/movie-ticket-radar/actions/runs/44939907285) | `954554d` (merge into `main`) | **success** |
+
+A follow-up commit adding this report's final evidence is merged the same way; its run is given in the session's closing summary (a file cannot hold the SHA of the commit that contains it).
 
 ## 12. Final commit
 
-FINAL_COMMIT
+- Feature commit: `db78476` — feat(explorer): listed ticket prices, grouped format filter, faster data path
+- Merge commit on `main`: `954554d` — Merge Movie Explorer premium upgrade (db78476) into main (tree identical to `db78476`)
 
 ## 13. Merge status
 
-MERGE_STATUS
+**Merged.** `main` is a protected branch; this repository has no pull requests and every earlier feature landed as a `--no-ff` merge commit pushed to `main` (e.g. `ffa040b`). The same was done: `a449c5c..954554d main -> main`, accepted normally — no force-push, no bypass. The merge was made only after branch CI was green, and `main`'s own CI on the merge is green.
 
 ## 14. Deployment verification
 
-**Not verified on the live Streamlit app.** The live app is behind Firebase sign-in; this session has no account credentials and must not create or use any, and it cannot reach BookMyShow. Streamlit Community Cloud redeploys from `main`; this session has no access to its deploy status.
+### 14.1 The deployed app — PENDING
 
-To confirm: sign in → Showtime Explorer → By movie → pick a film, Tomorrow. Each row should show a price or "Price unavailable" beside Book; a **Tickets** line above the results; Format → Premium audio → Dolby Atmos should list every Atmos show (including "4K Dolby Atmos" and "Barco … Dolby Atmos" screens). If BookMyShow refuses the server, the strip will say "From the catalogue sync" and prices will be "Price unavailable" — by design.
+- `https://movie-ticket-radar.streamlit.app/` was reached in Chromium after the merge: it serves the TicketRadar sign-in page (the app is up).
+- The Showtime Explorer is behind Firebase sign-in. This session has no account and must not create or use one, so **the deployed Explorer was not verified**.
+- Which commit Streamlit Community Cloud is serving is not observable from here (no deploy-status access; the version tag is visible only after sign-in). It redeploys from `main` on push, but that is not confirmed for `954554d`.
+- To confirm yourself: sign in → Showtime Explorer → By movie → Ramayana. Expect a price beside every Book button, a **Tickets** line (on 22 Nov it read ₹50 – ₹666 in §14.2), and Format → Premium audio → Dolby Atmos. If the strip says "From the catalogue sync", BookMyShow refused the Streamlit server and every row will honestly say "Price unavailable".
+
+### 14.2 Real BookMyShow data, merged code — PASS
+
+To get real prices, `in.bookmyshow.com` was added (with the user's approval card) to this session's cloud-environment network allow-list. No repository file was changed for this. Then the merged `main` (`954554d`, clean tree) ran locally through the project's harness `tools/fake_firebase_app.py`: only sign-in is faked; **BookMyShow was real**, with no fake reader installed. **Every price below is BookMyShow's own; none is fixture data.**
+
+Ramayana (Hindi + Telugu rows and their premium siblings), Today 22 Nov, read live at 00:48 IST:
+
+| Check | Desktop 1440×900 | Phone (iPhone 13) |
+|---|---|---|
+| Showtimes · theatres | 214 · 57 | 214 · 57 |
+| Rows rendered (first page) | 120 | 120 |
+| Rows with a real listed price | 120 (53 single, 67 ranges) | same |
+| Tickets line | ₹50 – ₹666 | same |
+| Overlap with Book / row overflow / horizontal scroll | 0 / 0 / none | 0 / 0 / none |
+| Dolby Atmos | 36 shows, every one naming Atmos | 36 |
+| Dolby Atmos + 4K Laser (OR) | 38 | 38 |
+| Clear formats | 214 | 214 |
+| Select all | 214, label "All formats" | 214 |
+| Scroll change on pill tap | 0 | 0 |
+| By theatre, AMB Cinemas: Gachibowli — formats offered | 2D, Laser projection, HDR, Barco projection, Dolby Atmos, LUXE, VIP screen | same |
+| First live read (cache miss) | 7.8 s (network + the provider's 1 s politeness gap per sibling event) | 0.9 s (cached) |
+
+Rows match the original screenshot, now priced: Tivoli Cinemas: Secunderabad 8:50 AM 3D Hindi "Laser Dolby 7.1" **₹325** (2 seat types); Aparna Cinemas: Nallagandla 9:00 AM VIP Screen **₹350**; UK Cineplex: Nacharam 9:00 AM **₹295** (2 seat types).
+
+**Independent check** (no Explorer code in the reference): the raw JSON of one live response (Ramayana Telugu base event, 22 Nov) was walked directly for `sessionId`, `screenAttr` and `curPrice`:
+- 57 shows compared: **0** price mismatches (the min/max of raw `curPrice` = the Explorer's range).
+- Dolby Atmos: raw shows whose `screenAttr` contains "atmos" = 7; Explorer = the same 7.
+- Atmos OR 4K Laser: raw = 7; Explorer = the same 7. This response had no 4K-laser screens; the 4K Laser additions in the table above come from the other language row and siblings.
+
+Real examples read: AMB Cinemas: Gachibowli 9:15 AM VIP screen ₹350 (PLATINUM, sold out); Asian Lakshmikala Cinepride: Moosapet 2:20 PM ₹50 – ₹175 (COUPLE SEATS ₹175 sold out, PLATINUM ₹175, GOLD ₹150, SILVER ₹50).
+
+Screenshots with real BookMyShow prices: `docs/screenshots/explorer-premium-upgrade/REAL_BMS_*.jpg`. The other files in that folder (§10) use **fixture prices**.
+
+Not observed in this real read: a "₹X onwards" or "Price unavailable" case (every category was priced). Those are covered by tests §8 and by the fixture browser run in §10.
 
 ## 15. Remaining work / limitations
 
 - Live prices depend on the live read succeeding from the Streamlit host (§5).
+- Deployed-app verification and the deployed commit are PENDING (§14.1).
+- Pre-existing sign-in cookie-clear flake (§10) needs its own auth fix.
 - GST inclusion of `curPrice` is not stated by BookMyShow; the UI does not claim it.
 - Format vocabulary is rule-based; a new BookMyShow spelling that names no known feature appears whole under "More formats" until a rule is added.
 - Cache-miss latency (network + politeness gaps) is unchanged by design (§7).
