@@ -166,9 +166,15 @@ def locality_of(name: str, area: str = "") -> str:
     return UNKNOWN
 
 
+@lru_cache(maxsize=8192)
 def classify(name: str, area: str = "") -> TheatreFacts:
     """Everything the Explorer filters a theatre on. ``name`` is the short
-    name and ``area`` the tail BookMyShow wrote after the colon."""
+    name and ``area`` the tail BookMyShow wrote after the colon.
+
+    Cached: it is a pure function of BookMyShow's own two strings, and a
+    city-wide read repeats each theatre once per show (about sixty locality
+    patterns per call, which was over half the cost of building a read's
+    shows)."""
     operator = operator_of(name)
     # A type marker can sit on either side of BookMyShow's colon.
     full = f"{name} {area}".strip()

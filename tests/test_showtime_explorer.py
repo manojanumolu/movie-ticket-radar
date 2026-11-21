@@ -687,7 +687,8 @@ def test_operator_type_area_and_format_filters_on_the_page(page_env):
     app = ok(app.multiselect(key="sx_area").select("Gachibowli").run())
     html = body(app)
     assert "AMB Cinemas: Gachibowli</div>" in html and "Sudarshan" not in html
-    app = ok(app.multiselect(key="sx_fmt").select("3D").run())
+    # the format picker's Standard group (the Format multiselect became grouped pills)
+    app = ok(app.button_group(key="sx_fmt_std").select("3D").run())
     assert "10:40" in body(app) and "9:05" not in body(app)
 
 

@@ -1629,7 +1629,25 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 .tr-sx-row .m { min-width:0; }
 .tr-sx-row .n { font-size:15px; font-weight:800; letter-spacing:-.015em; line-height:1.3; overflow-wrap:anywhere; color:var(--tr-text); }
 .tr-sx-row .s { font-size:12px; color:var(--tr-text-3); margin-top:2px; overflow-wrap:anywhere; }
-.tr-sx-row .f { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; min-width:0; max-width:280px; }
+/* the show's facts on their own line under the theatre: they wrap there and
+   never reach the price or the Book button, which keep their own columns */
+.tr-sx-row .f { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-start; min-width:0; margin-top:7px; }
+.tr-sx-row .f:empty { display:none; }
+/* the listed price: amount first, then how many seat types it spans */
+.tr-sx-row .p { display:flex; flex-direction:column; align-items:flex-end; gap:2px; min-width:96px; max-width:170px;
+  text-align:right; cursor:default; }
+.tr-sx-row .p b { font-size:15px; font-weight:800; letter-spacing:-.02em; color:var(--tr-text); white-space:nowrap;
+  font-variant-numeric:tabular-nums; }
+.tr-sx-row .p .a { white-space:nowrap; }
+.tr-sx-row .p .on { font-size:11.5px; font-weight:700; color:var(--tr-text-2); }
+.tr-sx-row .p .c { font-size:10.5px; color:var(--tr-text-3); letter-spacing:.01em; }
+.tr-sx-row .p.none .na { font-size:11.5px; font-weight:600; color:var(--tr-text-4); white-space:normal; line-height:1.3; }
+/* the price line above the results */
+.tr-sx-pricesum { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 9px; margin-top:6px; min-width:0; }
+.tr-sx-pricesum .k { font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--tr-text-3); }
+.tr-sx-pricesum b { font-size:15px; font-weight:800; color:#FFC2CE; letter-spacing:-.015em; font-variant-numeric:tabular-nums; }
+.tr-sx-pricesum.none b { color:var(--tr-text-3); font-weight:700; }
+.tr-sx-pricesum .d { font-size:11.5px; color:var(--tr-text-3); overflow-wrap:anywhere; }
 .tr-sx-book { display:inline-flex; align-items:center; gap:7px; padding:7px 13px 7px 11px; border-radius:10px; white-space:nowrap;
   font-size:12.5px; font-weight:800; text-decoration:none !important; color:#FFD6DE !important;
   background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,0) 55%), linear-gradient(135deg,rgba(255,51,85,.26),rgba(212,18,63,.16));
@@ -1658,6 +1676,48 @@ a.tr-chip:hover { background:rgba(62,213,152,.12); }
 .tr-sx-group .b { min-width:0; }
 .tr-sx-group .n { font-size:16px; font-weight:800; letter-spacing:-.02em; overflow-wrap:anywhere; }
 .tr-sx-group .s { font-size:12px; color:var(--tr-text-3); margin-top:2px; overflow-wrap:anywhere; }
+.tr-sx-group .h .pr { margin-left:auto; flex:none; font-size:13px; font-weight:800; color:#FFC2CE; white-space:nowrap;
+  font-variant-numeric:tabular-nums; padding-left:10px; }
+/* the format picker: one field, closed; four short groups of pills, open */
+[class*="st-key-sx_fmt_pop"] button, [class*="st-key-sxfilters"] [data-testid="stPopover"] > div > button {
+  min-height:46px; border-radius:12px !important; justify-content:space-between; padding:0 12px 0 14px;
+  border:1px solid rgba(255,255,255,.20) !important; color:var(--tr-text) !important;
+  background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.05)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 14px 32px -16px rgba(0,0,0,.95); }
+[class*="st-key-sx_fmt_pop"] button > div { width:100%; justify-content:space-between; gap:8px; min-width:0; }
+[class*="st-key-sx_fmt_pop"] button > div > div:first-child { min-width:0; overflow:hidden; flex:1; text-align:left; justify-content:flex-start; }
+[class*="st-key-sx_fmt_pop"] button p, [class*="st-key-sxfilters"] [data-testid="stPopover"] button p {
+  font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;
+  color:var(--tr-text-3); }
+[class*="st-key-sx_fmt_pop"] button [data-testid="stIconMaterial"] { color:var(--tr-text-2); font-size:20px; }
+/* formats chosen: the field says so in the accent, like a chosen tag */
+[class*="st-key-sx_fmt_pop"] button[kind="primary"] { border-color:rgba(255,51,85,.55) !important;
+  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03)), linear-gradient(90deg,rgba(255,51,85,.16),rgba(255,51,85,.05)) !important; }
+[class*="st-key-sx_fmt_pop"] button[kind="primary"] p { color:var(--tr-accent-soft); font-weight:700; }
+[class*="st-key-sx_fmt_pop"] button:hover, [class*="st-key-sxfilters"] [data-testid="stPopover"] button:hover {
+  border-color:rgba(255,255,255,.32) !important; transform:none; }
+[class*="st-key-sx_fmt_pop"] button:disabled { opacity:.55; }
+[data-testid="stPopoverBody"]:has(.tr-sx-fmtpop) { width:min(420px, calc(100vw - 32px)) !important;
+  max-height:min(72vh, 560px); overflow-y:auto; padding:14px 14px 10px !important; }
+[data-testid="stPopoverBody"]:has(.tr-sx-fmtpop) [data-testid="stVerticalBlock"] { gap:.55rem; }
+.tr-sx-fmtpop { display:flex; flex-direction:column; gap:2px; }
+.tr-sx-fmtpop b { font-size:14px; font-weight:800; color:var(--tr-text); }
+.tr-sx-fmtpop span { font-size:11.5px; color:var(--tr-text-3); line-height:1.4; }
+[data-testid="stPopoverBody"]:has(.tr-sx-fmtpop) .stButton button { justify-content:center; min-height:34px; font-size:12.5px;
+  border:1px solid var(--tr-border-strong); background:rgba(255,255,255,.04); }
+[data-testid="stPopoverBody"]:has(.tr-sx-fmtpop) .stButton button:disabled { opacity:.45; }
+[data-testid="stPopoverBody"]:has(.tr-sx-fmtpop) .stButton button > div { justify-content:center; }
+[data-testid="stPopoverBody"]:has(.tr-sx-fmtpop) [data-testid="stWidgetLabel"] p {
+  font-size:10.5px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--tr-text-3); }
+[data-testid="stPopoverBody"]:has(.tr-sx-fmtpop) [data-testid="stButtonGroup"] button {
+  min-height:30px; padding:4px 11px; border-radius:999px; font-size:12.5px; font-weight:700; }
+[data-testid="stPopoverBody"]:has(.tr-sx-fmtpop) [data-testid="stBaseButton-pillsActive"] {
+  color:#fff !important; border-color:rgba(255,51,85,.7) !important; background:rgba(255,51,85,.22) !important; }
+/* the chosen formats, under the filters, with a Clear always in reach */
+.tr-sx-fmton { display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; }
+.tr-sx-fmton .k { font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--tr-text-3); margin-right:2px; }
+.tr-sx-fmton .tr-badge { background:rgba(255,51,85,.14); border-color:rgba(255,51,85,.38); color:var(--tr-accent-soft); }
+[class*="st-key-sx_fmt_clear"] .stButton button { min-height:34px; font-size:12px; border-radius:10px; }
 .tr-sx-group .times { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 .tr-sx-time { display:inline-flex; flex-direction:column; gap:1px; padding:8px 13px; border-radius:10px; min-width:0; max-width:100%;
   text-decoration:none !important; background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
@@ -1827,12 +1887,18 @@ a.tr-sx-time:hover { border-color:rgba(255,51,85,.6); background:rgba(255,51,85,
   [class*="st-key-sxpresets"] [data-testid="stColumn"] { flex: 1 1 calc(33% - 6px) !important; width: auto !important; min-width: 0 !important; }
   /* two filters to a row on a phone: five stacked fields were a screen of controls */
   [class*="st-key-sxfilters"] [data-testid="stColumn"] { flex: 1 1 calc(50% - .6rem) !important; width: auto !important; min-width: 0 !important; }
-  .tr-sx-row { grid-template-columns: 72px minmax(0,1fr) auto; gap: 6px 12px; padding: 11px 4px; }
+  /* phone: time | name, locality, facts — then the price and Book on a row
+     of their own, so neither ever sits on top of the other */
+  .tr-sx-row { grid-template-columns: 72px minmax(0,1fr) auto; gap: 8px 12px; padding: 11px 4px; align-items: start; }
+  .tr-sx-row .t { grid-row: 1 / span 2; }
   .tr-sx-row .t b { font-size: 19px; }
   .tr-sx-row .t span { display: block; margin: 0; font-size: 10.5px; }
   .tr-sx-row .m { grid-column: 2 / span 2; }
-  .tr-sx-row .f { grid-column: 2; justify-content: flex-start; max-width: none; }
-  .tr-sx-row .tr-sx-book { grid-column: 3; }
+  .tr-sx-row .p { grid-column: 2; grid-row: 2; align-items: flex-start; text-align: left; align-self: center;
+    min-width: 0; max-width: none; }
+  .tr-sx-row .tr-sx-book { grid-column: 3; grid-row: 2; }
+  .tr-sx-group .h { flex-wrap: wrap; }
+  .tr-sx-group .h .pr { margin-left: 0; padding-left: 0; }
   .tr-sx-count b { font-size: 21px; }
   .tr-sx-day b { font-size: 19px; }
   .tr-sx-film .n { font-size: 19px; }
