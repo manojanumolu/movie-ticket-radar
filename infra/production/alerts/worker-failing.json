@@ -1,0 +1,29 @@
+{
+  "displayName": "Radar worker failing (>3 in 10 min)",
+  "combiner": "OR",
+  "notificationChannels": [
+    "projects/ticketradar03/notificationChannels/CHANNEL_ID"
+  ],
+  "documentation": {
+    "content": "See docs/audit-reports/2026-11-26-production-readiness-and-activation.md (Operations).",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "Radar worker failing (>3 in 10 min)",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/radar_worker_failed\" AND resource.type=\"cloud_run_revision\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 3,
+        "duration": "0s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "600s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ]
+      }
+    }
+  ]
+}

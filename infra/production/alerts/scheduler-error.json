@@ -1,0 +1,29 @@
+{
+  "displayName": "Radar scheduler tick not delivered (>2 in 10 min)",
+  "combiner": "OR",
+  "notificationChannels": [
+    "projects/ticketradar03/notificationChannels/CHANNEL_ID"
+  ],
+  "documentation": {
+    "content": "See docs/audit-reports/2026-11-26-production-readiness-and-activation.md (Operations).",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "Radar scheduler tick not delivered (>2 in 10 min)",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/radar_scheduler_error\" AND resource.type=\"cloud_scheduler_job\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 2,
+        "duration": "0s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "600s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ]
+      }
+    }
+  ]
+}

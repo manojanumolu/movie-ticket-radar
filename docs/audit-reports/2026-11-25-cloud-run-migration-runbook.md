@@ -1,5 +1,9 @@
 # Production Migration Runbook — GitHub Actions monitor → private Cloud Run + Cloud Scheduler
 
+> **SUPERSEDED** by [`2026-11-26-production-readiness-and-activation.md`](2026-11-26-production-readiness-and-activation.md),
+> which corrects this runbook (backup security, export location, four-target verification, sink test, legacy
+> exclusion) and reflects the worker fixes. Do not execute this version.
+
 | | |
 |---|---|
 | Prepared | 25 November 2026 |

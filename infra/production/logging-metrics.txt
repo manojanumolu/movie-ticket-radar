@@ -1,0 +1,5 @@
+# name | description | filter   (created by runbook step P-9; read by tests)
+radar_worker_failed|Worker invocation failed (lease held, Firestore, crash)|resource.type="cloud_run_revision" AND resource.labels.service_name="radar-monitor-worker" AND jsonPayload.worker_result="failed"
+radar_worker_complete|Worker invocation completed|resource.type="cloud_run_revision" AND resource.labels.service_name="radar-monitor-worker" AND jsonPayload.worker_result="complete"
+radar_mail_problem|Alert e-mail failed or uncertain|resource.type="cloud_run_revision" AND resource.labels.service_name="radar-monitor-worker" AND (jsonPayload.slots.mail_failed:* OR jsonPayload.slots.mail_uncertain:*)
+radar_scheduler_error|Cloud Scheduler tick not delivered|resource.type="cloud_scheduler_job" AND resource.labels.job_id="radar-worker-tick" AND severity>=ERROR

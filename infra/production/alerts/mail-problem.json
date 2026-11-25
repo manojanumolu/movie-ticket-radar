@@ -1,0 +1,29 @@
+{
+  "displayName": "Radar alert e-mail failed or uncertain",
+  "combiner": "OR",
+  "notificationChannels": [
+    "projects/ticketradar03/notificationChannels/CHANNEL_ID"
+  ],
+  "documentation": {
+    "content": "See docs/audit-reports/2026-11-26-production-readiness-and-activation.md (Operations).",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "Radar alert e-mail failed or uncertain",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/radar_mail_problem\" AND resource.type=\"cloud_run_revision\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ]
+      }
+    }
+  ]
+}

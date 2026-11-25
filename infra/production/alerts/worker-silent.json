@@ -1,0 +1,27 @@
+{
+  "displayName": "Radar worker silent for 15 min",
+  "combiner": "OR",
+  "notificationChannels": [
+    "projects/ticketradar03/notificationChannels/CHANNEL_ID"
+  ],
+  "documentation": {
+    "content": "No completed worker invocation for 15 minutes. Expected only while the scheduler is paused.",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "No completed invocation for 15 min",
+      "conditionAbsent": {
+        "filter": "metric.type=\"logging.googleapis.com/user/radar_worker_complete\" AND resource.type=\"cloud_run_revision\"",
+        "duration": "900s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ]
+      }
+    }
+  ]
+}
