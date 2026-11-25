@@ -45,3 +45,8 @@ scratch/
 
 # Local scratch (browser audit output)
 tools/ui_audit_shots/
+
+# Firebase emulator dependencies and local output
+tests/firestore_rules/node_modules/
+tests/firestore_rules/.npm-cache/
+tests/firestore_rules/.firebase/

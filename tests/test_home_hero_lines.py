@@ -48,7 +48,7 @@ def test_css_only_a_fixed_slot_and_still_under_reduced_motion():
 def test_the_marks_and_their_lines_are_the_approved_ones():
     import subprocess
 
-    old = subprocess.run(["git", "show", "080ce6e:ui/home.py"], capture_output=True, text=True, check=True).stdout
+    old = subprocess.run(["git", "show", "080ce6e:ui/home.py"], capture_output=True, encoding="utf-8", check=True).stdout
     src = Path("ui/home.py").read_text(encoding="utf-8")
     for name in ("LINES", "TELUGU_SIX", "HOME_LAYOUT"):
         start = old.index(f"\n{name}")

@@ -223,6 +223,8 @@ def test_the_window_does_not_depend_on_the_server_timezone(page_env, monkeypatch
     With the server in UTC the window is still the IST whole day, always sent,
     and the date strip starts on today's date in IST."""
     monkeypatch.setenv("TZ", "UTC")
+    if not hasattr(time, "tzset"):
+        pytest.skip("host does not implement POSIX timezone switching")
     time.tzset()
     try:
         app = ok(run())

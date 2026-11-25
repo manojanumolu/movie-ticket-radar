@@ -4,7 +4,7 @@
   "description": "Runs firestore.rules in the Firebase emulator. See README.md.",
   "type": "module",
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project demo-ticketradar \"node rules.test.mjs\""
+    "test": "firebase emulators:exec --only auth,firestore --project demo-ticketradar-restored \"node rules.test.mjs && python -m pytest ../test_firebase_recovery_emulator.py -q --tb=short -o addopts=\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.0",
