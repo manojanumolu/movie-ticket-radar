@@ -130,6 +130,16 @@ def test_observation_and_intent_commit_together_without_early_mail_marker(ledger
     assert not any(c == HISTORY for c, _ in store.rows)
 
 
+def test_manual_request_receipt_is_atomic_with_observation(ledger):
+    store, at, monitor, state, outcome = ledger
+    with Execution(store, "shadow-test", clock=lambda: at[0]) as worker:
+        claim = worker.claim(monitor, state, request_id="dispatch-1")
+        observed, _ = worker.finish(monitor, claim, outcome)
+    with Execution(store, "shadow-test", clock=lambda: at[0]) as successor:
+        assert successor.claim(monitor, observed, request_id="dispatch-1") is None
+        assert successor.claim(monitor, observed, request_id="dispatch-2")
+
+
 def test_transaction_sends_document_preconditions_and_does_not_retry_commit():
     calls = []
 

@@ -43,7 +43,10 @@ def test_targeted_fenced_tick_uses_checker_and_preserves_stopped_monitor(monkeyp
     accepted = []
     tick = FencedTick(store, "shadow-test", sender=lambda *args: accepted.append(args),
                       catalogue=lambda _: {"movies": []}, clock=lambda: 0, now=lambda: now[0])
-    counts = tick(Intent(monitor.id, True), now[0], 1)
+
+    intent = Intent(monitor.id, True, "fixture-dispatch")
+    counts = tick(intent, now[0], 1)
+    assert tick(intent, now[0], 1) == {"duplicate_request": 1}
     assert counts["checked"] == counts["fetches"] == counts["mail_accepted"] == 1
     assert fetches == [monitor.movie.event_code]
     assert len(accepted) == 1

@@ -61,6 +61,23 @@ def test_crash_after_sender_claim_is_never_automatically_retried(ledger):
     assert store.fields(OUTBOX, item_id)["status"] == "uncertain"
 
 
+def test_uncertain_item_can_be_reconciled_without_sending(ledger):
+    store, at, monitor, state, outcome = ledger
+
+    def ambiguous(*_):
+        raise OSError("lost final reply")
+
+    with Execution(store, "shadow-test", clock=lambda: at[0]) as worker:
+        item_id = enqueue(worker, store, monitor, state, outcome)
+        outbox = Outbox(worker, ambiguous)
+        assert outbox.deliver(item_id, monitor.notify_email) == "uncertain"
+        assert outbox.reconcile(item_id, accepted=True, evidence_sha256="a" * 64)
+        assert not outbox.reconcile(item_id, accepted=True, evidence_sha256="a" * 64)
+        assert outbox.deliver(item_id, monitor.notify_email) == "skipped"
+    assert store.fields(OUTBOX, item_id)["status"] == "accepted"
+    assert store.fields(HISTORY, item_id)["monitor_id"] == monitor.id
+
+
 @pytest.mark.parametrize("failure,retryable", [
     (smtplib.SMTPDataError(450, b"synthetic"), True),
     (smtplib.SMTPDataError(550, b"synthetic"), False),

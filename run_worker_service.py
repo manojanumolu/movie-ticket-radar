@@ -22,7 +22,7 @@ def parse_intent(path: str, raw: bytes) -> Intent:
         if body:
             raise ValueError("scheduled tick takes no inputs")
         return Intent()
-    if set(body) - {"monitor_id", "force"}:
+    if set(body) - {"monitor_id", "force", "request_id"}:
         raise ValueError("unknown check input")
     monitor_id = body.get("monitor_id")
     force = body.get("force", True)
@@ -30,7 +30,10 @@ def parse_intent(path: str, raw: bytes) -> Intent:
         raise ValueError("a single monitor ID is required")
     if type(force) is not bool:
         raise ValueError("force must be boolean")
-    return Intent(monitor_id=monitor_id, force=force)
+    request_id = body.get("request_id", "")
+    if not isinstance(request_id, str) or request_id and not MONITOR_ID.fullmatch(request_id):
+        raise ValueError("invalid check request ID")
+    return Intent(monitor_id=monitor_id, force=force, request_id=request_id)
 
 
 def configured_runtime() -> Runtime:

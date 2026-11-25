@@ -12,6 +12,7 @@ from config.timezone import now_ist
 class Intent:
     monitor_id: str = ""
     force: bool = False
+    request_id: str = ""
 
 
 class Runtime:
@@ -48,9 +49,11 @@ class FencedTick:
         from notifications.outbox import Outbox
 
         with Execution(self.client, self.authority, clock=self.now) as execution, catalogue_source(self.catalogue):
+            if intent.request_id and execution.already_checked(intent.monitor_id, intent.request_id):
+                return {"duplicate_request": 1}
             report = run_once(
                 at=at, monitor_id=intent.monitor_id, force=intent.force, execution=execution,
-                within_deadline=lambda: self.clock() < deadline,
+                request_id=intent.request_id, within_deadline=lambda: self.clock() < deadline,
             )
             eligible = {m.id: m.notify_email for m in report.monitors if m.is_running(at)}
             counts = {"checked": len(report.checked), "changes": len(report.changes),

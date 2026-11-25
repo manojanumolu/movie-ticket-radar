@@ -665,7 +665,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
              mirror: bool = False, notifier=None,
              known_state: dict[str, MonitorState] | None = None,
              carry: dict[str, MonitorState] | None = None,
-             dry_run: bool = False, execution=None, within_deadline=lambda: True) -> RunReport:
+             dry_run: bool = False, execution=None, request_id: str = "",
+             within_deadline=lambda: True) -> RunReport:
     """Check every monitor that is due (see :func:`_run_once`).
 
     ``dry_run`` evaluates exactly what a real tick would — the same reads,
@@ -678,12 +679,14 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     reached anyway is refused rather than performed. A later real run sees
     the store exactly as it was, and alerts exactly as it would have.
     """
+    if request_id and (execution is None or not monitor_id):
+        raise ValueError("request ID requires a targeted fenced check")
     if execution is not None and (dry_run or notifier or carry is not None or known_state is not None):
         raise ValueError("fenced execution owns state and notification intent")
     if not dry_run:
         return _run_once(at=at, force=force, monitor_id=monitor_id, mirror=mirror, notifier=notifier,
                          known_state=known_state, carry=carry, dry_run=False, execution=execution,
-                         within_deadline=within_deadline)
+                         request_id=request_id, within_deadline=within_deadline)
     with readonly.read_only():
         return _run_once(at=at, force=force, monitor_id=monitor_id, mirror=False,
                          notifier=_no_mail_in_a_dry_run, known_state=known_state, carry=None,
@@ -693,7 +696,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
 def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool, notifier,
               known_state: dict[str, MonitorState] | None,
               carry: dict[str, MonitorState] | None, dry_run: bool,
-              execution=None, within_deadline=lambda: True) -> RunReport:
+              execution=None, request_id="", within_deadline=lambda: True) -> RunReport:
     """Check every monitor that is due. This is what the workflow calls.
 
     ``mirror`` is False by default because inside Actions the workflow makes
@@ -869,7 +872,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
                     break
                 if monitor_id and candidate.id != monitor_id:
                     continue
-                claim = execution.claim(originals[candidate.id], state[candidate.id])
+                claim = execution.claim(originals[candidate.id], state[candidate.id], request_id=request_id)
                 if claim:
                     claims[candidate.id] = claim
             if not claims or not within_deadline():

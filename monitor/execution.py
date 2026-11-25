@@ -27,6 +27,7 @@ class Claim:
     monitor_version: str
     state_version: str | None
     check_id: str
+    request_key: str = ""
 
 
 class Execution:
@@ -102,10 +103,25 @@ class Execution:
             tx.commit()
             return True
 
-    def claim(self, original: Monitor, observed: MonitorState) -> Claim | None:
-        mid = original.id
+    @staticmethod
+    def request_key(monitor_id: str, request_id: str) -> str:
+        return sha256(f"request:{monitor_id}:{request_id}".encode()).hexdigest()
+
+    def already_checked(self, monitor_id: str, request_id: str) -> bool:
         with self.client.transaction() as tx:
             self.assert_lease(tx)
+            receipt, _ = tx.get("worker_runtime", self.request_key(monitor_id, request_id))
+            return receipt is not None
+
+    def claim(self, original: Monitor, observed: MonitorState, *, request_id: str = "") -> Claim | None:
+        mid = original.id
+        key = self.request_key(mid, request_id) if request_id else ""
+        with self.client.transaction() as tx:
+            self.assert_lease(tx)
+            if key:
+                receipt, _ = tx.get("worker_runtime", key)
+                if receipt:
+                    return None
             monitor, version = tx.get(MONITORS, mid)
             state, state_version = tx.get(STATES, mid)
             execution, _ = tx.get(EXECUTION, mid)
@@ -120,7 +136,7 @@ class Execution:
                 return None
             if execution and execution.get(OWNER) != original.owner_uid:
                 return None
-            claim = Claim(version, state_version, uuid4().hex)
+            claim = Claim(version, state_version, uuid4().hex, key)
             tx.set(EXECUTION, mid, {**(execution or {}), OWNER: original.owner_uid,
                                     "claim": claim.check_id, "holder": self.holder})
             tx.commit()
@@ -160,6 +176,10 @@ class Execution:
                         monitor, "ERROR", "The platform check failed. Availability is unchanged.",
                         outcome.checked_at,
                     ))
+            if claim.request_key:
+                tx.create("worker_runtime", claim.request_key, {
+                    "check_id": claim.check_id, "completed_at": to_iso(self.clock()),
+                })
             tx.set(STATES, mid, {**actual.to_dict(), OWNER: monitor.owner_uid})
             tx.set(EXECUTION, mid, {**execution, "detection": detection.to_dict(),
                                     "claim": "", "last_check_id": claim.check_id})

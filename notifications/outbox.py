@@ -97,6 +97,25 @@ class Outbox:
         self._finish(item_id, attempt, status)
         return status
 
+    def reconcile(self, item_id: str, *, accepted: bool, evidence_sha256: str) -> bool:
+        """Settle uncertain transport using private, independently verified evidence."""
+        import re
+
+        if type(accepted) is not bool or not re.fullmatch(r"[0-9a-f]{64}", evidence_sha256):
+            raise ValueError("a disposition and evidence digest are required")
+        now = self.execution.clock()
+        with self.execution.client.transaction() as tx:
+            self.execution.assert_lease(tx)
+            item, _ = tx.get(OUTBOX, item_id)
+            if not item or item.get("status") != "uncertain":
+                return False
+            if accepted:
+                self._record_acceptance(tx, item_id, item, now)
+            tx.set(OUTBOX, item_id, {**item, "status": "accepted" if accepted else "failed",
+                                    "settled_at": to_iso(now), "evidence_sha256": evidence_sha256})
+            tx.commit()
+            return True
+
     def _finish(self, item_id, attempt, status):
         now = self.execution.clock()
         with self.execution.client.transaction() as tx:
