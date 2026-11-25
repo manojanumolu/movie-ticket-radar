@@ -343,18 +343,17 @@ class FirestoreClient:
         so a write that did land before its answer was lost lands the same
         way again. A permanent refusal is raised on the first answer.
         """
-        where = suffix.split("?")[0]
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
                 return self._call_once(method, suffix, body, absent=absent)
             except FirestoreError as exc:
                 if not exc.transient or attempt == MAX_ATTEMPTS:
                     if exc.transient:
-                        print(f"[firestore] {method} {where}: giving up after {attempt} attempts "
+                        print(f"[firestore] {method}: giving up after {attempt} attempts "
                               f"({'HTTP ' + str(exc.status) if exc.status else 'unreachable'})", flush=True)
                     raise
                 delay = backoff_delay(attempt)
-                print(f"[firestore] {method} {where}: "
+                print(f"[firestore] {method}: "
                       f"{'HTTP ' + str(exc.status) if exc.status else 'unreachable'} — "
                       f"retry {attempt}/{MAX_ATTEMPTS - 1} in {delay:.1f}s", flush=True)
                 _sleep(delay)
@@ -379,7 +378,8 @@ class FirestoreClient:
         if status >= 400:
             error = (payload or {}).get("error") if isinstance(payload, dict) else None
             message = (error or {}).get("message") or f"HTTP {status}"
-            print(f"[firestore] {method} {suffix.split('?')[0]}: HTTP {status} {message[:120]}", flush=True)
+            # Error payloads and document paths can contain private identifiers.
+            print(f"[firestore] {method}: HTTP {status}", flush=True)
             raise FirestoreError(str(message), status)
         return payload
 
