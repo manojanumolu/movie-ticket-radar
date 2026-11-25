@@ -8,3 +8,6 @@
 *.webp binary
 *.gif binary
 *.ico binary
+
+# Unified patch context retains its leading space on empty lines.
+worker_candidate/runtime.patch -whitespace

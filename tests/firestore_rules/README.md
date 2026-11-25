@@ -1,12 +1,12 @@
-# Firestore rules tests
+# Firebase Rules and recovery emulator tests
 
-`firestore.rules` run in the real Firebase emulator — no production project,
-no credentials (`demo-` projects never reach Google).
+Install Node 22, Java 21, and the repository's Python development dependencies.
+Prepare the [candidate worktree](../../worker_candidate/README.md). From its
+`tests/firestore_rules` directory, run `npm ci --ignore-scripts` and `npm test`.
 
-    cd tests/firestore_rules
-    npm install
-    npm test
-
-Needs Node 18+ and Java 11+ (the emulator is a jar). The Python suite
-(`pytest`) does not run these; `tests/test_security_hardening.py` checks the
-rules file states the same limits as `monitor/policy.py`.
+The suite uses local Firestore and Authentication on ports 8080 and 9099.
+Firebase CLI starts the emulators for demo projects. Only synthetic records
+are created. Rules tests run unauthenticated, verified, unverified, and app
+admin clients. The recovery test compares snapshots across demo projects and
+verifies fixture sign-in. A separate case exercises the worker's lease and
+write preconditions using the emulator's actual REST API.

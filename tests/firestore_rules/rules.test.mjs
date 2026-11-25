@@ -18,7 +18,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const rules = readFileSync(join(here, "..", "..", "firestore.rules"), "utf8");
 
 const env = await initializeTestEnvironment({
-  projectId: "demo-ticketradar",
+  projectId: "demo-ticketradar-restored",
   firestore: { rules, host: "127.0.0.1", port: 8080 },
 });
 
@@ -320,6 +320,21 @@ test("a monitor over a newer limit can be stopped or expired, nothing else", asy
   await assertFails(setDoc(doc(me, "monitors/new13s"), monitor(ALICE, { id: "new13s", status: "STOPPED", movie: thirteen })));
   // Deletion was never affected.
   await assertSucceeds(deleteDoc(doc(me, "monitors/old3")));
+});
+
+test("worker control, claims and outbox reject all Firebase client identities", async () => {
+  for (const name of ["worker_runtime", "monitor_execution", "monitor_outbox"]) {
+    const path = name + "/fixture";
+    await seed(path, { owner_uid: ALICE.uid, status: "pending" });
+    for (const dbRef of [env.unauthenticatedContext().firestore(), db(ALICE),
+                         db(BOB), db(ALICE, { admin: true }), db(ALICE, { verified: false })]) {
+      await assertFails(getDoc(doc(dbRef, path)));
+      await assertFails(getDocs(query(collection(dbRef, name), where("owner_uid", "==", ALICE.uid))));
+      await assertFails(setDoc(doc(dbRef, name, "new"), { owner_uid: ALICE.uid }));
+      await assertFails(updateDoc(doc(dbRef, path), { status: "accepted" }));
+      await assertFails(deleteDoc(doc(dbRef, path)));
+    }
+  }
 });
 
 let failed = 0;
