@@ -1,0 +1,3 @@
+project_id   = "radar-staging-example"
+region       = "asia-south1"
+worker_image = "asia-south1-docker.pkg.dev/radar-staging-example/radar/worker@sha256:0000000000000000000000000000000000000000000000000000000000000000"
