@@ -1,6 +1,7 @@
 **
 !Dockerfile.worker
 !run_worker_service.py
+!run_bms_probe.py
 !ci/
 !ci/requirements-worker.lock
 !auth/

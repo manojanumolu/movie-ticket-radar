@@ -21,7 +21,7 @@ jobs:
       id-token: write
     environment: monitor-dispatch
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     concurrency:
       group: dedicated-monitor-worker-relay
       cancel-in-progress: false
@@ -55,6 +55,9 @@ jobs:
         run: |
           body=$(jq -cn --arg id "$MONITOR_ID" --argjson force "$FORCE" --arg request "$REQUEST_ID" \
             '{monitor_id:$id,force:$force,request_id:$request}')
-          curl --fail --silent --show-error --output /dev/null --max-time 55 \
+          # A scheduled tick may hold the worker (503 busy / lease held):
+          # retry briefly. The worker deduplicates by request_id.
+          curl --fail --silent --show-error --output /dev/null --max-time 50 \
+            --retry 2 --retry-delay 15 --retry-all-errors \
             --header "Authorization: Bearer $INVOKER_TOKEN" \
             --header "Content-Type: application/json" --data-binary "$body" "${SERVICE_URL}/check"

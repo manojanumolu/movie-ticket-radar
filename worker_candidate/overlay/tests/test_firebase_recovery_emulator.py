@@ -117,3 +117,35 @@ def test_emulator_commits_observation_receipt_and_mail_intent_together(ledger):
         assert outbox.deliver(item_id, monitor.notify_email) == "accepted"
         assert outbox.deliver(item_id, monitor.notify_email) == "skipped"
     assert len(calls) == 1 and client.get("history", item_id)["owner_uid"] == monitor.owner_uid
+
+
+def test_emulator_refused_mail_is_detected_again_not_lost(ledger):
+    from datetime import timedelta
+
+    from monitor.models import CheckOutcome
+    from monitor.state import STATES, MonitorState
+    from notifications.outbox import Rejected
+
+    _, transport = emulators()
+    store, at, monitor, state, outcome = ledger
+    client = FirestoreClient("demo-ticketradar-release", lambda: "owner", transport)
+    client.commit([(collection, key, fields) for (collection, key), (fields, _) in store.rows.items()])
+
+    def refuse(*_):
+        raise Rejected(retryable=False)
+
+    with Execution(client, "shadow-test", clock=lambda: at[0]) as execution:
+        claim = execution.claim(monitor, state)
+        execution.finish(monitor, claim, outcome)
+        first, = client.query(OUTBOX, equals={"status": "pending"})
+        assert Outbox(execution, refuse).deliver(first, monitor.notify_email) == "failed"
+    at[0] += timedelta(minutes=5)
+    calls = []
+    with Execution(client, "shadow-test", clock=lambda: at[0]) as execution:
+        observed = MonitorState.from_dict(client.get(STATES, monitor.id))
+        claim = execution.claim(monitor, observed)
+        execution.finish(monitor, claim, CheckOutcome(monitor.id, at[0], True, outcome.results))
+        second, = client.query(OUTBOX, equals={"status": "pending"})
+        assert second != first
+        assert Outbox(execution, lambda *a: calls.append(a)).deliver(second, monitor.notify_email) == "accepted"
+    assert len(calls) == 1

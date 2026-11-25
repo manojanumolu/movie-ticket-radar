@@ -63,3 +63,33 @@ def test_http_shadow_health_and_check():
         finally:
             server.shutdown()
             thread.join()
+
+
+def test_health_reports_the_configured_mode_without_secrets(monkeypatch):
+    from run_worker_service import startup_summary
+
+    runtime = Runtime(replay_tick, now=lambda: datetime(2026, 1, 1, tzinfo=timezone.utc))
+    with ThreadingHTTPServer(("127.0.0.1", 0), handler_for(runtime, "fenced")) as server:
+        thread = Thread(target=server.serve_forever)
+        thread.start()
+        try:
+            conn = http.client.HTTPConnection(*server.server_address, timeout=3)
+            conn.request("GET", "/healthz")
+            assert json.loads(conn.getresponse().read()) == {"ready": True, "mode": "fenced"}
+        finally:
+            server.shutdown()
+            thread.join()
+    monkeypatch.setenv("FIREBASE_PROJECT_ID", "ticketradar03")
+    monkeypatch.setenv("FIREBASE_EXPECTED_PROJECT", "ticketradar03")
+    monkeypatch.setenv("FIREBASE_CREDENTIAL_MODE", "adc")
+    monkeypatch.setenv("GMAIL_ADDRESS", "sender@example.com")
+    monkeypatch.setenv("GMAIL_APP_PASSWORD", "synthetic-secret")
+    monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT", raising=False)
+    summary = startup_summary("fenced", "ticketradar03-cloudrun-v1")
+    assert summary == {"worker_start": "fenced", "authority": "ticketradar03-cloudrun-v1",
+                       "credential_mode": "adc", "project_pinned": True,
+                       "sender_configured": True, "legacy_key_present": False}
+    assert "synthetic-secret" not in json.dumps(summary)
+    assert "sender@example.com" not in json.dumps(summary)
+    monkeypatch.delenv("GMAIL_APP_PASSWORD")
+    assert startup_summary("fenced", "x")["sender_configured"] is False

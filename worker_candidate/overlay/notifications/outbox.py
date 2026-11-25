@@ -7,9 +7,9 @@ from datetime import timedelta
 from config.firestore import OWNER
 from config.timezone import parse_iso, to_iso
 from monitor.changes import Change, ChangeKind, mark_notified
-from monitor.execution import OUTBOX, history
+from monitor.execution import EXECUTION, OUTBOX, history
 from monitor.models import Availability, Monitor
-from monitor.state import HISTORY, MONITORS, STATES, MonitorState
+from monitor.state import HISTORY, MONITORS, STATES, MonitorState, TargetState
 from notifications.email import render_change
 
 MAX_ATTEMPTS = 3
@@ -38,6 +38,40 @@ def make_item(monitor, change, check_id, version, target):
         "created_at": to_iso(change.detected_at), "subject": subject, "html": html, "plain": plain,
         "change": {**change.to_dict(), "new_showtime_keys": change.new_showtime_keys},
     }
+
+
+def release_detection_mark(tx, item, state) -> bool:
+    """Undo this item's "already announced" mark after it provably went nowhere.
+
+    ``Execution.finish`` marks a change as announced in the private detection
+    state when it writes the outbox row, so the next check does not create a
+    second intent while the first is pending. If that row then ends
+    ``failed`` (the SMTP server refused it) or ``cancelled`` (stale, monitor
+    edited or stopped, target no longer bookable), nothing reached the user.
+    Without this, the detection mark would suppress the alert until the next
+    availability transition. The mark is reset to what the user was actually
+    told (the observed state, which only acceptance advances), and only when
+    the mark is still this item's own, so a newer pending intent is never
+    disturbed. ``uncertain`` rows are never released: they may have been
+    delivered.
+    """
+    mid = item["monitor_id"]
+    execution, _ = tx.get(EXECUTION, mid)
+    if not execution or execution.get(OWNER) != item[OWNER] or not execution.get("detection"):
+        return False
+    if state is not None and state.get(OWNER) != item[OWNER]:
+        return False
+    detection = MonitorState.from_dict(execution["detection"])
+    marked = detection.targets.get(item["target_key"])
+    if marked is None or not marked.notified_at or to_iso(marked.notified_at) != item.get("created_at"):
+        return False
+    told = MonitorState.from_dict(state or {}).targets.get(item["target_key"]) or TargetState()
+    marked.notified_availability = told.notified_availability
+    marked.notified_at = told.notified_at
+    marked.notified_showtime_keys = list(told.notified_showtime_keys)
+    marked.new_showtime_notice_at = told.new_showtime_notice_at
+    tx.set(EXECUTION, mid, {**execution, "detection": detection.to_dict()})
+    return True
 
 
 class Outbox:
@@ -73,6 +107,7 @@ class Outbox:
                     or target.availability is not Availability.AVAILABLE
                     or to_iso(target.since) != item["since"]):
                 tx.set(OUTBOX, item_id, {**item, "status": "cancelled"})
+                release_detection_mark(tx, item, state)
                 tx.commit()
                 return None
             if not address or digest(address) != item["recipient_sha256"]:
@@ -128,6 +163,9 @@ class Outbox:
                 final["retry_at"] = to_iso(now + timedelta(minutes=2 ** attempt["attempts"]))
             if status == "accepted":
                 self._record_acceptance(tx, item_id, item, now)
+            elif status == "failed":
+                state, _ = tx.get(STATES, item["monitor_id"])
+                release_detection_mark(tx, item, state)
             tx.set(OUTBOX, item_id, final)
             tx.commit()
 

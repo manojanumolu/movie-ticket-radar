@@ -36,8 +36,25 @@ def parse_intent(path: str, raw: bytes) -> Intent:
     return Intent(monitor_id=monitor_id, force=force, request_id=request_id)
 
 
+def startup_summary(mode: str, authority: str) -> dict:
+    """One start-up line an operator can check before enabling the schedule:
+    which mode, which authority, which project pin, and whether a mail sender
+    is mounted. Never a credential value."""
+    return {
+        "worker_start": mode,
+        "authority": authority,
+        "credential_mode": os.environ.get("FIREBASE_CREDENTIAL_MODE", "legacy"),
+        "project_pinned": bool(os.environ.get("FIREBASE_PROJECT_ID"))
+        and os.environ.get("FIREBASE_PROJECT_ID") == os.environ.get("FIREBASE_EXPECTED_PROJECT"),
+        "sender_configured": bool(os.environ.get("GMAIL_ADDRESS", "").strip()
+                                  and os.environ.get("GMAIL_APP_PASSWORD", "").strip()),
+        "legacy_key_present": bool(os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip()),
+    }
+
+
 def configured_runtime() -> Runtime:
     if os.environ.get("WORKER_MODE") == "shadow":
+        print(json.dumps(startup_summary("shadow", "")), flush=True)
         return Runtime(replay_tick)
     if os.environ.get("WORKER_MODE") == "fenced":
         from config import worker_credentials
@@ -51,12 +68,13 @@ def configured_runtime() -> Runtime:
             raise ValueError("fenced mode requires workload identity and a named authority")
         client = worker_firestore_client()
         client.token()
+        print(json.dumps(startup_summary("fenced", authority)), flush=True)
         return Runtime(FencedTick(client, authority, sender=send_outbox_email,
                                   catalogue=CatalogueRefresh().read))
     raise ValueError("an explicit worker mode is required")
 
 
-def handler_for(runtime: Runtime) -> type[BaseHTTPRequestHandler]:
+def handler_for(runtime: Runtime, mode: str = "") -> type[BaseHTTPRequestHandler]:
     busy = Lock()
 
     class Handler(BaseHTTPRequestHandler):
@@ -78,7 +96,9 @@ def handler_for(runtime: Runtime) -> type[BaseHTTPRequestHandler]:
 
         def do_GET(self):
             if self.path == "/healthz":
-                self._reply(200, {"ready": True})
+                # Liveness and configured mode only: it does not prove that
+                # Firestore, the authority or the sender work (see /tick).
+                self._reply(200, {"ready": True, "mode": mode} if mode else {"ready": True})
             else:
                 self._reply(404, {"error": "unknown endpoint"})
 
@@ -123,7 +143,7 @@ def handler_for(runtime: Runtime) -> type[BaseHTTPRequestHandler]:
 def main():
     runtime = configured_runtime()
     port = int(os.environ.get("PORT", "8080"))
-    with ThreadingHTTPServer(("0.0.0.0", port), handler_for(runtime)) as server:
+    with ThreadingHTTPServer(("0.0.0.0", port), handler_for(runtime, os.environ.get("WORKER_MODE", ""))) as server:
         server.serve_forever()
 
 
