@@ -191,21 +191,12 @@ def main() -> int:
     from config import readonly
     from config.timezone import now_ist
 
-    from config import worker_credentials as credential
-
+    info, problem = fs.service_account_status()
     project = fs.project_from_env()
-    try:
-        if credential.mode() == "legacy":
-            info, problem = fs.service_account_status()
-            if info is None or not project:
-                raise credential.CredentialError(problem or "FIREBASE_PROJECT_ID is not set")
-            getter = fs.service_account_token_getter(info)
-        else:
-            getter = credential.keyless_token(project, credential.DATASTORE_SCOPES)
-    except credential.CredentialError as exc:
-        print(f"[rules-audit] cannot read the store: {exc}")
+    if info is None or not project:
+        print(f"[rules-audit] cannot read the store: {problem or 'FIREBASE_PROJECT_ID is not set'}")
         return 1
-    client = fs.FirestoreClient(project, getter)
+    client = fs.FirestoreClient(project, fs.service_account_token_getter(info))
     with readonly.read_only():
         try:
             documents = client.query("monitors")

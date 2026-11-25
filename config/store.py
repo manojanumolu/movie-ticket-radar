@@ -334,22 +334,9 @@ def catalogue_file(platform: str = "bookmyshow") -> Path:
     return DATA_DIR / f"catalogue_{platform}.json"
 
 
-_catalogue_override = contextvars.ContextVar("catalogue_override", default=None)
-
-
-@contextmanager
-def catalogue_source(reader):
-    token = _catalogue_override.set(reader)
-    try:
-        yield
-    finally:
-        _catalogue_override.reset(token)
-
-
 def load_catalogue(platform: str = "bookmyshow") -> dict[str, Any]:
     path = catalogue_file(platform)
-    override = _catalogue_override.get()
-    data = override(platform) if override else read_json(path)
+    data = read_json(path)
     if not isinstance(data, dict):
         return _default_for(path)
     data.setdefault("movies", [])

@@ -8,7 +8,7 @@ restore Firebase Authentication UIDs or provider links.
 
 ## Local drill
 
-Run the pinned Firebase emulator suite. It exercises two signed-in users and
+Run the pinned Firebase emulator suite from the [candidate worktree](../worker_candidate/README.md). It exercises two signed-in users and
 client denials for worker-only collections. The synthetic recovery test takes
 an Auth and Firestore snapshot and replays it into another demo project.
 It compares UIDs, operator claims, preferences, monitor IDs, stopped status,

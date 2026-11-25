@@ -343,17 +343,18 @@ class FirestoreClient:
         so a write that did land before its answer was lost lands the same
         way again. A permanent refusal is raised on the first answer.
         """
+        where = suffix.split("?")[0]
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
                 return self._call_once(method, suffix, body, absent=absent)
             except FirestoreError as exc:
                 if not exc.transient or attempt == MAX_ATTEMPTS:
                     if exc.transient:
-                        print(f"[firestore] {method}: giving up after {attempt} attempts "
+                        print(f"[firestore] {method} {where}: giving up after {attempt} attempts "
                               f"({'HTTP ' + str(exc.status) if exc.status else 'unreachable'})", flush=True)
                     raise
                 delay = backoff_delay(attempt)
-                print(f"[firestore] {method}: "
+                print(f"[firestore] {method} {where}: "
                       f"{'HTTP ' + str(exc.status) if exc.status else 'unreachable'} — "
                       f"retry {attempt}/{MAX_ATTEMPTS - 1} in {delay:.1f}s", flush=True)
                 _sleep(delay)
@@ -378,8 +379,7 @@ class FirestoreClient:
         if status >= 400:
             error = (payload or {}).get("error") if isinstance(payload, dict) else None
             message = (error or {}).get("message") or f"HTTP {status}"
-            # Error payloads and document paths can contain private identifiers.
-            print(f"[firestore] {method}: HTTP {status}", flush=True)
+            print(f"[firestore] {method} {suffix.split('?')[0]}: HTTP {status} {message[:120]}", flush=True)
             raise FirestoreError(str(message), status)
         return payload
 
@@ -446,77 +446,11 @@ class FirestoreClient:
         # Firestore accepts up to 500 writes per commit; ours are a handful.
         self._call("POST", ":commit", body)
 
-    def transaction(self) -> "FirestoreTransaction":
-        return FirestoreTransaction(self)
-
     def set(self, collection: str, doc: str, fields: dict[str, Any]) -> None:
         self.commit([(collection, doc, fields)])
 
     def delete(self, collection: str, doc: str) -> None:
         self.commit([(collection, doc, None)])
-
-
-class FirestoreTransaction:
-    """Single-attempt read/write transaction with versioned writes."""
-
-    def __init__(self, client: FirestoreClient):
-        self.client = client
-        self.token = ""
-        self.versions: dict[tuple[str, str], str | None] = {}
-        self.writes: list[dict[str, Any]] = []
-
-    def __enter__(self):
-        self.token = self.client._call_once("POST", ":beginTransaction", {
-            "options": {"readWrite": {}},
-        })["transaction"]
-        return self
-
-    def __exit__(self, *_exc):
-        if self.token:
-            try:
-                self.client._call_once("POST", ":rollback", {"transaction": self.token})
-            except FirestoreError:
-                pass
-
-    def get(self, collection: str, doc: str):
-        name = f"{self.client.root}/{collection}/{doc}"
-        rows = self.client._call_once("POST", ":batchGet", {
-            "documents": [name], "transaction": self.token,
-        })
-        if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
-            raise FirestoreError("invalid Firestore transaction read")
-        row = rows[0]
-        payload = row.get("found")
-        if payload is None and row.get("missing") != name:
-            raise FirestoreError("missing Firestore transaction result")
-        if payload is not None and (payload.get("name") != name or not payload.get("updateTime")):
-            raise FirestoreError("invalid Firestore transaction document version")
-        version = payload["updateTime"] if payload is not None else None
-        self.versions[collection, doc] = version
-        return (fields_of(payload) if payload is not None else None), version
-
-    def _write(self, collection, doc, fields, condition):
-        self.writes.append({
-            "currentDocument": condition,
-            "update": {"name": f"{self.client.root}/{collection}/{doc}",
-                       "fields": {name: encode(value, field=name) for name, value in fields.items()}},
-        })
-
-    def set(self, collection, doc, fields):
-        version = self.versions[collection, doc]
-        self._write(collection, doc, fields, {"updateTime": version} if version else {"exists": False})
-
-    def create(self, collection, doc, fields):
-        self._write(collection, doc, fields, {"exists": False})
-
-    def commit(self) -> None:
-        from config import readonly
-
-        readonly.refuse("Firestore transaction")
-        self.client._call_once("POST", ":commit", {
-            "transaction": self.token, "writes": self.writes,
-        })
-        self.token = ""
 
 
 __all__ = [

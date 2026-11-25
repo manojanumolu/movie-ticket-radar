@@ -1,7 +1,8 @@
 # Firebase Rules and recovery emulator tests
 
 Install Node 22, Java 21, and the repository's Python development dependencies.
-From this directory, run `npm ci --ignore-scripts` and `npm test`.
+Prepare the [candidate worktree](../../worker_candidate/README.md). From its
+`tests/firestore_rules` directory, run `npm ci --ignore-scripts` and `npm test`.
 
 The suite uses local Firestore and Authentication on ports 8080 and 9099.
 Firebase CLI starts the emulators for demo projects. Only synthetic records

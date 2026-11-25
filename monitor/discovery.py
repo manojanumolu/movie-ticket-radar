@@ -234,8 +234,7 @@ def _code_check(platform: str) -> Callable[[str], Any] | None:
 # ──────────────────────────────────────────────────────────────────────────
 def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[str, MonitorState],
                       *, at: datetime | None = None, mirror: bool = False,
-                      provider_for: Callable[[str], Any] | None = None,
-                      load_clock=None, save_clock=None, within_deadline=lambda: True) -> DiscoveryReport:
+                      provider_for: Callable[[str], Any] | None = None) -> DiscoveryReport:
     """Re-list each city a due, unresolved monitor is watching, and merge any
     sibling events the listing names that the monitors don't know yet.
 
@@ -259,11 +258,9 @@ def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[s
     if not reasons:
         return report
 
-    clock = (load_clock or load_discovery)()
+    clock = load_discovery()
     dirty = False
     for region_key, why in reasons.items():
-        if not within_deadline():
-            break
         platform, _, slug = region_key.partition(":")
         fresh, age = is_fresh(region_key, clock, at)
         if fresh:
@@ -308,7 +305,7 @@ def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[s
             _merge_into(monitor, listed, report)
 
     if dirty:
-        (save_clock or save_discovery)(clock, mirror=mirror)
+        save_discovery(clock, mirror=mirror)
     return report
 
 

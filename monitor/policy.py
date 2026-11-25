@@ -361,7 +361,7 @@ class _Unavailable:
 
 
 _override: IdentityResolver | str | None = None
-_built: tuple[tuple[str, ...], IdentityResolver] | None = None
+_built: tuple[str, IdentityResolver] | None = None
 _lock = threading.Lock()
 
 
@@ -387,18 +387,10 @@ def worker_resolver(backend: str) -> IdentityResolver | str:
         return LOCAL
     from config import firestore as fs
 
-    from config import worker_credentials as credential
-
     project = fs.project_from_env()
-    key = credential.configuration_key(project)
     with _lock:
-        if _built is not None and _built[0] == key:
+        if _built is not None and _built[0] == project:
             return _built[1]
-        if key[1] != "legacy":
-            getter = credential.keyless_token(project, IDENTITY_SCOPES)
-            resolver = FirebaseIdentityResolver(project, getter)
-            _built = (key, resolver)
-            return resolver
         info, problem = fs.service_account_status()
         if problem or not project:
             resolver: IdentityResolver = _Unavailable(problem or "FIREBASE_PROJECT_ID is not set")
@@ -407,7 +399,7 @@ def worker_resolver(backend: str) -> IdentityResolver | str:
                 resolver = FirebaseIdentityResolver(project, identity_token_getter(info or {}))
             except Exception as exc:  # noqa: BLE001 - a key google-auth refuses
                 resolver = _Unavailable(f"the service account was rejected ({type(exc).__name__})")
-        _built = (key, resolver)
+        _built = (project, resolver)
         return resolver
 
 

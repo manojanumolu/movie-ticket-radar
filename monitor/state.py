@@ -106,7 +106,6 @@ ScopeProvider = Callable[[], "Scope | None"]
 _scope_provider: ScopeProvider | None = None
 #: The worker's client, built once from the environment.
 _admin: "_FirestoreStore | None" = None
-_keyless_admin: "tuple[tuple[str, ...], _FirestoreStore] | None" = None
 #: Injected by tests to stand in for the service.
 _transport: Callable[..., tuple[int, Any]] | None = None
 
@@ -149,10 +148,6 @@ def backend_report() -> BackendReport:
     the outside the two are identical — a green run that checked nothing. So
     the reason is worked out here, in terms that can be logged.
     """
-    from config import worker_credentials as credential
-
-    if credential.mode() != "legacy":
-        return BackendReport(backend_name(), True, True)
     info, problem = fs.service_account_status()
     project = fs.project_from_env()
     if not project:
@@ -174,7 +169,7 @@ def backend_report() -> BackendReport:
 
 
 def _backend() -> "_Store":
-    global _admin, _keyless_admin
+    global _admin
     if _scope_provider is not None:
         scope = _scope_provider()
         if scope is not None and scope.uid:
@@ -188,24 +183,8 @@ def _backend() -> "_Store":
             # A developer's machine (no Firebase sign-in configured): the
             # per-UID view of the local files, which never leave the machine.
             return _JsonStore(uid=scope.uid)
-    from config import worker_credentials as credential
-
-    project = fs.project_from_env()
-    try:
-        key = credential.configuration_key(project)
-        if key[1] != "legacy":
-            if _scope_provider is not None:
-                raise StorageUnavailable("no signed-in account for this request")
-            if _keyless_admin is None or _keyless_admin[0] != key:
-                getter = credential.keyless_token(project, credential.DATASTORE_SCOPES)
-                client = fs.FirestoreClient(project, getter, transport=_transport or fs._http)
-                _keyless_admin = (key, _FirestoreStore(client, uid=None))
-            return _keyless_admin[1]
-    except credential.CredentialError as exc:
-        _keyless_admin = None
-        raise StorageUnavailable(str(exc)) from None
-
     info = fs.service_account_from_env()
+    project = fs.project_from_env()
     if info and project and _scope_provider is not None:
         # The app registered a scope provider, so this is the Streamlit app —
         # and nobody is signed in for this call. The service account reads
@@ -1034,13 +1013,6 @@ def _prepare_for_write(monitors: list[Monitor]) -> None:
 # ──────────────────────────────────────────────────────────────────────────
 def load_monitors() -> list[Monitor]:
     return _cached("monitors", lambda: _backend().load_monitors())
-
-
-def worker_firestore_client() -> fs.FirestoreClient:
-    store = _backend()
-    if not isinstance(store, _FirestoreStore) or store.uid is not None:
-        raise StorageUnavailable("fenced worker requires Firestore workload identity")
-    return store.client
 
 
 def load_monitors_for_checking() -> list[Monitor]:

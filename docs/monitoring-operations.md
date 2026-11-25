@@ -1,6 +1,8 @@
 # Dedicated worker review and cutover
 
-The current GitHub workflow continues to own production checks. The Terraform
+The current GitHub workflow continues to own production checks. The
+[candidate worktree](../worker_candidate/README.md) holds the proposed worker,
+operator modules and relay for isolated builds and tests. The Terraform
 configuration targets a separate staging project and defines a paused Scheduler
 job. The image accepts only an explicitly selected mode. Shadow mode runs
 synthetic checks without data and mail access.
@@ -52,7 +54,8 @@ legacy workflow dependency before retiring a key.
    Cutover must retain that workflow ID for the app. Wire its targeted manual
    route to the reusable `monitor-worker-relay.yml` and explicitly preserve
    the approved behavior for untargeted and dry-run invocations. The reusable
-   workflow has no caller in this branch and needs an approved main-only
+   workflow is held outside GitHub's workflow directory in the candidate
+   overlay. Promotion needs an approved main-only
    `monitor-dispatch` environment and a Cloud Run invoker identity.
 4. At the approved window, drain legacy worker jobs and address queued jobs and
    reruns of old revisions. Confirm their write and sender capabilities are

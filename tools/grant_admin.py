@@ -166,15 +166,8 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--revoke", action="store_true", help="remove the admin claim")
     args = parser.parse_args(argv)
 
-    from config import worker_credentials as credential
-
+    info, problem = service_account_status()
     project = project_from_env()
-    try:
-        selected = credential.mode()
-        info, problem = service_account_status() if selected == "legacy" else (None, "")
-    except credential.CredentialError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
     if problem or not project:
         print(f"error: {problem or 'FIREBASE_PROJECT_ID is not set'}", file=sys.stderr)
         return 2
@@ -188,12 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             uid_in = account
 
-    try:
-        token = (access_token(info or {}) if selected == "legacy"
-                 else credential.keyless_token(project, SCOPES)())
-    except credential.CredentialError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
+    token = access_token(info or {})
     user = lookup(project, token, email_in, uid=uid_in)
     uid, before = str(user.get("localId", "")), claims_of(user)
     address = str(user.get("email") or email_in)
