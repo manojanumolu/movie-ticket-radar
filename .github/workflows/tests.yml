@@ -76,10 +76,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run --detach --rm --name radar-worker-test --env WORKER_MODE=shadow \
+          docker run --detach --name radar-worker-test --env WORKER_MODE=shadow \
             --publish 127.0.0.1:8087:8080 radar-worker-test
-          trap 'docker stop radar-worker-test' EXIT
-          curl --fail --silent --show-error --retry 5 --retry-connrefused http://127.0.0.1:8087/healthz
+          trap 'docker logs radar-worker-test; docker rm --force radar-worker-test' EXIT
+          curl --fail --silent --show-error --max-time 3 --retry 6 --retry-delay 1 \
+            --retry-all-errors --retry-max-time 15 http://127.0.0.1:8087/healthz \
+            | jq -e '.ready == true'
           curl --fail --silent --show-error --max-time 10 --header 'Content-Type: application/json' \
             --data-binary '{"monitor_id":"fixture-monitor","force":true}' http://127.0.0.1:8087/check \
             | jq -e '.slots == [{"checked":1,"changes":0}]'
