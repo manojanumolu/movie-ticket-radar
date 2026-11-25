@@ -1,0 +1,46 @@
+name: BookMyShow monitor
+
+# CUTOVER VERSION — relay only. Monitoring runs on the private Cloud Run
+# worker (Cloud Scheduler, every minute). This file keeps the legacy name and
+# inputs only because the Streamlit app dispatches "bookmyshow-monitor.yml"
+# with {force, dry_run, monitor_id} for "Start now" and "Check now".
+#
+# It never checks, writes data/ or sends mail here: no schedule, no push
+# trigger, no loop, no self-dispatch, no repository write, no stored credential.
+# A targeted dispatch asks the worker for one fenced check of that monitor
+# through monitor-worker-relay.yml (keyless OIDC → Cloud Run invoker).
+# Until the relay is configured (repository variable
+# RADAR_ENABLE_MONITOR_RELAY = true) the relay job is skipped, the dispatch
+# still succeeds, and the scheduled worker checks the monitor within a minute.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Check now, ignoring each monitor's interval"
+        type: boolean
+        default: true
+      dry_run:
+        description: "Not supported by the dedicated worker (ignored: nothing runs)"
+        type: boolean
+        default: false
+      monitor_id:
+        description: "The monitor to check (required for a relay check)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  relay:
+    # Untargeted and dry-run requests do nothing: the scheduler already
+    # checks every due monitor each minute, and the worker has no dry run.
+    if: ${{ inputs.monitor_id != '' && !inputs.dry_run }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/monitor-worker-relay.yml
+    with:
+      monitor_id: ${{ inputs.monitor_id }}
+      force: ${{ inputs.force }}
