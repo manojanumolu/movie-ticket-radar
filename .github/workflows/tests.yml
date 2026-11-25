@@ -37,3 +37,74 @@ jobs:
         run: python -m pytest -q --timeout=300
       - name: Known vulnerabilities in the pinned dependencies
         run: pip-audit --require-hashes -r ci/requirements-worker.lock --progress-spinner off
+
+  candidate-pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r ci/requirements-dev.lock
+      - name: Test the isolated worker candidate
+        run: |
+          python tools/materialize_worker_candidate.py "$RUNNER_TEMP/worker-candidate"
+          cd -- "$RUNNER_TEMP/worker-candidate"
+          python -m pytest -q --timeout=300
+
+  firebase-emulators:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/firestore_rules/package-lock.json
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: pip install --require-hashes -r ci/requirements-dev.lock
+      - name: Test Firebase Rules, transactions and isolated recovery
+        run: |
+          python tools/materialize_worker_candidate.py "$RUNNER_TEMP/worker-candidate"
+          cd -- "$RUNNER_TEMP/worker-candidate/tests/firestore_rules"
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+
+  worker-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Build the isolated worker image
+        run: |
+          python3 tools/materialize_worker_candidate.py "$RUNNER_TEMP/worker-candidate"
+          cd -- "$RUNNER_TEMP/worker-candidate"
+          docker build --file Dockerfile.worker --tag radar-worker-test .
+      - name: Exercise the shadow worker over HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name radar-worker-test --env WORKER_MODE=shadow \
+            --publish 127.0.0.1:8087:8080 radar-worker-test
+          trap 'docker logs radar-worker-test; docker rm --force radar-worker-test' EXIT
+          curl --fail --silent --show-error --max-time 3 --retry 6 --retry-delay 1 \
+            --retry-all-errors --retry-max-time 15 http://127.0.0.1:8087/healthz \
+            | jq -e '.ready == true'
+          curl --fail --silent --show-error --max-time 10 --header 'Content-Type: application/json' \
+            --data-binary '{"monitor_id":"fixture-monitor","force":true}' http://127.0.0.1:8087/check \
+            | jq -e '.slots == [{"checked":1,"changes":0}]'

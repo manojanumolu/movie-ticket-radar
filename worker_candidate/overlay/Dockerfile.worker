@@ -1,0 +1,9 @@
+FROM python:3.12-slim
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY ci/requirements-worker.lock ci/
+RUN pip install --no-cache-dir --require-hashes -r ci/requirements-worker.lock
+COPY --chown=65532:65532 . .
+USER 65532:65532
+EXPOSE 8080
+CMD ["python", "run_worker_service.py"]

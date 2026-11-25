@@ -54,7 +54,7 @@ def test_the_crafts_are_homes_marks_and_now_explain_formats():
 def test_the_explorer_marks_keep_the_exact_positions_of_the_approved_baseline():
     import subprocess
 
-    old = subprocess.run(["git", "show", "080ce6e:ui/explorer.py"], capture_output=True, text=True, check=True).stdout
+    old = subprocess.run(["git", "show", "080ce6e:ui/explorer.py"], capture_output=True, encoding="utf-8", check=True).stdout
     start = old.index("CRAFT_ROWS = {")
     assert old[start:old.index("\n}\n", start) + 2] in Path("ui/explorer.py").read_text(encoding="utf-8")
 

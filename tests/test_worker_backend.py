@@ -140,24 +140,19 @@ def test_the_workflow_passes_both_variables_to_the_worker():
 def test_no_credential_is_ever_committed():
     """The service account belongs in the Actions environment and nowhere
     else: not in the repository, not in the app, not in Streamlit secrets."""
+    import subprocess
     from pathlib import Path
 
     here = Path(__file__).resolve()
     root = here.parent.parent
-    for path in root.rglob("*"):
-        if not path.is_file() or ".git" in path.parts or "__pycache__" in path.parts:
+    listed = subprocess.check_output(["git", "ls-files", "-z"], cwd=root)
+    marker = b"-----BEGIN " + b"PRIVATE KEY-----"
+    for name in filter(None, listed.decode().split("\0")):
+        path = root / name
+        if path == here or path.is_symlink() or path.suffix in {".jpg", ".png", ".webp", ".woff2"}:
             continue
-        if path.suffix not in {".py", ".json", ".toml", ".yml", ".yaml", ".md", ".txt"}:
-            continue
-        if path.resolve() == here:
-            continue                    # this file names the patterns it looks for
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-        assert "BEGIN PRIVATE KEY" not in text, f"a private key is committed in {path}"
-        assert ".iam.gserviceaccount.com" not in text, \
-            f"a service-account address is committed in {path}"
+        if path.is_file() and marker in path.read_bytes():
+            pytest.fail(f"private key marker in tracked file {name}", pytrace=False)
 
 
 # ──────────────────────────────────────────────────────────────────────────

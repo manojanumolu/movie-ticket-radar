@@ -66,7 +66,8 @@ def test_the_rules_audit_reads_with_the_worker_key_and_can_do_nothing_else():
                                                           "rules-audit.yml"}))
 def test_no_other_workflow_touches_a_production_secret_or_environment(name):
     for job_name, job in load(name)["jobs"].items():
-        assert "environment" not in job, (name, job_name)
+        expected = "monitor-dispatch" if (name, job_name) == ("monitor-worker-relay.yml", "invoke") else None
+        assert job.get("environment") == expected, (name, job_name)
         assert secrets_used(job) == set(), (name, job_name)
 
 
