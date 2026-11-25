@@ -85,3 +85,19 @@ def test_catalogue_conditional_read_and_unavailable_response():
     with pytest.raises(ValueError, match="unavailable"):
         refresh.read("bookmyshow")
     assert calls == [{}, {"If-None-Match": "fixture"}, {"If-None-Match": "fixture"}]
+
+
+def test_relay_is_reusable_and_gated_to_main_manual_dispatch():
+    from pathlib import Path
+
+    workflow = Path(".github/workflows/monitor-worker-relay.yml").read_text(encoding="utf-8")
+    assert "  workflow_call:" in workflow
+    assert "github.ref == 'refs/heads/main'" in workflow
+    assert "github.event_name == 'workflow_dispatch'" in workflow
+    assert "vars.RADAR_ENABLE_MONITOR_RELAY == 'true'" in workflow
+    assert "    environment: monitor-dispatch" in workflow
+    assert workflow.count("id-token: write") == 1
+    assert "secrets." not in workflow
+    assert "monitor-worker-relay.yml" not in Path(
+        ".github/workflows/bookmyshow-monitor.yml"
+    ).read_text(encoding="utf-8")
