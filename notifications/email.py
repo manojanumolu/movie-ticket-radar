@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import smtplib
+import ssl
 import threading
 import time
 from collections import deque
@@ -102,19 +103,13 @@ def send_email(to: str, subject: str, html: str, text: str) -> None:
         raise NotificationError(str(exc)) from None
 
     address, password = credentials()
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = formataddr((SENDER_NAME, address))
-    msg["To"] = to
-    msg.set_content(text)
-    msg.add_alternative(html, subtype="html")
+    msg = _message(address, to, subject, html, text)
 
     try:
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
             server.login(address, password)
             server.send_message(msg)
     except smtplib.SMTPAuthenticationError:
-        # Never echo the exception body — it can contain the credential.
         raise NotificationError(
             "Gmail rejected the login. Check GMAIL_ADDRESS and that "
             "GMAIL_APP_PASSWORD is a 16-character app password."
@@ -123,6 +118,58 @@ def send_email(to: str, subject: str, html: str, text: str) -> None:
         raise NotificationError(f"Could not send mail: {type(exc).__name__}") from None
 
     print(f"[email] sent '{subject}' to {_mask(to)}")
+
+
+def _message(address, to, subject, html, text):
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = formataddr((SENDER_NAME, address))
+    msg["To"] = to
+    msg.set_content(text)
+    msg.add_alternative(html, subtype="html")
+    return msg
+
+
+def send_outbox_email(to: str, subject: str, html: str, text: str, item_id: str) -> None:
+    """Send one durable intent. A lost response during DATA is ambiguous."""
+    from notifications.outbox import Rejected
+
+    address = os.environ.get("GMAIL_ADDRESS", "").strip()
+    password = os.environ.get("GMAIL_APP_PASSWORD", "").strip()
+    try:
+        if not address or not password:
+            raise InvalidRecipient("sender unavailable")
+        to = normalise_recipient(to)
+        address = normalise_recipient(address)
+        msg = _message(address, to, subject, html, text)
+        msg["Message-ID"] = f"<{item_id}@ticket-radar.invalid>"
+    except (ValueError, InvalidRecipient):
+        raise Rejected(retryable=False) from None
+
+    server = None
+    try:
+        try:
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10,
+                                      context=ssl.create_default_context())
+            server.login(address, password)
+        except smtplib.SMTPResponseException as exc:
+            raise Rejected(retryable=400 <= exc.smtp_code < 500) from None
+        except (smtplib.SMTPException, OSError):
+            raise Rejected(retryable=True) from None
+        try:
+            refused = server.send_message(msg, from_addr=address, to_addrs=[to])
+        except smtplib.SMTPRecipientsRefused as exc:
+            raise Rejected(retryable=any(400 <= c < 500 for c, _ in exc.recipients.values())) from None
+        except (smtplib.SMTPSenderRefused, smtplib.SMTPDataError) as exc:
+            raise Rejected(retryable=400 <= exc.smtp_code < 500) from None
+        if refused:
+            raise Rejected(retryable=any(400 <= c < 500 for c, _ in refused.values()))
+    finally:
+        if server is not None:
+            try:
+                server.close()
+            except (smtplib.SMTPException, OSError):
+                pass
 
 
 # ──────────────────────────────────────────────────────────────────────────

@@ -32,6 +32,48 @@ class Runtime:
         return results
 
 
+class FencedTick:
+    def __init__(self, client, authority, *, sender, catalogue, clock=time.monotonic, now=now_ist):
+        self.client = client
+        self.authority = authority
+        self.sender = sender
+        self.catalogue = catalogue
+        self.clock = clock
+        self.now = now
+
+    def __call__(self, intent, at, deadline):
+        from config.store import catalogue_source
+        from monitor.checker import run_once
+        from monitor.execution import Execution, OUTBOX
+        from notifications.outbox import Outbox
+
+        with Execution(self.client, self.authority, clock=self.now) as execution, catalogue_source(self.catalogue):
+            report = run_once(
+                at=at, monitor_id=intent.monitor_id, force=intent.force, execution=execution,
+                within_deadline=lambda: self.clock() < deadline,
+            )
+            eligible = {m.id: m.notify_email for m in report.monitors if m.is_running(at)}
+            counts = {"checked": len(report.checked), "changes": len(report.changes),
+                      "failed_checks": len(report.failed), "fetches": report.fetches}
+            sender = Outbox(execution, self.sender)
+            for status in ("sending", "retry", "pending"):
+                if self.clock() >= deadline:
+                    break
+                where = {"status": status}
+                if intent.monitor_id:
+                    where["monitor_id"] = intent.monitor_id
+                rows = self.client.query(OUTBOX, equals=where, limit=50)
+                for item_id, item in rows.items():
+                    if self.clock() >= deadline:
+                        break
+                    mid = item["monitor_id"]
+                    if not intent.monitor_id or mid == intent.monitor_id:
+                        result = sender.deliver(item_id, eligible.get(mid, ""))
+                        name = f"mail_{result}"
+                        counts[name] = counts.get(name, 0) + 1
+            return counts
+
+
 def replay_tick(intent: Intent, at: datetime, deadline: float) -> dict:
     """Exercise due calculation and the state machine on synthetic data."""
     from monitor.changes import apply_outcome, detect_changes
@@ -39,7 +81,7 @@ def replay_tick(intent: Intent, at: datetime, deadline: float) -> dict:
     from monitor.state import MonitorState
 
     movie = MovieRef("bookmyshow", "ET00000001", "Fixture", "HYD", "hyderabad")
-    monitor = Monitor(movie=movie, targets=[TheatreTarget("Fixture", "FIX", "2D")],
+    monitor = Monitor(movie=movie, targets=[TheatreTarget("FIX", "Fixture", fmt="2D")],
                       id="fixture-monitor", created_at=at, monitor_until=at + timedelta(days=1))
     state = MonitorState()
     selected = not intent.monitor_id or intent.monitor_id == monitor.id

@@ -36,7 +36,21 @@ def parse_intent(path: str, raw: bytes) -> Intent:
 def configured_runtime() -> Runtime:
     if os.environ.get("WORKER_MODE") == "shadow":
         return Runtime(replay_tick)
-    raise ValueError("set WORKER_MODE=shadow")
+    if os.environ.get("WORKER_MODE") == "fenced":
+        from config import worker_credentials
+        from monitor.catalogue_refresh import CatalogueRefresh
+        from monitor.runtime import FencedTick
+        from monitor.state import worker_firestore_client
+        from notifications.email import send_outbox_email
+
+        authority = os.environ.get("WORKER_AUTHORITY", "")
+        if worker_credentials.mode() == "legacy" or not MONITOR_ID.fullmatch(authority):
+            raise ValueError("fenced mode requires workload identity and a named authority")
+        client = worker_firestore_client()
+        client.token()
+        return Runtime(FencedTick(client, authority, sender=send_outbox_email,
+                                  catalogue=CatalogueRefresh().read))
+    raise ValueError("an explicit worker mode is required")
 
 
 def handler_for(runtime: Runtime) -> type[BaseHTTPRequestHandler]:
@@ -91,9 +105,11 @@ def handler_for(runtime: Runtime) -> type[BaseHTTPRequestHandler]:
                 return
             try:
                 results = runtime.run(intent, scheduled=self.path == "/tick")
-            except Exception:
+            except Exception as exc:
+                print(json.dumps({"worker_result": "failed", "kind": type(exc).__name__}), flush=True)
                 self._reply(503, {"error": "worker invocation failed"})
             else:
+                print(json.dumps({"worker_result": "complete", "slots": results}), flush=True)
                 self._reply(200, {"slots": results})
             finally:
                 busy.release()

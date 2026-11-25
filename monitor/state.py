@@ -1036,6 +1036,13 @@ def load_monitors() -> list[Monitor]:
     return _cached("monitors", lambda: _backend().load_monitors())
 
 
+def worker_firestore_client() -> fs.FirestoreClient:
+    store = _backend()
+    if not isinstance(store, _FirestoreStore) or store.uid is not None:
+        raise StorageUnavailable("fenced worker requires Firestore workload identity")
+    return store.client
+
+
 def load_monitors_for_checking() -> list[Monitor]:
     """The worker's read: on Firestore, only ACTIVE monitors (see the store);
     on JSON, the file. Never cached — the worker has no session to cache in,

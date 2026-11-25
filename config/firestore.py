@@ -446,11 +446,69 @@ class FirestoreClient:
         # Firestore accepts up to 500 writes per commit; ours are a handful.
         self._call("POST", ":commit", body)
 
+    def transaction(self) -> "FirestoreTransaction":
+        return FirestoreTransaction(self)
+
     def set(self, collection: str, doc: str, fields: dict[str, Any]) -> None:
         self.commit([(collection, doc, fields)])
 
     def delete(self, collection: str, doc: str) -> None:
         self.commit([(collection, doc, None)])
+
+
+class FirestoreTransaction:
+    """Single-attempt read/write transaction with versioned writes."""
+
+    def __init__(self, client: FirestoreClient):
+        self.client = client
+        self.token = ""
+        self.versions: dict[tuple[str, str], str | None] = {}
+        self.writes: list[dict[str, Any]] = []
+
+    def __enter__(self):
+        self.token = self.client._call_once("POST", ":beginTransaction", {
+            "options": {"readWrite": {}},
+        })["transaction"]
+        return self
+
+    def __exit__(self, *_exc):
+        if self.token:
+            try:
+                self.client._call_once("POST", ":rollback", {"transaction": self.token})
+            except FirestoreError:
+                pass
+
+    def get(self, collection: str, doc: str):
+        from urllib.parse import quote, urlencode
+
+        suffix = f"/{quote(collection, safe='')}/{quote(doc, safe='')}?"
+        payload = self.client._call_once("GET", suffix + urlencode({"transaction": self.token}))
+        version = payload["updateTime"] if payload is not None else None
+        self.versions[collection, doc] = version
+        return (fields_of(payload) if payload is not None else None), version
+
+    def _write(self, collection, doc, fields, condition):
+        self.writes.append({
+            "currentDocument": condition,
+            "update": {"name": f"{self.client.root}/{collection}/{doc}",
+                       "fields": {name: encode(value, field=name) for name, value in fields.items()}},
+        })
+
+    def set(self, collection, doc, fields):
+        version = self.versions[collection, doc]
+        self._write(collection, doc, fields, {"updateTime": version} if version else {"exists": False})
+
+    def create(self, collection, doc, fields):
+        self._write(collection, doc, fields, {"exists": False})
+
+    def commit(self) -> None:
+        from config import readonly
+
+        readonly.refuse("Firestore transaction")
+        self.client._call_once("POST", ":commit", {
+            "transaction": self.token, "writes": self.writes,
+        })
+        self.token = ""
 
 
 __all__ = [

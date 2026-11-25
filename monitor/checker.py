@@ -33,6 +33,7 @@ Order of operations, and why:
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -664,7 +665,7 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
              mirror: bool = False, notifier=None,
              known_state: dict[str, MonitorState] | None = None,
              carry: dict[str, MonitorState] | None = None,
-             dry_run: bool = False) -> RunReport:
+             dry_run: bool = False, execution=None, within_deadline=lambda: True) -> RunReport:
     """Check every monitor that is due (see :func:`_run_once`).
 
     ``dry_run`` evaluates exactly what a real tick would — the same reads,
@@ -677,9 +678,12 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
     reached anyway is refused rather than performed. A later real run sees
     the store exactly as it was, and alerts exactly as it would have.
     """
+    if execution is not None and (dry_run or notifier or carry is not None or known_state is not None):
+        raise ValueError("fenced execution owns state and notification intent")
     if not dry_run:
         return _run_once(at=at, force=force, monitor_id=monitor_id, mirror=mirror, notifier=notifier,
-                         known_state=known_state, carry=carry, dry_run=False)
+                         known_state=known_state, carry=carry, dry_run=False, execution=execution,
+                         within_deadline=within_deadline)
     with readonly.read_only():
         return _run_once(at=at, force=force, monitor_id=monitor_id, mirror=False,
                          notifier=_no_mail_in_a_dry_run, known_state=known_state, carry=None,
@@ -688,7 +692,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
 
 def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool, notifier,
               known_state: dict[str, MonitorState] | None,
-              carry: dict[str, MonitorState] | None, dry_run: bool) -> RunReport:
+              carry: dict[str, MonitorState] | None, dry_run: bool,
+              execution=None, within_deadline=lambda: True) -> RunReport:
     """Check every monitor that is due. This is what the workflow calls.
 
     ``mirror`` is False by default because inside Actions the workflow makes
@@ -737,6 +742,17 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
         # a monitor past its end time is not running either way.
         stored, newly_expired = load_monitors_for_checking(), []
         report.would_expire = [m.id for m in stored if m.status.is_running and m.is_expired(at)]
+    elif execution is not None:
+        stored = load_monitors_for_checking()
+        newly_expired = []
+        for monitor in stored:
+            if not within_deadline():
+                break
+            if monitor.status.is_running and monitor.is_expired(at):
+                original = deepcopy(monitor)
+                monitor.expire(at)
+                if execution.update_monitor(original, monitor, expired=True):
+                    newly_expired.append(monitor)
     else:
         stored, newly_expired = expire_due_monitors(load_monitors_for_checking(), at=at, mirror=mirror)
     report.expired = [m.id for m in newly_expired]
@@ -746,6 +762,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
     # owner's verified account address, enforces the intervals, the end-date
     # cap, admin-only features and the active-monitor limit, and refuses
     # anything malformed — whatever the document, the rules or the app said.
+    originals = {m.id: deepcopy(m) for m in stored} if execution is not None else {}
     screened = policy.screen(stored, at=at, resolver=policy.worker_resolver(backend_name()))
     report.rejected = dict(screened.rejected)
     report.deferred = [m.id for m in screened.deferred]
@@ -753,7 +770,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
         report.skipped.append(f"{short_id(monitor_ref.id)} (owner not verified yet)")
     for rejected_id in screened.rejected:
         report.skipped.append(f"{short_id(rejected_id)} (refused)")
-    if screened.clamped and not dry_run:
+    if screened.clamped and not dry_run and execution is None:
         # The whole list: the JSON store rewrites its file from what it is
         # given, so a subset would drop every other monitor.
         save_monitors(stored, mirror=mirror, changed=screened.clamped)
@@ -796,9 +813,27 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
     # *before* fetching, so this tick's sweep is the film as it is now.
     # (Not in a dry run: what it learns has to be stored to be of any use,
     # and a dry run stores nothing. It evaluates on the siblings known now.)
-    if not dry_run:
+    if not dry_run and execution is None:
         report.discovery = discover_siblings(monitors, due, state, at=at, mirror=mirror)
-    if report.discovery.updated:
+    elif execution is not None and within_deadline():
+        execution.verify()
+        # A targeted request cannot issue an unrelated discovery pass.
+        report.discovery = discover_siblings(
+            monitors, due, state, at=at, load_clock=execution.discovery_clock,
+            save_clock=execution.save_discovery_clock, within_deadline=within_deadline,
+        )
+        changed = {m.id for m in screened.clamped} | report.discovery.updated.keys()
+        for monitor in (m for m in stored if m.id in changed):
+            if not within_deadline():
+                running = [m for m in running if m.id != monitor.id]
+                continue
+            if execution.update_monitor(originals[monitor.id], monitor):
+                originals[monitor.id] = deepcopy(monitor)
+            else:
+                running = [m for m in running if m.id != monitor.id]
+        running_ids = {m.id for m in running}
+        due = [m for m in due if m.id in running_ids]
+    if report.discovery.updated and execution is None:
         save_monitors(stored, mirror=mirror,
                       changed=[m for m in stored if m.id in report.discovery.updated])
 
@@ -825,6 +860,20 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
         print(f"[checker] sharing: {report.sharing.summary()}")
 
     for group in groups:
+        claims = {}
+        if execution is not None:
+            if not within_deadline():
+                break
+            for candidate in group.monitors:
+                if not within_deadline():
+                    break
+                if monitor_id and candidate.id != monitor_id:
+                    continue
+                claim = execution.claim(originals[candidate.id], state[candidate.id])
+                if claim:
+                    claims[candidate.id] = claim
+            if not claims or not within_deadline():
+                continue
         if group.shared:
             print(f"[checker] one read for {len(group.monitors)} monitors "
                   f"({len(group.subscribers)} account(s)) — {group.key.label}")
@@ -845,6 +894,16 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
             # bookkeeping — is this monitor's problem this tick, and the
             # next monitor is still checked.
             try:
+                if execution is not None:
+                    claim = claims.get(monitor.id)
+                    if claim is not None:
+                        outcome = outcome_for(monitor, listing, at=at)
+                        completed = execution.finish(monitor, claim, outcome)
+                        if completed is not None:
+                            state[monitor.id], changes = completed
+                            report.changes.extend(changes)
+                            (report.checked if outcome.ok else report.failed).append(monitor.id)
+                    continue
                 if _check_one(monitor, listing, state, report, at=at, mirror=mirror,
                               notifier=notifier, carry=carry, dry_run=dry_run):
                     dirty = True
@@ -855,7 +914,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
                 print(f"::warning::monitor {short_id(monitor.id)} could not be processed this tick "
                       f"({type(exc).__name__}); the others continue", flush=True)
 
-    if dirty and not dry_run:
+    if dirty and not dry_run and execution is None:
         try:
             save_state(state, mirror=mirror)
         except Exception:
