@@ -147,9 +147,10 @@ def test_transaction_sends_document_preconditions_and_does_not_retry_commit():
         calls.append((method, url, body))
         if url.endswith(":beginTransaction"):
             return 200, {"transaction": "fixture/+"}
-        if method == "GET":
-            assert url.endswith("?transaction=fixture%2F%2B")
-            return 200, {"updateTime": "2026-11-24T15:00:00Z", "fields": {}}
+        if url.endswith(":batchGet"):
+            assert method == "POST" and body["transaction"] == "fixture/+"
+            name, = body["documents"]
+            return 200, [{"found": {"name": name, "updateTime": "2026-11-24T15:00:00Z", "fields": {}}}]
         if url.endswith(":commit"):
             raise OSError("commit response lost")
         assert url.endswith(":rollback")

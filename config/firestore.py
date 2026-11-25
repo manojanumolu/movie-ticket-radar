@@ -479,10 +479,18 @@ class FirestoreTransaction:
                 pass
 
     def get(self, collection: str, doc: str):
-        from urllib.parse import quote, urlencode
-
-        suffix = f"/{quote(collection, safe='')}/{quote(doc, safe='')}?"
-        payload = self.client._call_once("GET", suffix + urlencode({"transaction": self.token}))
+        name = f"{self.client.root}/{collection}/{doc}"
+        rows = self.client._call_once("POST", ":batchGet", {
+            "documents": [name], "transaction": self.token,
+        })
+        if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+            raise FirestoreError("invalid Firestore transaction read")
+        row = rows[0]
+        payload = row.get("found")
+        if payload is None and row.get("missing") != name:
+            raise FirestoreError("missing Firestore transaction result")
+        if payload is not None and (payload.get("name") != name or not payload.get("updateTime")):
+            raise FirestoreError("invalid Firestore transaction document version")
         version = payload["updateTime"] if payload is not None else None
         self.versions[collection, doc] = version
         return (fields_of(payload) if payload is not None else None), version
