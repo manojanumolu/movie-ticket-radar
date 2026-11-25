@@ -36,8 +36,11 @@ trees before isolation landed. An authorized integration must publish the
 final isolated tree to the default branch in a single update. Review this
 branch against the production baseline for that operation.
 
-Streamlit Community Cloud synchronizes its configured source branch
-independently of GitHub Actions. Verify the live app's repository, branch and
-entry point in the owner workspace before authorizing any default-branch
-update. Even a runtime-identical commit could be reflected by its source
-integration. This code does not change the deployment configuration.
+On 26 November 2026, the live Streamlit app's public context reported
+`manojanumolu/movie-ticket-radar` and branch `main`. The public
+[branch link](https://share.streamlit.io/manojanumolu/movie-ticket-radar/main/app.py)
+also resolved to the live app. Streamlit Community Cloud synchronizes
+the configured branch independently of GitHub Actions. Require separate
+production approval before an integration updates `main`, even while
+the application source and dependencies match the production baseline.
+[Streamlit source updates](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/edit-your-app)
