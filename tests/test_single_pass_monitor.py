@@ -1,0 +1,176 @@
+"""The five-minute single-pass monitor: one pass per run, no overlap, no
+refusal bypass, and the city-listing throttle kept between runs."""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+import yaml
+
+from monitor import discovery
+from platforms import http
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOWS = ROOT / ".github/workflows"
+
+
+def load(name):
+    doc = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+    doc["on"] = doc.pop(True, doc.get("on"))
+    return doc
+
+
+# ── the workflow ──────────────────────────────────────────────────────────
+def test_one_job_one_pass_and_a_hard_stop_inside_five_minutes():
+    wf = load("bookmyshow-monitor.yml")
+    assert wf["on"]["schedule"] == [{"cron": "*/5 * * * *"}]
+    assert set(wf["on"]["workflow_dispatch"]["inputs"]) == {"force", "dry_run", "monitor_id"}
+    assert wf["concurrency"] == {"group": "bookmyshow-monitor", "cancel-in-progress": False}
+    assert wf["permissions"] == {"contents": "read"}
+    [job] = wf["jobs"].values()
+    assert job["timeout-minutes"] <= 4
+    [run] = [s for s in job["steps"] if "run_monitor.py" in s.get("run", "")]
+    assert "python run_monitor.py" in run["run"]
+    for forbidden in ("--loop", "--max-minutes", "--poll-seconds", "sleep "):
+        assert forbidden not in run["run"]
+    env = run["env"]
+    assert env["RADAR_DISCOVERY_CLOCK"] == "firestore"
+    assert env["RADAR_RETRY_REFUSALS"] == "0"
+    assert env["RADAR_HTTP_ATTEMPTS"] == "2"
+    assert "GITHUB_TOKEN" not in env                        # nothing to dispatch or push with
+
+
+def test_no_second_scheduler_for_the_monitor_and_catalogue_unchanged():
+    scheduled = {}
+    for path in WORKFLOWS.glob("*.yml"):
+        wf = load(path.name)
+        if "schedule" in (wf["on"] or {}):
+            scheduled[path.name] = [c["cron"] for c in wf["on"]["schedule"]]
+    assert scheduled == {"bookmyshow-monitor.yml": ["*/5 * * * *"],
+                         "catalogue-sync.yml": ["0 1,7,13,19 * * *"]}
+    texts = {p.name: p.read_text(encoding="utf-8") for p in WORKFLOWS.glob("*.yml")}
+    assert [n for n, t in texts.items() if "run_monitor.py" in t] == ["bookmyshow-monitor.yml"]
+
+
+# ── refusals are final ────────────────────────────────────────────────────
+class Resp:
+    def __init__(self, status):
+        self.status_code = status
+
+
+class FakeCurlSession:
+    def __init__(self, script, calls):
+        self.script, self.calls = script, calls
+
+    def get(self, url, headers=None, params=None, timeout=20):
+        self.calls.append(url)
+        item = self.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return Resp(item)
+
+    def close(self):
+        pass
+
+
+def _session(monkeypatch, script, **kwargs):
+    calls = []
+
+    class Curl:
+        @staticmethod
+        def Session(impersonate):
+            return FakeCurlSession(script, calls)
+
+    monkeypatch.setattr(http, "_curl", Curl)
+    return http.ImpersonatingSession(sleeper=lambda s: None, **kwargs), calls
+
+
+@pytest.mark.parametrize("status", [401, 403, 429])
+def test_with_refusal_retries_off_a_refusal_is_one_request(monkeypatch, status):
+    session, calls = _session(monkeypatch, [status, 200, 200], retries=2, retry_refusals=False)
+    assert session.get("https://example.invalid").status_code == status
+    assert len(calls) == 1
+
+
+def test_a_network_error_is_retried_once_and_only_once(monkeypatch):
+    session, calls = _session(monkeypatch, [OSError("reset"), 200], retries=2, retry_refusals=False)
+    assert session.get("https://example.invalid").status_code == 200
+    assert len(calls) == 2
+    session, calls = _session(monkeypatch, [OSError("a"), OSError("b"), 200], retries=2, retry_refusals=False)
+    with pytest.raises(OSError):
+        session.get("https://example.invalid")
+    assert len(calls) == 2
+
+
+def test_the_default_is_unchanged_for_everything_else(monkeypatch):
+    """Catalogue sync and other callers set nothing: today's behaviour."""
+    monkeypatch.delenv("RADAR_RETRY_REFUSALS", raising=False)
+    monkeypatch.delenv("RADAR_HTTP_ATTEMPTS", raising=False)
+    assert http.session_policy() == (http.BLOCK_RETRIES, True)
+
+
+def test_the_monitor_environment_turns_refusal_retries_off(monkeypatch):
+    monkeypatch.setenv("RADAR_RETRY_REFUSALS", "0")
+    monkeypatch.setenv("RADAR_HTTP_ATTEMPTS", "2")
+    assert http.session_policy() == (2, False)
+    monkeypatch.setenv("RADAR_HTTP_ATTEMPTS", "99")          # never above the old ceiling
+    assert http.session_policy() == (http.BLOCK_RETRIES, False)
+    monkeypatch.setenv("RADAR_HTTP_ATTEMPTS", "nonsense")
+    assert http.session_policy() == (http.BLOCK_RETRIES, False)
+
+
+# ── the discovery clock survives between runs ─────────────────────────────
+class Client:
+    def __init__(self):
+        self.docs = {}
+
+    def get(self, collection, doc):
+        return self.docs.get((collection, doc))
+
+    def set(self, collection, doc, fields):
+        self.docs[(collection, doc)] = fields
+
+
+def test_the_clock_round_trips_through_firestore_without_touching_the_file(monkeypatch):
+    client = Client()
+    monkeypatch.setenv("RADAR_DISCOVERY_CLOCK", "firestore")
+    monkeypatch.setattr(discovery, "_clock_client", lambda: client)
+    monkeypatch.setattr(discovery, "save_discovery", lambda *a, **k: pytest.fail("file written"))
+    monkeypatch.setattr(discovery, "load_discovery", lambda: pytest.fail("file read"))
+    clock = {"bookmyshow:hyderabad": {"at": "2026-12-01T10:00:00+05:30", "ok": True}}
+    discovery._save_clock(clock, mirror=False)
+    assert discovery._load_clock() == clock
+    assert client.docs[discovery.CLOCK_DOC] == {"clock": clock}
+
+
+def test_a_clock_failure_falls_back_to_the_file_and_never_stops_a_check(monkeypatch):
+    class Broken:
+        def get(self, *a):
+            raise RuntimeError("down")
+
+        def set(self, *a):
+            raise RuntimeError("down")
+
+    monkeypatch.setattr(discovery, "_clock_client", lambda: Broken())
+    saved = []
+    monkeypatch.setattr(discovery, "load_discovery", lambda: {"from": "file"})
+    monkeypatch.setattr(discovery, "save_discovery", lambda c, mirror: saved.append(c))
+    assert discovery._load_clock() == {"from": "file"}
+    discovery._save_clock({"x": 1}, mirror=False)
+    assert saved == [{"x": 1}]
+
+
+def test_without_the_flag_the_file_is_used(monkeypatch):
+    monkeypatch.delenv("RADAR_DISCOVERY_CLOCK", raising=False)
+    assert discovery._clock_client() is None
+
+
+def test_maintenance_is_manual_dry_run_by_default_and_shares_the_monitor_lock():
+    wf = load("monitor-maintenance.yml")
+    assert set(wf["on"]) == {"workflow_dispatch"}
+    assert wf["concurrency"] == {"group": "bookmyshow-monitor", "cancel-in-progress": False}
+    assert wf["permissions"] == {"contents": "read"}
+    [job] = wf["jobs"].values()
+    run = job["steps"][-1]["run"]
+    assert '[ "$INPUT_CONFIRM" = "APPLY" ] && args+=(--apply)' in run
+    assert "--extend" not in run and "monitor_until" not in run

@@ -27,11 +27,15 @@ def git(*args: str) -> str:
 #: executable surface since the baseline: the Firestore rule, the store guard
 #: and the page's explanation. Anything else changing is still a failure.
 ADMIN_ONLY_CREATION = ["app.py", "firestore.rules", "monitor/state.py"]
+#: The single-pass five-minute monitor: the workflow itself, the city-listing
+#: clock kept in Firestore between runs, and the refusal policy switch.
+SINGLE_PASS_MONITOR = [".github/workflows/bookmyshow-monitor.yml", "monitor/discovery.py",
+                       "platforms/http.py"]
 
 
 def test_production_runtime_files_match_the_baseline():
     changed = git("diff", "--name-only", PRODUCTION, "HEAD", "--", *RUNTIME).split()
-    assert changed == ADMIN_ONLY_CREATION, changed
+    assert changed == sorted(ADMIN_ONLY_CREATION + SINGLE_PASS_MONITOR), changed
 
 
 def test_worker_entrypoints_are_tracked_only_in_the_candidate():
@@ -53,7 +57,8 @@ def test_candidate_preparation_is_only_invoked_by_test_ci():
 
 def test_only_test_ci_can_change_on_release():
     changed = git("diff", "--name-only", PRODUCTION, "HEAD", "--", ".github/workflows").splitlines()
-    assert changed == [".github/workflows/tests.yml"]
+    assert changed == [".github/workflows/bookmyshow-monitor.yml", ".github/workflows/monitor-maintenance.yml",
+                       ".github/workflows/tests.yml"]
     catalogue = git("show", "HEAD:.github/workflows/catalogue-sync.yml")
     assert re.findall(r'cron:\s*"([^"]+)"', catalogue) == ["0 1,7,13,19 * * *"]
     tests = git("show", "HEAD:.github/workflows/tests.yml")

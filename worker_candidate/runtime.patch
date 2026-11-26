@@ -302,11 +302,11 @@ index 7e18c98..12608b0 100644
              save_state(state, mirror=mirror)
          except Exception:
 diff --git a/monitor/discovery.py b/monitor/discovery.py
-index 9fd2528..41fa8d9 100644
+index 62bae71..3e7b60d 100644
 --- a/monitor/discovery.py
 +++ b/monitor/discovery.py
-@@ -234,7 +234,8 @@ def _code_check(platform: str) -> Callable[[str], Any] | None:
- # ──────────────────────────────────────────────────────────────────────────
+@@ -277,7 +277,8 @@ def _save_clock(clock: dict, *, mirror: bool) -> None:
+ 
  def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[str, MonitorState],
                        *, at: datetime | None = None, mirror: bool = False,
 -                      provider_for: Callable[[str], Any] | None = None) -> DiscoveryReport:
@@ -315,12 +315,12 @@ index 9fd2528..41fa8d9 100644
      """Re-list each city a due, unresolved monitor is watching, and merge any
      sibling events the listing names that the monitors don't know yet.
  
-@@ -258,9 +259,11 @@ def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[s
+@@ -301,9 +302,11 @@ def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[s
      if not reasons:
          return report
  
--    clock = load_discovery()
-+    clock = (load_clock or load_discovery)()
+-    clock = _load_clock()
++    clock = (load_clock or _load_clock)()
      dirty = False
      for region_key, why in reasons.items():
 +        if not within_deadline():
@@ -328,12 +328,12 @@ index 9fd2528..41fa8d9 100644
          platform, _, slug = region_key.partition(":")
          fresh, age = is_fresh(region_key, clock, at)
          if fresh:
-@@ -305,7 +308,7 @@ def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[s
+@@ -348,7 +351,7 @@ def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[s
              _merge_into(monitor, listed, report)
  
      if dirty:
--        save_discovery(clock, mirror=mirror)
-+        (save_clock or save_discovery)(clock, mirror=mirror)
+-        _save_clock(clock, mirror=mirror)
++        (save_clock or _save_clock)(clock, mirror=mirror)
      return report
  
  
@@ -380,7 +380,7 @@ index cf96638..a919136 100644
  
  
 diff --git a/monitor/state.py b/monitor/state.py
-index 93e92c7..9738e68 100644
+index 9227d04..b238ebe 100644
 --- a/monitor/state.py
 +++ b/monitor/state.py
 @@ -106,6 +106,7 @@ ScopeProvider = Callable[[], "Scope | None"]
@@ -437,7 +437,7 @@ index 93e92c7..9738e68 100644
      if info and project and _scope_provider is not None:
          # The app registered a scope provider, so this is the Streamlit app —
          # and nobody is signed in for this call. The service account reads
-@@ -1015,6 +1036,13 @@ def load_monitors() -> list[Monitor]:
+@@ -1022,6 +1043,13 @@ def load_monitors() -> list[Monitor]:
      return _cached("monitors", lambda: _backend().load_monitors())
  
  

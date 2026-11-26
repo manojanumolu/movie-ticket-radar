@@ -1,0 +1,68 @@
+name: Monitor maintenance
+
+# Manual only. Narrows ONE existing monitor to a subset of its own targets, or
+# resumes it WITHOUT changing its end time (tools/narrow_monitor_targets.py).
+# Dry run unless "confirm" is exactly APPLY. Never recreates a document, never
+# touches monitor_state or history, never extends. The log prints an ID
+# prefix, status, timestamps, interval and target labels — never an address
+# or a UID.
+
+on:
+  workflow_dispatch:
+    inputs:
+      monitor:
+        description: "Monitor ID or its first 8+ characters"
+        type: string
+        default: "af1711d4"
+      action:
+        description: "narrow: keep only the listed targets · resume: ACTIVE, same end time"
+        type: choice
+        options: [narrow, resume]
+        default: narrow
+      keep:
+        description: "narrow: targets to keep, separated by ;"
+        type: string
+        default: "ALLU Cinemas · Dolby Cinema;Prasads Multiplex · PCX"
+      confirm:
+        description: "Type APPLY to write. Anything else is a dry run."
+        type: string
+        default: ""
+
+concurrency:
+  group: bookmyshow-monitor          # never alongside a monitoring pass
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  maintain:
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r ci/requirements-worker.lock
+      - name: Narrow or resume
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          INPUT_MONITOR: ${{ inputs.monitor }}
+          INPUT_ACTION: ${{ inputs.action }}
+          INPUT_KEEP: ${{ inputs.keep }}
+          INPUT_CONFIRM: ${{ inputs.confirm }}
+        run: |
+          args=(--monitor "$INPUT_MONITOR")
+          if [ "$INPUT_ACTION" = "resume" ]; then
+            args+=(--resume)
+          else
+            IFS=';' read -ra keep <<< "$INPUT_KEEP"
+            for k in "${keep[@]}"; do args+=(--keep "$k"); done
+          fi
+          [ "$INPUT_CONFIRM" = "APPLY" ] && args+=(--apply)
+          python tools/narrow_monitor_targets.py "${args[@]}"

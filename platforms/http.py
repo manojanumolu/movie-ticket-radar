@@ -29,6 +29,7 @@ application already handles honestly, rather than an ImportError at startup.
 
 from __future__ import annotations
 
+import os
 import random
 import time
 from typing import Any, Protocol
@@ -68,9 +69,13 @@ class ImpersonatingSession:
     """
 
     def __init__(self, profiles: tuple[str, ...] = IMPERSONATE_PROFILES,
-                 retries: int = BLOCK_RETRIES, sleeper=time.sleep) -> None:
+                 retries: int = BLOCK_RETRIES, sleeper=time.sleep, *,
+                 retry_refusals: bool = True) -> None:
         self._profiles = list(profiles)
         self._retries = max(1, retries)
+        #: False: a 401/403 is final — no other browser profile is tried.
+        #: Only a request that did not complete (a network error) is retried.
+        self._retry_refusals = retry_refusals
         self._sleep = sleeper
         self._index = 0
         self._session = None
@@ -109,7 +114,8 @@ class ImpersonatingSession:
                     self._sleep(1.5 * (attempt + 1) + random.uniform(0, 0.5))
                 continue
 
-            if response.status_code not in (401, 403) or attempt == self._retries - 1:
+            if (response.status_code not in (401, 403) or not self._retry_refusals
+                    or attempt == self._retries - 1):
                 return response
 
             # Refused: a different fingerprint often gets straight through.
@@ -132,8 +138,25 @@ def build_session(sleeper=time.sleep) -> HttpSession:
     application already reports honestly.
     """
     if HAS_CURL_CFFI:
-        return ImpersonatingSession(sleeper=sleeper)
+        attempts, refusals = session_policy()
+        return ImpersonatingSession(sleeper=sleeper, retries=attempts, retry_refusals=refusals)
     return _requests.Session()
+
+
+def session_policy() -> tuple[int, bool]:
+    """(attempts, retry_refusals) from the environment.
+
+    The single-pass monitor sets RADAR_RETRY_REFUSALS=0 (a 401/403 is final,
+    never answered with another browser profile) and RADAR_HTTP_ATTEMPTS
+    (attempts for a request that did not complete; never above the existing
+    ceiling). Unset — catalogue sync and everything else — behaviour is
+    unchanged."""
+    refusals = os.environ.get("RADAR_RETRY_REFUSALS", "1") != "0"
+    try:
+        attempts = int(os.environ.get("RADAR_HTTP_ATTEMPTS", "") or BLOCK_RETRIES)
+    except ValueError:
+        attempts = BLOCK_RETRIES
+    return max(1, min(attempts, BLOCK_RETRIES)), refusals
 
 
 def transport_name(session: Any) -> str:
