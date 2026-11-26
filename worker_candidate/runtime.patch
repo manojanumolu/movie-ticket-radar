@@ -142,18 +142,18 @@ index 3fd7ef2..24d7617 100644
          return _default_for(path)
      data.setdefault("movies", [])
 diff --git a/monitor/checker.py b/monitor/checker.py
-index 7e18c98..12608b0 100644
+index 0812fe3..ed73898 100644
 --- a/monitor/checker.py
 +++ b/monitor/checker.py
-@@ -33,6 +33,7 @@ Order of operations, and why:
- 
+@@ -34,6 +34,7 @@ Order of operations, and why:
  from __future__ import annotations
  
+ import copy
 +from copy import deepcopy
  from dataclasses import dataclass, field
  from datetime import datetime
  
-@@ -664,7 +665,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
+@@ -673,7 +674,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
               mirror: bool = False, notifier=None,
               known_state: dict[str, MonitorState] | None = None,
               carry: dict[str, MonitorState] | None = None,
@@ -163,7 +163,7 @@ index 7e18c98..12608b0 100644
      """Check every monitor that is due (see :func:`_run_once`).
  
      ``dry_run`` evaluates exactly what a real tick would — the same reads,
-@@ -677,9 +679,14 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
+@@ -686,9 +688,14 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
      reached anyway is refused rather than performed. A later real run sees
      the store exactly as it was, and alerts exactly as it would have.
      """
@@ -179,7 +179,7 @@ index 7e18c98..12608b0 100644
      with readonly.read_only():
          return _run_once(at=at, force=force, monitor_id=monitor_id, mirror=False,
                           notifier=_no_mail_in_a_dry_run, known_state=known_state, carry=None,
-@@ -688,7 +695,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
+@@ -697,7 +704,8 @@ def run_once(*, at: datetime | None = None, force: bool = False, monitor_id: str
  
  def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool, notifier,
                known_state: dict[str, MonitorState] | None,
@@ -189,7 +189,7 @@ index 7e18c98..12608b0 100644
      """Check every monitor that is due. This is what the workflow calls.
  
      ``mirror`` is False by default because inside Actions the workflow makes
-@@ -737,6 +745,17 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
+@@ -748,6 +756,17 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
          # a monitor past its end time is not running either way.
          stored, newly_expired = load_monitors_for_checking(), []
          report.would_expire = [m.id for m in stored if m.status.is_running and m.is_expired(at)]
@@ -207,7 +207,7 @@ index 7e18c98..12608b0 100644
      else:
          stored, newly_expired = expire_due_monitors(load_monitors_for_checking(), at=at, mirror=mirror)
      report.expired = [m.id for m in newly_expired]
-@@ -746,6 +765,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
+@@ -757,6 +776,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
      # owner's verified account address, enforces the intervals, the end-date
      # cap, admin-only features and the active-monitor limit, and refuses
      # anything malformed — whatever the document, the rules or the app said.
@@ -215,7 +215,7 @@ index 7e18c98..12608b0 100644
      screened = policy.screen(stored, at=at, resolver=policy.worker_resolver(backend_name()))
      report.rejected = dict(screened.rejected)
      report.deferred = [m.id for m in screened.deferred]
-@@ -753,7 +773,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
+@@ -764,7 +784,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
          report.skipped.append(f"{short_id(monitor_ref.id)} (owner not verified yet)")
      for rejected_id in screened.rejected:
          report.skipped.append(f"{short_id(rejected_id)} (refused)")
@@ -224,7 +224,7 @@ index 7e18c98..12608b0 100644
          # The whole list: the JSON store rewrites its file from what it is
          # given, so a subset would drop every other monitor.
          save_monitors(stored, mirror=mirror, changed=screened.clamped)
-@@ -796,9 +816,27 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
+@@ -807,9 +827,27 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
      # *before* fetching, so this tick's sweep is the film as it is now.
      # (Not in a dry run: what it learns has to be stored to be of any use,
      # and a dry run stores nothing. It evaluates on the siblings known now.)
@@ -254,7 +254,7 @@ index 7e18c98..12608b0 100644
          save_monitors(stored, mirror=mirror,
                        changed=[m for m in stored if m.id in report.discovery.updated])
  
-@@ -825,6 +863,20 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
+@@ -836,6 +874,20 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
          print(f"[checker] sharing: {report.sharing.summary()}")
  
      for group in groups:
@@ -275,7 +275,7 @@ index 7e18c98..12608b0 100644
          if group.shared:
              print(f"[checker] one read for {len(group.monitors)} monitors "
                    f"({len(group.subscribers)} account(s)) — {group.key.label}")
-@@ -845,6 +897,16 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
+@@ -856,6 +908,16 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
              # bookkeeping — is this monitor's problem this tick, and the
              # next monitor is still checked.
              try:
@@ -292,7 +292,7 @@ index 7e18c98..12608b0 100644
                  if _check_one(monitor, listing, state, report, at=at, mirror=mirror,
                                notifier=notifier, carry=carry, dry_run=dry_run):
                      dirty = True
-@@ -855,7 +917,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
+@@ -866,7 +928,7 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
                  print(f"::warning::monitor {short_id(monitor.id)} could not be processed this tick "
                        f"({type(exc).__name__}); the others continue", flush=True)
  
@@ -380,7 +380,7 @@ index cf96638..a919136 100644
  
  
 diff --git a/monitor/state.py b/monitor/state.py
-index 9227d04..b238ebe 100644
+index 305ba42..6ccdb23 100644
 --- a/monitor/state.py
 +++ b/monitor/state.py
 @@ -106,6 +106,7 @@ ScopeProvider = Callable[[], "Scope | None"]
@@ -437,7 +437,7 @@ index 9227d04..b238ebe 100644
      if info and project and _scope_provider is not None:
          # The app registered a scope provider, so this is the Streamlit app —
          # and nobody is signed in for this call. The service account reads
-@@ -1022,6 +1043,13 @@ def load_monitors() -> list[Monitor]:
+@@ -1027,6 +1048,13 @@ def load_monitors() -> list[Monitor]:
      return _cached("monitors", lambda: _backend().load_monitors())
  
  
