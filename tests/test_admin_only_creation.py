@@ -172,3 +172,36 @@ def test_the_wizard_explains_and_disables_start_for_members_only(isolated_data, 
     assert not app.exception
     assert next(b for b in app.button if b.key == "start").disabled is False
     assert not any(state_mod.CREATE_MESSAGE in i.value for i in app.info)
+
+
+# ── a category watch whose owner is no longer admin ───────────────────────
+def test_a_revoked_admin_extends_and_retries_a_category_watch_without_changing_it(as_account):
+    """Their monitor keeps the categories and show time it was set up with;
+    Extend and Retry are saved as-is (firestore.rules accepts exactly that),
+    while changing or clearing the watch is still refused."""
+    as_account(MEMBER, admin=True)
+    monitor = _monitor(MEMBER)
+    monitor.categories, monitor.show_time = ["GOLD"], "07:15 PM"
+    state_mod.upsert_monitor(monitor, mirror=False)
+    state_mod.stop_monitor(monitor.id, mirror=False)
+    as_account(MEMBER, admin=False)                       # the claim is revoked
+
+    extended = state_mod.extend_monitor(monitor.id, 24, mirror=False)
+    assert extended.status is MonitorStatus.ACTIVE
+    state_mod.invalidate_cache()
+    stored = state_mod.get_monitor(monitor.id)
+    assert (stored.categories, stored.show_time) == (["GOLD"], "07:15 PM")
+
+    stored.clear_problem()
+    state_mod.upsert_monitor(stored, mirror=False)        # Retry
+    state_mod.invalidate_cache()
+    assert state_mod.get_monitor(monitor.id).categories == ["GOLD"]
+
+    for change in ({"categories": ["PLATINUM"]}, {"categories": []}, {"show_time": "10:00 PM"}):
+        edited = state_mod.get_monitor(monitor.id)
+        for key, value in change.items():
+            setattr(edited, key, value)
+        with pytest.raises(policy.MonitorNotAllowed):
+            state_mod.upsert_monitor(edited, mirror=False)
+        state_mod.invalidate_cache()
+    assert state_mod.get_monitor(monitor.id).categories == ["GOLD"]
