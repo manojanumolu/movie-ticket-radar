@@ -886,6 +886,13 @@ def load_many(*kinds: str) -> dict[str, Any]:
 #: past monitor stays in My Monitors and History regardless.
 ACTIVE_MONITOR_LIMIT = policy.ACTIVE_MONITOR_LIMIT
 
+CREATE_MESSAGE = ("New monitors are set up by the TicketRadar admin. "
+                  "Your existing monitors stay available to view, extend, stop or delete.")
+#: The fields that make a monitor *this* watch. An ordinary account may never
+#: change them (firestore.rules keepsWatchIdentity): doing so would amount to
+#: creating a new monitor in an old document.
+WATCH_IDENTITY_FIELDS = ("movie", "targets", "date_codes", "categories", "show_time", "created_at")
+
 LIMIT_MESSAGE = ("Active monitor limit reached — you can have up to {limit} active monitors "
                  "at a time. Stop an existing monitor to start another.")
 
@@ -976,9 +983,9 @@ def _prepare_for_write(monitors: list[Monitor]) -> None:
 
     * Its alerts go to the account's own verified address. Whatever an older
       document or a widget carried, the recipient is the person's own.
-    * An ordinary account cannot hold an admin-only interval or a category
-      watch (an account whose claim was revoked keeps its monitors, as
-      ordinary ones).
+    * An ordinary account cannot hold an admin-only interval (an account
+      whose claim was revoked keeps its monitors, as ordinary ones; their
+      category watch is kept as stored and only the worker ignores it).
     * An end date beyond :data:`policy.MAX_MONITOR_DAYS` is pulled back.
 
     The store writes the person's whole list on every save, so one older
@@ -1003,7 +1010,12 @@ def _prepare_for_write(monitors: list[Monitor]) -> None:
         if not scope.admin:
             if monitor.interval_minutes not in policy.MEMBER_INTERVALS:
                 monitor.interval_minutes = 10
-            monitor.categories, monitor.show_time = [], ""
+            # A category watch is left exactly as stored: it is part of the
+            # watch's identity, which an ordinary account may neither add nor
+            # change (``_assert_may_create_or_keep``; firestore.rules), and
+            # clearing it would be such a change — Extend and Retry on a
+            # monitor whose owner lost the admin claim were refused for it.
+            # The worker still watches it as an ordinary monitor (policy).
         if not policy.until_allowed(monitor.monitor_until):
             monitor.monitor_until = policy.max_until()
 
@@ -1034,10 +1046,39 @@ def save_monitors(monitors: list[Monitor], *, mirror: bool = True,
     _backend().save_monitors(monitors, mirror=mirror, changed=changed)
 
 
+def _assert_may_create_or_keep(monitor: Monitor, monitors: list[Monitor]) -> None:
+    """Admin-only creation, at the write boundary (firestore.rules enforces
+    the same on the server). An ordinary signed-in account may save changes
+    to a monitor it already has — extend, re-check, stop — but may not add a
+    new one, nor change an existing one's watch identity. The worker and other
+    unscoped callers are not users and are not affected."""
+    scope = _signed_in_scope()
+    if scope is None or scope.admin:
+        return
+    if not any(m.id == monitor.id for m in monitors):
+        raise policy.MonitorNotAllowed(CREATE_MESSAGE)
+    # Compared with what is stored, read afresh: the session cache hands out
+    # the same objects the page edits, so it cannot show what changed.
+    stored = next((m for m in _backend().load_monitors() if m.id == monitor.id), None)
+    if stored is None:
+        raise policy.MonitorNotAllowed(CREATE_MESSAGE)
+    before, after = stored.to_dict(), monitor.to_dict()
+    if any(before.get(k) != after.get(k) for k in WATCH_IDENTITY_FIELDS):
+        raise policy.MonitorNotAllowed(CREATE_MESSAGE)
+
+
+def may_create_monitors() -> bool:
+    """Whether the signed-in account may start new monitors (the admin claim)."""
+    scope = _signed_in_scope()
+    return scope is None or bool(scope.admin)
+
+
 def upsert_monitor(monitor: Monitor, *, mirror: bool = True) -> list[Monitor]:
-    """Save a monitor — refusing, before anything is written, one that
-    would put the account over :data:`ACTIVE_MONITOR_LIMIT`."""
+    """Save a monitor — refusing, before anything is written, a new monitor
+    from an ordinary account, or one that would put the account over
+    :data:`ACTIVE_MONITOR_LIMIT`."""
     monitors = load_monitors()
+    _assert_may_create_or_keep(monitor, monitors)
     _assert_interval_allowed(monitor)
     if _signed_in_scope() is not None and monitor.is_running():
         # Refused with a reason, not silently shortened: this is the
@@ -1434,6 +1475,7 @@ __all__ = [
     "delete_monitor",
     "expire_due_monitors",
     "extend_monitor",
+    "may_create_monitors",
     "get_monitor",
     "get_monitor_state",
     "load_history",

@@ -317,15 +317,25 @@ def test_monitor_limits_stay_per_account(users):
     for i, m in enumerate(mine):
         m.id = f"aligned-{i}"
     other = users("uid-b", ALLU_DOLBY)
-    save_monitors([*mine, other], mirror=False)
+    # A member can no longer create monitors; re-activating a stopped one is
+    # the remaining way to gain a running monitor, so that is what is refused.
+    stopped = users("uid-a", ALLU_DOLBY)
+    stopped.id = "stopped-extra"
+    stopped.stop()
+    save_monitors([*mine, other, stopped], mirror=False)
     scope = state_mod.Scope("", "uid-a", lambda: "tok", firestore_enabled=False, admin=False)
     state_mod.set_scope_provider(lambda: scope)
-    state_mod.invalidate_cache()
-    seen = state_mod.load_monitors()
-    assert sorted(m.id for m in seen) == sorted(m.id for m in mine), "B's monitor is invisible to A"
-    assert state_mod.monitor_limit_reached(seen) is True
-    with pytest.raises(state_mod.MonitorLimitError):
-        state_mod.upsert_monitor(users("uid-a", ALLU_DOLBY), mirror=False)
+    try:
+        state_mod.invalidate_cache()
+        seen = state_mod.load_monitors()
+        assert sorted(m.id for m in seen if m.is_running()) == sorted(m.id for m in mine), \
+            "B's monitor is invisible to A"
+        assert state_mod.monitor_limit_reached(seen) is True
+        with pytest.raises(state_mod.MonitorLimitError):
+            state_mod.extend_monitor("stopped-extra", 24, mirror=False)
+    finally:
+        state_mod.set_scope_provider(None)
+        state_mod.invalidate_cache()
 
 
 # ──────────────────────────────────────────────────────────────────────────

@@ -506,21 +506,41 @@ def _scope_for(creds: firebase.Credentials) -> None:
     state_mod.set_scope_provider(lambda: Scope(PROJECT, user.uid, lambda: f"id.{user.uid}", admin=user.admin))
 
 
+def _seed_for(creds: firebase.Credentials, monitors) -> None:
+    """What the admin's own setup writes for an account: monitors owned by its UID."""
+    user = session._from_credentials(creds)
+    state_mod.set_scope_provider(lambda: Scope(PROJECT, user.uid, lambda: f"id.{user.uid}", admin=True))
+    for monitor in monitors:
+        state_mod.upsert_monitor(monitor, mirror=False)
+    state_mod.invalidate_cache()
+
+
 def test_a_google_user_is_limited_and_isolated_like_everyone(stack, firestore):
     stack.firebase.add_google_identity("other-token", email="arjun@gmail.com", name="Arjun", sub="55")
     priya, arjun = _google_creds(stack), _google_creds(stack, "other-token")
 
+    # Monitors are created by the admin (admin-only creation); Priya then
+    # re-activates hers with Extend, which is where her limit applies.
+    _seed_for(priya, [_monitor(f"Priya {i}", priya.uid) for i in range(ACTIVE_MONITOR_LIMIT)])
+    spare = _monitor("Priya too many", priya.uid)
+    spare.stop()
+    _seed_for(priya, [spare])
     _scope_for(priya)
-    for i in range(ACTIVE_MONITOR_LIMIT):
-        state_mod.upsert_monitor(_monitor(f"Priya {i}", priya.uid), mirror=False)
+    with pytest.raises(state_mod.policy.MonitorNotAllowed):          # she cannot create one
+        state_mod.upsert_monitor(_monitor("Priya new", priya.uid), mirror=False)
     with pytest.raises(MonitorLimitError):
-        state_mod.upsert_monitor(_monitor("Priya too many", priya.uid), mirror=False)
+        state_mod.extend_monitor(spare.id, 24, mirror=False)
 
     _scope_for(arjun)
     assert state_mod.load_monitors() == []                        # none of Priya's
-    state_mod.upsert_monitor(_monitor("Arjun 0", arjun.uid), mirror=False)
+    _seed_for(arjun, [_monitor("Arjun 0", arjun.uid)])
+    _scope_for(arjun)
     assert {m.owner_uid for m in state_mod.load_monitors()} == {arjun.uid}
-    with pytest.raises(PermissionError):
+    with pytest.raises(state_mod.policy.MonitorNotAllowed):        # an ordinary account creates nothing
+        state_mod.upsert_monitor(_monitor("Forged", priya.uid), mirror=False)
+    arjun_user = session._from_credentials(arjun)
+    state_mod.set_scope_provider(lambda: Scope(PROJECT, arjun_user.uid, lambda: f"id.{arjun_user.uid}", admin=True))
+    with pytest.raises(PermissionError):                           # …and no claim writes under another UID
         state_mod.upsert_monitor(_monitor("Forged", priya.uid), mirror=False)
 
     # …and the documents carry the Firebase UID, nothing Google-specific.

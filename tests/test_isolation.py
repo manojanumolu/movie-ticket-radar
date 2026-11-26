@@ -235,7 +235,7 @@ def cloud(monkeypatch):
 
         @staticmethod
         def as_user(uid: str) -> None:
-            state_mod.set_scope_provider(lambda: Scope(PROJECT, uid, lambda: f"id.{uid}"))
+            state_mod.set_scope_provider(lambda: Scope(PROJECT, uid, lambda: f"id.{uid}", admin=True))
 
         @staticmethod
         def as_worker() -> None:
@@ -295,14 +295,14 @@ def test_json_compatibility_store_is_private_per_signed_in_account(tmp_path, mon
     monkeypatch.setattr(state_mod, "_json_save_history", lambda value, **_: history.__setitem__(slice(None), value))
     monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT", raising=False)
 
-    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False))
+    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False, admin=True))
     a = make_monitor(email="a@example.com", owner_uid="")
     state_mod.upsert_monitor(a, mirror=False)
     state_mod.record_history(a, "CREATED", "A's monitor", mirror=False)
     state_mod.save_settings({"notify_email": "a@example.com", "default_interval": 15}, mirror=False)
     state_mod.save_state({a.id: MonitorState(check_count=2)}, mirror=False)
 
-    state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False))
+    state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False, admin=True))
     assert state_mod.load_monitors() == []
     assert state_mod.load_history() == []
     assert state_mod.load_state() == {}
@@ -315,22 +315,22 @@ def test_json_compatibility_delete_removes_only_the_owners_state(tmp_path, monke
     monkeypatch.setattr(state_mod, "STATE_FILE", tmp_path / "state.json")
     monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT", raising=False)
 
-    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False))
+    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False, admin=True))
     a = make_monitor(email="a@example.com", owner_uid="")
     state_mod.upsert_monitor(a, mirror=False)
     state_mod.save_state({a.id: MonitorState(check_count=2)}, mirror=False)
 
-    state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False))
+    state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False, admin=True))
     b = make_monitor(email="b@example.com", owner_uid="")
     state_mod.upsert_monitor(b, mirror=False)
     state_mod.save_state({b.id: MonitorState(check_count=3)}, mirror=False)
 
-    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False))
+    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False, admin=True))
     state_mod.delete_monitor(a.id, mirror=False)
     assert state_mod.load_monitors() == []
     assert state_mod.load_state() == {}
 
-    state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False))
+    state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", firestore_enabled=False, admin=True))
     assert [monitor.id for monitor in state_mod.load_monitors()] == [b.id]
     assert state_mod.load_state()[b.id].check_count == 3
     state_mod.set_scope_provider(None)

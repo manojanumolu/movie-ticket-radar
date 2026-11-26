@@ -23,9 +23,15 @@ def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=ROOT, encoding="utf-8")
 
 
+#: The admin-only monitor creation release is the one deliberate change to the
+#: executable surface since the baseline: the Firestore rule, the store guard
+#: and the page's explanation. Anything else changing is still a failure.
+ADMIN_ONLY_CREATION = ["app.py", "firestore.rules", "monitor/state.py"]
+
+
 def test_production_runtime_files_match_the_baseline():
-    changed = git("diff", "--name-only", PRODUCTION, "HEAD", "--", *RUNTIME)
-    assert not changed, changed
+    changed = git("diff", "--name-only", PRODUCTION, "HEAD", "--", *RUNTIME).split()
+    assert changed == ADMIN_ONLY_CREATION, changed
 
 
 def test_worker_entrypoints_are_tracked_only_in_the_candidate():

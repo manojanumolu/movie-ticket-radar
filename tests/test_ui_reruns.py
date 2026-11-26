@@ -44,7 +44,7 @@ def _monitor(uid: str, title: str = "Film") -> Monitor:
 
 
 def _running(uid: str, n: int) -> None:
-    state_mod.set_scope_provider(lambda: Scope("", uid, lambda: "t"))
+    state_mod.set_scope_provider(lambda: Scope("", uid, lambda: "t", admin=True))   # seeded by the admin
     try:
         for i in range(n):
             state_mod.upsert_monitor(_monitor(uid, f"Film {i}"), mirror=False)
@@ -159,6 +159,7 @@ def _wizards(app) -> dict[str, int]:
 
 
 def test_the_wizard_renders_exactly_once_after_every_interaction(seeded, signed_in):
+    signed_in.admin = False            # the ordinary wizard (no admin category-watch step)
     wiz = dict(step=5, furthest=5, location="hyderabad", movie_id=seeded,
                theatres=["ALLU"], formats={"ALLU": [ANY_FORMAT]})
     once = {w: 1 for w in WIZARD} | {"start buttons": 1, "email inputs": 1}
@@ -184,18 +185,21 @@ def test_the_wizard_renders_exactly_once_after_every_interaction(seeded, signed_
 # ──────────────────────────────────────────────────────────────────────────
 # The limit on the page: the fifth is allowed, the sixth is not
 # ──────────────────────────────────────────────────────────────────────────
-def test_four_active_monitors_leave_start_enabled_and_silent(seeded, signed_in):
-    _running(signed_in.uid, ACTIVE_MONITOR_LIMIT - 1)
+def test_the_admin_has_no_running_limit_and_start_stays_enabled(seeded, signed_in):
+    _running(signed_in.uid, ACTIVE_MONITOR_LIMIT + 1)
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU"], formats={"ALLU": [ANY_FORMAT]})
     assert next(b for b in app.button if b.key == "start").disabled is False
     assert not any("Active monitor limit" in w.value for w in app.warning)
 
 
-def test_five_active_monitors_disable_start_with_the_message(seeded, signed_in):
+def test_an_ordinary_account_cannot_start_and_is_told_why_not_a_limit(seeded, signed_in):
+    from monitor.state import CREATE_MESSAGE
+
+    signed_in.admin = False
     _running(signed_in.uid, ACTIVE_MONITOR_LIMIT)
     app = run(step=5, location="hyderabad", movie_id=seeded, theatres=["ALLU"], formats={"ALLU": [ANY_FORMAT]})
     assert next(b for b in app.button if b.key == "start").disabled is True
-    assert any("up to 5 active monitors" in w.value for w in app.warning)
+    assert any(CREATE_MESSAGE in i.value for i in app.info)
 
 
 # ──────────────────────────────────────────────────────────────────────────

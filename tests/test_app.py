@@ -253,7 +253,8 @@ def test_any_format_overrides_the_specific_picks(seeded):
 # ──────────────────────────────────────────────────────────────────────────
 # Test 7/8 — monitoring settings and creating a monitor
 # ──────────────────────────────────────────────────────────────────────────
-def test_monitoring_step_offers_the_three_intervals(seeded):
+def test_monitoring_step_offers_the_three_intervals(seeded, signed_in):
+    signed_in.admin = False            # an ordinary account's tiles
     app = run(step=5, location="hyderabad", movie_id=seeded,
               theatres=["ALLU"], formats={"ALLU": ["Dolby Cinema"]})
     assert not app.exception

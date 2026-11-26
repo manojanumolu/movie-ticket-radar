@@ -261,7 +261,7 @@ def cutover(monkeypatch):
             person, through the scope provider."""
             monkeypatch.setenv("FIREBASE_PROJECT_ID", PROJECT)
             state_mod.set_scope_provider(
-                lambda: state_mod.Scope(PROJECT, Cutover.owner, lambda: f"id.{Cutover.owner}"))
+                lambda: state_mod.Scope(PROJECT, Cutover.owner, lambda: f"id.{Cutover.owner}", admin=True))
             monitor = _running_monitor(title, owner=Cutover.owner, running=running)
             state_mod.upsert_monitor(monitor, mirror=False)
             state_mod.set_scope_provider(None)

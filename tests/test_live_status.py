@@ -62,7 +62,7 @@ def live(monkeypatch):
         @staticmethod
         def as_user(uid: str) -> None:
             state_mod.set_scope_provider(
-                lambda: Scope(PROJECT, uid, lambda: f"id.{uid}"))
+                lambda: Scope(PROJECT, uid, lambda: f"id.{uid}", admin=True))
 
         @staticmethod
         def worker_writes(monitor_id: str, owner: str, target_state: TargetState,

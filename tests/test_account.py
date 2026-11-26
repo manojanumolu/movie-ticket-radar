@@ -114,6 +114,7 @@ def test_admin_chip_keeps_the_display_name_out_of_the_closed_chip(admin):
 
 
 def test_an_ordinary_member_is_their_own_name_and_carries_no_admin_mark(signed_in):
+    signed_in.admin = False
     app = run()
     page = body(app)
     assert "Test" in page                      # the fixture's display name

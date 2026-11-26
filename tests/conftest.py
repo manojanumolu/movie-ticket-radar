@@ -147,9 +147,13 @@ def signed_in(monkeypatch):
     ``tests/test_auth.py`` switches this off to test the gate itself."""
     from auth import firebase, session
 
+    # Creating monitors is the admin's (admin-only monitor creation), so the
+    # account that walks the wizard in these tests carries the admin claim.
+    # Tests about ordinary accounts set ``signed_in.admin = False`` themselves.
     user = session.AuthUser(uid="uid-test-1", email="tester@example.com",
                             display_name="Test Person", id_token="id.token",
-                            refresh_token="refresh.token", expires_at=4102444800.0)
+                            refresh_token="refresh.token", expires_at=4102444800.0,
+                            admin=True)
 
     def restore():
         import streamlit as st

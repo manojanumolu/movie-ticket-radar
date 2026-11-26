@@ -1,0 +1,572 @@
+{
+ "03d54db": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "32fc165": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "36e5949": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "37956bd": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "3a1e59d": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "5fe4325": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "62e3dc3": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "630a8ce": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "79336ee": {
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "83075bf": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "aa301f4": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "d774a0e": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ },
+ "dfae1c9": {
+  "categories": [],
+  "created_at": "2026-11-01T10:00:00+05:30",
+  "date_codes": [
+   "20261217"
+  ],
+  "first_check_requested_at": null,
+  "id": "hist0001",
+  "interval_minutes": 10,
+  "monitor_until": "2026-11-03T10:00:00+05:30",
+  "movie": {
+   "city": "Hyderabad",
+   "event_code": "ET00439706",
+   "language": "English",
+   "platform": "bookmyshow",
+   "poster_url": "https://x/p.jpg",
+   "region_code": "HYD",
+   "region_slug": "hyderabad",
+   "source_url": "https://in.bookmyshow.com/x",
+   "title": "Film",
+   "variants": [
+    [
+     "ET00526287",
+     "IMAX 3D"
+    ]
+   ]
+  },
+  "notify_email": "m@example.com",
+  "owner_uid": "uid-member",
+  "problem": null,
+  "show_time": "",
+  "start_immediately": true,
+  "status": "STOPPED",
+  "stopped_at": null,
+  "stopped_reason": "",
+  "targets": [
+   {
+    "area": "Kokapet",
+    "fmt": "Dolby Cinema",
+    "venue_code": "ALUC",
+    "venue_name": "ALLU Cinemas"
+   }
+  ]
+ }
+}

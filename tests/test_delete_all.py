@@ -86,16 +86,16 @@ def test_json_store_delete_all_keeps_other_accounts(make_monitor):
     from monitor.state import Scope, load_monitors, upsert_monitor
 
     for uid in ("uid-a", "uid-a", "uid-b"):
-        state_mod.set_scope_provider(lambda uid=uid: Scope("", uid, lambda: ""))
+        state_mod.set_scope_provider(lambda uid=uid: Scope("", uid, lambda: "", admin=True))
         m = make_monitor(owner_uid=uid)
         upsert_monitor(m, mirror=False)
         state_mod.save_state({m.id: MonitorState(check_count=1)}, mirror=False)
     try:
-        state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: ""))
+        state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", admin=True))
         assert state_mod.delete_all_monitors(mirror=False) == 2
         assert load_monitors() == [] and state_mod.load_state() == {}
         assert state_mod.delete_all_monitors(mirror=False) == 0
-        state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: ""))
+        state_mod.set_scope_provider(lambda: Scope("", "uid-b", lambda: "", admin=True))
         mine = load_monitors()
         assert len(mine) == 1 and mine[0].owner_uid == "uid-b"
         assert list(state_mod.load_state()) == [mine[0].id]

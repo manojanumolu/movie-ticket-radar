@@ -78,7 +78,10 @@ def test_the_exception_is_exactly_the_tested_design():
     monitors = RULES.split("match /monitors/{id} {")[1].split("\n    }\n")[0]
     update = re.search(r"allow update: if (.*?);", monitors, re.S).group(1)
     assert re.sub(r"\s+", " ", update) == (
-        "ownsExisting() && ownsIncoming() && (validMonitor(request.resource.data, id) || isStopOrExpiry())")
-    # Creation never uses it: a new monitor must pass every check.
-    assert "allow create: if ownsIncoming() && validMonitor(request.resource.data, id);" in monitors
+        "ownsExisting() && ownsIncoming() && ((isAdmin() && validMonitor(request.resource.data, id)) "
+        "|| (keepsWatchIdentity() && validKeptMonitor(request.resource.data, id)) "
+        "|| isStopOrExpiry())")
+    # Creation never uses it: a new monitor must pass every check, and only an
+    # admin (the server-set claim) may create one.
+    assert "allow create: if ownsIncoming() && isAdmin() && validMonitor(request.resource.data, id);" in monitors
     assert RULES.count("isStopOrExpiry()") == 2

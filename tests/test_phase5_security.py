@@ -124,7 +124,7 @@ def test_the_worker_refuses_the_audit_monitor_without_making_its_requests(firest
 def test_saving_an_expensive_monitor_is_refused_with_a_reason(monkeypatch, at):
     """The app says so before saving; the worker is not the first to know."""
     state_mod.set_scope_provider(lambda: Scope(PROJECT, "uid-test-1", lambda: "id.uid-test-1",
-                                               firestore_enabled=False, email="w@example.com"))
+                                               firestore_enabled=False, email="w@example.com", admin=True))
     try:
         with pytest.raises(policy.MonitorNotAllowed, match="Watch fewer dates"):
             state_mod.upsert_monitor(_monitor(at, movie=_film(variants=_siblings(2)), dates=_dates(41),
@@ -479,7 +479,7 @@ def test_saving_one_monitor_writes_only_that_monitors_document(firestore_worker,
         return real_commit(self, writes)
 
     monkeypatch.setattr(fs.FirestoreClient, "commit", recording)
-    state_mod.set_scope_provider(lambda: Scope(PROJECT, owner, lambda: f"id.{owner}", email="w@example.com"))
+    state_mod.set_scope_provider(lambda: Scope(PROJECT, owner, lambda: f"id.{owner}", email="w@example.com", admin=True))
     try:
         state_mod.stop_monitor(other.id, mirror=False)
         state_mod.extend_monitor(other.id, mirror=False)
