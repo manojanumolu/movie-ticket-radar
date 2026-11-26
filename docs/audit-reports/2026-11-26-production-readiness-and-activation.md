@@ -5,7 +5,7 @@
 | Prepared | 26 November 2026 (night pass, IST) |
 | Production baseline | `main` = `cb9c6a130b1b3f321435c817fabb133d3742f27b` |
 | Work branch | `claude/charming-bardeen-9al13c` (not merged) |
-| Code commits in this pass | `89936bc` worker hardening · `1df5499` staged relay cutover · this document + `infra/production/` in the commit that adds this file |
+| Code commits in this pass | `89936bc` worker hardening · `1df5499` staged relay cutover · `d18b9a9` report and production config · backup-isolation update (DR project + access verifier) |
 | Supersedes | `2026-11-25-cloud-run-migration-runbook.md` (kept for history; **use this document**) |
 | Production changes made | **None.** No GCP resource, IAM, Rule, backup, credential, workflow, monitor or email was touched. Nothing was merged. |
 
@@ -51,7 +51,7 @@ release you approve (Stage 2, §8.4).
 
 | # | Error in the 25 Nov runbook | Correction |
 |---|---|---|
-| R1 | Auth export (contains **password hashes**) uploaded in plaintext to a bucket with default project-wide access | Dedicated `-dr-restricted` bucket: uniform access, public-access prevention, `projectViewer`/`projectEditor` bindings removed, export **GPG-encrypted (AES-256) before upload**, plaintext shredded, policy verified |
+| R1 | Auth export (contains **password hashes**) uploaded in plaintext to a bucket with default project-wide access | Superseded by R11. Export GPG-encrypted (AES-256) in RAM (`/dev/shm`) before upload; plaintext never touches the persistent disk. |
 | R2 | Export bucket placed in the Cloud Run region | Bucket location derived from the Firestore location (`nam5→US`, `eur3→EU`, else the same region) |
 | R3 | Firestore service agent bucket permission missing | Explicit binding on the DR bucket only |
 | R4 | Four-target check read `last_check_at` per target, but that field is monitor-level | Monitor-level `last_check_at` + per-target `availability`, plus the new log lines |
@@ -61,6 +61,7 @@ release you approve (Stage 2, §8.4).
 | R8 | Alerting was only suggested | 4 log-based metrics + 4 alert policies in `infra/production/` |
 | R9 | No before/after proof that `af1711d4` is unchanged | Snapshot before; field-by-field diff after *Extend* (only `status`, `monitor_until`, `stopped_*` may differ) |
 | R10 | Names were scattered and inconsistent | `infra/production/env.sh` is the single source; a test checks the runbook against it |
+| R11 | **The first version of this report (owner review, 26 Nov) removed `projectViewer`/`projectEditor` from the bucket policy. Inherited access cannot be removed that way.** Effective bucket access is the union of the bucket, project, folder and organisation policies, plus groups and impersonation. Project-level `roles/storage.*` grants in `ticketradar03` (for example, to the Firebase Admin SDK account whose key is in GitHub) would still reach the backups. | Backups move to a **dedicated project `ticketradar03-dr`** where only the owner holds a role. The bucket policy is **replaced** with exactly two bindings: owner `objectAdmin`, and `ticketradar03`'s Firestore service agent `storage.admin` on that bucket only. Ancestors and their policies (including deny) are listed. **Policy Analyzer** (`--expand-groups --analyze-service-account-impersonation`) must return only approved identities before anything is uploaded, and again afterwards. A tested verifier, `tools/verify_backup_access.py`, turns all of this into pass/fail. No IAM in `ticketradar03` changes. |
 
 ### 2.4 Remaining — cannot be resolved in the repository
 
@@ -77,6 +78,8 @@ release you approve (Stage 2, §8.4).
 | U9 | Terraform `validate` could not run (provider registry blocked here); `fmt` passes. Terraform is staging-only and refuses `ticketradar03` by design. | None for production | — |
 | U10 | Log filters and alert-policy JSON were not executed against real Cloud Logging/Monitoring | Low | Gate A-9 |
 | U11 | Relay request receipts accumulate in `worker_runtime/` (tiny docs, no TTL) | Low | Add TTL later |
+| U12 | Effective access to the DR bucket cannot be determined from here (no GCP access). If the account sits in a Google Workspace/Cloud **organisation**, its policies apply to the DR project too. | Gate | A-2b/A-2c decide it tomorrow. With an organisation, the analysis needs org-scope Cloud Asset access, or backups stop. |
+| U13 | A project owner of `ticketradar03` can still create managed backups or PITR restores there (by design) | Accepted | Same population that can read the live database |
 
 ---
 
@@ -108,7 +111,8 @@ release you approve (Stage 2, §8.4).
 |---|---|
 | `89936bc` | `worker_candidate/overlay/notifications/outbox.py`, `run_worker_service.py`, `run_bms_probe.py` (new), `.dockerignore`, `.github/workflows/monitor-worker-relay.yml`, `runtime.patch` (fenced logging in `monitor/checker.py`); tests `test_outbox_release.py`, `test_bms_probe.py`, `test_fenced_logging.py`, `test_monitor_preservation.py`, `test_worker_service.py`, `test_firebase_recovery_emulator.py` |
 | `1df5499` | `worker_candidate/cutover/{bookmyshow-monitor.yml, test_release_isolation.py, README.md}`, `tests/test_cutover_staging.py` |
-| this commit | `infra/production/{env.sh, logging-metrics.txt, alerts/*.json}`, `tests/test_production_runbook.py`, this report, superseded banner on the 25 Nov runbook |
+| `d18b9a9` | `infra/production/{env.sh, logging-metrics.txt, alerts/*.json}`, `tests/test_production_runbook.py`, this report, superseded banner on the 25 Nov runbook |
+| backup-isolation commit | `tools/verify_backup_access.py` (new), `tests/test_verify_backup_access.py` (new), `infra/production/env.sh` (DR project), A-2 rewritten, gates G3a–G3d, R11, U12–U13, runbook tests |
 
 Live runtime files (app, legacy monitor, `.github/workflows/*`, `firestore.rules`, locks): **unchanged**
 (`tests/test_release_isolation.py` passes).
@@ -130,7 +134,8 @@ Live runtime files (app, legacy monitor, `.github/workflows/*`, `firestore.rules
 | actionlint 1.7.12 | live workflows; cutover set | clean; clean |
 | pip-audit | worker lock; dev lock | no known vulnerabilities; none |
 | bandit `-ll` (worker code) | local | 1 medium: B104 bind `0.0.0.0` (required by Cloud Run; accepted) |
-| gcloud syntax | gcloud 570.0.0 `--help`, offline | all 49 commands and their flags exist |
+| gcloud syntax | gcloud 570.0.0 `--help`, offline | all commands and flags exist, including `asset analyze-iam-policy`, `projects get-ancestors(-iam-policy)`, `projects create`, `billing projects link` and `storage buckets set-iam-policy` (`gcloud beta services identity create` is beta-only: present in Cloud Shell, not installable here) |
+| DR access verifier | local | 16 tests: inherited project/org grants, convenience values, `allUsers`, group members, impersonators, incomplete analysis, analysis errors, missing Firestore agent, exact bucket policy, conditional bindings, ancestors, DR-project service agents only |
 | Terraform | local | `fmt` OK; `validate` **not run** (registry blocked) |
 | Browser/UI tests | in the suites above (Playwright-based tests that need a browser are among the skips) | as reported |
 
@@ -199,7 +204,10 @@ Each gate lists the **stop state**: what stays paused and what must not be activ
 | **G0** CI | Tests workflow green on the commit you build | Do not build. Everything stays as today. |
 | **G1** Original monitor | `af1711d4…` exists, not ACTIVE, 5 targets as listed; `6150dc3b…` not ACTIVE; snapshot saved | Stop. Do not deploy fenced; do not Extend. |
 | **G2** Rules | Deployed ruleset = `firestore.rules` at `cb9c6a1` | Stop before fenced deploy; investigate Rules. |
-| **G3** Backups | Export `SUCCESSFUL` with `overall_export_metadata`; PITR enabled; schedule listed; encrypted Auth export in DR bucket; bucket policy has no `allUsers`/`projectViewer`/`projectEditor` | Stop before A-7 (no real-data worker). |
+| **G3a** DR isolation | `ANCESTORS_OK` (or every folder/org reviewed and passed with `--allow-ancestor`); DR project policy holds only you + its own Google-managed agents | **Upload nothing.** Stop before A-2c. Monitoring stays as today. |
+| **G3b** Effective access (before upload) | `BUCKET_POLICY_OK` and `EFFECTIVE_ACCESS_OK`; public access prevention enforced; uniform access on | **Upload nothing.** Fix the named binding. Never widen access in `ticketradar03`. |
+| **G3c** Export works | Export `SUCCESSFUL` with `overall_export_metadata` in the DR bucket | Stop before A-7. Do not add project-level roles to make it work. |
+| **G3d** Backups complete | PITR enabled; daily schedule; encrypted Auth export present; plaintext gone from `/dev/shm`; re-run of both access checks still passes | Stop before A-7 (no real-data worker). |
 | **G4** Private service | IAM has only the invoker SA (and owners); unauthenticated `/healthz` → 403 | Scheduler stays paused; fix IAM. |
 | **G5** Shadow + scheduler | 6 shadow tests pass; ≥4 consecutive scheduler `complete`; then `PAUSED` | Scheduler paused; do not deploy fenced. |
 | **G6** BookMyShow | `BMS_PROBE_OK movies=N`, N ≈ 40–60, `requests=1` | **Stop the migration.** Scheduler paused, legacy untouched, `af1711d4` stays stopped. Do not retry in a loop. |
@@ -221,6 +229,7 @@ Each gate lists the **stop state**: what stays paused and what must not be activ
 * One-request probe packaged in the image.
 * Relay-only cutover staged and simulated (F6).
 * All resource names in `infra/production/env.sh`; metrics and alert policies in `infra/production/`.
+* Backup isolation designed (dedicated DR project) with a tested pass/fail verifier for effective access.
 * Every gcloud command checked against gcloud 570.0.0.
 
 ### 8.1 Where you work
@@ -293,54 +302,152 @@ curl -s -o /dev/null -w 'control=%{http_code}\n' -H "Authorization: Bearer $TOKE
   `Prasads Multiplex · HDR By Barco`. `6150dc3b` not `ACTIVE`. Running count known (expected 0). `control=404`.
 * **If it fails:** stop (G1/G2). Nothing has been changed yet.
 
-#### A-2 Backups and encrypted Auth export — 25 min + export wait **[CHANGE]**
+#### A-2 Backups in an isolated DR project — 35 min + export wait **[CHANGE]**
+
+**Why a separate project.** A bucket's effective access is the **union** of its own policy and every IAM policy
+above it: the project, any folder, and the organisation. Removing bindings from the bucket cannot subtract a
+project-level `roles/storage.*` grant, an inherited folder/org grant, or a role held through a Google group or
+service-account impersonation. `ticketradar03` carries identities this runbook cannot vet in advance: the
+Firebase Admin SDK service account whose long-lived key is in GitHub (U7), default service accounts, and any
+collaborators. So backups go to a **new project, `$DR_PROJECT`**, in which only you hold a role. The export is
+written cross-project by `ticketradar03`'s **Firestore service agent**, which is granted on that one bucket only.
+Nothing in `ticketradar03`'s IAM changes. Before anything is uploaded, A-2c proves with Policy Analyzer
+(inherited policies, expanded groups, impersonation paths) that only approved identities can read or write the bucket.
+
+##### A-2a DR project and APIs **[CHANGE]**
 
 ```bash
 gcloud services enable run.googleapis.com cloudscheduler.googleapis.com artifactregistry.googleapis.com \
   secretmanager.googleapis.com iamcredentials.googleapis.com
-gcloud storage buckets create "$DR_BUCKET" --location="$DR_LOCATION" --uniform-bucket-level-access \
-  --public-access-prevention --soft-delete-duration=7d
-for b in "projectViewer:$PROJECT roles/storage.legacyBucketReader" "projectViewer:$PROJECT roles/storage.legacyObjectReader" \
-         "projectEditor:$PROJECT roles/storage.legacyBucketOwner"  "projectEditor:$PROJECT roles/storage.legacyObjectOwner"; do
-  set -- $b; gcloud storage buckets remove-iam-policy-binding "$DR_BUCKET" --member="$1" --role="$2" || true; done
-gcloud storage buckets add-iam-policy-binding "$DR_BUCKET" \
-  --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-firestore.iam.gserviceaccount.com" --role=roles/storage.admin
-gcloud storage buckets get-iam-policy "$DR_BUCKET" --format=json | jq -r '.bindings[] | "\(.role)  \(.members|join(","))"'   # [READ]
-
-export EXPORT_PATH="$DR_BUCKET/firestore/$(date -u +%Y%m%dT%H%MZ)"
-gcloud firestore export "$EXPORT_PATH" --database='(default)' --async
-gcloud firestore databases update --database='(default)' --enable-pitr
-gcloud firestore backups schedules create --database='(default)' --recurrence=daily --retention=14d
-
-# Auth export: encrypted before it leaves Cloud Shell; choose a strong passphrase and store it in your password manager
-npx -y firebase-tools@13 login --no-localhost
-npx -y firebase-tools@13 auth:export ~/auth.json --format=json --project "$PROJECT"
-jq '.users | length' ~/auth.json                              # compare with Console → Authentication → Users count
-gpg --pinentry-mode loopback --symmetric --cipher-algo AES256 --output ~/auth-$(date -u +%Y%m%d).json.gpg ~/auth.json
-shred -u ~/auth.json
-gcloud storage cp ~/auth-*.json.gpg "$DR_BUCKET/auth/" && shred -u ~/auth-*.json.gpg
+gcloud projects create "$DR_PROJECT" --name="TicketRadar DR backups"
+export DR_PROJECT_NUMBER=$(gcloud projects describe "$DR_PROJECT" --format='value(projectNumber)')
+export BILLING=$(gcloud billing projects describe "$PROJECT" --format='value(billingAccountName)')
+gcloud billing projects link "$DR_PROJECT" --billing-account="${BILLING#billingAccounts/}"
+gcloud services enable storage.googleapis.com cloudasset.googleapis.com --project="$DR_PROJECT"
+export BACKUP_ADMIN="user:$(gcloud config get-value account 2>/dev/null)"
+export FIRESTORE_AGENT="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-firestore.iam.gserviceaccount.com"
+echo "$DR_PROJECT ($DR_PROJECT_NUMBER)  admin=$BACKUP_ADMIN  agent=$FIRESTORE_AGENT"
 ```
 
-**[UI]** Console → **Authentication** (Firebase console → project → Build → Authentication) → **Users** → ⋮ (above
-the user table) → **Password hash parameters**. Copy them into your password manager next to the passphrase. Import needs them.
+* **Expected:** the project is created; billing is linked; both APIs are enabled.
+* **If** `projects create` says the ID is taken: edit `DR_PROJECT` in `infra/production/env.sh` (for example
+  `ticketradar03-dr-7k2q`), run `source infra/production/env.sh`, and repeat.
+* No backup data exists anywhere yet.
+
+##### A-2b Inherited access — ancestors and project policy **[READ]**
 
 ```bash
-# G3 verification [READ] — repeat the first command until operationState is SUCCESSFUL
-gcloud firestore operations list --database='(default)' --format='table(name.basename(),metadata.operationState,metadata.endTime)' --limit=3
-gcloud storage ls "$EXPORT_PATH/**" | grep overall_export_metadata
-gcloud firestore databases describe --database='(default)' --format='value(pointInTimeRecoveryEnablement)'   # POINT_IN_TIME_RECOVERY_ENABLED
-gcloud firestore backups schedules list --database='(default)'
-gcloud storage ls -l "$DR_BUCKET/auth/"
-gcloud storage buckets describe "$DR_BUCKET" --format='value(iamConfiguration.publicAccessPrevention)'          # enforced
+gcloud projects get-ancestors "$DR_PROJECT" --format=json > ~/dr-ancestors.json
+python3 ~/radar/tools/verify_backup_access.py ancestors ~/dr-ancestors.json
+gcloud projects get-ancestors-iam-policy "$DR_PROJECT" --include-deny --format=json > ~/dr-ancestor-policies.json
+jq -r '.[] | .id as $id | (.policy.bindings // [])[] | "\($id)  \(.role)  \(.members|join(","))"' ~/dr-ancestor-policies.json
 ```
 
-* **Expected bindings:** `legacyBucketOwner`/`legacyObjectOwner` → `projectOwner:ticketradar03` only, plus `storage.admin`
-  → the Firestore service agent. No `allUsers`, `projectViewer` or `projectEditor`.
-* **If it fails:** G3 → stop before A-7. A `remove-iam-policy-binding` error "not found" is harmless.
-* **Optional restore drill (+20 min):**
-  `gcloud firestore databases create --database=restore-drill --location="$FS_LOCATION"`,
-  then `gcloud firestore import "$EXPORT_PATH" --database=restore-drill`. Compare the `monitors` count, then
-  `gcloud firestore databases delete --database=restore-drill`.
+* **Expected:** `project <DR_PROJECT>` then `ANCESTORS_OK` (a personal-account project has no folder or organisation).
+  The policy listing shows `roles/owner  user:<you>`, plus only `service-<DR_PROJECT_NUMBER>@…` Google-managed
+  agents with `*.serviceAgent` roles.
+* **Exit code 3 (folder or organisation found):** the organisation's policies apply to every project in it. Run
+  A-2c with `--organization=<ORG_ID>` instead of `--project`; this needs `roles/cloudasset.viewer` at the organisation.
+  Have the organisation admin review the listed ancestor bindings. Re-run the ancestors check with
+  `--allow-ancestor organizations/<ORG_ID>` only after that review. **If you cannot, stop: upload nothing** (G3a).
+* **Any other member on the DR project** (user, group, user-managed service account): remove it or stop (G3a).
+
+##### A-2c Bucket with an exact policy, verified before any upload **[CHANGE, then READ]**
+
+```bash
+gcloud storage buckets create "$DR_BUCKET" --project="$DR_PROJECT" --location="$DR_LOCATION" \
+  --uniform-bucket-level-access --public-access-prevention --soft-delete-duration=7d
+umask 077
+cat > ~/dr-bucket-policy.json <<POLICY
+{"bindings": [
+  {"role": "roles/storage.objectAdmin", "members": ["$BACKUP_ADMIN"]},
+  {"role": "roles/storage.admin",       "members": ["$FIRESTORE_AGENT"]}
+]}
+POLICY
+gcloud storage buckets set-iam-policy "$DR_BUCKET" ~/dr-bucket-policy.json      # replaces the default convenience bindings
+
+# 1. The bucket's own policy is exactly the two bindings
+gcloud storage buckets get-iam-policy "$DR_BUCKET" --format=json > ~/dr-bucket-iam.json
+python3 ~/radar/tools/verify_backup_access.py bucket ~/dr-bucket-iam.json --admin "$BACKUP_ADMIN" --agent "$FIRESTORE_AGENT"
+# 2. Effective access, including inherited project/folder/org policies, expanded groups and impersonation
+gcloud asset analyze-iam-policy --project="$DR_PROJECT" --full-resource-name="$DR_BUCKET_RESOURCE" \
+  --permissions=storage.objects.get,storage.objects.list,storage.objects.create,storage.objects.delete,storage.buckets.setIamPolicy \
+  --expand-groups --analyze-service-account-impersonation --show-response --format=json > ~/dr-effective.json
+python3 ~/radar/tools/verify_backup_access.py effective ~/dr-effective.json \
+  --admin "$BACKUP_ADMIN" --agent "$FIRESTORE_AGENT" --dr-project-number "$DR_PROJECT_NUMBER"
+# 3. Public access prevention and uniform access are on
+gcloud storage buckets describe "$DR_BUCKET" --format='yaml(public_access_prevention,uniform_bucket_level_access,soft_delete_policy)'
+```
+
+* **Expected:**
+  1. `BUCKET_POLICY_OK`.
+  2. One line per identity with the role and where it is attached, then `EFFECTIVE_ACCESS_OK`. The only identities:
+     `user:<you>` (bucket `objectAdmin`, project `owner`) and
+     `serviceAccount:service-<PROJECT_NUMBER>@gcp-sa-firestore…` (bucket `storage.admin`). Optionally there are lines marked
+     `[Google-managed agent of the DR project]`.
+  3. `public_access_prevention: enforced`, `uniform_bucket_level_access: true`.
+* **`set-iam-policy` says the Firestore agent does not exist:** run
+  `gcloud beta services identity create --service=firestore.googleapis.com --project="$PROJECT"`, then repeat.
+  This creates Google's own agent and grants nothing in `ticketradar03`.
+* **Any `UNEXPECTED`, `MISSING` or `ERROR` line, or exit ≠ 0:** **stop: upload nothing** (G3b). Fix the named
+  binding and repeat A-2c. Analysis output with `PERMISSION_DENIED` means you lack Cloud Asset permission at that
+  scope, so the check is unproven: stop.
+
+##### A-2d Firestore export, PITR and schedule **[CHANGE — only after `EFFECTIVE_ACCESS_OK`]**
+
+```bash
+export EXPORT_PATH="$DR_BUCKET/firestore/$(date -u +%Y%m%dT%H%MZ)"
+gcloud firestore export "$EXPORT_PATH" --project="$PROJECT" --database='(default)' --async
+gcloud firestore databases update --database='(default)' --enable-pitr
+gcloud firestore backups schedules create --database='(default)' --recurrence=daily --retention=14d
+# [READ] repeat until SUCCESSFUL
+gcloud firestore operations list --database='(default)' --format='table(name.basename(),metadata.operationState,metadata.endTime)' --limit=3
+gcloud storage ls "$EXPORT_PATH/**" | grep overall_export_metadata
+```
+
+* **Expected:** `SUCCESSFUL`, and one `…overall_export_metadata` object. That proves the Firestore service agent can
+  write cross-project with exactly the bucket-scoped grant.
+* **`PERMISSION_DENIED` / `FAILED`:** the agent binding is wrong. Re-run A-2c checks 1–2. **Do not widen access** with
+  project-level roles. Stop (G3c).
+* PITR versions and managed backups stay inside `ticketradar03`. They are reachable only by identities that already
+  hold Firestore permissions there, the same population that can read the live database. They do not widen access.
+
+##### A-2e Auth export — encrypted in memory, then uploaded **[CHANGE]**
+
+```bash
+umask 077
+npx -y firebase-tools@13 login --no-localhost
+npx -y firebase-tools@13 auth:export /dev/shm/auth.json --format=json --project "$PROJECT"   # RAM only, never the persistent home disk
+jq '.users | length' /dev/shm/auth.json                                                       # = Console → Authentication → Users count
+gpg --pinentry-mode loopback --symmetric --cipher-algo AES256 --output /dev/shm/auth-$(date -u +%Y%m%d).json.gpg /dev/shm/auth.json
+shred -u /dev/shm/auth.json
+gcloud storage cp /dev/shm/auth-*.json.gpg "$DR_BUCKET/auth/" && shred -u /dev/shm/auth-*.json.gpg
+ls /dev/shm/ | grep -c auth || true                                                           # 0
+```
+
+Choose a long passphrase and store it in your password manager. **[UI]** Firebase console → Authentication →
+Users → ⋮ → **Password hash parameters**: store them next to the passphrase. Both stay outside Google Cloud.
+
+##### A-2f Final backup verification — G3d **[READ]**
+
+```bash
+gcloud storage ls -l "$EXPORT_PATH/" "$DR_BUCKET/auth/"
+gcloud storage buckets get-iam-policy "$DR_BUCKET" --format=json > ~/dr-bucket-iam.json
+python3 ~/radar/tools/verify_backup_access.py bucket ~/dr-bucket-iam.json --admin "$BACKUP_ADMIN" --agent "$FIRESTORE_AGENT"
+gcloud asset analyze-iam-policy --project="$DR_PROJECT" --full-resource-name="$DR_BUCKET_RESOURCE" \
+  --permissions=storage.objects.get,storage.objects.list,storage.objects.create,storage.objects.delete,storage.buckets.setIamPolicy \
+  --expand-groups --analyze-service-account-impersonation --show-response --format=json > ~/dr-effective.json
+python3 ~/radar/tools/verify_backup_access.py effective ~/dr-effective.json \
+  --admin "$BACKUP_ADMIN" --agent "$FIRESTORE_AGENT" --dr-project-number "$DR_PROJECT_NUMBER"
+gcloud firestore databases describe --database='(default)' --format='value(pointInTimeRecoveryEnablement)'
+gcloud firestore backups schedules list --database='(default)'
+```
+
+* **G3d pass:** both objects are listed (the export folder and one `.json.gpg`); `BUCKET_POLICY_OK`; `EFFECTIVE_ACCESS_OK`;
+  `POINT_IN_TIME_RECOVERY_ENABLED`; one daily schedule.
+* **Optional restore drill (+20 min):** `gcloud firestore databases create --database=restore-drill --location="$FS_LOCATION"`,
+  then `gcloud firestore import "$EXPORT_PATH" --database=restore-drill` (the same agent reads the bucket). Compare
+  the `monitors` count, then `gcloud firestore databases delete --database=restore-drill`.
 
 #### A-3 Identities and registry — 5 min **[CHANGE]**
 
@@ -618,7 +725,7 @@ Requires two merges you approve. Production effect: the legacy workflow file bec
 |---|---|---|
 | A-0 setup + G0 | 5 min | 5 min |
 | A-1 pre-flight | 15 | 15 |
-| A-2 backups + Auth | 25 | 25–40 (export) |
+| A-2 DR project, access proofs, backups + Auth | 35 | 35–50 (export) |
 | A-3 identities | 5 | 5 |
 | A-4 build | 5 | 10 |
 | A-5 shadow + scheduler | 15 | 20 |
@@ -629,7 +736,7 @@ Requires two merges you approve. Production effect: the legacy workflow file bec
 | A-10 notification test | 20 | 25 |
 | A-11 activate `af1711d4` | 10 | 15 |
 | A-12 first hour | 10 | 60 |
-| **Total** | **≈ 2 h 40 min – 3 h 30 min** | **≈ 4 h 15 min – 5 h** |
+| **Total** | **≈ 2 h 50 min – 3 h 40 min** | **≈ 4 h 25 min – 5 h 10 min** |
 
 Add about 30 min of contingency for the first use of Cloud Shell or Firebase CLI login. Stage 2 is an extra 45–60 min (optional).
 
@@ -675,7 +782,7 @@ The `production` reviewer gate keeps it from running unattended.
 | Least privilege | Worker: `datastore.user`, `firebaseauth.viewer`, per-secret accessor. Invoker: `run.invoker` on one service. Probe: nothing. Relay: `workloadIdentityUser`, condition-pinned to repository ID, owner ID, `main`, environment, workflow. |
 | Firebase Rules | Unchanged. Worker-only collections are client-denied (emulator-verified). IAM bypasses Rules by design. |
 | Secrets | Gmail app password in Secret Manager, version-pinned, readable only by the worker SA. Values never printed; the start-up log reports booleans only. |
-| Backups | Restricted bucket, no project-wide reader, public access prevented, soft delete 7 d. Auth export AES-256 encrypted client-side; passphrase and hash parameters kept outside GCP. |
+| Backups | **Dedicated DR project** (no inherited access from `ticketradar03`). Bucket policy is exactly owner `objectAdmin` + source Firestore agent `storage.admin`, both bucket-scoped. Public access prevented, uniform access, soft delete 7 d. Effective access proven by Policy Analyzer (inheritance, groups, impersonation) before and after upload. Auth export encrypted in RAM (AES-256); passphrase and hash parameters kept outside Google Cloud. |
 | Logs | Monitor details move from public Actions logs to private Cloud Logging. Addresses are never printed. |
 | Dependencies | Hash-locked; pip-audit clean (worker and dev locks) |
 | Static analysis | bandit: B104 only (required); actionlint clean |
@@ -689,3 +796,23 @@ The `production` reviewer gate keeps it from running unattended.
 * Unchanged: *Catalogue sync* `0 1,7,13,19 * * *` (~3 min, 4×/day); *Tests* on push/PR; manual diagnostic workflows.
 * No continuous or self-dispatching runner remains. Whether GitHub would consider any remaining usage objectionable is
   not something this report can determine.
+
+---
+
+## 13. Backup procedure — safety verdict
+
+**Safe to execute tomorrow, as written in A-2, with its gates.** Conditions:
+
+* Backup data never lands in `ticketradar03` storage. It goes to a dedicated project whose only principals are you
+  and Google-managed agents, so inherited `ticketradar03` access (including the GitHub-held Admin SDK key) cannot reach it.
+* No byte is uploaded until G3a (no unreviewed folder/organisation) and G3b (Policy Analyzer: only you and the
+  Firestore service agent, counting inheritance, groups and impersonation) pass. Both are re-checked after upload (G3d).
+* The Firestore service agent's ability to export is proven by the export itself (G3c), with only the bucket-scoped
+  grant. If it fails, the procedure stops rather than widening access.
+* The Auth export is encrypted before upload, and its plaintext lives only in RAM. Even an access mistake would expose ciphertext only.
+* No IAM in `ticketradar03` is changed by A-2.
+
+**What remains unproven until you run it:** the real Policy Analyzer result (U12). With an organisation above
+your account, the analysis must run at organisation scope, or the backups stop. That is the one possible blocker,
+and A-2b reports it before any data moves.
+

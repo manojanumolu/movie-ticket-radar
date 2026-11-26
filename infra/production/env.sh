@@ -22,8 +22,13 @@ export AUTHORITY=ticketradar03-cloudrun-v1
 # Secret Manager names (values are entered interactively, never here).
 export SECRET_GMAIL_ADDRESS=radar-gmail-address
 export SECRET_GMAIL_PASSWORD=radar-gmail-app-password
-# Restricted disaster-recovery bucket: Firestore export + encrypted Auth export.
-export DR_BUCKET=gs://${PROJECT}-dr-restricted
+# Disaster-recovery storage lives in a SEPARATE project so that no identity that
+# holds a role on ticketradar03 (or could inherit one there) can read backups.
+# Project IDs are global: if ticketradar03-dr is taken, set e.g. ticketradar03-dr-7k2q
+# here before step A-2 and keep it for every later session.
+export DR_PROJECT=ticketradar03-dr
+export DR_BUCKET=gs://${DR_PROJECT}-backups
+export DR_BUCKET_RESOURCE=//storage.googleapis.com/projects/_/buckets/${DR_PROJECT}-backups
 # Firestore REST root (read-only inspection and the control document).
 export FS="https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents"
 # GitHub identifiers for the optional "Check now" relay (Stage 2).

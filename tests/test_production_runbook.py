@@ -12,7 +12,8 @@ ALERTS = ROOT / "infra/production/alerts"
 #: Variables the runbook sets itself, in the step that uses them.
 LOCAL = {"BUILD_SHA", "PROJECT_NUMBER", "FS_LOCATION", "DR_LOCATION", "TOKEN", "RULES", "RS", "DOOMSDAY_ID",
          "OVERLAP_ID", "EXPORT_PATH", "IMAGE", "IMAGE_DIGEST", "URL", "ID", "CHANNEL_ID", "TEST_ID", "b", "s",
-         "f", "sa", "name", "desc", "filter", "strip", "HOME", "PATH"}
+         "f", "sa", "name", "desc", "filter", "strip", "HOME", "PATH",
+         "DR_PROJECT_NUMBER", "BILLING", "BACKUP_ADMIN", "FIRESTORE_AGENT", "id"}
 
 
 def env_names():
@@ -77,3 +78,21 @@ def test_runbook_keeps_the_mandatory_order():
     assert text.index("Disable workflow") < text.index("WORKER_MODE=fenced")
     # The original monitor is extended only after the notification test.
     assert text.index("Extend by 24 hours**. Expected") > text.index("#### A-10")
+
+
+def test_backups_go_to_the_isolated_project_and_are_proven_before_upload():
+    text = RUNBOOK.read_text()
+    env = ENV.read_text()
+    assert "export DR_PROJECT=ticketradar03-dr" in env and "export DR_BUCKET=gs://${DR_PROJECT}-backups" in env
+    a2 = text[text.index("#### A-2 "):text.index("#### A-3 ")]
+    assert 'gcloud storage buckets create "$DR_BUCKET" --project="$DR_PROJECT"' in a2
+    assert "remove-iam-policy-binding" not in a2                 # inherited access is not "removed" on the bucket
+    assert "gcloud projects add-iam-policy-binding" not in a2    # no IAM change in ticketradar03 or DR project
+    assert "set-iam-policy" in a2
+    proof = a2.index("verify_backup_access.py effective")
+    assert proof < a2.index("gcloud firestore export")
+    assert proof < a2.index("gcloud storage cp /dev/shm/auth")
+    assert a2.index("verify_backup_access.py ancestors") < a2.index("gcloud storage buckets create")
+    assert "--expand-groups --analyze-service-account-impersonation --show-response" in a2
+    assert a2.count("verify_backup_access.py effective") == 2      # before and after upload
+    assert "/dev/shm/auth.json" in a2 and "~/auth.json" not in a2
