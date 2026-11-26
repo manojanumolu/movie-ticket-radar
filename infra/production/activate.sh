@@ -131,6 +131,45 @@ startup_line() {  # latest start-up summary of the current revision
   log_json "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"$SERVICE\" AND resource.labels.revision_name=\"$1\" AND jsonPayload.worker_start:*" 15m \
     | jq -c '.[0].jsonPayload // empty'
 }
+# ── Firestore Rules comparison (G2) ────────────────────────────────────────
+# Writes the deployed source to $1 byte-for-byte. `jq -j` adds nothing (`jq -r`
+# appended a line feed, which made identical Rules look different). Fails closed
+# on an HTTP error, a missing release/ruleset, anything but exactly one source
+# file, or a non-string/empty source.
+fetch_deployed_rules() {
+  local api=https://firebaserules.googleapis.com/v1 rs
+  rs=$(curl -fsS -H "Authorization: Bearer $(token)" "$api/projects/$PROJECT/releases/cloud.firestore" \
+       | jq -er '.rulesetName | select(type == "string" and startswith("projects/"))') || return 1
+  curl -fsS -H "Authorization: Bearer $(token)" "$api/$rs" \
+    | jq -ej '.source.files | if (type == "array" and length == 1 and (.[0].content | type) == "string")
+                             then .[0].content else error("unexpected ruleset source") end' > "$1" || return 1
+  [ -s "$1" ]
+}
+# Pass only if the two files are byte-identical once TRAILING LINE FEEDS ALONE are
+# removed from each end. Every other byte — including whitespace inside or before
+# the final line, carriage returns and comments — must match. Prints hashes, and a
+# unified diff on mismatch. Missing, unreadable or empty input fails closed.
+rules_equivalent() {
+  python3 - "$1" "$2" <<'PY'
+import difflib, hashlib, sys
+try:
+    base, deployed = (open(p, "rb").read() for p in sys.argv[1:3])
+except OSError as exc:
+    print(f"  rules: unreadable ({exc.__class__.__name__})"); sys.exit(1)
+a, b = base.rstrip(b"\n"), deployed.rstrip(b"\n")
+for name, raw, core in (("baseline", base, a), ("deployed", deployed, b)):
+    print(f"  {name}: {len(raw)} bytes, sha256 {hashlib.sha256(raw).hexdigest()}, "
+          f"without trailing LF {hashlib.sha256(core).hexdigest()}")
+if not a or not b:
+    print("  rules: empty source"); sys.exit(1)
+if a == b:
+    sys.exit(0)
+sys.stdout.writelines(difflib.unified_diff(a.decode("utf-8", "replace").splitlines(True),
+                                           b.decode("utf-8", "replace").splitlines(True),
+                                           "baseline", "deployed", n=2))
+print(); sys.exit(1)
+PY
+}
 current_revision() { gcloud run services describe "$SERVICE" --region="$REGION" --format='value(status.latestReadyRevisionName)'; }
 # Predicates polled by wait_for.
 tick_ok()        { [[ "$(worker POST /tick)" == 200* ]]; }
@@ -175,12 +214,13 @@ phase_preflight() {
   case "$FS_LOCATION" in nam5) save DR_LOCATION US ;; eur3) save DR_LOCATION EU ;; *) save DR_LOCATION "$FS_LOCATION" ;; esac
   ok "Firestore $FS_LOCATION → DR bucket location $DR_LOCATION; Cloud Run $REGION"
 
-  local rules=https://firebaserules.googleapis.com/v1 rs
-  rs=$(curl -sS -H "Authorization: Bearer $(token)" "$rules/projects/$PROJECT/releases/cloud.firestore" | jq -r .rulesetName)
-  curl -sS -H "Authorization: Bearer $(token)" "$rules/$rs" | jq -r '.source.files[0].content' > "$STATE_DIR/deployed.rules"
-  git -C "$ROOT" show "$BASELINE:firestore.rules" | diff -q - "$STATE_DIR/deployed.rules" >/dev/null \
-    || die "G2" "deployed Firestore Rules differ from the repository baseline" "everything"
-  ok "deployed Rules = repository"
+  fetch_deployed_rules "$STATE_DIR/deployed.rules" \
+    || die "G2" "could not read the deployed Firestore Rules (release, ruleset or source missing)" "everything"
+  git -C "$ROOT" show "$BASELINE:firestore.rules" > "$STATE_DIR/baseline.rules" \
+    || die "G2" "could not read the baseline firestore.rules" "everything"
+  rules_equivalent "$STATE_DIR/baseline.rules" "$STATE_DIR/deployed.rules" \
+    || die "G2" "deployed Firestore Rules differ from the repository baseline (diff above)" "everything"
+  ok "deployed Rules = repository (identical apart from trailing line feeds)"
 
   local names original overlap
   names=$(fs_get "monitors?pageSize=300&mask.fieldPaths=status" | jq -r '.documents[]?.name | split("/")[-1]')

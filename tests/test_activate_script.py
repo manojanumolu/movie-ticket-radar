@@ -198,3 +198,121 @@ gcloud storage cp /dev/shm/radar-auth.json.gpg gs://never
 def test_rollback_usage_is_strict(tmp_path):
     proc, _ = run(tmp_path, "rollback reenable-legacy")
     assert proc.returncode == 1 and "STOP [usage]" in proc.stderr
+
+
+# ── G2: deployed Firestore Rules vs the baseline ─────────────────────────
+BASELINE_RULES = subprocess.run(["git", "show", "cb9c6a130b1b3f321435c817fabb133d3742f27b:firestore.rules"],
+                                cwd=ROOT, capture_output=True, check=True).stdout
+
+
+def compare(tmp_path, base: bytes, deployed: bytes | None):
+    (tmp_path / "base.rules").write_bytes(base)
+    if deployed is not None:
+        (tmp_path / "deployed.rules").write_bytes(deployed)
+    return run(tmp_path, f"rules_equivalent {tmp_path}/base.rules {tmp_path}/deployed.rules")[0]
+
+
+def test_baseline_rules_are_the_approved_bytes():
+    import hashlib
+    assert hashlib.sha256(BASELINE_RULES).hexdigest() == \
+        "932bdc42ac30b79c48629e9e4420fa2030b6165b157a3ef8016a79ebea2a06ff"
+    # The production diagnostic's "deployed" hash is exactly the baseline plus one LF:
+    assert hashlib.sha256(BASELINE_RULES + b"\n").hexdigest() == \
+        "8f58cd7a6628bf14c8b32087163c46471efe2d5dfc3a9216cc0c21fa1306d218"
+
+
+@pytest.mark.parametrize("deployed", [
+    BASELINE_RULES,                          # byte-identical
+    BASELINE_RULES + b"\n",                  # the production case (one extra LF)
+    BASELINE_RULES + b"\n\n\n",              # several extra LFs
+    BASELINE_RULES.rstrip(b"\n"),            # no final LF at all
+])
+def test_trailing_line_feed_differences_pass(tmp_path, deployed):
+    assert compare(tmp_path, BASELINE_RULES, deployed).returncode == 0
+
+
+def _edit(old: bytes, new: bytes) -> bytes:
+    assert BASELINE_RULES.count(old) >= 1, old
+    return BASELINE_RULES.replace(old, new, 1)
+
+
+@pytest.mark.parametrize("deployed,why", [
+    (_edit(b"match /monitors/{id} {", b"match /monitors/{monitorId} {"), "renamed match wildcard"),
+    (_edit(b"allow delete: if ownsExisting();", b"allow delete: if true;"), "removed a restriction"),
+    (_edit(b"allow update: if false;", b"allow update: if request.auth != null;"), "loosened a denial"),
+    (_edit(b"allow delete: if ownsExisting();", b"allow delete: if ownsExisting() && false;"), "added a restriction"),
+    (_edit(b"&& requestCost(d) <= 120", b"&& requestCost(d) <= 1200"), "changed a numeric limit"),
+    (BASELINE_RULES.replace(b"\n", b"\r\n"), "CRLF line endings"),
+    (BASELINE_RULES + b" \n", "trailing space is not a line feed"),
+    (BASELINE_RULES + b"\n// comment\n", "appended comment"),
+    (b" " + BASELINE_RULES, "leading whitespace"),
+    (BASELINE_RULES.rstrip(b"\n") + b"\n}\n", "extra closing brace"),
+])
+def test_any_real_difference_fails(tmp_path, deployed, why):
+    proc = compare(tmp_path, BASELINE_RULES, deployed)
+    assert proc.returncode == 1, why
+
+
+def test_a_rule_difference_is_shown_as_a_diff(tmp_path):
+    proc = compare(tmp_path, BASELINE_RULES, _edit(b"allow update: if false;", b"allow update: if true;"))
+    assert proc.returncode == 1
+    assert "-      allow update: if false;" in proc.stdout and "+      allow update: if true;" in proc.stdout
+
+
+@pytest.mark.parametrize("deployed", [None, b"", b"\n\n"])
+def test_missing_or_empty_deployed_rules_fail_closed(tmp_path, deployed):
+    assert compare(tmp_path, BASELINE_RULES, deployed).returncode == 1
+
+
+@pytest.mark.parametrize("release,ruleset,ok", [
+    ({"rulesetName": "projects/ticketradar03/rulesets/r1"},
+     {"source": {"files": [{"name": "firestore.rules", "content": "RULES\n"}]}}, True),
+    ({"rulesetName": "projects/ticketradar03/rulesets/r1"}, {"source": {"files": []}}, False),
+    ({"rulesetName": "projects/ticketradar03/rulesets/r1"},
+     {"source": {"files": [{"content": "A"}, {"content": "B"}]}}, False),
+    ({"rulesetName": "projects/ticketradar03/rulesets/r1"}, {"source": {"files": [{"name": "x"}]}}, False),
+    ({"rulesetName": "projects/ticketradar03/rulesets/r1"}, {"source": {"files": [{"content": ""}]}}, False),
+    ({}, {}, False),
+    ({"error": {"code": 403}}, {}, False),
+])
+def test_fetch_extracts_exact_bytes_and_fails_closed(tmp_path, release, ruleset, ok):
+    (tmp_path / "release.json").write_text(json.dumps(release))
+    (tmp_path / "ruleset.json").write_text(json.dumps(ruleset))
+    stubs = f"""
+token() {{ echo t; }}
+curl() {{ case "$*" in *releases/cloud.firestore*) cat {tmp_path}/release.json ;; *) cat {tmp_path}/ruleset.json ;; esac; }}
+fetch_deployed_rules {tmp_path}/out.rules && echo FETCHED
+"""
+    proc, _ = run(tmp_path, stubs)
+    assert ("FETCHED" in proc.stdout) is ok
+    if ok:
+        assert (tmp_path / "out.rules").read_bytes() == b"RULES\n"       # no extra line feed added
+
+
+def test_fetch_fails_closed_on_http_error(tmp_path):
+    proc, _ = run(tmp_path, "token() { echo t; }\ncurl() { return 22; }\nfetch_deployed_rules "
+                            f"{tmp_path}/out.rules && echo FETCHED || echo REFUSED")
+    assert "REFUSED" in proc.stdout
+
+
+@pytest.mark.parametrize("deployed,passes", [
+    (BASELINE_RULES + b"\n", True),                                                   # the production case
+    (_edit(b"allow update: if false;", b"allow update: if true;"), False),
+])
+def test_preflight_g2_end_to_end(tmp_path, deployed, passes):
+    (tmp_path / "bad.rules").write_bytes(deployed)
+    stubs = f"""
+gh_get() {{ printf '{{"check_runs":[%s]}}' '{{"name":"pytest","conclusion":"success"}},{{"name":"candidate-pytest","conclusion":"success"}},{{"name":"firebase-emulators","conclusion":"success"}},{{"name":"worker-image","conclusion":"success"}}'; }}
+gcloud() {{ case "$*" in *"get-value account"*) echo me@example.com ;; *projectNumber*) echo 123 ;; *locationId*) echo asia-south1 ;; *) echo ok ;; esac; }}
+git() {{ case "$*" in *"status --porcelain"*) : ;; *"rev-parse HEAD"*) echo abc ;; *show*) command git "$@" ;; *) command git "$@" ;; esac; }}
+fetch_deployed_rules() {{ cp {tmp_path}/bad.rules "$1"; }}
+fs_get() {{ echo '{{}}'; }}
+phase_preflight
+"""
+    proc, _ = run(tmp_path, stubs)
+    assert proc.returncode == 1                       # stubs end the run at a later gate either way
+    if passes:
+        assert "STOP [G2]" not in proc.stderr and "deployed Rules = repository" in proc.stdout
+        assert "STOP [G1]" in proc.stderr             # preflight continued to the monitor checks
+    else:
+        assert "STOP [G2]" in proc.stderr and "+      allow update: if true;" in proc.stdout
