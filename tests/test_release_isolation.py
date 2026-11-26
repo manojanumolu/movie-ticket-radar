@@ -33,11 +33,14 @@ ADMIN_ONLY_CREATION = ["app.py", "firestore.rules", "monitor/state.py"]
 #: follow-on pass after a targeted single-pass "Check now".
 SINGLE_PASS_MONITOR = ["monitor/checker.py", "monitor/discovery.py",
                        "monitor/worker.py", "run_monitor.py"]
+#: Each monitor keeps its own interval: a monitor that is not due is never
+#: checked early because another monitor shares its listing read.
+OWN_INTERVALS = ["monitor/sharing.py"]
 
 
 def test_production_runtime_files_match_the_baseline():
     changed = git("diff", "--name-only", PRODUCTION, "HEAD", "--", *RUNTIME).split()
-    assert changed == sorted(ADMIN_ONLY_CREATION + SINGLE_PASS_MONITOR), changed
+    assert changed == sorted(ADMIN_ONLY_CREATION + SINGLE_PASS_MONITOR + OWN_INTERVALS), changed
 
 
 def test_worker_entrypoints_are_tracked_only_in_the_candidate():

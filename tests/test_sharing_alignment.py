@@ -1,19 +1,11 @@
-"""One BookMyShow read for everyone on a listing — even when their clocks differ.
+"""One BookMyShow read for monitors on the same listing that are due together,
+and never a check before a monitor's own interval.
 
-The production case (21 Sep 2026, run 35529331442): two 10-minute monitors on
-Avengers Endgame: Encore · English · Hyderabad · 25 Sep, both ALLU Cinemas ·
-Dolby Cinema. ``d9b8e05d`` had been checked at :01, :11, :21…; ``fee5ee79``
-was created six minutes later and ran at :07, :17, :27…. ``run_once`` grouped
-only the monitors *due in the same tick*, so the two never met and each made
-its own listing read — two reads every ten minutes of the very same page.
-
-The fix is not a cache. When a listing read is due for anyone, every running
-monitor on that same read is evaluated against it in the same tick — the
-others are simply checked a few minutes early, once. From then on their
-``last_check_at`` coincide, they are due together, and the existing
-same-tick grouping carries them. Nobody is ever handed an answer older than
-the tick it was read in, and nobody's gap between checks ever exceeds their
-own interval; it can only shorten, once.
+Monitors on the same listing (film, city, dates) that are due in the same
+tick share one listing read. A monitor that is *not* due is not checked,
+even when another monitor on its listing is: each keeps its own configured
+interval (owner's request, 27 Nov 2026 — a 10-minute monitor was being
+checked every 5 minutes because it rode a 5-minute monitor's read).
 
 These tests run the worker tick by tick on a fixed clock and count reads
 through a recording provider — the same instrument ``tests/test_sharing.py``
@@ -84,74 +76,6 @@ def _available(venue="ALLU", name="Allu Cinemas", fmt="Dolby Cinema 2D", date_co
 # ──────────────────────────────────────────────────────────────────────────
 # 8 · The production case: identical target, due six minutes apart
 # ──────────────────────────────────────────────────────────────────────────
-def test_phase_offset_monitors_share_one_read_and_then_stay_aligned(users, recording):
-    a = users("uid-a", ALLU_DOLBY)      # last checked 23:51 → due at 00:01
-    b = users("uid-b", ALLU_DOLBY)      # last checked 23:57 → due at 00:07
-    seed([a, b], {a.id: t(-9), b.id: t(-3)})
-
-    # 00:01 — A is due. Before the fix this read served A alone.
-    report = tick(t(1))
-    assert recording.count == 1
-    assert sorted(report.checked) == sorted([a.id, b.id]), "B rides the read A needed"
-    assert report.sharing.fetches == 1 and report.sharing.monitors == 2
-    assert report.sharing.aligned == 1
-
-    # 00:07 — B's old slot. It was served at 00:01, so nothing is due.
-    report = tick(t(7))
-    assert recording.count == 1, "the phase-offset read no longer happens"
-    assert report.checked == []
-    assert any(sid.startswith(b.id[:8]) and "not due" in sid for sid in report.skipped)
-
-    # 00:11 — both due together now; one read, both evaluated, no alignment needed.
-    report = tick(t(11))
-    assert recording.count == 2
-    assert sorted(report.checked) == sorted([a.id, b.id])
-    assert report.sharing.aligned == 0
-
-    # 00:17 — B's old slot again: silence.
-    assert tick(t(17)).checked == []
-    assert recording.count == 2
-
-    # 00:21 — and again together.
-    tick(t(21))
-    assert recording.count == 3
-    state = load_state()
-    assert state[a.id].last_check_at == state[b.id].last_check_at == t(21)
-
-
-def test_before_and_after_read_counts_over_twenty_minutes(users, recording):
-    """The number the change is for: reads of one listing between 00:00 and
-    00:20 for two identical 10-minute monitors six minutes apart."""
-    a = users("uid-a", ALLU_DOLBY)
-    b = users("uid-b", ALLU_DOLBY)
-    seed([a, b], {a.id: t(-9), b.id: t(-3)})
-    for minute in range(0, 21):                    # one scheduled tick a minute
-        tick(t(minute))
-    # Before: A at :01 and :11, B at :07 and :17 → 4 reads. After: :01, :11 → 2.
-    assert recording.count == 2, recording.reads
-    assert [r[0] for r in recording.reads] == ["ET00478890", "ET00478890"]
-
-
-def test_a_monitor_never_waits_longer_than_its_own_interval(users, recording):
-    """Alignment only ever pulls a check *earlier*. Whatever the offset, the
-    gap between two evaluations of a monitor stays within its interval."""
-    a = users("uid-a", ALLU_DOLBY)
-    b = users("uid-b", ALLU_DOLBY)
-    seed([a, b], {a.id: t(-9), b.id: t(-1)})       # B was checked a minute ago
-    checks: dict[str, list[datetime]] = {a.id: [], b.id: []}
-    for minute in range(0, 41):
-        for second in (0, 30):
-            report = tick(t(minute, second))
-            for mid in report.checked:
-                checks[mid].append(t(minute, second))
-    for mid, times in checks.items():
-        gaps = [(y - x).total_seconds() for x, y in zip(times, times[1:])]
-        assert times, mid
-        assert max(gaps, default=0) <= 10 * 60, (mid, gaps)
-    assert checks[b.id][0] == checks[a.id][0] < t(2), "B was pulled forward to A's first read"
-    assert recording.count == len(checks[a.id]), "one read per aligned tick"
-
-
 # ──────────────────────────────────────────────────────────────────────────
 # 7 · 9 · 10 — same tick, three users, and two targets on one listing
 # ──────────────────────────────────────────────────────────────────────────
@@ -163,36 +87,6 @@ def test_identical_target_due_at_the_same_time_is_one_read(users, recording):
     assert recording.count == 1
     assert sorted(report.checked) == sorted([a.id, b.id])
     assert report.sharing.aligned == 0
-
-
-def test_three_users_offset_by_minutes_cost_one_read(users, recording):
-    monitors = [users(f"uid-{n}", ALLU_DOLBY) for n in "abc"]
-    seed(monitors, {monitors[0].id: t(-10), monitors[1].id: t(-6), monitors[2].id: t(-2)})
-    report = tick(t(0))
-    assert recording.count == 1
-    assert sorted(report.checked) == sorted(m.id for m in monitors)
-    assert report.sharing.aligned == 2
-    for minute in (4, 8):                          # the old slots of B and C
-        assert tick(t(minute)).checked == []
-    assert recording.count == 1
-
-
-def test_allu_dolby_and_amb_hdr_offset_are_one_listing_read(users, recording):
-    """A = ALLU Dolby (due :01), B = ALLU Dolby (due :07), C = AMB HDR (due :09).
-    Venue and format never reach the network; one read answers all three."""
-    a = users("uid-a", ALLU_DOLBY)
-    b = users("uid-b", ALLU_DOLBY)
-    c = users("uid-c", AMB_HDR)
-    seed([a, b, c], {a.id: t(-9), b.id: t(-3), c.id: t(-1)})
-    report = tick(t(1))
-    assert recording.count == 1, recording.reads
-    assert sorted(report.checked) == sorted([a.id, b.id, c.id])
-    assert len(report.sharing.shared) == 1 and report.sharing.shared[0][1:] == (3, 3)
-    for minute in (7, 9):
-        assert tick(t(minute)).checked == []
-    assert recording.count == 1
-    tick(t(11))
-    assert recording.count == 2
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -223,28 +117,6 @@ def test_different_events_are_separate_reads_and_are_not_aligned(users, recordin
 # ──────────────────────────────────────────────────────────────────────────
 # 13 · Nothing is reused across ticks
 # ──────────────────────────────────────────────────────────────────────────
-def test_a_listing_is_never_reused_after_the_tick_it_was_read_in(users, recording):
-    """The reuse window is one tick. When the listing changes between ticks,
-    the next tick reads it again — a rider is never served yesterday's page."""
-    a = users("uid-a", ALLU_DOLBY)
-    b = users("uid-b", ALLU_DOLBY)
-    seed([a, b], {a.id: t(-9), b.id: t(-3)})
-    sent: list[tuple[str, str]] = []
-    notify = lambda m, c: sent.append((m.owner_uid, c.kind.value))  # noqa: E731
-
-    recording._shows = []                          # 00:01 — no Dolby show yet
-    tick(t(1), notify)
-    assert recording.count == 1 and sent == []
-
-    recording._shows = [_available()]              # tickets open at 00:03
-    assert tick(t(7), notify).checked == [], "not due: no read, and no stale verdict either"
-    assert sent == []
-
-    tick(t(11), notify)                            # both due: a fresh read, not the 00:01 one
-    assert recording.count == 2
-    assert sorted(sent) == [("uid-a", "TICKETS_LIVE"), ("uid-b", "TICKETS_LIVE")]
-
-
 def test_alignment_reads_no_state_when_nothing_is_due(users, recording):
     """The segment's own skip-the-state-read shortcut still holds."""
     a = users("uid-a", ALLU_DOLBY)
@@ -259,55 +131,6 @@ def test_alignment_reads_no_state_when_nothing_is_due(users, recording):
 # ──────────────────────────────────────────────────────────────────────────
 # 14 · 15 · 16 · 17 — the fan-out is untouched by alignment
 # ──────────────────────────────────────────────────────────────────────────
-def test_an_aligned_rider_keeps_its_own_state_and_history(users, recording):
-    a = users("uid-a", ALLU_DOLBY)
-    b = users("uid-b", AMB_HDR)
-    seed([a, b], {a.id: t(-9), b.id: t(-3)})
-    recording._shows = [_available(), _available("AMB", "AMB Cinemas", "HDR by Barco 2D")]
-    tick(t(1))
-    state = load_state()
-    assert state[a.id].check_count == 1 and state[b.id].check_count == 1
-    assert state[a.id].target(ALLU_DOLBY.key).availability is Availability.AVAILABLE
-    assert state[b.id].target(AMB_HDR.key).availability is Availability.AVAILABLE
-    assert ALLU_DOLBY.key not in state[b.id].targets, "B's state holds B's targets only"
-    assert AMB_HDR.key not in state[a.id].targets
-
-
-def test_an_aligned_read_emails_each_subscriber_separately(users, recording):
-    recording._shows = [_available()]
-    a = users("uid-a", ALLU_DOLBY)
-    b = users("uid-b", ALLU_DOLBY)
-    seed([a, b], {a.id: t(-9), b.id: t(-3)})
-    sent: list[tuple[str, str]] = []
-    report = tick(t(1), lambda m, c: sent.append((m.owner_uid, m.notify_email)))
-    assert recording.count == 1 and report.emails_sent == 2
-    assert sorted(sent) == [("uid-a", "uid-a@example.com"), ("uid-b", "uid-b@example.com")]
-    # duplicate protection is per person, and the rider's is armed like anyone's
-    sent.clear()
-    tick(t(11), lambda m, c: sent.append((m.owner_uid, m.notify_email)))
-    assert sent == []
-
-
-def test_a_riders_email_failure_does_not_touch_the_leader(users, recording):
-    recording._shows = [_available()]
-    a = users("uid-a", ALLU_DOLBY)
-    b = users("uid-b", ALLU_DOLBY)
-    seed([a, b], {a.id: t(-9), b.id: t(-3)})
-
-    def flaky(monitor, change):
-        if monitor.owner_uid == "uid-b":
-            raise RuntimeError("SMTP said no")
-
-    report = tick(t(1), flaky)
-    assert report.emails_sent == 1 and len(report.email_errors) == 1
-    state = load_state()
-    assert state[a.id].target(ALLU_DOLBY.key).notified_availability is Availability.AVAILABLE
-    assert state[b.id].target(ALLU_DOLBY.key).notified_availability is not Availability.AVAILABLE
-    sent: list[str] = []
-    tick(t(11), lambda m, c: sent.append(m.owner_uid))
-    assert sent == ["uid-b"], "only the failed send is retried"
-
-
 def test_monitor_limits_stay_per_account(users):
     """Riding a shared read still costs the subscriber one of their own slots."""
     from monitor import state as state_mod
@@ -373,28 +196,91 @@ def test_one_owner_still_sees_only_their_own_monitor_after_alignment(users, reco
     assert mine[0].owner_uid == "uid-b" and mine[0].notify_email == "uid-b@example.com"
 
 
-def test_the_production_monitor_shape_rides_and_leads_unchanged(make_monitor, recording):
-    """A document written by earlier code — two targets, no new keys — is
-    grouped, led and ridden exactly as one written today; nothing about it
-    is rewritten by alignment except its own ``last_check_at``."""
-    from dataclasses import replace
-    from monitor.models import Monitor
+# ──────────────────────────────────────────────────────────────────────────
+# Each monitor keeps its own interval, even on a shared listing
+# ──────────────────────────────────────────────────────────────────────────
+def _five_and_ten(users):
+    fast = users("uid-a", ALLU_DOLBY)
+    fast.interval_minutes = 5
+    slow = users("uid-b", ALLU_DOLBY)
+    slow.interval_minutes = 10
+    return fast, slow
 
-    production = make_monitor(targets=[ALLU_DOLBY, AMB_HDR], owner_uid="uid-owner")
-    production.movie = replace(production.movie, event_code="ET00514163")
-    production.date_codes = ["20260925"]
-    restored = Monitor.from_dict(production.to_dict())      # round-trip, as the store does
-    newcomer = make_monitor(targets=[ALLU_DOLBY], owner_uid="uid-other")
-    newcomer.movie = replace(newcomer.movie, event_code="ET00514163")
-    newcomer.date_codes = ["20260925"]
-    newcomer.id = "newcomer-" + newcomer.id
-    seed([restored, newcomer], {restored.id: t(-9), newcomer.id: t(-3)})
 
-    before = restored.to_dict()
-    report = tick(t(1))
-    assert recording.count == 1 and sorted(report.checked) == sorted([restored.id, newcomer.id])
-    assert report.sharing.aligned == 1
-    from monitor.state import load_monitors_for_checking
-    after = next(m for m in load_monitors_for_checking() if m.id == restored.id).to_dict()
-    assert after == before, "the monitor document itself is untouched"
-    assert len(after["targets"]) == 2 and after["interval_minutes"] == 10
+def test_five_and_ten_minute_monitors_on_one_listing_keep_their_own_intervals(users, recording):
+    fast, slow = _five_and_ten(users)
+    seed([fast, slow], {})                          # both new: due at once
+    checks: dict[str, list[datetime]] = {fast.id: [], slow.id: []}
+    for minute in range(0, 31):
+        report = tick(t(minute))
+        assert report.sharing.aligned == 0
+        for mid in report.checked:
+            checks[mid].append(t(minute))
+    assert checks[fast.id] == [t(m) for m in range(0, 31, 5)]       # 0,5,…,30
+    assert checks[slow.id] == [t(m) for m in range(0, 31, 10)]      # 0,10,20,30
+    # One read per tick in which anyone was due: the shared ticks cost one.
+    assert recording.count == len(checks[fast.id])
+
+
+def test_at_the_workers_30_second_poll_no_monitor_is_checked_early(users, recording):
+    """The worker polls every 30 seconds and a check may land up to
+    ``DUE_TOLERANCE_SECONDS`` (30 s) early, as it always could. Over an hour
+    the 10-minute monitor is never checked closer than 9.5 minutes apart,
+    i.e. never at the 5-minute monitor's slots."""
+    fast, slow = _five_and_ten(users)
+    seed([fast, slow], {})
+    checks: dict[str, list[datetime]] = {fast.id: [], slow.id: []}
+    for minute in range(0, 61):
+        for second in (0, 30):
+            for mid in tick(t(minute, second)).checked:
+                checks[mid].append(t(minute, second))
+    for mid, interval in ((fast.id, 5), (slow.id, 10)):
+        gaps = [(b - a).total_seconds() for a, b in zip(checks[mid], checks[mid][1:])]
+        assert gaps and all(interval * 60 - 30 <= g <= interval * 60 + 30 for g in gaps), (interval, gaps)
+    assert 6 <= len(checks[slow.id]) <= 7 and 12 <= len(checks[fast.id]) <= 14
+
+
+def test_the_ten_minute_monitor_is_not_checked_at_minute_five(users, recording):
+    fast, slow = _five_and_ten(users)
+    seed([fast, slow], {})
+    tick(t(0))
+    before = load_state()[slow.id]
+    report = tick(t(5))
+    assert report.checked == [fast.id]
+    after = load_state()[slow.id]
+    assert after.check_count == before.check_count == 1
+    assert after.last_check_at == before.last_check_at == t(0)
+    assert any(sid.startswith(slow.id[:8]) and "not due" in sid for sid in report.skipped)
+
+
+def test_monitors_due_together_share_one_read(users, recording):
+    fast, slow = _five_and_ten(users)
+    seed([fast, slow], {})
+    report = tick(t(0))
+    assert sorted(report.checked) == sorted([fast.id, slow.id])
+    assert recording.count == 1 and report.sharing.fetches == 1 and report.sharing.monitors == 2
+    tick(t(5))
+    report = tick(t(10))
+    assert sorted(report.checked) == sorted([fast.id, slow.id])
+    assert recording.count == 3                    # 0 (shared), 5 (fast), 10 (shared)
+
+
+def test_check_counts_only_grow_for_monitors_that_were_due(users, recording):
+    fast, slow = _five_and_ten(users)
+    seed([fast, slow], {})
+    for minute in range(0, 21):
+        tick(t(minute))
+    state = load_state()
+    assert state[fast.id].check_count == 5          # 0,5,10,15,20
+    assert state[slow.id].check_count == 3          # 0,10,20
+
+
+def test_a_new_monitor_is_checked_at_once_without_waiting_for_another(users, recording):
+    fast, slow = _five_and_ten(users)
+    seed([fast], {})
+    tick(t(0))
+    save_monitors([fast, slow], mirror=False)       # created at 00:02 (never checked)
+    report = tick(t(2))
+    assert report.checked == [slow.id], "the new monitor alone; the other is not due"
+    assert load_state()[fast.id].check_count == 1
+

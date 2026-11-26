@@ -269,10 +269,9 @@ def test_segment_serves_each_monitor_at_its_own_interval(make_monitor, provider_
                            clock=clock, sleeper=clock.sleep, notifier=lambda m, c: None)
     state = load_state()
     assert state[fast.id].check_count == 7   # 0,10,…,60
-    # Both watch the same listing, so the slow one rides the fast one's read
-    # (``sharing.select_for_fetch``): evaluated every ten minutes, at no
-    # extra read — never less often than its own thirty.
-    assert state[slow.id].check_count == 7
+    # Same listing, but each keeps its own interval: the slow one is checked
+    # at 0,30,60 only, sharing the read at the ticks where both are due.
+    assert state[slow.id].check_count == 3
     assert sum(r.fetches for r in loop.reports) == 7, "one read per tick, not one per monitor"
 
 
@@ -319,14 +318,13 @@ def test_force_and_monitor_filter_apply_to_the_first_tick_only(make_monitor, pro
                            notifier=lambda m, c: None)
     first = loop.reports[0]
     assert new.id in first.checked                   # the dispatch's monitor, right away
-    # Both watch the same listing: the old one rides the dispatch's read
-    # (checked 8 minutes early, once) and the two are due together from
-    # then on — one read per ten minutes for both, not two.
-    assert sorted(first.checked) == sorted([new.id, old.id]) and first.fetches == 1
+    # The old one is not due (checked 2 minutes ago) and is not checked early:
+    # it keeps its own clock (+8, +18) while the new one runs 0, +10, +20.
+    assert first.checked == [new.id] and first.fetches == 1
     state = load_state()
-    assert state[old.id].check_count == 4            # 1 before + 0, +10, +20
+    assert state[old.id].check_count == 3            # 1 before + 8, +18
     assert state[new.id].check_count == 3            # 0, +10, +20
-    assert sum(r.fetches for r in loop.reports) == 3
+    assert sum(r.fetches for r in loop.reports) == 5
 
 
 def test_segment_stops_when_nothing_is_running(make_monitor, at):
