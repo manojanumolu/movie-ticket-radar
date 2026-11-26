@@ -28,8 +28,10 @@ def git(*args: str) -> str:
 #: and the page's explanation. Anything else changing is still a failure.
 ADMIN_ONLY_CREATION = ["app.py", "firestore.rules", "monitor/state.py"]
 #: The single-pass five-minute monitor: the workflow itself, the city-listing
-#: clock kept in Firestore between runs, and the refusal policy switch.
-SINGLE_PASS_MONITOR = [".github/workflows/bookmyshow-monitor.yml", "monitor/discovery.py",
+#: clock kept in Firestore between runs, the credential guard, write-ahead
+#: alert marking (no repeat after a store failure) and the follow-on pass
+#: after a targeted "Check now".
+SINGLE_PASS_MONITOR = [".github/workflows/bookmyshow-monitor.yml", "monitor/checker.py", "monitor/discovery.py",
                        "monitor/worker.py", "run_monitor.py"]
 
 

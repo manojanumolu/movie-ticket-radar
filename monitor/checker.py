@@ -33,6 +33,7 @@ Order of operations, and why:
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -591,27 +592,35 @@ def _record_history_safely(monitor: Monitor, kind: str, message: str, **kwargs) 
 
 
 def _persist_now(state: dict[str, MonitorState], carry: dict[str, MonitorState] | None,
-                 monitor_id: str, *, mirror: bool) -> bool:
+                 monitor_id: str, *, mirror: bool, park: bool = True) -> bool:
     """Write one monitor's state record now. Never raises.
 
-    Called the moment an alert has gone out, so "this was announced" reaches
-    the store before anything else can fail. Only that monitor's record:
+    Called just before an alert is sent (write-ahead: the "announced" mark
+    is stored first, so a run that cannot store it does not send it) and
+    after a send fails (to take the mark back). Only that monitor's record:
     the ones the tick has not reached yet are still blank and are not worth
-    a write. If the store refuses, the record is parked in ``carry`` — the
-    segment's own memory, handed back to the next tick — so the same process
-    does not announce the same thing twice while the store is down.
+    a write. The store client already retries passing failures. If the store
+    still refuses and ``park`` is set, the record is parked in ``carry`` —
+    a ``--loop`` segment's own memory.
     """
     try:
         save_state(state, mirror=mirror, only=[monitor_id])
-    except Exception as exc:  # noqa: BLE001 - reported, parked, retried
-        print(f"::warning::monitoring state could not be saved ({type(exc).__name__}); "
-              "kept in memory and retried", flush=True)
-        if carry is not None:
+    except Exception as exc:  # noqa: BLE001 - reported; the caller decides
+        print(f"::warning::monitoring state could not be saved ({type(exc).__name__})", flush=True)
+        if park and carry is not None:
             carry[monitor_id] = state[monitor_id]
         return False
     if carry is not None:
         carry.pop(monitor_id, None)
     return True
+
+
+def _unmark(ms: MonitorState, target_key: str, previous) -> None:
+    """Undo :func:`mark_notified` for one target: the alert did not go out."""
+    if previous is None:
+        ms.targets.pop(target_key, None)
+    else:
+        ms.targets[target_key] = previous
 
 
 def _park(state: dict[str, MonitorState], carry: dict[str, MonitorState] | None) -> None:
@@ -713,13 +722,15 @@ def _run_once(*, at: datetime | None, force: bool, monitor_id: str, mirror: bool
     emailed is not emailed again and a monitor already checked is not
     checked again every tick for as long as the store is down. This tick
     empties ``carry`` when its own save succeeds and refills it when it does
-    not. It lives in the worker process only: a segment that dies with
-    unsaved records can still repeat an email — delivery is at-least-once.
+    not. Repeated emails do not depend on it: each alert's "sent" mark is
+    written to the store before the email goes out (``_check_one``), so a
+    run with no memory of an earlier one — the single-pass workflow — does
+    not send the same alert again.
 
     One monitor failing — an exception anywhere in its evaluation, its alert
     or its bookkeeping — is recorded against that monitor and the tick moves
-    on to the next. State is saved as soon as an alert has been sent, not
-    only at the end of the tick.
+    on to the next. An alert's state is saved before it is sent, not only at
+    the end of the tick.
     """
     at = at or now_ist()
     report = RunReport(started_at=at, dry_run=dry_run)
@@ -879,10 +890,11 @@ def _check_one(monitor: Monitor, listing: Listing, state: dict[str, MonitorState
     """Evaluate one monitor against a listing already read, alert on what
     changed and record it. Returns True when its state record changed.
 
-    The order is the guarantee: the alert is sent, *then* marked as sent,
-    *then* that mark is written to the store before anything else happens.
-    A send that fails is never marked (it is retried next check); a mark
-    that cannot be saved stays in the segment's memory (``_persist_now``).
+    The order is the guarantee: the alert is marked as sent and that mark is
+    written to the store, *then* the email goes out. A mark the store cannot
+    take holds the alert back (it is still owed, and the next check sends
+    it); a send that fails takes the mark back (retried next check). So a
+    store failure can delay an alert but never makes it go out twice.
     """
     ms = state[monitor.id]
     print(f"[checker] {short_id(monitor.id)} — {monitor.movie.title} "
@@ -916,20 +928,33 @@ def _check_one(monitor: Monitor, listing: Listing, state: dict[str, MonitorState
             report.would_send.append(change)
             print(f"    [dry-run] would email: {change.headline} ({change.venue_name} · {change.fmt})")
             continue
+        # Write-ahead: "this was announced" reaches the store *before* the
+        # email goes out. A store that cannot take it holds the alert back
+        # (still owed, sent by the next check that can record it) instead of
+        # sending one the store will not remember — which, in a single-pass
+        # run with no memory between runs, would be sent again next run.
+        previous = copy.deepcopy(ms.targets.get(change.target_key))
+        mark_notified(change, ms, at)
+        if not _persist_now(state, carry, monitor.id, mirror=mirror, park=False):
+            _unmark(ms, change.target_key, previous)
+            report.email_errors.append(f"{short_id(monitor.id)}: held back — the store could not "
+                                       "record it before sending; sent on the next check")
+            print("    alert held back: the store could not record it first — sent on the next check")
+            continue
         try:
             notifier(monitor, change)
         except Exception as exc:  # noqa: BLE001 - retried on the next tick
+            # Not sent: take the mark back so the next check sends it.
+            _unmark(ms, change.target_key, previous)
             report.email_errors.append(f"{short_id(monitor.id)}: {exc}")
             ms.last_email_error = f"{type(exc).__name__}: {exc}"[:300]
             print(f"    email failed ({exc}) — will retry next check")
+            if not _persist_now(state, carry, monitor.id, mirror=mirror):
+                print("::error::an alert that failed to send could not be re-queued in the store; "
+                      "the end-of-run save retries it", flush=True)
             continue
         report.emails_sent += 1
         ms.last_email_error = ""
-        mark_notified(change, ms, at)
-        # The alert is out. Say so in the store *now* — before the history
-        # line, before the next monitor, before the end-of-tick save — so
-        # that nothing failing later in this tick can make it go out again.
-        _persist_now(state, carry, monitor.id, mirror=mirror)
         _record_history_safely(
             monitor,
             change.kind.value,

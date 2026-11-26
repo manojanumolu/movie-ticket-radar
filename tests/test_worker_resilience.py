@@ -322,9 +322,10 @@ def test_the_sent_mark_reaches_the_store_before_anything_else_can_fail(live):
     assert len(live.inbox) == 1
 
 
-def test_state_is_saved_right_after_the_alert_not_only_at_the_end_of_the_tick(live, monkeypatch):
-    """Two monitors. The store goes down the moment the second one's alert
-    is being sent — the first one's "sent" mark is already there."""
+def test_each_alert_is_recorded_in_the_store_before_it_is_sent(live):
+    """Two monitors. The store goes down the moment the second alert has
+    been sent — both "sent" marks are already there (write-ahead), so no
+    later run, which has no memory of this one, sends either again."""
     a = live.seed(_monitor("ET1", live.now), checked=False)
     b = live.seed(_monitor("ET2", live.now), checked=False)
 
@@ -333,49 +334,62 @@ def test_state_is_saved_right_after_the_alert_not_only_at_the_end_of_the_tick(li
         if len(live.inbox) == 2:
             live.outage.down = any_write
 
-    with pytest.raises(fs.FirestoreError):
-        run_once(at=live.now, force=True, notifier=notify)
+    run_once(at=live.now, force=True, notifier=notify)
+    for monitor in (a, b):
+        assert _target(live.stored(monitor)).notified_availability is Availability.AVAILABLE
 
-    first, second = (a, b) if live.inbox[0][0] == a.id else (b, a)
-    assert _target(live.stored(first)).notified_availability is Availability.AVAILABLE
-    assert second.id not in live.docs.get("monitor_state", {})
+    live.outage.down = None
+    run_once(at=live.now + timedelta(minutes=10), force=True, notifier=notify)
+    assert len(live.inbox) == 2
 
 
-def test_a_save_that_fails_after_the_email_parks_the_state_and_the_next_tick_does_not_resend(live):
+def test_a_store_that_cannot_record_an_alert_holds_it_back_and_sends_it_once(live):
+    """The store refuses every write: the alert is not sent (it could not be
+    recorded first), stays owed, and goes out exactly once when it can be."""
     m = live.seed(_monitor("ET1", live.now), checked=False)
     carry: dict[str, MonitorState] = {}
     live.outage.down = any_write
 
     with pytest.raises(fs.FirestoreError):
         run_once(at=live.now, force=True, notifier=live.notify, carry=carry)
-    assert live.inbox == [(m.id, "TICKETS_LIVE")]
+    assert live.inbox == []
     assert m.id not in live.docs.get("monitor_state", {}), "nothing reached the store"
-    assert _target(carry[m.id]).notified_availability is Availability.AVAILABLE
+    assert _target(carry[m.id]).notified_availability is not Availability.AVAILABLE
 
-    # Still down: the tick fails again, but the parked record means no second email.
     with pytest.raises(fs.FirestoreError):
         run_once(at=live.now + timedelta(minutes=10), force=True, notifier=live.notify, carry=carry)
-    assert len(live.inbox) == 1
+    assert live.inbox == []
 
-    # Back: the parked record is written, and ``carry`` is empty again.
     live.outage.down = None
     run_once(at=live.now + timedelta(minutes=20), force=True, notifier=live.notify, carry=carry)
-    assert len(live.inbox) == 1 and carry == {}
-    stored = live.stored(m)
-    assert _target(stored).notified_availability is Availability.AVAILABLE and stored.check_count == 3
+    assert live.inbox == [(m.id, "TICKETS_LIVE")] and carry == {}
+    assert _target(live.stored(m)).notified_availability is Availability.AVAILABLE
 
 
-def test_without_the_parked_state_the_alert_would_repeat__delivery_is_at_least_once(live):
-    """The honest limit: the park lives in the worker process. A segment
-    that dies with it unsaved starts the next one from the store, which
-    never heard about the email."""
+@pytest.mark.parametrize("when", ["before the send", "after the send"])
+def test_single_pass_runs_never_repeat_an_alert_when_the_store_fails(live, when):
+    """What the five-minute workflow runs: separate processes, no ``carry``.
+    Whether the store fails before or just after the email, the alert goes
+    out exactly once over the following runs."""
     m = live.seed(_monitor("ET1", live.now), checked=False)
-    live.outage.down = any_write
-    with pytest.raises(fs.FirestoreError):
-        run_once(at=live.now, force=True, notifier=live.notify, carry={})
+
+    def notify(monitor, change):
+        live.inbox.append((monitor.id, change.kind.value))
+        live.outage.down = any_write                 # fails right after sending
+
+    if when == "before the send":
+        live.outage.down = any_write
+        with pytest.raises(fs.FirestoreError):
+            run_once(at=live.now, force=True, notifier=live.notify)
+    else:
+        try:
+            run_once(at=live.now, force=True, notifier=notify)
+        except fs.FirestoreError:
+            pass
     live.outage.down = None
-    run_once(at=live.now + timedelta(minutes=10), force=True, notifier=live.notify, carry={})
-    assert live.inbox == [(m.id, "TICKETS_LIVE")] * 2
+    for minutes in (10, 20, 30):
+        run_once(at=live.now + timedelta(minutes=minutes), force=True, notifier=live.notify)
+    assert live.inbox == [(m.id, "TICKETS_LIVE")]
 
 
 def test_a_failed_save_does_not_corrupt_any_other_monitors_state(live):
@@ -509,16 +523,16 @@ def test_failed_ticks_back_off_instead_of_hammering_the_store(live, dispatched):
     assert naps[:4] == [30, 60, 120, 120], "doubling, capped at four poll intervals"
 
 
-def test_an_email_sent_just_before_the_store_fails_is_not_sent_again_by_the_same_segment(live, dispatched):
-    """Email succeeds, state persistence fails — for the rest of the segment.
-    One email, however many ticks follow, and the segment says what it
-    could not save."""
+def test_a_store_down_for_the_whole_segment_holds_the_alert_back(live, dispatched):
+    """No write gets through, so nothing is sent: an alert that cannot be
+    recorded first is never sent (it would be repeated). The segment says
+    what it could not save and hands over; the alert is still owed."""
     m = live.seed(_monitor("ET1", live.now), checked=False)
     live.outage.down = any_write
 
     loop, _ = _loop(live, minutes=45)
 
-    assert live.inbox == [(m.id, "TICKETS_LIVE")]
+    assert live.inbox == []
     assert loop.failed_ticks == loop.ticks >= 3
     assert m.id not in live.docs.get("monitor_state", {})
     assert loop.handed_over is True
@@ -546,11 +560,12 @@ def test_a_save_that_fails_once_is_completed_by_the_next_tick(live, dispatched):
         clock.sleep(seconds)
         live.outage.down = None            # back after the first failed tick
 
-    loop = worker.run_loop(max_minutes=5, poll_seconds=30, use_git=False, chain=False,
+    # The held-back alert goes out at the monitor's next check (10 minutes).
+    loop = worker.run_loop(max_minutes=12, poll_seconds=30, use_git=False, chain=False,
                            clock=clock, sleeper=sleeper, notifier=live.notify)
     assert loop.failed_ticks == 1 and live.inbox == [(m.id, "TICKETS_LIVE")]
     stored = live.stored(m)
-    assert _target(stored).notified_availability is Availability.AVAILABLE and stored.check_count == 1
+    assert _target(stored).notified_availability is Availability.AVAILABLE and stored.check_count == 2
 
 
 @pytest.mark.parametrize("status", [401, 403], ids=["401", "403"])

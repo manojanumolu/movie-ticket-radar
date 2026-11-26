@@ -168,3 +168,38 @@ def test_the_bookmyshow_adapter_is_byte_identical_to_the_baseline():
         ["git", "diff", "--name-only", "1f4650104bc153a8bab794ddd82d55da8cb86e70", "HEAD", "--", "platforms/"],
         cwd=root, encoding="utf-8").split()
     assert changed == []
+
+
+# ── targeted "Check now" ──────────────────────────────────────────────────
+def _record_passes(monkeypatch):
+    import run_monitor
+    from monitor import worker
+    from monitor.checker import RunReport
+
+    calls = []
+
+    def fake_run_once(**kwargs):
+        calls.append(kwargs)
+        return RunReport(started_at=kwargs["at"])
+
+    monkeypatch.setattr(run_monitor, "run_once", fake_run_once)
+    monkeypatch.setattr(worker, "require_worker_backend", lambda **k: None)
+    return run_monitor, calls
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_check_now_for_one_monitor_then_serves_every_other_due_monitor(monkeypatch, dry_run):
+    """The loop checked the named monitor first and went on serving everyone
+    else; a single pass does the same in one run, so a targeted dispatch
+    never takes the place of a scheduled pass."""
+    run_monitor, calls = _record_passes(monkeypatch)
+    argv = ["--force", "--monitor", "af1711d4"] + (["--dry-run"] if dry_run else [])
+    assert run_monitor.main(argv) == 0
+    assert [(c["monitor_id"], c.get("force", False)) for c in calls] == [("af1711d4", True), ("", False)]
+    assert all(c["dry_run"] is dry_run for c in calls)
+
+
+def test_an_ordinary_scheduled_pass_is_still_one_pass(monkeypatch):
+    run_monitor, calls = _record_passes(monkeypatch)
+    assert run_monitor.main([]) == 0
+    assert len(calls) == 1 and calls[0]["monitor_id"] == ""

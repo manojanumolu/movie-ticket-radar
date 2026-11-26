@@ -4,7 +4,7 @@
     python run_monitor.py                 # one pass: check everything that is due
     python run_monitor.py --loop          # stay alive and keep checking (what Actions runs)
     python run_monitor.py --force         # ignore the interval (manual run / first pass)
-    python run_monitor.py --monitor <id>  # one monitor only (first pass, in --loop)
+    python run_monitor.py --monitor <id>  # that monitor first, then the others that are due
     python run_monitor.py --dry-run       # check, report, send nothing
 
 Exits 0 whenever the run itself completed. A monitor that couldn't be checked
@@ -100,13 +100,20 @@ def main(argv: list[str] | None = None) -> int:
         from monitor.worker import require_worker_backend
 
         require_worker_backend(in_actions=running_in_actions())
-        report = run_once(
+        reports = [run_once(
             at=started,
             force=args.force,
             monitor_id=args.monitor,
             mirror=False,  # the workflow commits data/ once, at the end
             dry_run=args.dry_run,
-        )
+        )]
+        if args.monitor:
+            # "Check now" for one monitor checks it first, then serves
+            # everyone else who is due — as the loop's next tick used to —
+            # so a targeted run never takes the place of a scheduled one.
+            print("[worker] targeted check done; now the other monitors that are due")
+            reports.append(run_once(at=now_ist(), force=False, monitor_id="",
+                                    mirror=False, dry_run=args.dry_run))
     except Exception as exc:  # noqa: BLE001
         print(f"::error::worker crashed: {type(exc).__name__}: {exc}")
         return 1
@@ -115,27 +122,28 @@ def main(argv: list[str] | None = None) -> int:
         # Public log: enough of each id to read a run, never the whole thing.
         return ", ".join(short_id(i) for i in items) if items else "—"
 
-    for line in (
-        f"checked:  {ids(report.checked)}",
-        f"skipped:  {', '.join(report.skipped) if report.skipped else '—'}",
-        f"expired:  {ids(report.expired)}",
-        f"failed:   {ids(report.failed)}",
-        f"changes:  {len(report.changes)}",
-        f"emails:   {report.emails_sent}",
-        # One listing read can serve several people watching the same film,
-        # city and dates (monitor.sharing); say how many it saved.
-        f"fetches:  {report.fetches}"
-        + (f" (one read for {report.sharing.monitors} monitors; "
-           f"{report.sharing.saved} avoided)" if report.sharing.saved else ""),
-    ):
-        print(f"  {line}")
+    for report in reports:
+        for line in (
+            f"checked:  {ids(report.checked)}",
+            f"skipped:  {', '.join(report.skipped) if report.skipped else '—'}",
+            f"expired:  {ids(report.expired)}",
+            f"failed:   {ids(report.failed)}",
+            f"changes:  {len(report.changes)}",
+            f"emails:   {report.emails_sent}",
+            # One listing read can serve several people watching the same film,
+            # city and dates (monitor.sharing); say how many it saved.
+            f"fetches:  {report.fetches}"
+            + (f" (one read for {report.sharing.monitors} monitors; "
+               f"{report.sharing.saved} avoided)" if report.sharing.saved else ""),
+        ):
+            print(f"  {line}")
 
-    report_dry_run(report.would_send)
-    for err in report.email_errors:
-        print(f"::warning::email not sent ({err}) — it will be retried on the next check")
-    if report.failed:
-        print("::notice::one or more checks could not reach the platform; "
-              "state was left unchanged and will retry")
+        report_dry_run(report.would_send)
+        for err in report.email_errors:
+            print(f"::warning::email not sent ({err}) — it will be retried on the next check")
+        if report.failed:
+            print("::notice::one or more checks could not reach the platform; "
+                  "state was left unchanged and will retry")
 
     return 0
 
