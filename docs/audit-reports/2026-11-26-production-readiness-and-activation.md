@@ -11,6 +11,40 @@
 
 ---
 
+## 0. Final activation procedure — authoritative
+
+**Run `infra/production/activate.sh` in Google Cloud Shell.** It performs §8 A-0…A-12 in order and verifies every
+gate automatically. It stops (exit 1, `STOP [gate]`) instead of continuing; it is resumable (`status`, then re-run);
+and it waits for a typed word before each sensitive action. It holds no credential: you type the Gmail address and app
+password into hidden prompts, which pass straight to Secret Manager. It never writes `monitors`, `history` or `users`;
+never edits, enables, disables or dispatches a workflow; never touches the catalogue sync; never creates a key or a
+public service. §8 remains the manual reference; the commands are the same.
+
+```bash
+git clone --branch claude/charming-bardeen-9al13c https://github.com/manojanumolu/movie-ticket-radar.git ~/radar
+cd ~/radar && bash infra/production/activate.sh            # run / resume
+bash infra/production/activate.sh status                   # progress
+bash infra/production/activate.sh rollback pause           # stop all checks (also: resume, nosend, kill, unkill, epoch)
+```
+
+| # | Phase | Automatic gate | You type / do |
+|---|---|---|---|
+| 1 | preflight (read-only) | G0 CI green on the checkout; G2 Rules = baseline; G1 exactly one `af1711d4…` (not ACTIVE, exactly the 5 expected targets, snapshot saved) and one `6150dc3b…` (not ACTIVE); control doc absent | — |
+| 2 | dr_isolation | G3a ancestors / DR-project members; G3b exact bucket policy + Policy Analyzer allow-list | `ISOLATE` (`ORG-REVIEWED` only if an organisation exists) |
+| 3 | backups | G3c export written cross-project; PITR; schedule; G3d encrypted Auth export, plaintext gone, access re-proven | `BACKUP`; Firebase login; GPG passphrase; copy hash parameters (`DONE`) |
+| 4 | identities | no user-managed keys on the 3 SAs | — |
+| 5 | build | digest `@sha256:…` | — |
+| 6 | shadow | G4 private (403 unauthenticated, no `allUsers`); G5 shadow responses + ≥4 OIDC ticks, then PAUSED | — |
+| 7 | probe | G6 `requests=1 status=200`, `BMS_PROBE_OK` | `PROBE` |
+| 8 | legacy | G7 workflow `disabled_manually`, no in-progress/queued legacy run, reviewer rule; G13 catalogue active, cron unchanged | Disable workflow + Required reviewers (`DONE`) |
+| 9 | fenced | legacy still disabled; control doc with integer epoch; `mode: fenced`; tick 200; start-up `adc`, pinned, **no sender**, no legacy key; lease released | `FENCE`; Gmail address + app password (hidden) |
+| 10 | alerts | 4 metrics, 4 policies | create the e-mail channel; paste its ID |
+| 11 | notify | G10 only the test monitor active; `failed 1` with no sender; then exactly `accepted 1`; no duplicate | create Test-A (`DONE`), `SEND`, `ONE-EMAIL`, delete Test-A (`DONE`) |
+| 12 | activate | legacy still disabled; no unexpected ACTIVE monitor; G11 same document, only status/end time changed, same 5 targets; fenced check logged after reactivation for **each** of the 5 targets; `monitor_state` has 5 targets; `6150dc3b` not ACTIVE | `ACTIVATE`; press **Extend by 24 hours** on `af1711d4` (`DONE`) |
+| 13 | watch | G12 every 10 min for 1 h: ≥7 completed ticks, ≤3 failed, 0 BookMyShow refusals, 0 uncertain/sending mail | — |
+
+**Time:** about 3 h of your attention, 4½–5 h elapsed (export, build, scheduler observation and the first-hour watch are waits).
+
 ## 1. Verdict
 
 | Scope | Verdict |
@@ -41,6 +75,7 @@ build, the gates, one controlled email and the first-hour watch.
 
 | # | Issue | Fix |
 |---|---|---|
+| F7 | No single executable, self-verifying procedure | `infra/production/activate.sh` (§0) plus 16 behavioural tests: every gate stops before acting, no credential, no forbidden writes, typed confirmations precede each sensitive action |
 | F6 | After the legacy workflow is disabled, *Start now* on a new monitor shows a false red **PROBLEM** banner. *Check now*/*Retry* fail. Cause: the app dispatches `bookmyshow-monitor.yml`, which is then disabled. | `worker_candidate/cutover/bookmyshow-monitor.yml`: same name, same inputs (`force`, `dry_run`, `monitor_id`). It runs no engine, has no schedule/push/loop, holds no stored credential, and has `contents: read`. It forwards a targeted check to the private worker via the keyless relay. Untargeted and dry-run dispatches are no-ops. The app is unchanged. Before the relay is configured, the dispatch still succeeds, so there is no banner, and the scheduler checks within a minute. Includes the matching `test_release_isolation.py`. The cutover was **simulated** in a scratch worktree: the isolation and structure tests pass, and actionlint is clean. |
 
 This is deliberately not applied to `.github/workflows/` on this branch. The repository's `tests/test_release_isolation.py`
@@ -61,6 +96,7 @@ release you approve (Stage 2, §8.4).
 | R8 | Alerting was only suggested | 4 log-based metrics + 4 alert policies in `infra/production/` |
 | R9 | No before/after proof that `af1711d4` is unchanged | Snapshot before; field-by-field diff after *Extend* (only `status`, `monitor_until`, `stopped_*` may differ) |
 | R10 | Names were scattered and inconsistent | `infra/production/env.sh` is the single source; a test checks the runbook against it |
+| R12 | **The A-1 target query read a `name` field; stored targets use `venue_name` and `fmt`** (`TheatreTarget.to_dict` = `asdict`). It would have printed `null` and made G1 unverifiable. | Fixed in A-1. The script compares against the exact five expected labels before and after reactivation. |
 | R11 | **The first version of this report (owner review, 26 Nov) removed `projectViewer`/`projectEditor` from the bucket policy. Inherited access cannot be removed that way.** Effective bucket access is the union of the bucket, project, folder and organisation policies, plus groups and impersonation. Project-level `roles/storage.*` grants in `ticketradar03` (for example, to the Firebase Admin SDK account whose key is in GitHub) would still reach the backups. | Backups move to a **dedicated project `ticketradar03-dr`** where only the owner holds a role. The bucket policy is **replaced** with exactly two bindings: owner `objectAdmin`, and `ticketradar03`'s Firestore service agent `storage.admin` on that bucket only. Ancestors and their policies (including deny) are listed. **Policy Analyzer** (`--expand-groups --analyze-service-account-impersonation`) must return only approved identities before anything is uploaded, and again afterwards. A tested verifier, `tools/verify_backup_access.py`, turns all of this into pass/fail. No IAM in `ticketradar03` changes. |
 
 ### 2.4 Remaining — cannot be resolved in the repository
@@ -286,7 +322,7 @@ curl -s -H "Authorization: Bearer $TOKEN" "$FS/monitors/$DOOMSDAY_ID" > ~/af1711
 chmod 600 ~/af1711d4-before.json
 jq '{status:.fields.status.stringValue, until:.fields.monitor_until.stringValue,
      interval:.fields.interval_minutes.integerValue,
-     targets:[.fields.targets.arrayValue.values[].mapValue.fields | "\(.name.stringValue) · \(.fmt.stringValue)"]}' ~/af1711d4-before.json
+     targets:[.fields.targets.arrayValue.values[].mapValue.fields | "\(.venue_name.stringValue) · \(.fmt.stringValue)"]}' ~/af1711d4-before.json
 curl -s -H "Authorization: Bearer $TOKEN" "$FS/monitors/$OVERLAP_ID" | jq -r .fields.status.stringValue
 # Running monitors now
 curl -s -H "Authorization: Bearer $TOKEN" -X POST "$FS:runQuery" -H 'Content-Type: application/json' \

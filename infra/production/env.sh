@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # TicketRadar production monitoring worker — the ONE place resource names live.
 # Source it in Cloud Shell before every runbook step:   source infra/production/env.sh
 # Defining variables changes nothing in Google Cloud.
