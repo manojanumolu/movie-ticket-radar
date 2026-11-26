@@ -21,7 +21,6 @@
 * No loop, no 30-second polling, no self-dispatch, no push trigger, no repository write (`contents: read`).
 * `concurrency: bookmyshow-monitor`, `cancel-in-progress: false`: one pass at a time. A waiting run is replaced by a newer one, so missed runs never burst.
 * `timeout-minutes: 4`. A pass killed mid-way writes nothing (state is saved at the end) and the next pass retries.
-* `RADAR_RETRY_REFUSALS=0`: a 401/403 is final, with no second browser profile. `RADAR_HTTP_ATTEMPTS=2`: one retry for a request that did not complete.
 * `RADAR_DISCOVERY_CLOCK=firestore`: the 15-minute city-listing throttle survives between runs (`worker_runtime/legacy_discovery`), so the city is not re-listed every pass.
 * Catalogue sync is unchanged (`0 1,7,13,19 * * *`). No other monitor scheduler exists (tested).
 
@@ -83,12 +82,10 @@ Evaluated and **not recommended**: a Google Apps Script trigger calling `workflo
 
 | Item | State |
 |---|---|
-| Single-pass guard | A missing or revoked Firestore credential fails the run (exit 1). It never falls back to the empty JSON store (`monitor.worker.require_worker_backend`). |
-| Honest client (`RADAR_CLIENT=honest`) | No TLS fingerprint replay. A truthful `TicketRadar/1.0` User-Agent, with no browser headers. 401/403/429 are final: never retried, never routed via another endpoint. Network errors get 2 attempts of 10 s per read. Catalogue sync and tools are unchanged. |
-| PR #7 compatibility | Every historical document shape was reconstructed (`tests/fixtures/historical_monitor_shapes.json`). Monitors stored 16–21 Sep lack `categories`/`show_time`, and the Rules now treat an absent key as its empty default. Verified in the emulator (the previous rule fails that case). |
+| BookMyShow integration | **Unchanged from the production baseline.** `platforms/bookmyshow.py` and `platforms/http.py` are byte-identical to `main`. A test pins `platforms/` to the baseline. The workflow sets no request-behaviour switches. |
+| Single-pass guard | A missing or revoked Firestore credential fails the run (exit 1). It never falls back to the empty JSON store. |
+| Discovery clock (`RADAR_DISCOVERY_CLOCK=firestore`) | Monitor-side only. It keeps the existing 15-minute city re-listing timer between single-pass runs, so the adapter is called as often as the original loop called it, not more. |
+| PR #7 compatibility | Monitors stored 16–21 Sep (no `categories`/`show_time`) can still be stopped and extended by their owners (13 historical shapes as fixtures; emulator-verified). |
 | Old workflow | `disabled_manually` on GitHub (verified). PR #8 replaces its file. |
 
-**Achievable frequency:**
-- **Successful checks: 0.** `platforms/http.py` records that BookMyShow refuses non-imitating clients with 403 (two CI runs). Each honest check is therefore recorded as a refused failure, until BookMyShow authorises access.
-- **Attempts:** GitHub's scheduler delivered 4.9 runs a day on this repository (measured).
-- **Five-minute checks:** after authorisation, the zero-cost host that can genuinely reach five minutes is a Google Apps Script time trigger (no card; 5-minute triggers; within quota). GitHub Actions is not: the schedule delivers about 4.9 runs a day, and its terms exclude activity unrelated to the repository's software.
+BookMyShow authorisation is deferred by the owner. The existing implementation is preserved exactly until then.

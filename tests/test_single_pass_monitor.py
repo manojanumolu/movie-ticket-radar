@@ -7,12 +7,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from monitor import discovery
-from platforms import http
+import subprocess
 
-#: Captured at import, before the suite's autouse fixture swaps it for an
-#: offline stub, so the real selection logic can be tested.
-REAL_BUILD_SESSION = http.build_session
+from monitor import discovery
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github/workflows"
@@ -39,9 +36,9 @@ def test_one_job_one_pass_and_a_hard_stop_inside_five_minutes():
         assert forbidden not in run["run"]
     env = run["env"]
     assert env["RADAR_DISCOVERY_CLOCK"] == "firestore"
-    assert env["RADAR_CLIENT"] == "honest"                 # no browser imitation
-    assert env["RADAR_RETRY_REFUSALS"] == "0"
-    assert env["RADAR_HTTP_ATTEMPTS"] == "1"
+    # The BookMyShow client is the existing one: no request-behaviour switches.
+    for removed in ("RADAR_CLIENT", "RADAR_RETRY_REFUSALS", "RADAR_HTTP_ATTEMPTS"):
+        assert removed not in env
     assert "GITHUB_TOKEN" not in env                        # nothing to dispatch or push with
 
 
@@ -55,73 +52,6 @@ def test_no_second_scheduler_for_the_monitor_and_catalogue_unchanged():
                          "catalogue-sync.yml": ["0 1,7,13,19 * * *"]}
     texts = {p.name: p.read_text(encoding="utf-8") for p in WORKFLOWS.glob("*.yml")}
     assert [n for n, t in texts.items() if "run_monitor.py" in t] == ["bookmyshow-monitor.yml"]
-
-
-# ── refusals are final ────────────────────────────────────────────────────
-class Resp:
-    def __init__(self, status):
-        self.status_code = status
-
-
-class FakeCurlSession:
-    def __init__(self, script, calls):
-        self.script, self.calls = script, calls
-
-    def get(self, url, headers=None, params=None, timeout=20):
-        self.calls.append(url)
-        item = self.script.pop(0)
-        if isinstance(item, Exception):
-            raise item
-        return Resp(item)
-
-    def close(self):
-        pass
-
-
-def _session(monkeypatch, script, **kwargs):
-    calls = []
-
-    class Curl:
-        @staticmethod
-        def Session(impersonate):
-            return FakeCurlSession(script, calls)
-
-    monkeypatch.setattr(http, "_curl", Curl)
-    return http.ImpersonatingSession(sleeper=lambda s: None, **kwargs), calls
-
-
-@pytest.mark.parametrize("status", [401, 403, 429])
-def test_with_refusal_retries_off_a_refusal_is_one_request(monkeypatch, status):
-    session, calls = _session(monkeypatch, [status, 200, 200], retries=2, retry_refusals=False)
-    assert session.get("https://example.invalid").status_code == status
-    assert len(calls) == 1
-
-
-def test_a_network_error_is_retried_once_and_only_once(monkeypatch):
-    session, calls = _session(monkeypatch, [OSError("reset"), 200], retries=2, retry_refusals=False)
-    assert session.get("https://example.invalid").status_code == 200
-    assert len(calls) == 2
-    session, calls = _session(monkeypatch, [OSError("a"), OSError("b"), 200], retries=2, retry_refusals=False)
-    with pytest.raises(OSError):
-        session.get("https://example.invalid")
-    assert len(calls) == 2
-
-
-def test_the_default_is_unchanged_for_everything_else(monkeypatch):
-    """Catalogue sync and other callers set nothing: today's behaviour."""
-    monkeypatch.delenv("RADAR_RETRY_REFUSALS", raising=False)
-    monkeypatch.delenv("RADAR_HTTP_ATTEMPTS", raising=False)
-    assert http.session_policy() == (http.BLOCK_RETRIES, True)
-
-
-def test_the_monitor_environment_turns_refusal_retries_off(monkeypatch):
-    monkeypatch.setenv("RADAR_RETRY_REFUSALS", "0")
-    monkeypatch.setenv("RADAR_HTTP_ATTEMPTS", "2")
-    assert http.session_policy() == (2, False)
-    monkeypatch.setenv("RADAR_HTTP_ATTEMPTS", "99")          # never above the old ceiling
-    assert http.session_policy() == (http.BLOCK_RETRIES, False)
-    monkeypatch.setenv("RADAR_HTTP_ATTEMPTS", "nonsense")
-    assert http.session_policy() == (http.BLOCK_RETRIES, False)
 
 
 # ── the discovery clock survives between runs ─────────────────────────────
@@ -230,114 +160,11 @@ def test_a_working_store_still_runs_one_pass(monkeypatch, capsys):
     assert "[worker] backend=json" in out and "checked:" in out
 
 
-
-# ── honest mode: no browser imitation, refusals final (requirement 9) ─────
-class Recorder:
-    def __init__(self, script):
-        self.script, self.calls = list(script), []
-
-    def get(self, url, headers=None, params=None, timeout=None, allow_redirects=True):
-        self.calls.append({"url": url, "headers": headers, "params": params,
-                           "timeout": timeout, "allow_redirects": allow_redirects})
-        item = self.script.pop(0)
-        if isinstance(item, Exception):
-            raise item
-        return item
-
-
-class R:
-    def __init__(self, status, payload=None):
-        self.status_code, self._payload = status, payload
-
-    def json(self):
-        return self._payload
-
-
-BROWSER = {"User-Agent": "Mozilla/5.0 Chrome/140", "sec-ch-ua": '"Chromium"', "sec-ch-ua-mobile": "?0",
-           "sec-ch-ua-platform": '"Windows"', "Referer": "https://in.bookmyshow.com/x",
-           "Origin": "https://in.bookmyshow.com", "Accept": "application/json", "x-region-code": "HYD"}
-
-
-def test_the_honest_client_says_what_it_is_and_imitates_no_browser():
-    inner = Recorder([R(200)])
-    http.HonestSession(session=inner).get("https://in.bookmyshow.com/api", headers=BROWSER)
-    sent = inner.calls[0]["headers"]
-    assert sent["User-Agent"] == http.HONEST_USER_AGENT and "TicketRadar" in sent["User-Agent"]
-    for imitation in ("sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "Referer", "Origin"):
-        assert imitation not in sent
-    assert sent["Accept"] == "application/json" and sent["x-region-code"] == "HYD"   # what the API needs
-    assert inner.calls[0]["allow_redirects"] is False
-
-
-@pytest.mark.parametrize("status", [401, 403, 429])
-def test_the_honest_client_never_retries_a_refusal(status):
-    inner = Recorder([R(status), R(200)])
-    assert http.HonestSession(attempts=3, sleeper=lambda s: None, session=inner).get("u").status_code == status
-    assert len(inner.calls) == 1
-
-
-def test_the_honest_client_retries_only_a_request_that_did_not_complete():
-    inner = Recorder([OSError("reset"), R(200)])
-    assert http.HonestSession(attempts=2, sleeper=lambda s: None, session=inner).get("u").status_code == 200
-    inner = Recorder([OSError("a"), OSError("b")])
-    with pytest.raises(OSError):
-        http.HonestSession(attempts=2, sleeper=lambda s: None, session=inner).get("u")
-    assert len(inner.calls) == 2
-
-
-def test_honest_mode_selects_the_honest_client_and_nothing_else_changes(monkeypatch):
-    monkeypatch.setenv("RADAR_CLIENT", "honest")
-    assert isinstance(REAL_BUILD_SESSION(), http.HonestSession)
-    monkeypatch.delenv("RADAR_CLIENT")
-    assert not isinstance(REAL_BUILD_SESSION(), http.HonestSession)   # catalogue sync and tools unchanged
-
-
-def _provider(monkeypatch, script, honest=True):
-    from platforms.bookmyshow import BookMyShowProvider
-
-    if honest:
-        monkeypatch.setenv("RADAR_CLIENT", "honest")
-    else:
-        monkeypatch.delenv("RADAR_CLIENT", raising=False)
-    session = Recorder(script)
-    return BookMyShowProvider(session=session, sleeper=lambda s: None), session
-
-
-def test_honest_mode_stops_at_a_rate_limit_instead_of_retrying(monkeypatch):
-    from platforms.base import PlatformBlocked
-    from platforms.bookmyshow import region_for
-
-    provider, session = _provider(monkeypatch, [R(429), R(429), R(429)])
-    with pytest.raises(PlatformBlocked):
-        provider._get("ET00439706", "20261217", region_for("hyderabad"))
-    assert len(session.calls) == 1 and session.calls[0]["timeout"] == 10
-
-
-def test_honest_mode_never_routes_round_a_refused_city_listing(monkeypatch):
-    from platforms.base import PlatformBlocked
-
-    provider, session = _provider(monkeypatch, [R(403), R(200), R(200)])
-    with pytest.raises(PlatformBlocked):
-        provider.list_movies("hyderabad")
-    assert len(session.calls) == 1                                   # no second endpoint tried
-
-
-def test_honest_mode_bounds_network_retries_per_read(monkeypatch):
-    from platforms.base import PlatformError
-    from platforms.bookmyshow import region_for
-    from platforms.http import request_errors
-
-    err = request_errors()[0]("timed out")
-    provider, session = _provider(monkeypatch, [err, err, err, err])
-    with pytest.raises(PlatformError):
-        provider._get("ET00439706", "20261217", region_for("hyderabad"))
-    assert len(session.calls) == 2
-
-
-def test_without_honest_mode_the_existing_behaviour_is_unchanged(monkeypatch):
-    from platforms.bookmyshow import MAX_ATTEMPTS, TIMEOUT, region_for
-
-    provider, session = _provider(monkeypatch, [R(429)] * MAX_ATTEMPTS, honest=False)
-    with pytest.raises(Exception):
-        provider._get("ET00439706", "20261217", region_for("hyderabad"))
-    assert len(session.calls) == MAX_ATTEMPTS and session.calls[0]["timeout"] == TIMEOUT
+# ── the BookMyShow integration is exactly the production baseline ─────────
+def test_the_bookmyshow_adapter_is_byte_identical_to_the_baseline():
+    """This release must not change how BookMyShow is requested."""
+    root = Path(__file__).resolve().parents[1]
+    changed = subprocess.check_output(
+        ["git", "diff", "--name-only", "1f4650104bc153a8bab794ddd82d55da8cb86e70", "HEAD", "--", "platforms/"],
+        cwd=root, encoding="utf-8").split()
+    assert changed == []

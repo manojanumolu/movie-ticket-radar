@@ -40,7 +40,6 @@ means "we don't know" — the monitoring engine treats those very differently.
 from __future__ import annotations
 
 import json
-import os
 import random
 import re
 import time
@@ -515,27 +514,6 @@ class ListingResult:
     authoritative: bool = False
 
 
-#: Honest mode's bounds: a pass of four reads plus one city listing, every
-#: request timing out, stays well inside the monitor workflow's 4-minute stop.
-HONEST_TIMEOUT = 10
-HONEST_READ_ATTEMPTS = 2
-
-
-def request_timeout() -> int:
-    return HONEST_TIMEOUT if refusals_are_final() else TIMEOUT
-
-
-def read_attempts() -> int:
-    return HONEST_READ_ATTEMPTS if refusals_are_final() else MAX_ATTEMPTS
-
-
-def refusals_are_final() -> bool:
-    """The monitor's honest mode (RADAR_CLIENT=honest): a refusal or a rate
-    limit is the answer — never retried, never routed round via another
-    endpoint. Unset (catalogue sync, tools), behaviour is unchanged."""
-    return os.environ.get("RADAR_CLIENT", "") == "honest"
-
-
 def split_venue_name(full_name: str) -> tuple[str, str]:
     """'AMB Cinemas: Gachibowli' -> ('AMB Cinemas', 'Gachibowli').
 
@@ -663,7 +641,7 @@ class BookMyShowProvider:
         approach is refused we want to fall through to the next rather than
         spend three retries proving the same block.
         """
-        return self._session.get(url, headers=headers, params=params or {}, timeout=request_timeout())
+        return self._session.get(url, headers=headers, params=params or {}, timeout=TIMEOUT)
 
     def _get(self, event_code: str, date_code: str, region: tuple[str, str, str, str, str]) -> dict[str, Any]:
         """One API read, with bounded retries.
@@ -688,10 +666,9 @@ class BookMyShowProvider:
         }
 
         last_error = "unknown error"
-        attempts = read_attempts()
-        for attempt in range(1, attempts + 1):
+        for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
-                resp = self._session.get(API_URL, headers=headers, params=params, timeout=request_timeout())
+                resp = self._session.get(API_URL, headers=headers, params=params, timeout=TIMEOUT)
             except REQUEST_ERRORS as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
             else:
@@ -717,20 +694,18 @@ class BookMyShowProvider:
                 if resp.status_code == 404:
                     raise PlatformNotFound(f"BookMyShow has no listing for {event_code} (HTTP 404).")
                 if resp.status_code == 429:
-                    if refusals_are_final():
-                        raise PlatformBlocked("BookMyShow asked us to slow down (HTTP 429); not retried.")
                     last_error = "HTTP 429 (rate limited)"
                 elif 500 <= resp.status_code < 600:
                     last_error = f"HTTP {resp.status_code} (BookMyShow server error)"
                 else:
                     raise PlatformError(f"Unexpected HTTP {resp.status_code} from BookMyShow.")
 
-            if attempt < attempts:
+            if attempt < MAX_ATTEMPTS:
                 # Exponential backoff with jitter, so a scheduled fleet of
                 # checks doesn't retry in lockstep.
                 self._sleep(BACKOFF_BASE ** attempt + random.uniform(0, 0.75))
 
-        raise PlatformError(f"Could not reach BookMyShow after {attempts} attempts — {last_error}.")
+        raise PlatformError(f"Could not reach BookMyShow after {MAX_ATTEMPTS} attempts — {last_error}.")
 
     # ── City catalogue ───────────────────────────────────────────────────
     #
@@ -776,12 +751,6 @@ class BookMyShowProvider:
         for name, strategy in self.listing_strategies():
             try:
                 result = strategy(region)
-            except PlatformBlocked as exc:
-                if refusals_are_final():
-                    # Refused: do not try another endpoint to get round it.
-                    raise
-                failures.append(f"{name}: {exc}")
-                continue
             except PlatformError as exc:
                 failures.append(f"{name}: {exc}")
                 continue

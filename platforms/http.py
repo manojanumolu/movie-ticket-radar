@@ -29,7 +29,6 @@ application already handles honestly, rather than an ImportError at startup.
 
 from __future__ import annotations
 
-import os
 import random
 import time
 from typing import Any, Protocol
@@ -69,13 +68,9 @@ class ImpersonatingSession:
     """
 
     def __init__(self, profiles: tuple[str, ...] = IMPERSONATE_PROFILES,
-                 retries: int = BLOCK_RETRIES, sleeper=time.sleep, *,
-                 retry_refusals: bool = True) -> None:
+                 retries: int = BLOCK_RETRIES, sleeper=time.sleep) -> None:
         self._profiles = list(profiles)
         self._retries = max(1, retries)
-        #: False: a 401/403 is final — no other browser profile is tried.
-        #: Only a request that did not complete (a network error) is retried.
-        self._retry_refusals = retry_refusals
         self._sleep = sleeper
         self._index = 0
         self._session = None
@@ -114,8 +109,7 @@ class ImpersonatingSession:
                     self._sleep(1.5 * (attempt + 1) + random.uniform(0, 0.5))
                 continue
 
-            if (response.status_code not in (401, 403) or not self._retry_refusals
-                    or attempt == self._retries - 1):
+            if response.status_code not in (401, 403) or attempt == self._retries - 1:
                 return response
 
             # Refused: a different fingerprint often gets straight through.
@@ -130,52 +124,6 @@ class ImpersonatingSession:
         return f"<ImpersonatingSession profile={self.last_profile}>"
 
 
-#: How the honest client identifies itself: truthfully, as an automated tool.
-HONEST_USER_AGENT = "TicketRadar/1.0 (+https://github.com/manojanumolu/movie-ticket-radar; automated availability monitor)"
-#: Headers that present a request as a particular browser. The honest client
-#: never sends them; it keeps only what the request itself needs.
-_BROWSER_IMITATION = ("user-agent", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform",
-                      "origin", "referer")
-
-
-class HonestSession:
-    """A plain HTTP client that does not imitate a browser.
-
-    No TLS fingerprint replay, no browser User-Agent, no ``sec-ch-ua`` or
-    page Referer/Origin: the request says it is an automated tool. A 401, 403
-    or 429 is returned at once and never retried, with this or any other
-    client. Only a request that did not complete (a network error) is retried,
-    up to ``attempts`` times in all. This is what the monitor uses unless
-    BookMyShow authorises something else.
-    """
-
-    def __init__(self, attempts: int = 2, sleeper=time.sleep, session=None) -> None:
-        self._attempts = max(1, attempts)
-        self._sleep = sleeper
-        self._session = session if session is not None else _requests.Session()
-
-    @staticmethod
-    def honest_headers(headers: dict[str, str] | None) -> dict[str, str]:
-        kept = {k: v for k, v in (headers or {}).items() if k.lower() not in _BROWSER_IMITATION}
-        kept["User-Agent"] = HONEST_USER_AGENT
-        return kept
-
-    def get(self, url, headers=None, params=None, timeout=20):
-        last = None
-        for attempt in range(self._attempts):
-            try:
-                return self._session.get(url, headers=self.honest_headers(headers), params=params,
-                                         timeout=timeout, allow_redirects=False)
-            except Exception as exc:  # noqa: BLE001 - retried below, re-raised at the end
-                last = exc
-                if attempt < self._attempts - 1:
-                    self._sleep(1.5 * (attempt + 1))
-        raise last
-
-    def __repr__(self) -> str:  # pragma: no cover - diagnostics
-        return "<HonestSession>"
-
-
 def build_session(sleeper=time.sleep) -> HttpSession:
     """The best client available here.
 
@@ -183,29 +131,9 @@ def build_session(sleeper=time.sleep) -> HttpSession:
     the request, it just gets refused, and a refusal is a state the whole
     application already reports honestly.
     """
-    if os.environ.get("RADAR_CLIENT", "") == "honest":
-        # The monitor: no browser imitation and no refusal retries (above).
-        return HonestSession(attempts=session_policy()[0], sleeper=sleeper)
     if HAS_CURL_CFFI:
-        attempts, refusals = session_policy()
-        return ImpersonatingSession(sleeper=sleeper, retries=attempts, retry_refusals=refusals)
+        return ImpersonatingSession(sleeper=sleeper)
     return _requests.Session()
-
-
-def session_policy() -> tuple[int, bool]:
-    """(attempts, retry_refusals) from the environment.
-
-    The single-pass monitor sets RADAR_RETRY_REFUSALS=0 (a 401/403 is final,
-    never answered with another browser profile) and RADAR_HTTP_ATTEMPTS
-    (attempts for a request that did not complete; never above the existing
-    ceiling). Unset — catalogue sync and everything else — behaviour is
-    unchanged."""
-    refusals = os.environ.get("RADAR_RETRY_REFUSALS", "1") != "0"
-    try:
-        attempts = int(os.environ.get("RADAR_HTTP_ATTEMPTS", "") or BLOCK_RETRIES)
-    except ValueError:
-        attempts = BLOCK_RETRIES
-    return max(1, min(attempts, BLOCK_RETRIES)), refusals
 
 
 def transport_name(session: Any) -> str:

@@ -49,8 +49,8 @@ jobs:
     # environment (deployment branch: main only).
     environment: production
     runs-on: ubuntu-latest
-    # A pass is measured in seconds; worst case (every read timing out once and
-    # being retried once) stays under this hard stop, inside the 5-minute cadence.
+    # A pass is measured in seconds; this hard stop keeps a stuck run inside
+    # the 5-minute cadence.
     timeout-minutes: 4
 
     steps:
@@ -78,12 +78,6 @@ jobs:
           PYTHONUNBUFFERED: "1"
           # The city-listing throttle survives between runs in Firestore.
           RADAR_DISCOVERY_CLOCK: firestore
-          # No browser imitation: a plain client that says it is an automated
-          # tool. A refusal (401/403/429) is final and is recorded as a failed
-          # check; a request that did not complete is retried once (10 s each).
-          RADAR_CLIENT: honest
-          RADAR_RETRY_REFUSALS: "0"
-          RADAR_HTTP_ATTEMPTS: "1"
           DISPATCHED: ${{ github.event_name == 'workflow_dispatch' }}
           INPUT_FORCE: ${{ inputs.force }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
