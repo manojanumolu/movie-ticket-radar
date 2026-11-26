@@ -834,11 +834,16 @@ def wizard(monitors, *, settings: dict) -> None:
             # the explanation, not the enforcement. An admin account has
             # no ceiling and never sees this.
             at_limit = state_store.monitor_limit_reached(monitors)
-            if at_limit:
+            # New monitors are the admin's to create; the store and the
+            # Firestore rules refuse anyone else whatever this page shows.
+            may_create = state_store.may_create_monitors()
+            if not may_create:
+                st.info(state_store.CREATE_MESSAGE)
+            elif at_limit:
                 st.warning(state_store.LIMIT_MESSAGE.format(limit=state_store.ACTIVE_MONITOR_LIMIT))
             cta, helper = st.columns([2.2, 1], gap="medium")
             with cta:
-                if st.button("Start monitoring", type="primary", disabled=at_limit,
+                if st.button("Start monitoring", type="primary", disabled=at_limit or not may_create,
                              use_container_width=True, key="start", icon=":material/play_arrow:",
                              help="Save this monitor. The first check runs right away, then on the "
                                   "schedule you chose, until the end time."):

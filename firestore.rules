@@ -164,12 +164,23 @@ service cloud.firestore {
         && (!('owner_uid' in request.resource.data) || request.resource.data.owner_uid == uid);
     }
 
-    // monitors/{id}: created and managed by their owner.
+    // An ordinary account may still extend, re-check or stop a monitor it
+    // already owns, but never turn it into a different watch: the film, the
+    // theatres and formats, the dates and the creation time stay as stored.
+    // (Otherwise rewriting an old stopped monitor would be creating a new one.)
+    function keepsWatchIdentity() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['id', 'movie', 'targets', 'date_codes', 'categories', 'show_time', 'created_at']);
+    }
+
+    // monitors/{id}: created only by an authorised admin (the server-set
+    // `admin` custom claim); read, stopped, extended and deleted by their owner.
     match /monitors/{id} {
       allow read: if ownsExisting();
-      allow create: if ownsIncoming() && validMonitor(request.resource.data, id);
+      allow create: if ownsIncoming() && isAdmin() && validMonitor(request.resource.data, id);
       allow update: if ownsExisting() && ownsIncoming()
-        && (validMonitor(request.resource.data, id) || isStopOrExpiry());
+        && ((validMonitor(request.resource.data, id) && (isAdmin() || keepsWatchIdentity()))
+            || isStopOrExpiry());
       allow delete: if ownsExisting();
     }
 

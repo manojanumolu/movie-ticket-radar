@@ -24,6 +24,8 @@ const env = await initializeTestEnvironment({
 
 const DAY = 86400e3;
 const iso = (ms) => new Date(Date.now() + ms).toISOString();
+// A stored monitor keeps its creation time; the app never rewrites it.
+const CREATED = iso(0);
 
 const ALICE = { uid: "uid-alice", email: "alice@example.com" };
 const BOB = { uid: "uid-bob", email: "bob@example.com" };
@@ -47,7 +49,7 @@ function monitor(owner, overrides = {}) {
     notify_email: owner.email,
     date_codes: [],
     status: "ACTIVE",
-    created_at: iso(0),
+    created_at: CREATED,
     stopped_at: null,
     stopped_reason: "",
     first_check_requested_at: null,
@@ -86,12 +88,48 @@ test("an unverified account cannot write monitors, settings or history", async (
 });
 
 // ── Ownership (unchanged) ───────────────────────────────────────────────
-test("a verified owner creates, reads, stops and deletes their own monitor", async () => {
+test("only the admin claim creates a monitor; an ordinary account's create is refused", async () => {
+  await assertFails(setDoc(doc(db(ALICE), "monitors/m1"), monitor(ALICE)));
+  await assertFails(setDoc(doc(db(ALICE), "monitors/m2"), monitor(ALICE, { id: "m2", status: "STOPPED" })));
+  const admin = db(ALICE, { admin: true });
+  await assertSucceeds(setDoc(doc(admin, "monitors/m1"), monitor(ALICE)));
+  await assertSucceeds(getDoc(doc(admin, "monitors/m1")));
+  await assertSucceeds(setDoc(doc(admin, "monitors/m1"), monitor(ALICE, { status: "STOPPED" })));
+  await assertSucceeds(deleteDoc(doc(admin, "monitors/m1")));
+});
+
+test("an admin still cannot create a monitor under another UID", async () => {
+  await assertFails(setDoc(doc(db(ALICE, { admin: true }), "monitors/x1"),
+    monitor(ALICE, { id: "x1", owner_uid: BOB.uid, notify_email: BOB.email })));
+});
+
+test("an ordinary owner keeps reading, stopping, extending, re-checking and deleting their own monitor", async () => {
+  await seed("monitors/m1", monitor(ALICE));
   const me = db(ALICE);
-  await assertSucceeds(setDoc(doc(me, "monitors/m1"), monitor(ALICE)));
   await assertSucceeds(getDoc(doc(me, "monitors/m1")));
   await assertSucceeds(setDoc(doc(me, "monitors/m1"), monitor(ALICE, { status: "STOPPED" })));
+  await assertSucceeds(updateDoc(doc(me, "monitors/m1"), { status: "EXPIRED", stopped_reason: "done" }));
+  // Extend by 24 hours: ACTIVE again with a later end, same watch.
+  await assertSucceeds(setDoc(doc(me, "monitors/m1"), monitor(ALICE, { monitor_until: iso(3 * DAY) })));
+  // Retry / problem bookkeeping on the same watch.
+  await assertSucceeds(setDoc(doc(me, "monitors/m1"),
+    monitor(ALICE, { problem: { code: "RETRY_FAILED", detail: "x" }, first_check_requested_at: iso(0) })));
+  await assertSucceeds(setDoc(doc(me, "monitors/m1"), monitor(ALICE, { interval_minutes: 15 })));
   await assertSucceeds(deleteDoc(doc(me, "monitors/m1")));
+});
+
+test("an ordinary owner cannot turn an existing monitor into a different watch", async () => {
+  await seed("monitors/m1", monitor(ALICE, { status: "STOPPED" }));
+  const me = db(ALICE);
+  const other = { venue_code: "AMB", venue_name: "AMB Cinemas", area: "Gachibowli", fmt: "Any format" };
+  await assertFails(setDoc(doc(me, "monitors/m1"), monitor(ALICE, { targets: [other] })));
+  await assertFails(setDoc(doc(me, "monitors/m1"),
+    monitor(ALICE, { movie: { ...monitor(ALICE).movie, event_code: "ET2", title: "Other" } })));
+  await assertFails(setDoc(doc(me, "monitors/m1"), monitor(ALICE, { date_codes: ["20261217"] })));
+  await assertFails(setDoc(doc(me, "monitors/m1"), monitor(ALICE, { created_at: iso(DAY) })));
+  await assertFails(setDoc(doc(me, "monitors/m1"), monitor(ALICE, { status: "STOPPED", targets: [other] })));
+  // The admin claim may edit a watch it owns.
+  await assertSucceeds(setDoc(doc(db(ALICE, { admin: true }), "monitors/m1"), monitor(ALICE, { targets: [other] })));
 });
 
 test("nobody can create a monitor under another UID", async () => {
@@ -116,7 +154,7 @@ test("users/{uid} is the owner's alone", async () => {
 
 // ── Recipients ──────────────────────────────────────────────────────────
 test("a running monitor must email the account's own verified address", async () => {
-  const me = db(ALICE);
+  const me = db(ALICE, { admin: true });
   await assertFails(setDoc(doc(me, "monitors/m1"), monitor(ALICE, { notify_email: "victim@example.org" })));
   await assertFails(setDoc(doc(me, "monitors/m1"),
     monitor(ALICE, { notify_email: "alice@example.com, victim@example.org" })));
@@ -136,10 +174,13 @@ test("an older monitor addressed elsewhere can still be stopped, but not restart
 // ── Intervals and admin-only features ───────────────────────────────────
 test("intervals: 10/15/30 for everyone, 5 for the admin claim only, nothing else", async () => {
   for (const minutes of [10, 15, 30]) {
-    await assertSucceeds(setDoc(doc(db(ALICE), `monitors/i${minutes}`),
+    await assertSucceeds(setDoc(doc(db(ALICE, { admin: true }), `monitors/i${minutes}`),
       monitor(ALICE, { id: `i${minutes}`, interval_minutes: minutes })));
   }
-  await assertFails(setDoc(doc(db(ALICE), "monitors/i5"), monitor(ALICE, { id: "i5", interval_minutes: 5 })));
+  // An ordinary owner may move their own monitor between 10/15/30, never to 5.
+  await seed("monitors/own", monitor(ALICE, { id: "own" }));
+  await assertSucceeds(setDoc(doc(db(ALICE), "monitors/own"), monitor(ALICE, { id: "own", interval_minutes: 30 })));
+  await assertFails(setDoc(doc(db(ALICE), "monitors/own"), monitor(ALICE, { id: "own", interval_minutes: 5 })));
   await assertSucceeds(setDoc(doc(db(ALICE, { admin: true }), "monitors/i5"),
     monitor(ALICE, { id: "i5", interval_minutes: 5 })));
   for (const minutes of [0, 1, 7, 60]) {
@@ -158,10 +199,14 @@ test("a category watch is the admin claim's alone", async () => {
 
 // ── End date ────────────────────────────────────────────────────────────
 test("a running monitor ends within the 30-day limit", async () => {
-  await assertSucceeds(setDoc(doc(db(ALICE), "monitors/e1"), monitor(ALICE, { id: "e1", monitor_until: iso(29 * DAY) })));
-  await assertFails(setDoc(doc(db(ALICE), "monitors/e2"), monitor(ALICE, { id: "e2", monitor_until: iso(60 * DAY) })));
-  await assertFails(setDoc(doc(db(ALICE), "monitors/e3"), monitor(ALICE, { id: "e3", monitor_until: "2099-01-01T00:00:00+05:30" })));
-  await assertFails(setDoc(doc(db(ALICE), "monitors/e4"), monitor(ALICE, { id: "e4", monitor_until: "soon" })));
+  const admin = db(ALICE, { admin: true });
+  await assertSucceeds(setDoc(doc(admin, "monitors/e1"), monitor(ALICE, { id: "e1", monitor_until: iso(29 * DAY) })));
+  await assertFails(setDoc(doc(admin, "monitors/e2"), monitor(ALICE, { id: "e2", monitor_until: iso(60 * DAY) })));
+  await assertFails(setDoc(doc(admin, "monitors/e3"), monitor(ALICE, { id: "e3", monitor_until: "2099-01-01T00:00:00+05:30" })));
+  await assertFails(setDoc(doc(admin, "monitors/e4"), monitor(ALICE, { id: "e4", monitor_until: "soon" })));
+  // …and an ordinary owner's extension is held to the same limit.
+  await seed("monitors/e6", monitor(ALICE, { id: "e6" }));
+  await assertFails(setDoc(doc(db(ALICE), "monitors/e6"), monitor(ALICE, { id: "e6", monitor_until: iso(60 * DAY) })));
   await assertFails(setDoc(doc(db(ALICE, { admin: true }), "monitors/e5"),
     monitor(ALICE, { id: "e5", monitor_until: iso(90 * DAY) })));
 });
@@ -204,7 +249,7 @@ const sibling = (i) => ({ code: `ET9${String(i).padStart(7, "0")}`, label: "4DX 
 const film = (variants) => ({ ...monitor(ALICE).movie, variants });
 
 test("a monitor carries at most 12 sibling events", async () => {
-  const me = db(ALICE);
+  const me = db(ALICE, { admin: true });
   await assertSucceeds(setDoc(doc(me, "monitors/v1"),
     monitor(ALICE, { id: "v1", movie: film(Array.from({ length: 12 }, (_, i) => sibling(i))) })));
   await assertFails(setDoc(doc(me, "monitors/v2"),
@@ -217,7 +262,7 @@ test("a monitor carries at most 12 sibling events", async () => {
 });
 
 test("a running monitor costs at most 120 BookMyShow requests per check", async () => {
-  const me = db(ALICE);
+  const me = db(ALICE, { admin: true });
   const dates = (n) => Array.from({ length: n }, (_, i) => `202612${String(i % 28 + 1).padStart(2, "0")}`);
   // 40 dates x (1 + 2 siblings) = 120: allowed. 41 x 3 = 123: refused.
   await assertSucceeds(setDoc(doc(me, "monitors/r1"),
