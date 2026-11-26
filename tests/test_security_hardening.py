@@ -207,7 +207,7 @@ def test_every_running_monitor_a_person_saves_is_addressed_to_them(make_monitor)
     """The store binds the recipient, whatever the monitor object carried —
     including an older running monitor saved alongside (the whole list is
     written on every save). A stopped monitor is left as it was."""
-    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", email="a@example.com"))
+    state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", email="a@example.com", admin=True))
     try:
         legacy = make_monitor(email="old@example.org", owner_uid="uid-a")
         stopped = make_monitor(email="kept@example.org", owner_uid="uid-a")
@@ -636,10 +636,11 @@ def test_the_admin_can_check_everything_and_refresh_the_catalogue(github):
 
 
 def test_an_owner_may_ask_for_their_own_running_monitor_once_a_minute(github, make_monitor):
-    as_account("uid-a")
+    as_account("uid-a", admin=True)                      # the admin sets it up…
     try:
         mine = make_monitor(owner_uid="uid-a", email="uid-a@example.com")
         state_mod.upsert_monitor(mine, mirror=False)
+        as_account("uid-a")                              # …the ordinary owner asks
         assert dispatch.check_now(mine.id)[0] is True
         with pytest.raises(dispatch.DispatchNotAllowed, match="Try again"):
             dispatch.check_now(mine.id)
@@ -653,7 +654,7 @@ def test_an_owner_may_ask_for_their_own_running_monitor_once_a_minute(github, ma
 
 
 def test_nobody_can_ask_for_someone_elses_monitor(github, make_monitor):
-    as_account("uid-b")
+    as_account("uid-b", admin=True)                      # B's monitor, set up by the admin
     try:
         theirs = make_monitor(owner_uid="uid-b", email="uid-b@example.com")
         state_mod.upsert_monitor(theirs, mirror=False)
@@ -669,6 +670,7 @@ def test_nobody_can_ask_for_someone_elses_monitor(github, make_monitor):
 
 
 def test_the_settings_buttons_are_the_admins_alone(signed_in, github):
+    signed_in.admin = False
     member = run("Settings")
     keys = {b.key for b in member.button}
     assert "sync_now" not in keys and "run_now" not in keys
@@ -690,7 +692,7 @@ def test_the_token_guidance_asks_for_actions_only():
 # L1 · End dates
 # ══════════════════════════════════════════════════════════════════════════
 def test_the_store_refuses_a_monitor_ending_beyond_the_limit(make_monitor):
-    as_account("uid-test-1")
+    as_account("uid-test-1", admin=True)                 # even the admin is held to the limit
     try:
         far = make_monitor(until=now_ist() + timedelta(days=policy.MAX_MONITOR_DAYS + 5))
         with pytest.raises(policy.MonitorNotAllowed):
@@ -703,11 +705,12 @@ def test_the_store_refuses_a_monitor_ending_beyond_the_limit(make_monitor):
 
 
 def test_extending_cannot_push_a_monitor_past_the_limit(make_monitor):
-    as_account("uid-test-1")
+    as_account("uid-test-1", admin=True)
     try:
         m = make_monitor(until=now_ist() + timedelta(days=policy.MAX_MONITOR_DAYS - 0.5))
         state_mod.upsert_monitor(m, mirror=False)
         state_mod.stop_monitor(m.id, mirror=False)
+        as_account("uid-test-1")                         # the ordinary owner extends
         with pytest.raises(policy.MonitorNotAllowed):
             state_mod.extend_monitor(m.id, 24, mirror=False)
         assert state_mod.get_monitor(m.id).status is MonitorStatus.STOPPED   # nothing changed
@@ -759,7 +762,7 @@ def test_the_emulator_suite_is_in_the_repository():
 # ══════════════════════════════════════════════════════════════════════════
 def test_a_deployment_without_firestore_refuses_rather_than_fall_back_to_json(make_monitor):
     state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False,
-                                               deployment=True, email="a@example.com"))
+                                               deployment=True, email="a@example.com", admin=True))
     try:
         with pytest.raises(state_mod.StorageUnavailable):
             state_mod.load_monitors()
@@ -788,7 +791,7 @@ def test_a_signed_in_persons_json_writes_are_never_mirrored_to_github(monkeypatc
     monkeypatch.setattr(store, "push_to_github", lambda path, body, message: pushed.append(path.name) or True)
     monkeypatch.setattr(store, "github_token", lambda: "test-token")
     state_mod.set_scope_provider(lambda: Scope("", "uid-a", lambda: "", firestore_enabled=False,
-                                               email="a@example.com"))
+                                               email="a@example.com", admin=True))
     try:
         m = make_monitor(owner_uid="uid-a")
         state_mod.upsert_monitor(m, mirror=True)

@@ -95,7 +95,7 @@ def test_another_persons_home_and_history_are_untouched_by_a_delete_all(make_mon
     from monitor.state import Scope, set_scope_provider
 
     # B's records, written under B's scope.
-    set_scope_provider(lambda: Scope("", "uid-b", lambda: ""))
+    set_scope_provider(lambda: Scope("", "uid-b", lambda: "", admin=True))
     try:
         b_mon = make_monitor(owner_uid="uid-b")
         b_mon.movie = replace(b_mon.movie, title="B Film")

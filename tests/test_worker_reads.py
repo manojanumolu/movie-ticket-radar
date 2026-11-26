@@ -111,7 +111,7 @@ def firestore_worker(monkeypatch):
         @staticmethod
         def app_stops(monitor_id: str) -> None:
             """What Stop monitoring does: as the signed-in owner, through the store."""
-            state_mod.set_scope_provider(lambda: Scope(PROJECT, OWNER, lambda: f"id.{OWNER}"))
+            state_mod.set_scope_provider(lambda: Scope(PROJECT, OWNER, lambda: f"id.{OWNER}", admin=True))
             try:
                 state_mod.stop_monitor(monitor_id, mirror=False)
             finally:
@@ -119,7 +119,7 @@ def firestore_worker(monkeypatch):
 
         @staticmethod
         def app_creates(title: str) -> Monitor:
-            state_mod.set_scope_provider(lambda: Scope(PROJECT, OWNER, lambda: f"id.{OWNER}"))
+            state_mod.set_scope_provider(lambda: Scope(PROJECT, OWNER, lambda: f"id.{OWNER}", admin=True))
             try:
                 monitor = _monitor(title, until=at + timedelta(days=2))
                 state_mod.upsert_monitor(monitor, mirror=False)
@@ -206,7 +206,7 @@ def test_a_signed_in_persons_variant_keeps_the_owner_filter(firestore_worker, mo
     w = firestore_worker
     mine = w.seed(_monitor("Mine", until=w.now + timedelta(days=2)))
     w.seed(_monitor("Theirs", until=w.now + timedelta(days=2), owner="uid-friend-2"))
-    state_mod.set_scope_provider(lambda: Scope(PROJECT, OWNER, lambda: f"id.{OWNER}"))
+    state_mod.set_scope_provider(lambda: Scope(PROJECT, OWNER, lambda: f"id.{OWNER}", admin=True))
 
     w.reset()
     got = state_mod.load_monitors_for_checking()

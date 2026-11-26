@@ -362,17 +362,19 @@ def test_an_ordinary_account_sees_nothing_and_cannot_create_one(seeded_with_cate
     from ui.flow import CATEGORY_WATCH_KEY, CATEGORY_WATCH_TITLE
     from tests.test_app import run, text
 
+    signed_in.admin = False
     app = run(**_wizard(seeded_with_categories))
     assert not app.exception, [str(e) for e in app.exception]
     body = text(app)
     assert CATEGORY_WATCH_TITLE not in body and "seat categories" not in body.lower()
     assert not app.multiselect and not any((w.key or "").startswith("catwatch") for w in app.text_input)
     # even with the picks smuggled into the session, the saved monitor is ordinary
+    # even with the picks smuggled into the session, an ordinary account
+    # cannot start a monitor at all (admin-only creation): nothing is saved
     app = run(**_wizard(seeded_with_categories), **{CATEGORY_WATCH_KEY: ["GOLD"], "catwatch_show_time": "07:30 PM"})
     app.run()
-    app.button(key="start").click().run()
-    monitors = load_monitors()
-    assert len(monitors) == 1 and monitors[0].categories == [] and monitors[0].show_time == ""
+    assert next(b for b in app.button if b.key == "start").disabled is True
+    assert load_monitors() == []
 
 
 def test_the_admin_sees_the_block_and_creates_a_category_watch(seeded_with_categories, signed_in):
@@ -409,7 +411,7 @@ def test_a_category_watch_is_its_owners_only(make_monitor, monkeypatch):
 
     def as_(uid):
         monkeypatch.setattr(state_mod, "_scope_provider",
-                            lambda: state_mod.Scope("", uid, lambda: f"id.{uid}"))
+                            lambda: state_mod.Scope("", uid, lambda: f"id.{uid}", admin=True))
         state_mod.invalidate_cache("monitors")
 
     as_("uid-admin")

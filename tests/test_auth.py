@@ -1307,19 +1307,20 @@ def _seed_for(uid: str, make_monitor, email: str):
     from monitor import state as state_mod
 
     monitor = make_monitor(email=email, owner_uid=uid)
-    _as(uid)
+    _as(uid, admin=True)                    # monitors are created by the admin
     state_mod.upsert_monitor(monitor, mirror=False)
+    _as(uid)
     state_mod.save_state({monitor.id: state_mod.MonitorState(check_count=3)}, mirror=False)
     state_mod.record_history(monitor, "CREATED", "Monitor created.", mirror=False)
     state_mod.save_settings({"notify_email": email, "default_interval": 15}, mirror=False)
     return monitor
 
 
-def _as(uid: str):
+def _as(uid: str, *, admin: bool = False):
     from monitor import state as state_mod
 
     state_mod.set_scope_provider(
-        lambda: state_mod.Scope("", uid, lambda: "", firestore_enabled=False))
+        lambda: state_mod.Scope("", uid, lambda: "", firestore_enabled=False, admin=admin))
 
 
 def test_delete_account_removes_only_that_owners_data(make_monitor):

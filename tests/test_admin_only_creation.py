@@ -7,8 +7,8 @@ create one, nor turn an old one into a different watch. Enforced in the store
 (monitor/state.py) and in firestore.rules (tests/firestore_rules); the page
 only explains it.
 
-This module is deliberately NOT in conftest.PREEXISTING_MEMBER_MONITOR_MODULES:
-every test here runs with the guard enforced.
+Every test in the suite runs with this restriction enforced; tests that need
+monitors seed them with the admin claim, as production now does.
 """
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ from monitor import policy
 from monitor import state as state_mod
 from monitor.models import ANY_FORMAT, Monitor, MonitorStatus, MovieRef, TheatreTarget
 from monitor.state import Scope
-from tests import conftest
 from tests.test_monitor_limit import seeded_app  # noqa: F401 - pytest fixture
 
 MEMBER, OTHER = "uid-member", "uid-other"
@@ -173,10 +172,3 @@ def test_the_wizard_explains_and_disables_start_for_members_only(isolated_data, 
     assert not app.exception
     assert next(b for b in app.button if b.key == "start").disabled is False
     assert not any(state_mod.CREATE_MESSAGE in i.value for i in app.info)
-
-
-# ── the scoped test seam cannot grow unnoticed ────────────────────────────
-def test_the_preexisting_member_monitor_seam_is_pinned():
-    assert len(conftest.PREEXISTING_MEMBER_MONITOR_MODULES) == 31
-    assert "test_admin_only_creation" not in conftest.PREEXISTING_MEMBER_MONITOR_MODULES
-    assert "test_stop_expiry_rule" not in conftest.PREEXISTING_MEMBER_MONITOR_MODULES

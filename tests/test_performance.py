@@ -57,7 +57,7 @@ def cloud(monkeypatch):
         @staticmethod
         def as_user(uid: str) -> None:
             state_mod.set_scope_provider(
-                lambda: Scope(PROJECT, uid, lambda: f"id.{uid}"))
+                lambda: Scope(PROJECT, uid, lambda: f"id.{uid}", admin=True))
 
         @staticmethod
         def signed_out() -> None:
@@ -397,7 +397,7 @@ def fanout(monkeypatch):
                 if threading.get_ident() != caller:
                     off_thread.append("scope provider")
                     raise AssertionError("the scope provider reached a worker thread")
-                return Scope(PROJECT, uid, lambda: f"id.{uid}")
+                return Scope(PROJECT, uid, lambda: f"id.{uid}", admin=True)
 
             state_mod.set_scope_provider(provider)
 

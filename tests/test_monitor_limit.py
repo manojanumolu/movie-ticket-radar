@@ -70,18 +70,46 @@ def account(request, monkeypatch):
     class Account:
         backend = request.param
         uid = FRIEND
+        admin = False
+        last = ""
 
         @staticmethod
-        def as_(uid: str, *, admin: bool = False) -> None:
-            Account.uid = uid
+        def _scope(uid: str, admin: bool) -> None:
             state_mod.set_scope_provider(
                 lambda: Scope(project, uid, lambda: f"id.{uid}", admin=admin))
 
         @staticmethod
-        def create(title: str = "Film") -> Monitor:
-            monitor = _monitor(title, owner=Account.uid)
-            state_mod.upsert_monitor(monitor, mirror=False)
+        def as_(uid: str, *, admin: bool = False) -> None:
+            Account.uid, Account.admin = uid, admin
+            Account._scope(uid, admin)
+
+        @staticmethod
+        def seed(monitor: Monitor) -> Monitor:
+            """Write a monitor for the current account the way production now
+            does: with the admin claim (admin-only creation)."""
+            Account._scope(Account.uid, True)
+            try:
+                state_mod.upsert_monitor(monitor, mirror=False)
+            finally:
+                Account._scope(Account.uid, Account.admin)
+            state_mod.invalidate_cache()
             return monitor
+
+        @staticmethod
+        def create(title: str = "Film") -> Monitor:
+            """Gain one running monitor. The admin simply creates it. An
+            ordinary account cannot create monitors any more: the admin sets
+            one up, stopped, and the account's own Extend makes it running.
+            That Extend is where the active-monitor limit applies, and a
+            refused one stays STOPPED (``Account.last`` names it)."""
+            monitor = _monitor(title, owner=Account.uid)
+            if Account.admin:
+                state_mod.upsert_monitor(monitor, mirror=False)
+                return monitor
+            monitor.stop()
+            Account.seed(monitor)
+            Account.last = monitor.id
+            return state_mod.extend_monitor(monitor.id, 24, mirror=False)
 
         @staticmethod
         def running() -> int:
@@ -102,11 +130,14 @@ def test_a_person_with_nothing_running_can_create_one(account):
 
 def test_five_minute_interval_is_admin_only_at_the_store_boundary(account):
     account.as_(FRIEND)
-    member_monitor = _monitor("Five minute member", owner=FRIEND)
+    with pytest.raises(state_mod.policy.MonitorNotAllowed):          # not even created
+        state_mod.upsert_monitor(_monitor("New member monitor", owner=FRIEND), mirror=False)
+    member_monitor = account.create("Five minute member")         # the admin set it up
     member_monitor.interval_minutes = 5
     with pytest.raises(ValueError, match="admin account"):
         state_mod.upsert_monitor(member_monitor, mirror=False)
-    assert state_mod.load_monitors() == []
+    state_mod.invalidate_cache()
+    assert [m.interval_minutes for m in state_mod.load_monitors()] == [10]
 
     account.as_(OWNER, admin=True)
     admin_monitor = _monitor("Five minute admin", owner=OWNER)
@@ -128,15 +159,14 @@ def test_the_sixth_is_refused_before_anything_is_written(account):
     account.as_(FRIEND)
     for i in range(ACTIVE_MONITOR_LIMIT):
         account.create(f"Film {i}")
-    before = {m.id for m in state_mod.load_monitors()}
-
     with pytest.raises(MonitorLimitError) as exc:
         account.create("One too many")
 
     assert exc.value.limit == ACTIVE_MONITOR_LIMIT
     assert str(exc.value) == ("Active monitor limit reached — you can have up to 5 active "
                               "monitors at a time. Stop an existing monitor to start another.")
-    assert {m.id for m in state_mod.load_monitors()} == before   # nothing written
+    state_mod.invalidate_cache()
+    assert state_mod.get_monitor(account.last).status is MonitorStatus.STOPPED   # not activated
     assert account.running() == ACTIVE_MONITOR_LIMIT
 
 
@@ -161,8 +191,7 @@ def test_expired_monitors_hold_no_slot(account):
     for i in range(ACTIVE_MONITOR_LIMIT):
         # ACTIVE in the store, past its end time: expiry flips it on the
         # next render/tick, and it must not count either way.
-        state_mod.upsert_monitor(_monitor(f"Over {i}", owner=FRIEND,
-                                          until=now_ist() - timedelta(minutes=1)), mirror=False)
+        account.seed(_monitor(f"Over {i}", owner=FRIEND, until=now_ist() - timedelta(minutes=1)))
     assert account.running() == 0
     for i in range(ACTIVE_MONITOR_LIMIT):
         account.create(f"New {i}")
@@ -305,10 +334,8 @@ def test_saving_admin_into_your_own_documents_changes_nothing(account):
     state_mod.save_settings({"notify_email": "f@example.com", "admin": True}, mirror=False)
     for i in range(ACTIVE_MONITOR_LIMIT):
         account.create(f"Film {i}")
-    forged = _monitor("Forged", owner=FRIEND)
-    forged.owner_uid = FRIEND
-    with pytest.raises(MonitorLimitError):
-        state_mod.upsert_monitor(forged, mirror=False)
+    with pytest.raises(MonitorLimitError):                         # the claim in data is ignored
+        account.create("Forged")
     assert state_mod.active_monitor_limit() == ACTIVE_MONITOR_LIMIT
 
 
@@ -344,17 +371,17 @@ def test_my_monitors_still_lists_everything_at_the_limit(isolated_data, signed_i
     assert sum(1 for b in app.button if b.key.startswith("m_stop_")) == ACTIVE_MONITOR_LIMIT
 
 
-def test_start_button_is_disabled_at_the_limit_and_enabled_for_admin(isolated_data, signed_in, seeded_app):
+def test_start_button_is_disabled_for_an_ordinary_account_and_enabled_for_admin(isolated_data, signed_in, seeded_app):
     _five_running_for(signed_in.uid, isolated_data)
     wizard = dict(step=5, location="hyderabad", movie_id=seeded_app.movie_id,
                   theatres=["ALLU"], formats={"ALLU": [ANY_FORMAT]})
 
+    signed_in.admin = False
     app = seeded_app(**wizard)
     assert not app.exception
     assert next(b for b in app.button if b.key == "start").disabled is True
-    assert any("Active monitor limit reached — you can have up to 5 active monitors "
-               "at a time. Stop an existing monitor to start another." in w.value
-               for w in app.warning)
+    # Creation is the admin's: that is the explanation shown, not the limit.
+    assert any(state_mod.CREATE_MESSAGE in i.value for i in app.info)
 
     signed_in.admin = True                                  # what the record would say
     app = seeded_app(**wizard)

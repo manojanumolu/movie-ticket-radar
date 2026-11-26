@@ -320,7 +320,8 @@ def test_F_capability_never_stands_in_for_a_listing_but_still_guards_the_start(p
     assert flow.unknown_formats(prasads, ["2D", "PCX", "Infinity Vision 2D", ANY_FORMAT], capable) == []
 
 
-def test_the_monitoring_step_says_what_is_not_listed_on_the_chosen_date(provider_factory):
+def test_the_monitoring_step_says_what_is_not_listed_on_the_chosen_date(provider_factory, signed_in):
+    signed_in.admin = False            # the ordinary step, without the admin's category watch
     default = build_payload([dated(ALLU, "DOLBY CINEMA", "20260925")], bookable_dates=("20260925", "20260926"), closed_dates=())
     twenty_sixth = build_payload([dated(PRASADS, "MS - Infinity Vision", "20260926"), dated(ALLU, "DOLBY CINEMA", "20260926")],
                                  bookable_dates=("20260925", "20260926"), closed_dates=())

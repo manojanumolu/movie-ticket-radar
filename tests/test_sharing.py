@@ -503,7 +503,7 @@ def test_one_user_still_cannot_see_another_users_monitor(at, users):
     b = users("uid-b", ALLU_DOLBY)
     save_monitors([a, b], mirror=False)
 
-    scope = state_mod.Scope("", "uid-a", lambda: "tok", firestore_enabled=False)
+    scope = state_mod.Scope("", "uid-a", lambda: "tok", firestore_enabled=False, admin=True)
     state_mod.set_scope_provider(lambda: scope)
     try:
         state_mod.invalidate_cache()
@@ -537,8 +537,15 @@ def test_a_shared_target_still_costs_the_subscriber_one_of_their_own_slots(at, u
         state_mod.invalidate_cache()
         assert state_mod.active_monitor_count(mine, at=at) == limit
         assert state_mod.monitor_limit_reached(mine, at=at) is True
+        # A member can no longer create monitors; re-activating a stopped
+        # one is the remaining way to gain a running monitor, and it is refused.
+        stopped = users("uid-a", ALLU_DOLBY)
+        stopped.id = "stopped-extra"
+        stopped.stop()
+        save_monitors([*mine, stopped], mirror=False)
+        state_mod.invalidate_cache()
         with pytest.raises(state_mod.MonitorLimitError):
-            state_mod.upsert_monitor(users("uid-a", ALLU_DOLBY), mirror=False)
+            state_mod.extend_monitor("stopped-extra", 24, mirror=False)
     finally:
         state_mod.set_scope_provider(None)
         state_mod.invalidate_cache()
