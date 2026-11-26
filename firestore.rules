@@ -168,9 +168,15 @@ service cloud.firestore {
     // already owns, but never turn it into a different watch: the film, the
     // theatres and formats, the dates and the creation time stay as stored.
     // (Otherwise rewriting an old stopped monitor would be creating a new one.)
+    // Monitors stored before 21 Sep 2026 have no `categories`/`show_time`
+    // keys; the app now writes them as [] and "". An absent key equals its
+    // empty default here, so those owners can still stop or extend, while
+    // adding a real category or show time is still a change of watch.
     function keepsWatchIdentity() {
       return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['id', 'movie', 'targets', 'date_codes', 'categories', 'show_time', 'created_at']);
+          .hasAny(['id', 'movie', 'targets', 'date_codes', 'created_at'])
+        && request.resource.data.get('categories', []) == resource.data.get('categories', [])
+        && request.resource.data.get('show_time', '') == resource.data.get('show_time', '');
     }
 
     // monitors/{id}: created only by an authorised admin (the server-set
