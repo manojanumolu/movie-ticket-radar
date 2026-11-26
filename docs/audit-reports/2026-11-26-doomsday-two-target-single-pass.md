@@ -31,26 +31,31 @@
 
 ## Cost and quota (measured per pass on the real code with the repository's Firestore tally fixture)
 
-Per due pass: 54 Firestore reads (1 active monitor + the whole `monitor_state` collection, 53 in the fixture), 1 clock read, 1 state write, and 1 clock write per re-list (≤ every third pass). BookMyShow: 4 requests, plus 1 city listing per re-list. The same for two or five targets.
+**Writes per pass (measured):**
+
+| Pass | Reads | Writes | What is written |
+|---|---|---|---|
+| Due pass, nothing changes | 54 | 1 | monitor state |
+| Due pass that re-lists the city | 55 | 2 | state + discovery clock (≤ once per 15 min while a target is unlisted; both are today) |
+| First failed check in an hour | 55 | 2 | state + one ERROR history row (deduplicated per hour) |
+| Pass that finds a release | 54–55 | 2+ | state + one history row per alert |
+
+That gives **1.33 writes/pass on average** (288 state + 96 clock = 384/day), not 1. The earlier "1 write" was the minimum. Removing three targets changes none of this: 4 BookMyShow requests and 54 reads per pass with two or five targets.
 
 | | 1 day | 5 days | 15 days |
 |---|---|---|---|
-| Runs (theoretical) | 288 | 1,440 | 4,320 |
-| Runs (measured delivery 1.7%) | ≈ 5 | ≈ 25 | ≈ 75 |
-| Runner minutes, theoretical (≤ 1 min each) | ≤ 288 | ≤ 1,440 | ≤ 4,320 |
-| Firestore reads, theoretical | 15,840 | 79,200 | 237,600 |
-| Firestore writes, theoretical (+ alert/history rows) | 384 | 1,920 | 5,760 |
-| Firestore deletes / storage | 0 / +1 small doc | 0 | 0 |
-| BookMyShow requests, theoretical | 1,248 | 6,240 | 18,720 |
-| Emails | one per real release/new showtime (Gmail limit ≈ 500/day) | | |
+| Runs, theoretical / at measured 1.7% delivery | 288 / ≈5 | 1,440 / ≈25 | 4,320 / ≈75 |
+| Runner minutes, typical (passes take < 1 min; each job rounds to 1 min) | 288 | 1,440 | 4,320 |
+| Runner minutes, **upper bound** (4-min timeout × every run) | 1,152 | 5,760 | 17,280 |
+| Firestore reads (55/pass) | 15,840 | 79,200 | 237,600 |
+| Firestore writes, normal (state + clock) | 384 | 1,920 | 5,760 |
+| Firestore writes, worst (re-list retried every pass + hourly ERROR) | 600 | 3,000 | 9,000 |
+| Firestore deletes / new storage | 0 / 1 small doc | 0 | 0 |
+| BookMyShow requests, normal (4/pass + 1 per re-list) | 1,248 | 6,240 | 18,720 |
+| BookMyShow requests, worst (refusal = 1, no retry; network error = 2 attempts) | ≤ 2,880 | ≤ 14,400 | ≤ 43,200 |
 | Cost | **$0** (public repository, standard runners; Firebase has no billing) | **$0** | **$0** |
 
-Worst case per pass:
-- **Refusals:** a refusal costs 1 request, never retried, so ≤ 5 requests.
-- **Network failures:** every read failing twice costs ≤ 10 requests and about 3.9 min. That is under the 4-min stop.
-- **Recording:** failed checks are recorded as ERROR history with availability unchanged, never as successful checks.
-
-Firestore headroom: the monitor alone would use about 32% of the 50k daily reads. **The website's own usage is not measured.** The Firebase console *Usage* tab is required.
+Firestore headroom: the monitor alone needs about 32% of the 50k daily reads and about 2–3% of the 20k writes. **The website's usage is not measured.** It can only be read in the Firebase console (Firestore → Usage), or in Cloud Monitoring with `monitoring.timeSeries.list`. This session has neither access, and the dashboard is an estimate ([docs](https://firebase.google.com/docs/firestore/monitor-usage)).
 
 ## Activation conditions
 
@@ -68,4 +73,8 @@ Firestore headroom: the monitor alone would use about 32% of the 50k daily reads
 
 ## Best zero-cost hosted alternative for the cadence
 
-A free Google Apps Script time-driven trigger (every 5 min, no card) that calls GitHub's `workflow_dispatch` API with a fine-grained token limited to *Actions: write* on this repository. Dispatched runs are not subject to scheduled-run drops. Not set up here: it needs your Google account, and it does not change conditions 7 and 9.
+Evaluated and **not recommended**: a Google Apps Script trigger calling `workflow_dispatch`.
+- **Free limits:** consumer accounts get 90 min of trigger runtime and 20k URL fetches per day.
+- **Timing:** `everyMinutes(5)` is allowed, but Google documents that trigger times may be randomized.
+- **Token:** dispatch requires a fine-grained token with Actions: write. That scope also allows enabling and disabling workflows and cancelling or re-running runs.
+- **Enforcement risk:** it would raise this repository's monitoring runs from ≈5 to ≈288 a day on GitHub-hosted runners. That increases, rather than reduces, the GitHub enforcement exposure while the Job Tracker cause is unknown.

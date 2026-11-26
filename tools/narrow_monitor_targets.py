@@ -34,6 +34,9 @@ import sys
 from datetime import datetime
 from typing import Any
 
+#: The only monitor this tool may touch. Anything else is refused outright.
+ALLOWED_PREFIXES = ("af1711d4",)
+
 IDENTITY_UNCHANGED = ("id", "movie", "date_codes", "categories", "show_time", "created_at",
                       "monitor_until", "owner_uid", "notify_email", "interval_minutes", "status",
                       "stopped_at", "stopped_reason")
@@ -60,6 +63,8 @@ def _client():
 def find(client, prefix: str) -> tuple[str, dict[str, Any]]:
     if len(prefix) < 8:
         raise Refused("give at least the 8-character ID prefix")
+    if not prefix.startswith(ALLOWED_PREFIXES):
+        raise Refused(f"this tool only maintains {', '.join(ALLOWED_PREFIXES)}")
     ids = [d for d in client.query("monitors") if d.startswith(prefix)]
     if len(ids) != 1:
         raise Refused(f"expected exactly one monitor starting {prefix}, found {len(ids)}")

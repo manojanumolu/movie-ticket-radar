@@ -28,6 +28,7 @@ class Client:
     def __init__(self, *docs):
         self.docs = {d["id"]: deepcopy(d) for d in docs}
         self.writes = []
+        self.collections = []
 
     def query(self, collection):
         assert collection == "monitors"
@@ -38,6 +39,7 @@ class Client:
 
     def set(self, collection, doc_id, fields):
         self.writes.append(doc_id)
+        self.collections.append(collection)
         self.docs[doc_id] = deepcopy(fields)
 
 
@@ -81,7 +83,7 @@ def test_ambiguous_or_missing_ids_are_refused():
     other = {**doc(), "id": "af1711d4ffffffff"}
     with pytest.raises(tool.Refused, match="exactly one"):
         tool.run(Client(doc(), other), "af1711d4", KEEP, resume=False, apply=True, now=NOW)
-    with pytest.raises(tool.Refused, match="exactly one"):
+    with pytest.raises(tool.Refused, match="only maintains af1711d4"):
         tool.run(Client(doc()), "6150dc3b", KEEP, resume=False, apply=True, now=NOW)
     with pytest.raises(tool.Refused, match="8-character"):
         tool.run(Client(doc()), "af17", KEEP, resume=False, apply=True, now=NOW)
@@ -121,3 +123,35 @@ def test_a_read_back_mismatch_is_reported():
 
     with pytest.raises(tool.Refused, match="read-back"):
         tool.run(Lossy(doc()), "af1711d4", KEEP, resume=False, apply=True, now=NOW)
+
+
+PROTECTED = ["created_at", "monitor_until", "owner_uid", "notify_email", "interval_minutes",
+             "movie", "date_codes", "categories", "show_time", "id"]
+
+
+@pytest.mark.parametrize("resume", [False, True])
+def test_only_the_monitors_collection_is_written_and_protected_fields_are_byte_identical(resume):
+    before = doc()
+    client = Client(before)
+    tool.run(client, "af1711d4", [] if resume else KEEP, resume=resume, apply=True, now=NOW)
+    assert client.collections == ["monitors"] and client.writes == [ID]   # never history or monitor_state
+    after = client.docs[ID]
+    for field in PROTECTED:
+        assert after[field] == before[field], field
+
+
+@pytest.mark.parametrize("field", PROTECTED + ["status"])
+def test_a_change_to_any_protected_field_is_refused_before_writing(monkeypatch, field):
+    """Even if the narrowing logic were wrong, the write gate refuses."""
+    client = Client(doc())
+    real = tool.narrowed
+    monkeypatch.setattr(tool, "narrowed", lambda d, k: {**real(d, k), field: "tampered"})
+    with pytest.raises(tool.Refused, match="more than allowed"):
+        tool.run(client, "af1711d4", KEEP, resume=False, apply=True, now=NOW)
+    assert client.writes == []
+
+
+def test_unrelated_monitors_cannot_even_be_named():
+    for prefix in ("6150dc3b", "00000000", "zzzzzzzzzz"):
+        with pytest.raises(tool.Refused, match="only maintains"):
+            tool.run(Client(doc()), prefix, KEEP, resume=False, apply=False, now=NOW)
