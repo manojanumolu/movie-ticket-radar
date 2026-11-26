@@ -22,24 +22,26 @@ def load(name):
 
 
 # ── the workflow ──────────────────────────────────────────────────────────
-def test_one_job_one_pass_and_a_hard_stop_inside_five_minutes():
+def test_the_monitor_workflow_is_the_proven_baseline_segment_loop():
+    """The five-minute cadence comes from the baseline's self-handing-over
+    segment (``run_monitor.py --loop``), not from GitHub's schedule, which
+    this repository receives only a few times a day. The file is the
+    production baseline's, byte for byte (1f46501: 512 checking passes on
+    23–25 Nov, median gap 4.99 min)."""
+    baseline = subprocess.check_output(
+        ["git", "show", "1f4650104bc153a8bab794ddd82d55da8cb86e70:.github/workflows/bookmyshow-monitor.yml"],
+        cwd=ROOT)
+    assert (WORKFLOWS / "bookmyshow-monitor.yml").read_bytes() == baseline
     wf = load("bookmyshow-monitor.yml")
-    assert wf["on"]["schedule"] == [{"cron": "*/5 * * * *"}]
-    assert set(wf["on"]["workflow_dispatch"]["inputs"]) == {"force", "dry_run", "monitor_id"}
     assert wf["concurrency"] == {"group": "bookmyshow-monitor", "cancel-in-progress": False}
-    assert wf["permissions"] == {"contents": "read"}
+    assert wf["permissions"] == {"contents": "write", "actions": "write"}
     [job] = wf["jobs"].values()
-    assert job["timeout-minutes"] <= 4
+    assert job["environment"] == "production"
     [run] = [s for s in job["steps"] if "run_monitor.py" in s.get("run", "")]
-    assert "python run_monitor.py" in run["run"]
-    for forbidden in ("--loop", "--max-minutes", "--poll-seconds", "sleep "):
-        assert forbidden not in run["run"]
-    env = run["env"]
-    assert env["RADAR_DISCOVERY_CLOCK"] == "firestore"
-    # The BookMyShow client is the existing one: no request-behaviour switches.
+    assert "python run_monitor.py --loop --max-minutes 50 --poll-seconds 30" in run["run"]
+    assert job["timeout-minutes"] == 65                     # 50-minute segment + setup + commit
     for removed in ("RADAR_CLIENT", "RADAR_RETRY_REFUSALS", "RADAR_HTTP_ATTEMPTS"):
-        assert removed not in env
-    assert "GITHUB_TOKEN" not in env                        # nothing to dispatch or push with
+        assert removed not in run["env"]
 
 
 def test_no_second_scheduler_for_the_monitor_and_catalogue_unchanged():

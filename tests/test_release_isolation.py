@@ -27,11 +27,11 @@ def git(*args: str) -> str:
 #: executable surface since the baseline: the Firestore rule, the store guard
 #: and the page's explanation. Anything else changing is still a failure.
 ADMIN_ONLY_CREATION = ["app.py", "firestore.rules", "monitor/state.py"]
-#: The single-pass five-minute monitor: the workflow itself, the city-listing
-#: clock kept in Firestore between runs, the credential guard, write-ahead
-#: alert marking (no repeat after a store failure) and the follow-on pass
-#: after a targeted "Check now".
-SINGLE_PASS_MONITOR = [".github/workflows/bookmyshow-monitor.yml", "monitor/checker.py", "monitor/discovery.py",
+#: Worker changes kept from the single-pass release, now run by the baseline's
+#: own segment workflow: the city-listing clock option, the credential guard,
+#: write-ahead alert marking (no repeat after a store failure) and the
+#: follow-on pass after a targeted single-pass "Check now".
+SINGLE_PASS_MONITOR = ["monitor/checker.py", "monitor/discovery.py",
                        "monitor/worker.py", "run_monitor.py"]
 
 
@@ -59,8 +59,8 @@ def test_candidate_preparation_is_only_invoked_by_test_ci():
 
 def test_only_test_ci_can_change_on_release():
     changed = git("diff", "--name-only", PRODUCTION, "HEAD", "--", ".github/workflows").splitlines()
-    assert changed == [".github/workflows/bookmyshow-monitor.yml", ".github/workflows/monitor-maintenance.yml",
-                       ".github/workflows/tests.yml"]
+    # bookmyshow-monitor.yml is back to the baseline's own file (the segment loop).
+    assert changed == [".github/workflows/monitor-maintenance.yml", ".github/workflows/tests.yml"]
     catalogue = git("show", "HEAD:.github/workflows/catalogue-sync.yml")
     assert re.findall(r'cron:\s*"([^"]+)"', catalogue) == ["0 1,7,13,19 * * *"]
     tests = git("show", "HEAD:.github/workflows/tests.yml")

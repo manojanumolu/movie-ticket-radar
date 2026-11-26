@@ -130,7 +130,7 @@ def test_the_workflow_passes_both_variables_to_the_worker():
     workflow = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "bookmyshow-monitor.yml"
     text = workflow.read_text(encoding="utf-8")
 
-    step = text.split("- name: One monitoring pass", 1)[1].split("- name:", 1)[0]
+    step = text.split("Run monitor segment", 1)[1].split("- name:", 1)[0]
     assert "FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}" in step
     assert "FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" in step
     # …and the step really is the one that runs the worker.
