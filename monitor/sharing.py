@@ -281,21 +281,17 @@ def group_for_fetch(monitors: Sequence[Monitor], *,
 def select_for_fetch(running: Sequence[Monitor], due_ids: Iterable[str], *,
                      resolve: Callable[[MovieRef], MovieRef] | None = None,
                      ) -> list[SharedFetch]:
-    """The listing reads this tick makes: every group with a member due.
+    """The listing reads this tick makes: only monitors that are due.
 
     ``running`` is every monitor that may be checked at all; ``due_ids`` are
-    the ones whose own interval has elapsed. A group is selected when any
-    of its monitors is due, and comes back *whole* — the members that were
-    not due ride the same read (:attr:`SharedFetch.riders`). Groups with
-    nobody due are not returned, and their monitors are not touched.
+    the ones whose own interval has elapsed. Only those are grouped and
+    checked: monitors due together still share one read, but a monitor that
+    is not due is never checked early because another monitor on the same
+    listing is (each keeps its own configured interval). ``riders`` is
+    therefore always empty.
     """
     wanted = set(due_ids)
-    selected: list[SharedFetch] = []
-    for group in group_for_fetch(running, resolve=resolve):
-        if any(m.id in wanted for m in group.monitors):
-            group.riders = [m.id for m in group.monitors if m.id not in wanted]
-            selected.append(group)
-    return selected
+    return group_for_fetch([m for m in running if m.id in wanted], resolve=resolve)
 
 
 @dataclass

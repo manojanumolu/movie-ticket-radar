@@ -345,10 +345,9 @@ def test_a_monitor_never_checked_is_read_and_checked_even_when_the_hint_says_not
                              notifier=lambda m, c: None, known_state=tick1.state)
     assert tick2.state_read_skipped is False
     assert len(w.queries("monitor_state")) == 1
-    # Second is due; First shares its listing read and rides it — evaluated
-    # against the same answer, at no extra read (``sharing.select_for_fetch``).
-    assert second.id in tick2.checked
-    assert sorted(tick2.checked) == sorted([first.id, second.id])
+    # Second is due; First was checked 30 seconds ago and is not checked
+    # early just because it shares the listing (each keeps its own interval).
+    assert tick2.checked == [second.id]
     assert tick2.fetches == 1
 
 
@@ -435,10 +434,9 @@ def test_a_monitor_the_app_creates_is_checked_on_the_next_tick(firestore_worker,
                     clock=clock, sleeper=sleeper, notifier=lambda m, c: None)
 
     assert ticks[0].checked == [first.id]
-    # The new monitor is checked at once; First, on the same listing, rides
-    # that read rather than making its own (``sharing.select_for_fetch``).
-    assert created and created[0].id in ticks[1].checked
-    assert sorted(ticks[1].checked) == sorted([first.id, created[0].id])
+    # The new monitor is checked at once, on its own; First is not due and
+    # is not checked early because it shares the listing.
+    assert created and ticks[1].checked == [created[0].id]
     assert ticks[1].fetches == 1
     assert {m.id for m in ticks[1].monitors} == {first.id, created[0].id}
 
