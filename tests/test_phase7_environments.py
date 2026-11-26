@@ -94,10 +94,10 @@ def test_the_environment_lines_change_nothing_else_about_the_worker():
     and permissions as before the environment was added."""
     worker = load("bookmyshow-monitor.yml")
     triggers = worker.get("on", worker.get(True))
-    # Single pass: schedule + the app's dispatch only, read-only token.
-    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    assert set(triggers) == {"push", "schedule", "workflow_dispatch"}
+    assert triggers["push"] == {"branches": ["main"], "paths": ["data/monitors.json"]}
     assert worker["concurrency"] == {"group": "bookmyshow-monitor", "cancel-in-progress": False}
-    assert worker["permissions"] == {"contents": "read"}
+    assert worker["permissions"] == {"contents": "write", "actions": "write"}
     job = worker["jobs"]["check"]
     assert "needs" not in job and "outputs" not in job
     admin = load("grant-admin.yml")

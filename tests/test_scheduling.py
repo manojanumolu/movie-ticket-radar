@@ -149,16 +149,14 @@ def test_a_signed_in_persons_monitor_is_never_committed_to_the_repository(seeded
     assert "First check is starting now" not in body_of(app)
 
 
-def test_workflow_is_not_triggered_by_repository_pushes():
-    """Signed-in monitors live in Firestore and are never committed, so a push
-    trigger only produced extra runs. The single pass runs on its schedule or
-    on the app's dispatch."""
+def test_workflow_is_triggered_by_the_monitors_commit():
     from pathlib import Path
     import yaml
 
     doc = yaml.safe_load(Path(".github/workflows/bookmyshow-monitor.yml").read_text(encoding="utf-8"))
     on = doc.get(True, doc.get("on"))
-    assert "push" not in on
+    assert on["push"]["paths"] == ["data/monitors.json"]
+    assert on["push"]["branches"] == ["main"]
 
 
 def test_dispatch_is_skipped_when_start_now_is_off(seeded, dispatches):
@@ -201,16 +199,15 @@ def test_first_check_does_not_wait_for_the_interval(at):
         assert MonitorState().is_due(interval, at) is True
 
 
-def test_workflow_yaml_is_one_pass_every_five_minutes_without_loop_or_handover():
+def test_workflow_yaml_keeps_schedule_dispatch_loop_and_concurrency():
     from pathlib import Path
 
     yaml = Path(".github/workflows/bookmyshow-monitor.yml").read_text(encoding="utf-8")
-    assert 'cron: "*/5 * * * *"' in yaml
+    assert "schedule:" in yaml and "cron:" in yaml           # safety net stays
     assert "workflow_dispatch:" in yaml and "monitor_id:" in yaml
-    assert "--loop" not in yaml and "--max-minutes" not in yaml and "--poll-seconds" not in yaml
+    assert "--loop" in yaml                                  # the segment worker
     assert "group: bookmyshow-monitor" in yaml and "cancel-in-progress: false" in yaml
-    assert "actions: write" not in yaml and "contents: write" not in yaml   # no handover, no commits
-    assert "git push" not in yaml and "git commit" not in yaml
+    assert "actions: write" in yaml                          # can hand over to the next segment
 
 
 # ──────────────────────────────────────────────────────────────────────────
