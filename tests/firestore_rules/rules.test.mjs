@@ -219,6 +219,25 @@ test("a category watch is the admin claim's alone", async () => {
     monitor(ALICE, { id: "c3", categories: ["GOLD"], show_time: "07:15 PM" })));
 });
 
+test("an owner whose admin claim was revoked can extend and re-check a category watch, unchanged", async () => {
+  const watch = { id: "cw", categories: ["GOLD"], show_time: "07:15 PM" };
+  await seed("monitors/cw", monitor(ALICE, { ...watch, status: "STOPPED" }));
+  const me = db(ALICE);                                  // no admin claim any more
+  // Extend (ACTIVE again, later end) and Retry keep the watch exactly as stored.
+  await assertSucceeds(setDoc(doc(me, "monitors/cw"), monitor(ALICE, { ...watch, monitor_until: iso(3 * DAY) })));
+  await assertSucceeds(setDoc(doc(me, "monitors/cw"), monitor(ALICE, { ...watch, monitor_until: iso(3 * DAY), problem: { code: "RETRY_FAILED", detail: "x" }, first_check_requested_at: iso(0) })));
+  // Changing it, clearing it, or any other identity field is still refused.
+  await assertFails(setDoc(doc(me, "monitors/cw"), monitor(ALICE, { ...watch, categories: ["PLATINUM"] })));
+  await assertFails(setDoc(doc(me, "monitors/cw"), monitor(ALICE, { ...watch, show_time: "10:00 PM" })));
+  await assertFails(setDoc(doc(me, "monitors/cw"), monitor(ALICE, { id: "cw" })));
+  await assertFails(setDoc(doc(me, "monitors/cw"), monitor(ALICE, { ...watch, date_codes: ["20261217"] })));
+  // Every other running-monitor limit still holds for them.
+  await assertFails(setDoc(doc(me, "monitors/cw"), monitor(ALICE, { ...watch, interval_minutes: 5 })));
+  await assertFails(setDoc(doc(me, "monitors/cw"), monitor(ALICE, { ...watch, monitor_until: iso(60 * DAY) })));
+  // …and it is still no way to create one.
+  await assertFails(setDoc(doc(me, "monitors/cw2"), monitor(ALICE, { ...watch, id: "cw2" })));
+});
+
 // ── End date ────────────────────────────────────────────────────────────
 test("a running monitor ends within the 30-day limit", async () => {
   const admin = db(ALICE, { admin: true });

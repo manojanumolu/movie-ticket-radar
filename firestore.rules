@@ -128,18 +128,27 @@ service cloud.firestore {
         && until < isoDate(request.time + duration.value(32, 'd'));
     }
 
-    function runningAllowed(d) {
+    // `keptWatch`: the update leaves the stored watch identity unchanged
+    // (keepsWatchIdentity). A category watch an admin set up stays as it is
+    // when its owner, no longer admin, extends or re-checks it; the worker
+    // watches it as an ordinary monitor. Adding or changing one stays admin-only.
+    function runningAllowed(d, keptWatch) {
       return d.status != 'ACTIVE' || (
         d.notify_email.lower() == request.auth.token.email.lower()
         && (d.interval_minutes in [10, 15, 30] || (isAdmin() && d.interval_minutes == 5))
-        && (isAdmin() || (hasNoneOrEmptyList(d, 'categories') && hasNoneOrEmptyString(d, 'show_time')))
+        && (isAdmin() || keptWatch
+            || (hasNoneOrEmptyList(d, 'categories') && hasNoneOrEmptyString(d, 'show_time')))
         && endsWithinLimit(d.monitor_until)
         && requestCost(d) <= 120
       );
     }
 
     function validMonitor(d, id) {
-      return validShape(d, id) && runningAllowed(d);
+      return validShape(d, id) && runningAllowed(d, false);
+    }
+
+    function validKeptMonitor(d, id) {
+      return validShape(d, id) && runningAllowed(d, true);
     }
 
     // Stopping or expiring is always possible, even for a monitor saved before
@@ -185,7 +194,8 @@ service cloud.firestore {
       allow read: if ownsExisting();
       allow create: if ownsIncoming() && isAdmin() && validMonitor(request.resource.data, id);
       allow update: if ownsExisting() && ownsIncoming()
-        && ((validMonitor(request.resource.data, id) && (isAdmin() || keepsWatchIdentity()))
+        && ((isAdmin() && validMonitor(request.resource.data, id))
+            || (keepsWatchIdentity() && validKeptMonitor(request.resource.data, id))
             || isStopOrExpiry());
       allow delete: if ownsExisting();
     }

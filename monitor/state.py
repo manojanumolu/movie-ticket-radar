@@ -983,9 +983,9 @@ def _prepare_for_write(monitors: list[Monitor]) -> None:
 
     * Its alerts go to the account's own verified address. Whatever an older
       document or a widget carried, the recipient is the person's own.
-    * An ordinary account cannot hold an admin-only interval or a category
-      watch (an account whose claim was revoked keeps its monitors, as
-      ordinary ones).
+    * An ordinary account cannot hold an admin-only interval (an account
+      whose claim was revoked keeps its monitors, as ordinary ones; their
+      category watch is kept as stored and only the worker ignores it).
     * An end date beyond :data:`policy.MAX_MONITOR_DAYS` is pulled back.
 
     The store writes the person's whole list on every save, so one older
@@ -1010,7 +1010,12 @@ def _prepare_for_write(monitors: list[Monitor]) -> None:
         if not scope.admin:
             if monitor.interval_minutes not in policy.MEMBER_INTERVALS:
                 monitor.interval_minutes = 10
-            monitor.categories, monitor.show_time = [], ""
+            # A category watch is left exactly as stored: it is part of the
+            # watch's identity, which an ordinary account may neither add nor
+            # change (``_assert_may_create_or_keep``; firestore.rules), and
+            # clearing it would be such a change — Extend and Retry on a
+            # monitor whose owner lost the admin claim were refused for it.
+            # The worker still watches it as an ordinary monitor (policy).
         if not policy.until_allowed(monitor.monitor_until):
             monitor.monitor_until = policy.max_until()
 
