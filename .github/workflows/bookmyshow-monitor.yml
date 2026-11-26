@@ -1,86 +1,63 @@
 name: BookMyShow monitor
 
-# How checks actually get their cadence
-# -------------------------------------
-# GitHub does not honour a "*/5" schedule. Measured on this repo (Sept 2026)
-# the scheduled runs landed at 03:57, 05:51, 10:42 and 16:14 IST — hours
-# apart — so a monitor created at 02:55 was first checked at 03:57. The
-# schedule below is therefore only a safety net. The real cadence comes from:
+# One monitoring pass per run
+# ---------------------------
+# Every run checks the monitors that are due exactly once (one shared listing
+# read per film and date serves every target), writes the results to
+# Firestore, sends any alert, and exits. There is no loop, no 30-second
+# polling, no self-dispatch and no repository write.
 #
-#   1. The Streamlit app saving a monitor. Its commit to data/monitors.json
-#      is itself the trigger (the `push` event below), so START MONITORING
-#      starts a run within about a minute using nothing more than the
-#      Contents permission the app already has. The app also tries a
-#      workflow_dispatch (force=true for that monitor) when its token allows;
-#      either one is enough, and the concurrency group serialises them.
-#   2. The worker running as a *segment*: `run_monitor.py --loop` stays alive
-#      for up to ~50 minutes, ticking every 30s, checking each monitor when its
-#      own 10/15/30-minute interval is due, pulling main between ticks (so
-#      monitors created or stopped in the UI are picked up) and committing each
-#      observation as it happens. When the segment ends with monitors still
-#      running it dispatches the next segment itself.
+# GitHub does not guarantee this schedule. Scheduled runs can start late or be
+# dropped under load, and this repository has measured both (see
+# docs/audit-reports/2026-11-26-doomsday-two-target-single-pass.md). A late
+# run simply checks then; nothing is replayed.
 #
-# The concurrency group below is what guarantees two segments never run at
-# once, so no monitor is ever checked twice simultaneously. If a dispatch
-# arrives while a segment is running it waits, and the running segment has
-# already picked the new monitor up from main in the meantime.
-#
-# Note: GitHub disables scheduled workflows on repos with no activity for 60
-# days. The monitor commits state on every real check, which keeps it alive
-# while anything is being watched.
+# The concurrency group allows one run at a time. A run that arrives while
+# another is in progress waits; a newer waiting run replaces an older waiting
+# one. Missed runs therefore never pile up into a burst, and two passes never
+# overlap.
 
 on:
-  # The app's own commit is the trigger. The worker's commits carry
-  # "[skip ci]" so they never retrigger this.
-  push:
-    branches: [main]
-    paths: ["data/monitors.json"]
   schedule:
     - cron: "*/5 * * * *"
+  # The app's "Check now" / first check: same inputs as before.
   workflow_dispatch:
     inputs:
       force:
-        description: "Check now, ignoring each monitor's interval (first pass only)"
+        description: "Check now, ignoring each monitor's interval"
         type: boolean
         default: true
       dry_run:
-        description: "Evaluate but send no email"
+        description: "Evaluate but send no email and write nothing"
         type: boolean
         default: false
       monitor_id:
-        description: "Check this monitor first (optional). The segment then serves every monitor."
+        description: "Check only this monitor (optional)"
         type: string
         default: ""
 
-# Segments write data/ and push, and must never overlap. Queue, don't cancel:
-# a pending dispatch is how the next segment (or a new monitor) gets its turn.
 concurrency:
   group: bookmyshow-monitor
   cancel-in-progress: false
 
 permissions:
-  contents: write   # commit data/
-  actions: write    # dispatch the next segment
+  contents: read
 
 jobs:
   check:
-    # The production credentials (worker Firebase key, project id, Gmail) live
-    # in the `production` environment, whose deployment branches are `main`
-    # only, so a run of this workflow on any other branch is refused them.
-    # No reviewer: monitoring runs unattended. The schedule, the push trigger,
-    # the next-segment handover and the app's "check now" all run on main.
-    # (Repository settings, not this file, hold the branch rule — see the
-    # Phase 7 report. Until the environment exists, GitHub creates it on the
-    # first run and the repository secrets keep working exactly as before.)
+    # The worker credential and Gmail sender live in the `production`
+    # environment (deployment branch: main only).
     environment: production
     runs-on: ubuntu-latest
-    timeout-minutes: 65   # a 50-minute segment plus setup and the final commit
+    # A pass is measured in seconds; this hard stop keeps a stuck run inside
+    # the 5-minute cadence.
+    timeout-minutes: 4
 
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
-          fetch-depth: 0   # the rebase needs a merge base
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
@@ -91,20 +68,16 @@ jobs:
       - name: Install dependencies
         run: pip install --require-hashes -r ci/requirements-worker.lock
 
-      - name: Run monitor segment
-        id: monitor
+      - name: One monitoring pass
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # commits + next-segment dispatch
-          # User-owned monitors live in Firestore; the worker reads every
-          # owner's with a service account (never a file in the repository).
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TZ: Asia/Kolkata
           PYTHONUNBUFFERED: "1"
-          # Dispatch inputs reach the shell as variables, never spliced into
-          # the command. On a push or schedule run they are simply empty.
+          # The city-listing throttle survives between runs in Firestore.
+          RADAR_DISCOVERY_CLOCK: firestore
           DISPATCHED: ${{ github.event_name == 'workflow_dispatch' }}
           INPUT_FORCE: ${{ inputs.force }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
@@ -116,33 +89,4 @@ jobs:
             [ "$INPUT_DRY_RUN" = "true" ] && args+=(--dry-run)
             [ -n "$INPUT_MONITOR_ID" ] && args+=(--monitor "$INPUT_MONITOR_ID")
           fi
-          python run_monitor.py --loop --max-minutes 50 --poll-seconds 30 "${args[@]}"
-
-      - name: Commit state
-        # The segment commits after every check; this is the net under it. It
-        # runs even if the segment failed, so an observation is never lost and
-        # anything that failed to notify stays un-notified for the next run.
-        if: ${{ !cancelled() }}
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: monitoring state $(date -u +'%Y-%m-%dT%H:%MZ') [skip ci]"
-          fi
-          if [ "$(git rev-list --count origin/${GITHUB_REF_NAME}..HEAD)" = "0" ]; then
-            echo "Nothing left to push"
-            exit 0
-          fi
-          # main may have moved while this run executed (the Streamlit app
-          # saving a monitor, or a manual push). Rebase on top and retry.
-          for attempt in 1 2 3; do
-            if git pull --rebase -X ours origin "${GITHUB_REF_NAME}" && git push; then
-              echo "State pushed"
-              exit 0
-            fi
-            echo "push attempt $attempt failed, retrying…"
-            sleep $((attempt * 5))
-          done
-          echo "::error::could not push state after 3 attempts"
-          exit 1
+          python run_monitor.py "${args[@]}"

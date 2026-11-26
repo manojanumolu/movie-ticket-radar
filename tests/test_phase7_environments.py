@@ -62,8 +62,19 @@ def test_the_rules_audit_reads_with_the_worker_key_and_can_do_nothing_else():
     assert checkout["with"]["persist-credentials"] is False
 
 
+def test_monitor_maintenance_is_manual_read_only_and_uses_only_the_worker_credential():
+    doc = load("monitor-maintenance.yml")
+    assert set(doc.get("on", doc.get(True))) == {"workflow_dispatch"}
+    assert doc["permissions"] == {"contents": "read"}
+    (job,) = doc["jobs"].values()
+    assert job["environment"] == "production"
+    assert secrets_used(job) == {"FIREBASE_SERVICE_ACCOUNT", "FIREBASE_PROJECT_ID"}   # no mail sender
+    checkout = next(step for step in job["steps"] if str(step.get("uses", "")).startswith("actions/checkout@"))
+    assert checkout["with"]["persist-credentials"] is False
+
+
 @pytest.mark.parametrize("name", sorted(set(WORKFLOWS) - {"bookmyshow-monitor.yml", "grant-admin.yml",
-                                                          "rules-audit.yml"}))
+                                                          "rules-audit.yml", "monitor-maintenance.yml"}))
 def test_no_other_workflow_touches_a_production_secret_or_environment(name):
     for job_name, job in load(name)["jobs"].items():
         expected = "monitor-dispatch" if (name, job_name) == ("monitor-worker-relay.yml", "invoke") else None
@@ -83,10 +94,10 @@ def test_the_environment_lines_change_nothing_else_about_the_worker():
     and permissions as before the environment was added."""
     worker = load("bookmyshow-monitor.yml")
     triggers = worker.get("on", worker.get(True))
-    assert set(triggers) == {"push", "schedule", "workflow_dispatch"}
-    assert triggers["push"] == {"branches": ["main"], "paths": ["data/monitors.json"]}
+    # Single pass: schedule + the app's dispatch only, read-only token.
+    assert set(triggers) == {"schedule", "workflow_dispatch"}
     assert worker["concurrency"] == {"group": "bookmyshow-monitor", "cancel-in-progress": False}
-    assert worker["permissions"] == {"contents": "write", "actions": "write"}
+    assert worker["permissions"] == {"contents": "read"}
     job = worker["jobs"]["check"]
     assert "needs" not in job and "outputs" not in job
     admin = load("grant-admin.yml")

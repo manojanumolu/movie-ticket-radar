@@ -58,6 +58,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Iterable
 
 from config.store import load_discovery, save_discovery
+import os
 from config.timezone import now_ist, parse_iso, to_iso
 from monitor import policy
 from monitor.models import Availability, Monitor, MovieRef
@@ -232,6 +233,48 @@ def _code_check(platform: str) -> Callable[[str], Any] | None:
 # ──────────────────────────────────────────────────────────────────────────
 # The step the checker runs before checking
 # ──────────────────────────────────────────────────────────────────────────
+#: A single-pass worker run starts from a fresh checkout, so the city-listing
+#: clock in data/discovery.json would be forgotten and the city re-listed on
+#: every run. With RADAR_DISCOVERY_CLOCK=firestore the clock is kept in the
+#: worker-only document below instead (no repository commits). Any failure
+#: falls back to the file, which at worst re-lists once.
+CLOCK_DOC = ("worker_runtime", "legacy_discovery")
+
+
+def _clock_client():
+    if os.environ.get("RADAR_DISCOVERY_CLOCK", "") != "firestore":
+        return None
+    from monitor import state
+
+    store = state._backend()
+    client = getattr(store, "client", None)
+    if client is None or getattr(store, "uid", "signed-in") is not None:
+        return None          # only the worker's own (unscoped) Firestore store
+    return client
+
+
+def _load_clock() -> dict:
+    try:
+        client = _clock_client()
+        if client is not None:
+            clock = (client.get(*CLOCK_DOC) or {}).get("clock")
+            return clock if isinstance(clock, dict) else {}
+    except Exception as exc:  # noqa: BLE001 - never stop a check over the clock
+        print(f"[discover] clock unavailable ({type(exc).__name__}); using the file")
+    return load_discovery()
+
+
+def _save_clock(clock: dict, *, mirror: bool) -> None:
+    try:
+        client = _clock_client()
+        if client is not None:
+            client.set(*CLOCK_DOC, {"clock": clock})
+            return
+    except Exception as exc:  # noqa: BLE001
+        print(f"[discover] clock not saved ({type(exc).__name__}); using the file")
+    save_discovery(clock, mirror=mirror)
+
+
 def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[str, MonitorState],
                       *, at: datetime | None = None, mirror: bool = False,
                       provider_for: Callable[[str], Any] | None = None) -> DiscoveryReport:
@@ -258,7 +301,7 @@ def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[s
     if not reasons:
         return report
 
-    clock = load_discovery()
+    clock = _load_clock()
     dirty = False
     for region_key, why in reasons.items():
         platform, _, slug = region_key.partition(":")
@@ -305,7 +348,7 @@ def discover_siblings(monitors: list[Monitor], due: list[Monitor], state: dict[s
             _merge_into(monitor, listed, report)
 
     if dirty:
-        save_discovery(clock, mirror=mirror)
+        _save_clock(clock, mirror=mirror)
     return report
 
 
