@@ -118,6 +118,28 @@ test("an ordinary owner keeps reading, stopping, extending, re-checking and dele
   await assertSucceeds(deleteDoc(doc(me, "monitors/m1")));
 });
 
+// The real shape of monitors stored by the first Firestore release (16–21 Sep
+// 2026, model 79336ee): no `categories` and no `show_time` keys. Reconstructed
+// from that commit's Monitor.to_dict; every later release writes them.
+function earlyShape(owner, overrides = {}) {
+  const d = monitor(owner, overrides);
+  delete d.categories;
+  delete d.show_time;
+  return d;
+}
+
+test("a monitor stored before 21 Sep (no categories/show_time) can still be stopped and extended", async () => {
+  await seed("monitors/old", earlyShape(ALICE, { id: "old" }));
+  const me = db(ALICE);
+  // What today's app writes: the whole document, with [] and "" added.
+  await assertSucceeds(setDoc(doc(me, "monitors/old"), monitor(ALICE, { id: "old", status: "STOPPED" })));
+  await seed("monitors/old2", earlyShape(ALICE, { id: "old2", status: "STOPPED" }));
+  await assertSucceeds(setDoc(doc(me, "monitors/old2"), monitor(ALICE, { id: "old2", monitor_until: iso(3 * DAY) })));
+  // …but a real category or show time is still a new watch.
+  await assertFails(setDoc(doc(me, "monitors/old2"), monitor(ALICE, { id: "old2", categories: ["GOLD"] })));
+  await assertFails(setDoc(doc(me, "monitors/old2"), monitor(ALICE, { id: "old2", show_time: "07:15 PM" })));
+});
+
 test("an ordinary owner cannot turn an existing monitor into a different watch", async () => {
   await seed("monitors/m1", monitor(ALICE, { status: "STOPPED" }));
   const me = db(ALICE);
