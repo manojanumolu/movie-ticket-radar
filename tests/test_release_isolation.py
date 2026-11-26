@@ -30,7 +30,8 @@ ADMIN_ONLY_CREATION = ["app.py", "firestore.rules", "monitor/state.py"]
 #: The single-pass five-minute monitor: the workflow itself, the city-listing
 #: clock kept in Firestore between runs, and the refusal policy switch.
 SINGLE_PASS_MONITOR = [".github/workflows/bookmyshow-monitor.yml", "monitor/discovery.py",
-                       "platforms/http.py"]
+                       "monitor/worker.py", "platforms/bookmyshow.py", "platforms/http.py",
+                       "run_monitor.py"]
 
 
 def test_production_runtime_files_match_the_baseline():

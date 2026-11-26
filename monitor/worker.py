@@ -97,11 +97,11 @@ def _yn(value: bool) -> str:
     return "true" if value else "false"
 
 
-def require_worker_backend(*, in_actions: bool) -> str:
+def require_worker_backend(*, in_actions: bool, report=None) -> str:
     """State which store this run will use and, inside Actions, refuse
     anything but Firestore (see :func:`preflight`). Reads no documents, so a
     single-pass run can afford it every time. Returns the backend name."""
-    report = backend_report()
+    report = report if report is not None else backend_report()
     print(f"[worker] backend={report.name}")
     print(f"[worker] firebase_project_configured={_yn(report.project_configured)}")
     print(f"[worker] service_account_configured={_yn(report.service_account_configured)}")
@@ -135,7 +135,8 @@ def preflight(*, in_actions: bool, monitor_id: str = "",
 
     Returns ``(backend_name, monitors)`` so the caller need not read twice.
     """
-    require_worker_backend(in_actions=in_actions)
+    report = backend_report()
+    require_worker_backend(in_actions=in_actions, report=report)
 
     # One read, so the segment's first decision is visible rather than
     # inferred from the fact that it exited. Deliberately not cached: the

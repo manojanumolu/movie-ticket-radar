@@ -78,3 +78,17 @@ Evaluated and **not recommended**: a Google Apps Script trigger calling `workflo
 - **Timing:** `everyMinutes(5)` is allowed, but Google documents that trigger times may be randomized.
 - **Token:** dispatch requires a fine-grained token with Actions: write. That scope also allows enabling and disabling workflows and cancelling or re-running runs.
 - **Enforcement risk:** it would raise this repository's monitoring runs from ≈5 to ≈288 a day on GitHub-hosted runners. That increases, rather than reduces, the GitHub enforcement exposure while the Job Tracker cause is unknown.
+
+## Final status (this revision)
+
+| Item | State |
+|---|---|
+| Single-pass guard | A missing or revoked Firestore credential fails the run (exit 1). It never falls back to the empty JSON store (`monitor.worker.require_worker_backend`). |
+| Honest client (`RADAR_CLIENT=honest`) | No TLS fingerprint replay. A truthful `TicketRadar/1.0` User-Agent, with no browser headers. 401/403/429 are final: never retried, never routed via another endpoint. Network errors get 2 attempts of 10 s per read. Catalogue sync and tools are unchanged. |
+| PR #7 compatibility | Every historical document shape was reconstructed (`tests/fixtures/historical_monitor_shapes.json`). Monitors stored 16–21 Sep lack `categories`/`show_time`, and the Rules now treat an absent key as its empty default. Verified in the emulator (the previous rule fails that case). |
+| Old workflow | `disabled_manually` on GitHub (verified). PR #8 replaces its file. |
+
+**Achievable frequency:**
+- **Successful checks: 0.** `platforms/http.py` records that BookMyShow refuses non-imitating clients with 403 (two CI runs). Each honest check is therefore recorded as a refused failure, until BookMyShow authorises access.
+- **Attempts:** GitHub's scheduler delivered 4.9 runs a day on this repository (measured).
+- **Five-minute checks:** after authorisation, the zero-cost host that can genuinely reach five minutes is a Google Apps Script time trigger (no card; 5-minute triggers; within quota). GitHub Actions is not: the schedule delivers about 4.9 runs a day, and its terms exclude activity unrelated to the repository's software.
