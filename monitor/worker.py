@@ -97,6 +97,27 @@ def _yn(value: bool) -> str:
     return "true" if value else "false"
 
 
+def require_worker_backend(*, in_actions: bool) -> str:
+    """State which store this run will use and, inside Actions, refuse
+    anything but Firestore (see :func:`preflight`). Reads no documents, so a
+    single-pass run can afford it every time. Returns the backend name."""
+    report = backend_report()
+    print(f"[worker] backend={report.name}")
+    print(f"[worker] firebase_project_configured={_yn(report.project_configured)}")
+    print(f"[worker] service_account_configured={_yn(report.service_account_configured)}")
+
+    if report.name != "firestore" and in_actions and os.environ.get(ALLOW_JSON_WORKER) != "1":
+        if report.problem:
+            print(f"[worker] reason: {report.problem}")
+        print("[worker] FATAL: Firestore worker credentials are not configured "
+              "correctly; refusing to fall back to JSON.")
+        raise WorkerConfigError(
+            f"the worker selected the {report.name} store inside GitHub Actions"
+            + (f": {report.problem}" if report.problem else "")
+        )
+    return report.name
+
+
 def preflight(*, in_actions: bool, monitor_id: str = "",
               at: datetime | None = None) -> tuple[str, list]:
     """Say which store this segment will use, and what it can see in it.
@@ -114,20 +135,7 @@ def preflight(*, in_actions: bool, monitor_id: str = "",
 
     Returns ``(backend_name, monitors)`` so the caller need not read twice.
     """
-    report = backend_report()
-    print(f"[worker] backend={report.name}")
-    print(f"[worker] firebase_project_configured={_yn(report.project_configured)}")
-    print(f"[worker] service_account_configured={_yn(report.service_account_configured)}")
-
-    if report.name != "firestore" and in_actions and os.environ.get(ALLOW_JSON_WORKER) != "1":
-        if report.problem:
-            print(f"[worker] reason: {report.problem}")
-        print("[worker] FATAL: Firestore worker credentials are not configured "
-              "correctly; refusing to fall back to JSON.")
-        raise WorkerConfigError(
-            f"the worker selected the {report.name} store inside GitHub Actions"
-            + (f": {report.problem}" if report.problem else "")
-        )
+    require_worker_backend(in_actions=in_actions)
 
     # One read, so the segment's first decision is visible rather than
     # inferred from the fact that it exited. Deliberately not cached: the

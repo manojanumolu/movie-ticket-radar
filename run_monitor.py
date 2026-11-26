@@ -93,6 +93,13 @@ def main(argv: list[str] | None = None) -> int:
             # refuses the worker outright is that, and must show as a red run.
             return 1 if loop.stopped_reason == "store refused the worker" else 0
 
+        # The single pass gets the loop's mandatory guard: inside Actions a
+        # missing or unusable credential is a failed run, never a silent
+        # fall-back to the (empty) JSON store.
+        from config.store import running_in_actions
+        from monitor.worker import require_worker_backend
+
+        require_worker_backend(in_actions=running_in_actions())
         report = run_once(
             at=started,
             force=args.force,

@@ -174,3 +174,52 @@ def test_maintenance_is_manual_dry_run_by_default_and_shares_the_monitor_lock():
     run = job["steps"][-1]["run"]
     assert '[ "$INPUT_CONFIRM" = "APPLY" ] && args+=(--apply)' in run
     assert "--extend" not in run and "monitor_until" not in run
+
+
+# ── the single pass fails loudly on a missing or revoked credential ──────
+def _no_checks(monkeypatch):
+    import run_monitor
+    from monitor import checker
+    called = []
+    monkeypatch.setattr(run_monitor, "run_once", lambda **k: called.append(k) or pytest.fail("checked anyway"))
+    monkeypatch.setattr(checker, "run_once", lambda **k: called.append(k) or pytest.fail("checked anyway"))
+    return run_monitor, called
+
+
+def test_a_missing_credential_inside_actions_fails_the_run(monkeypatch, capsys):
+    run_monitor, called = _no_checks(monkeypatch)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT", raising=False)
+    monkeypatch.delenv("FIREBASE_PROJECT_ID", raising=False)
+    monkeypatch.delenv("TICKETRADAR_ALLOW_JSON_WORKER", raising=False)
+    assert run_monitor.main([]) == 1
+    out = capsys.readouterr().out
+    assert "FATAL" in out and "refusing to fall back to JSON" in out and "::error::" in out
+    assert called == []
+
+
+def test_a_revoked_credential_fails_the_run_instead_of_reporting_nothing_running(monkeypatch, capsys):
+    import run_monitor
+    from config import firestore as fs
+    from monitor import state as state_mod
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("FIREBASE_PROJECT_ID", "demo-ticketradar")
+    monkeypatch.setenv("FIREBASE_SERVICE_ACCOUNT", '{"client_email": "worker@test", "type": "service_account"}')
+    monkeypatch.setattr(fs, "service_account_token_getter", lambda info: (lambda: "revoked"))
+    monkeypatch.setattr(state_mod, "_admin", None)
+    state_mod.set_scope_provider(None)
+    monkeypatch.setattr(state_mod, "_transport",
+                        lambda method, url, token, body: (401, {"error": {"message": "UNAUTHENTICATED"}}))
+    assert run_monitor.main([]) == 1
+    out = capsys.readouterr().out
+    assert "::error::" in out and "checked:" not in out
+
+
+def test_a_working_store_still_runs_one_pass(monkeypatch, capsys):
+    import run_monitor
+
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)            # local: the JSON store is allowed
+    assert run_monitor.main([]) == 0
+    out = capsys.readouterr().out
+    assert "[worker] backend=json" in out and "checked:" in out
